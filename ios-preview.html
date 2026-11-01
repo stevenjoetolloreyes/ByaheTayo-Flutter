@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#e9e9e9;font-family:Inter,Roboto,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;padding:28px 0 12px}
+.phone{width:400px;height:856px;background:#000;border-radius:52px;padding:12px;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative}
+.screen{width:100%;height:100%;background:#17191D;border-radius:42px;overflow:hidden;position:relative;color:#fff}
+.island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:110px;height:30px;background:#000;border-radius:20px;z-index:20}
+.status{position:absolute;top:14px;left:0;right:0;display:flex;justify-content:space-between;padding:0 30px;font-size:14px;font-weight:600;z-index:10}
+.status span:last-child{letter-spacing:1px}
+.map{position:absolute;inset:0;background:#17191D}
+.map svg.roads{position:absolute;inset:0;width:100%;height:100%}
+.lbl{position:absolute;font-size:13px;color:#c8cdd4;font-weight:500}
+.lbl b{color:#eef1f4;font-weight:600}
+.search{position:absolute;top:56px;left:16px;right:16px;background:#f4f4f5;border-radius:28px;height:48px;display:flex;align-items:center;gap:10px;padding:0 16px;color:#3f3f46;font-size:14px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.search .dot{width:22px;height:22px;border-radius:50%;background:#e4e4e7;display:flex;align-items:center;justify-content:center;color:#52525b;font-size:13px}
+.chips{position:absolute;top:116px;left:16px;right:16px;display:flex;gap:8px;z-index:10}
+.chip{background:rgba(38,41,47,.92);border:1px solid #3a3e45;color:#d4d8de;font-size:12.5px;padding:8px 14px;border-radius:20px}
+.chip.on{background:#16A34A;border-color:#16A34A;color:#fff;font-weight:600}
+.controls{position:absolute;right:14px;top:210px;display:flex;flex-direction:column;gap:10px;z-index:10}
+.ctl{width:46px;height:46px;border-radius:50%;background:#26292f;border:1px solid #3a3e45;color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.ctl.loc{color:#16A34A}
+.pin{position:absolute;left:236px;top:300px;z-index:5}
+.pin .p{width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#16A34A;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.pin .p span{transform:rotate(45deg);font-size:16px;color:#fff}
+.me{position:absolute;left:150px;top:430px;width:20px;height:20px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 6px rgba(59,130,246,.25);z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:88px;background:#1e2126;border-top:1px solid #33373e;border-radius:22px 22px 0 0;padding:10px 16px 14px;z-index:10}
+.grip{width:44px;height:5px;border-radius:3px;background:#4b5058;margin:0 auto 12px}
+.sheet h3{font-size:15px;margin-bottom:10px}
+.route{background:#26292f;border:1px solid #33373e;border-radius:14px;padding:12px;display:flex;justify-content:space-between;align-items:center}
+.route .t{font-size:14px;font-weight:600}
+.route .s{font-size:12px;color:#9aa0a8;margin-top:3px}
+.route .f{font-size:14px;font-weight:700;color:#16A34A;text-align:right}
+.route .f small{display:block;color:#9aa0a8;font-weight:400;font-size:11px}
+.nav{position:absolute;left:0;right:0;bottom:0;height:88px;background:#1e2126;border-top:1px solid #33373e;display:flex;padding:10px 6px 22px;z-index:11}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#8b9097;font-size:10.5px}
+.tab.on{color:#16A34A}
+.tab svg{width:23px;height:23px}
+.homebar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#fff;z-index:12;opacity:.85}
+.cap{margin-top:16px;font-size:13px;color:#555;text-align:center;max-width:400px}
+</style></head>
+<body>
+<div class="phone"><div class="screen">
+<div class="island"></div>
+<div class="status"><span>9:41</span><span>5G ▂▄▆ ▣</span></div>
+<div class="map">
+<svg class="roads" viewBox="0 0 376 832" preserveAspectRatio="none">
+<g stroke="#2a2e34" stroke-width="10" fill="none" stroke-linecap="round">
+<path d="M-20,300 C80,280 140,330 200,300 S340,260 400,300"/>
+<path d="M-20,520 C90,500 180,560 260,520 S380,480 400,520"/>
+<path d="M120,-20 C140,150 100,350 150,550 S130,850 150,860"/>
+<path d="M280,-20 C260,200 300,420 270,650 S290,850 280,860"/>
+</g>
+<g stroke="#3a3e45" stroke-width="3" fill="none">
+<path d="M-20,180 C100,200 220,160 400,190"/>
+<path d="M-20,640 C120,620 240,670 400,640"/>
+</g>
+</svg>
+<span class="lbl" style="left:24px;top:180px"><b>Cabugao</b></span>
+<span class="lbl" style="left:210px;top:370px"><b>Vigan City</b></span>
+<span class="lbl" style="left:40px;top:560px">San Juan</span>
+<span class="lbl" style="left:250px;top:600px">Bantay</span>
+</div>
+<div class="search"><span class="dot">☰</span>Search places, landmarks, or streets</div>
+<div class="chips"><span class="chip on">Home</span><span class="chip">Malls</span><span class="chip">Schools</span><span class="chip">Hospitals</span></div>
+<div class="controls"><div class="ctl">+</div><div class="ctl">−</div><div class="ctl loc">◎</div></div>
+<div class="pin"><div class="p"><span>●</span></div></div>
+<div class="me"></div>
+<div class="sheet"><div class="grip"></div><h3>Nearby Routes</h3>
+<div class="route"><div><div class="t">Cabugao → Vigan City</div><div class="s">Traditional jeepney · ~32 km</div></div><div class="f">₱72.00<small>View full route</small></div></div>
+</div>
+<div class="nav">
+<div class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Map</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18 L9 13 L14 18 L20 9"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="9" r="1.6"/></svg>Trips</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="12" y="17" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor" stroke="none">₱</text></svg>Fares</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9l10-5 10 5-10 5-10-5z"/><path d="M6 11v4c0 1.5 2.7 3 6 3s6-1.5 6-3v-4"/></svg>Student</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 19c0-2.8 2.7-4.5 6-4.5s6 1.7 6 4.5M15 14.6c2.6.3 5 1.8 5 4.4"/></svg>Friends</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.5"/><path d="M4 20c0-3.5 3.6-5.5 8-5.5s8 2 8 5.5"/></svg>Account</div>
+</div>
+<div class="homebar"></div>
+</div></div>
+<p class="cap">Design preview — ByaheTayo sa iPhone (dark redesign). Hindi pa ito real iOS build.</p>
+</body></html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#e9e9e9;font-family:Inter,Roboto,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;padding:12px 0}
+.phone{width:400px;height:856px;background:#000;border-radius:52px;padding:12px;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative}
+.screen{width:100%;height:100%;background:#17191D;border-radius:42px;overflow:hidden;position:relative;color:#fff}
+.island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:110px;height:30px;background:#000;border-radius:20px;z-index:20}
+.status{position:absolute;top:14px;left:0;right:0;display:flex;justify-content:space-between;padding:0 30px;font-size:14px;font-weight:600;z-index:10}
+.map{position:absolute;inset:0;background:#1e2126}
+.map svg.roads{position:absolute;inset:0;width:100%;height:100%}
+.lbl{position:absolute;font-size:13px;color:#c8cdd4;font-weight:500}
+.lbl b{color:#eef1f4;font-weight:600}
+.sheet{position:absolute;left:0;right:0;bottom:88px;height:600px;background:#1e2126;border-top:1px solid #33373e;border-radius:22px 22px 0 0;padding:10px 16px 14px;z-index:10;overflow:hidden}
+.grip{width:44px;height:5px;border-radius:3px;background:#4b5058;margin:0 auto 8px}
+.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.head h3{font-size:16px}
+.head span{color:#16A34A;font-size:12.5px}
+.field{border:1px solid #33373e;border-radius:12px;padding:9px 12px;margin-bottom:8px;background:#26292f}
+.field small{color:#9aa0a8;font-size:11px;display:block}
+.field b{font-size:14px}
+.start{background:#16A34A;color:#fff;border-radius:28px;text-align:center;padding:11px;font-weight:700;font-size:14px;margin:2px 0 12px}
+.sec{font-size:14px;font-weight:700;margin-bottom:7px}
+.veh{display:flex;gap:6px;margin-bottom:12px}
+.v{flex:1;border:1px solid #33373e;border-radius:12px;padding:8px 2px;text-align:center;font-size:10.5px;color:#c8cdd4}
+.v.on{border:2px solid #16A34A;color:#16A34A;font-weight:700}
+.v .ic{font-size:18px;display:block;margin-bottom:2px}
+.avoid{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.chip{border:1px solid #4b5058;border-radius:20px;padding:6px 11px;font-size:11.5px;color:#d4d8de}
+.opt{border:1px solid #33373e;border-radius:12px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;background:#26292f}
+.opt b{font-size:13px}
+.opt small{color:#9aa0a8;font-size:11px;display:block}
+.opt .r{font-size:13px;font-weight:700}
+.nav{position:absolute;left:0;right:0;bottom:0;height:88px;background:#1e2126;border-top:1px solid #33373e;display:flex;padding:10px 6px 22px;z-index:11}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#8b9097;font-size:10.5px}
+.tab.on{color:#16A34A}
+.homebar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#fff;z-index:12;opacity:.85}
+</style></head>
+<body>
+<div class="phone"><div class="screen">
+<div class="island"></div>
+<div class="status"><span>9:41</span><span>5G ▂▄▆ ▣</span></div>
+<div class="map">
+<svg class="roads" viewBox="0 0 376 832" preserveAspectRatio="none">
+<g stroke="#2a2e34" stroke-width="10" fill="none" stroke-linecap="round"><path d="M-20,120 C80,100 140,150 200,120 S340,80 400,120"/><path d="M120,-20 C140,80 100,150 150,200"/></g>
+</svg>
+<span class="lbl" style="left:24px;top:80px"><b>Cabugao</b></span>
+<span class="lbl" style="left:210px;top:140px"><b>Vigan City</b></span>
+</div>
+<div class="sheet"><div class="grip"></div>
+<div class="head"><h3>Choose a way to get there</h3><span>Back to routes</span></div>
+<div class="field"><small>From</small><b>Cabugao</b></div>
+<div class="field"><small>To</small><b>Vigan City</b></div>
+<div class="start">▲&nbsp; Start Navigation</div>
+<div class="sec">Select Vehicle Type</div>
+<div class="veh"><div class="v"><span class="ic">🚌</span>Bus</div><div class="v on"><span class="ic">🚗</span>Car ✓</div><div class="v"><span class="ic">🚆</span>Train</div><div class="v"><span class="ic">🏍</span>Motorcycle</div><div class="v"><span class="ic">📍</span>Any Vehicle</div></div>
+<div class="sec">Avoid</div>
+<div class="avoid"><span class="chip">Avoid highways</span><span class="chip">Avoid tolls</span><span class="chip">Avoid ferries</span></div>
+<div class="sec">Best options</div>
+<div class="opt"><div><b>Public transport</b><small>About 1 hr 10 min · 1 direct ride</small></div><div class="r">₱72</div></div>
+<div class="opt"><div><b>Motorcycle</b><small>About 50 min</small></div><div class="r">No fare</div></div>
+<div class="opt"><div><b>Walking</b><small>About 7 hr 10 min</small></div><div class="r">No fare</div></div>
+</div>
+<div class="nav">
+<div class="tab on">Map</div><div class="tab">Fares</div><div class="tab">Student</div><div class="tab">Friends</div><div class="tab">Account</div>
+</div>
+<div class="homebar"></div>
+</div></div>
+</body></html>

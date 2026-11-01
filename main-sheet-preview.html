@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#e9e9e9;font-family:Inter,Roboto,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;padding:12px 0}
+.phone{width:400px;height:856px;background:#000;border-radius:52px;padding:12px;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative}
+.screen{width:100%;height:100%;background:#17191D;border-radius:42px;overflow:hidden;position:relative;color:#fff}
+.island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:110px;height:30px;background:#000;border-radius:20px;z-index:20}
+.status{position:absolute;top:14px;left:0;right:0;display:flex;justify-content:space-between;padding:0 30px;font-size:14px;font-weight:600;z-index:10}
+.map{position:absolute;inset:0;background:#1e2126}
+.lbl{position:absolute;font-size:13px;color:#c8cdd4;font-weight:500}
+.lbl b{color:#eef1f4;font-weight:600}
+.sheet{position:absolute;left:0;right:0;bottom:88px;height:610px;background:#1e2126;border-top:1px solid #33373e;border-radius:22px 22px 0 0;padding:10px 16px 14px;z-index:10;overflow:hidden}
+.grip{width:44px;height:5px;border-radius:3px;background:#4b5058;margin:0 auto 8px}
+.sheet h3{font-size:16px;margin-bottom:8px}
+.route{border:1px solid #33373e;border-radius:12px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;background:#26292f}
+.route b{font-size:13px}
+.route small{color:#9aa0a8;font-size:11px;display:block}
+.route .f{font-size:13px;font-weight:700;color:#16A34A}
+.row{display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap}
+.chip{border:1px solid #4b5058;border-radius:20px;padding:6px 11px;font-size:11.5px;color:#d4d8de}
+.chip.on{background:#16A34A;border-color:#16A34A;color:#fff;font-weight:700}
+.ampm{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.seg{display:flex;border:1px solid #4b5058;border-radius:20px;overflow:hidden;font-size:12px}
+.seg span{padding:6px 14px}
+.seg span.on{background:#16A34A;font-weight:700}
+.note{font-size:11px;color:#9aa0a8;flex:1;line-height:1.35}
+.card{border:1px solid #33373e;border-radius:14px;padding:11px 12px;background:#26292f}
+.card b{font-size:14px}
+.card small{color:#9aa0a8;font-size:11.5px;display:block;line-height:1.4}
+.etas{display:flex;justify-content:space-between;margin:9px 0;font-size:11.5px;color:#c8cdd4;text-align:center}
+.etas b{color:#fff;font-size:12px;display:block}
+.btnrow{display:flex;gap:6px;margin-top:9px}
+.btn{flex:1;border:1px solid #4b5058;border-radius:20px;padding:7px;text-align:center;font-size:11.5px}
+.btn.go{background:#16A34A;border-color:#16A34A;font-weight:700}
+.nav{position:absolute;left:0;right:0;bottom:0;height:88px;background:#1e2126;border-top:1px solid #33373e;display:flex;padding:10px 6px 22px;z-index:11}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#8b9097;font-size:10.5px}
+.tab.on{color:#16A34A}
+.homebar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#fff;z-index:12;opacity:.85}
+</style></head>
+<body>
+<div class="phone"><div class="screen">
+<div class="island"></div>
+<div class="status"><span>9:41</span><span>5G ▂▄▆ ▣</span></div>
+<div class="map"><span class="lbl" style="left:24px;top:80px"><b>Cabugao</b></span><span class="lbl" style="left:210px;top:140px"><b>Vigan City</b></span></div>
+<div class="sheet"><div class="grip"></div>
+<h3>Nearby Routes</h3>
+<div class="route"><div><b>Cabugao → Vigan City</b><small>Traditional jeepney · ~32 km</small></div><div class="f">₱72.00</div></div>
+<div class="row"><span class="chip on">All stops</span><span class="chip">Nearest stop</span><span class="chip">Live Tracking</span></div>
+<div class="row"><span class="chip on">All (14)</span><span class="chip">Northbound (3)</span><span class="chip">Southbound (11)</span></div>
+<div class="ampm"><div class="seg"><span class="on">AM</span><span>PM</span></div><div class="note">Walang verified timetable pa — hindi pa makakapag-filter ng departures ang AM/PM.</div></div>
+<div class="card"><b>Vigan City</b><small>Ilocos Region · Cabugao → Vigan City · 32.3 km · ₱72 · Southbound</small>
+<div class="etas"><div>🚌<b>1 hr 10 min</b></div><div>🚗<b>50 min</b></div><div>🚲<b>2 hr 25 min</b></div><div>🚶<b>7 hr 10 min</b></div></div>
+<small>Estimated arrival: About 10:26 AM</small>
+<div class="btnrow"><span class="btn">Share route</span><span class="btn">Save</span><span class="btn go">Start Navigation</span></div>
+</div>
+</div>
+<div class="nav"><div class="tab on">Map</div><div class="tab">Fares</div><div class="tab">Student</div><div class="tab">Friends</div><div class="tab">Account</div></div>
+<div class="homebar"></div>
+</div></div>
+</body></html>

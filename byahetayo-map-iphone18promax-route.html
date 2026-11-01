@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>ByaheTayo Map — iPhone 18 Pro Max preview</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#e8e8e8;font-family:Inter,Roboto,Arial,sans-serif;display:flex;justify-content:center;padding:24px 0}
+.wrap{position:relative;width:470px}
+.phone{width:430px;height:932px;background:#1a1a1c;border-radius:64px;padding:11px;box-shadow:0 24px 60px rgba(0,0,0,.38), inset 0 0 0 2px #3d3d40;position:relative;margin:0 auto}
+.side{position:absolute;background:#2b2b2e;border-radius:3px}
+.side.action{left:-3px;top:180px;width:4px;height:32px}
+.side.vol1{left:-3px;top:230px;width:4px;height:58px}
+.side.vol2{left:-3px;top:296px;width:4px;height:58px}
+.side.power{right:-3px;top:250px;width:4px;height:86px}
+.screen{width:100%;height:100%;background:#17191D;border-radius:54px;overflow:hidden;position:relative;color:#fff}
+.island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:118px;height:34px;background:#000;border-radius:20px;z-index:30}
+.island:after{content:"";position:absolute;right:18px;top:11px;width:11px;height:11px;border-radius:50%;background:#101418;box-shadow:inset 0 0 0 2px #1d2833}
+.status{position:absolute;top:16px;left:0;right:0;display:flex;justify-content:space-between;padding:0 32px;font-size:15px;font-weight:600;z-index:20}
+.map{position:absolute;inset:0;background:#17191D}
+.map svg{position:absolute;inset:0;width:100%;height:100%}
+.lbl{position:absolute;font-size:14px;color:#c8cdd4;font-weight:500}
+.lbl b{color:#eef1f4;font-weight:700}
+.search{position:absolute;top:58px;left:16px;right:16px;background:#fff;border-radius:28px;height:50px;display:flex;align-items:center;gap:10px;padding:0 16px;color:#555;font-size:14.5px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.45)}
+.search .menu{width:24px;height:24px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;color:#555;font-size:15px;font-weight:700}
+.chips{position:absolute;top:120px;left:16px;right:16px;display:flex;gap:8px;z-index:10;overflow:hidden}
+.chip{background:#26292F;border:1px solid #33373E;color:#e6e9ec;font-size:13px;padding:9px 15px;border-radius:20px;white-space:nowrap}
+.controls{position:absolute;right:14px;top:248px;display:flex;flex-direction:column;gap:10px;z-index:10}
+.ctl{width:48px;height:48px;border-radius:50%;background:#26292F;border:1px solid #33373E;color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.45)}
+.ctl.loc{color:#16A34A;font-size:20px}
+.logo{width:48px;height:48px;border-radius:10px;background:#16A34A;color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.45)}
+.mode{position:absolute;left:16px;bottom:436px;background:#1F2226;border-radius:24px;padding:4px;display:flex;gap:2px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.mode span{padding:8px 14px;border-radius:20px;font-size:13px;color:#b9bec4;font-weight:500}
+.mode span.on{background:#16A34A;color:#fff;font-weight:700}
+.pin{position:absolute;left:262px;top:322px;z-index:5}
+.pin .p{width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#16A34A;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.pin .p span{transform:rotate(45deg);font-size:16px;color:#fff}
+.me{position:absolute;left:168px;top:452px;width:20px;height:20px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 7px rgba(59,130,246,.25);z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:88px;height:340px;background:#1E2126;border-top:1px solid #33373E;border-radius:24px 24px 0 0;padding:10px 16px 14px;z-index:10}
+.grip{width:44px;height:5px;border-radius:3px;background:#4b5058;margin:0 auto 12px}
+.sheethead{display:flex;justify-content:space-between;align-items:center}
+.sheethead h3{font-size:17px;font-weight:700}
+.sheethead span{color:#16A34A;font-size:14px;font-weight:600}
+.sheetsearch{margin-top:12px;background:#26292F;border:1px solid #33373E;border-radius:16px;height:46px;display:flex;align-items:center;gap:8px;padding:0 14px;color:#9aa0a8;font-size:13.5px}
+.stopchips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.stopchips span{background:#26292F;border:1px solid #33373E;color:#e6e9ec;font-size:12.5px;padding:8px 13px;border-radius:20px}
+.stopchips span.on{background:#16A34A;border-color:#16A34A;color:#fff;font-weight:700}
+.dirchips{display:flex;gap:8px;margin-top:10px}
+.dirchips span{background:#26292F;border:1px solid #33373E;color:#e6e9ec;font-size:12.5px;padding:8px 13px;border-radius:20px}
+.dirchips span.on{background:#16A34A;border-color:#16A34A;color:#fff;font-weight:700}
+.ampm{margin-top:14px;display:flex;gap:12px;align-items:center}
+.seg{display:flex;border:1px solid #33373E;border-radius:10px;overflow:hidden;flex-shrink:0;white-space:nowrap}
+.seg span{padding:8px 14px;font-size:13px;color:#b9bec4}
+.seg span.on{background:#16A34A;color:#fff;font-weight:700}
+.ampm p{font-size:11.5px;color:#9aa0a8;line-height:1.4}
+.nav{position:absolute;left:0;right:0;bottom:0;height:88px;background:#1E2126;border-top:1px solid #33373E;display:flex;padding:10px 4px 22px;z-index:11}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#8b9097;font-size:10px}
+.tab.on{color:#16A34A}
+.tab svg{width:23px;height:23px}
+.homebar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:132px;height:5px;border-radius:3px;background:#fff;z-index:12;opacity:.85}
+.cap{margin-top:18px;text-align:center;font-size:13px;color:#555}
+
+.screen{color:#111}
+.status{color:#111}
+.search{border:1px solid #e0e0e0}
+.chip{background:#fff;border:1px solid #ddd;color:#222}
+.ctl{background:#fff;border:1px solid #ddd;color:#222}
+.mode{background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.mode span{color:#555}
+.sheet{background:#fff;border-top:1px solid #e0e0e0;color:#111}
+.grip{background:#ccc}
+.sheetsearch{background:#f1f3f4;border:1px solid #e0e0e0;color:#555}
+.stopchips span{background:#fff;border:1px solid #ddd;color:#222}
+.dirchips span{background:#fff;border:1px solid #ddd;color:#222}
+.seg{border:1px solid #ddd}
+.seg span{color:#555}
+.ampm p{color:#666}
+.nav{background:#fff;border-top:1px solid #e0e0e0}
+.tab{color:#888}
+.homebar{background:#111}
+.routecard{position:absolute;top:58px;left:16px;right:16px;background:#fff;border-radius:16px;padding:10px 12px 10px 12px;display:flex;gap:10px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.rc-col{display:flex;flex-direction:column;align-items:center;padding-top:6px}
+.rc-dot{width:10px;height:10px;border-radius:50%;background:#3b82f6}
+.rc-line{width:2px;height:22px;background:#bbb;margin:2px 0}
+.rc-pin{color:#e11d48;font-size:20px;line-height:1}
+.rc-main{flex:1}
+.rc-main b{font-size:15px;color:#111}
+.rc-main small{display:block;color:#666;font-size:12px}
+.rc-swap{color:#555;font-size:22px;padding-top:6px}
+.rc-more{color:#555;font-size:22px;padding-top:6px}
+.flow{font-size:14px;font-weight:700;color:#111;margin-top:10px;line-height:1.4}
+.flow small{display:block;font-weight:400;color:#555;font-size:12.5px}
+.modechips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.modechips span{background:#fff;border:1px solid #ddd;color:#222;font-size:12.5px;padding:8px 12px;border-radius:20px}
+.modechips span.on{background:#16A34A;border-color:#16A34A;color:#fff;font-weight:700}
+.arrival{margin-top:12px;font-size:13.5px;color:#333}
+.arrival b{color:#16A34A}
+.btnrow{display:flex;gap:8px;margin-top:12px}
+.btnrow span{flex:1;text-align:center;border:1px solid #16A34A;color:#16A34A;border-radius:10px;padding:10px;font-size:13.5px;font-weight:600}
+.startbtn{margin-top:10px;background:#16A34A;color:#fff;text-align:center;border-radius:12px;padding:13px;font-size:15px;font-weight:700}
+.dirpill{position:absolute;left:120px;top:360px;z-index:9;background:#16A34A;color:#fff;font-size:12px;font-weight:700;padding:6px 10px;border-radius:16px;box-shadow:0 3px 10px rgba(0,0,0,.3)}
+</style></head><body>
+<div class="wrap">
+<div class="phone">
+<div class="side action"></div><div class="side vol1"></div><div class="side vol2"></div><div class="side power"></div>
+<div class="screen">
+<div class="island"></div>
+<div class="status"><span>9:41</span><span>5G</span></div>
+<div class="map"><img src="real-map-route-cabugao-vigan.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></div>
+<div class="routecard"><div class="rc-col"><span class="rc-dot"></span><span class="rc-line"></span><span class="rc-pin">&#128205;</span></div><div class="rc-main"><b>Cabugao</b><div style="height:22px"></div><b>Vigan City</b><small>Ilocos Region</small></div><span class="rc-swap">&#8645;</span><span class="rc-more">&#8942;</span></div>
+<div class="controls"><div class="logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 10h16M9 21v-2M15 21v-2"/><circle cx="8" cy="17" r="1.4" fill="#fff"/><circle cx="16" cy="17" r="1.4" fill="#fff"/></svg></div><div class="ctl">+</div><div class="ctl">&minus;</div><div class="ctl loc">&#9673;</div><div class="ctl" style="font-size:19px">&#10132;</div></div>
+<div class="dirpill">Southbound &#8595; &middot; Direction line</div>
+<div class="mode"><span class="on">2D</span><span>3D</span><span>Satellite</span></div>
+<div style="position:absolute;right:16px;top:176px;z-index:9;font-size:9px;color:#333;background:rgba(255,255,255,.75);padding:2px 6px;border-radius:8px">&copy; OpenStreetMap contributors &middot; real map</div>
+<div class="sheet"><div class="grip"></div>
+<div class="sheethead"><h3>Vigan City</h3><span>&#10005;</span></div>
+<div class="flow">Cabugao &rarr; Vigan City &middot; 32.3 km &middot; &#8369;72.00 &middot; Southbound<small>Solid line = road path. Direction line runs Cabugao &rarr; Vigan, southbound.</small></div>
+<div class="modechips"><span class="on">Transit &middot; 1 hr 10 min</span><span>Motorcycle &middot; 50 min</span><span>Bicycle &middot; 2 hr 25 min</span><span>Walking &middot; 7 hr 10 min</span></div>
+<div class="arrival">Estimated time: <b>About 1 hr 10 min</b> &middot; Estimated arrival: <b>About 10:51 AM</b></div>
+<div class="btnrow"><span>Share route</span><span>Save</span></div>
+<div class="startbtn">Start Navigation</div>
+</div>
+<div class="nav">
+<div class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Map</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="12" y="17" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor" stroke="none">&#8369;</text></svg>Fares</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9l10-5 10 5-10 5-10-5z"/><path d="M6 11v4c0 1.5 2.7 3 6 3s6-1.5 6-3v-4"/></svg>Student</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 19c0-2.8 2.7-4.5 6-4.5s6 1.7 6 4.5M15 14.6c2.6.3 5 1.8 5 4.4"/></svg>Friends</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 19c0-2.5 2.5-4 6-4s6 1.5 6 4M14 15c2.5.3 5 1.7 5 4"/></svg>Communities</div>
+<div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.5"/><path d="M4 20c0-3.5 3.6-5.5 8-5.5s8 2 8 5.5"/></svg>Account</div>
+</div>
+<div class="homebar"></div>
+</div></div>
+</div>
+</body></html>
