@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "832009508458",
+    "project_id": "estudyantego",
+    "storage_bucket": "estudyantego.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:832009508458:android:86a7bbe9c4483225655c13",
+        "android_client_info": {
+          "package_name": "com.estudyanteGo.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6ja3KS8-9c5O7SwApkIWF0yQveoTVeT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:832009508458:android:977e2d637bcacc9d655c13",
+        "android_client_info": {
+          "package_name": "com.estudyantego.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6ja3KS8-9c5O7SwApkIWF0yQveoTVeT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

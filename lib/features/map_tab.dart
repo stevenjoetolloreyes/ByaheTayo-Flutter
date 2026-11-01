@@ -2861,7 +2861,7 @@ class _MapTabState extends State<MapTab> {
       roadKm: route.roadKm,
     );
     _shareRouteText(
-      'ByaheTayo route: ${route.originName} → ${route.dest.name} · '
+      'EstudyanteGO route: ${route.originName} → ${route.dest.name} · '
       '${route.roadKm.toStringAsFixed(1)} km · '
       '${fare == null ? 'No fare' : peso(fare)} · '
       '${route.direction == Direction.northbound ? 'Northbound' : 'Southbound'}',
@@ -4627,7 +4627,7 @@ class _MapTabState extends State<MapTab> {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () => _shareRouteText(
-                            'ByaheTayo route: ${origin.name} → ${dest.name} · '
+                            'EstudyanteGO route: ${origin.name} → ${dest.name} · '
                             '${roadKm.toStringAsFixed(1)} km · '
                             'About ${formatTripTime(minutes)} · '
                             'Estimated fare $fareText',

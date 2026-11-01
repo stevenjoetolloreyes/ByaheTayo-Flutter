@@ -616,7 +616,7 @@ class _FaresTabState extends State<FaresTab> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'Tingnan ang fare matrix ng LGU. Ang tricycle fares ay itinakda ng local ordinance, kaya hindi gagawa ang ByaheTayo ng national estimate.',
+                            'Tingnan ang fare matrix ng LGU. Ang tricycle fares ay itinakda ng local ordinance, kaya hindi gagawa ang EstudyanteGO ng national estimate.',
                           ),
                         ],
                       )

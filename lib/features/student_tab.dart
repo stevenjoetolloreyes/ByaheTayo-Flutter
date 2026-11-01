@@ -1223,7 +1223,7 @@ class _StudentTabState extends State<StudentTab> {
           child: shareCardContent(
             body: '"${daily.text}"',
             attribution: '— ${daily.author}',
-            footer: 'ByaheTayo · Daily Quotes',
+            footer: 'EstudyanteGO · Daily Quotes',
           ),
         ),
         const SizedBox(height: 4),

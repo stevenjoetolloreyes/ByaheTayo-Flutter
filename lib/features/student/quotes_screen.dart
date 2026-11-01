@@ -224,7 +224,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
             child: shareCardContent(
               body: '"${daily.text}"',
               attribution: '— ${daily.author}',
-              footer: 'ByaheTayo · Daily Quotes',
+              footer: 'EstudyanteGO · Daily Quotes',
             ),
           ),
           const SizedBox(height: 8),

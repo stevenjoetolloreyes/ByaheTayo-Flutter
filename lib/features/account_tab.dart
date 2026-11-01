@@ -1,87 +1,112 @@
-// Account dashboard — ByaheTayo Flutter app (Account tab).
+// Premium Account page — ByaheTayo Flutter app (Account tab).
 //
-// HONEST STATE: this Flutter app has NO account backend yet (no Firebase
-// auth, no profile, no points). So the header is a guest state (no
-// invented name/email, no fake verification badge), the wallet is 0
-// points (true — no points exist), and every action that needs a backend
-// says so plainly in a SnackBar instead of faking success. What DOES
-// really work: theme switching (wired to the whole app), and local
-// notification/language preferences persisted with SharedPreferences.
+// Premium Travel App + Material 3 + minimalist card UI. No guest
+// accounts anywhere: the header shows the authenticated Firebase
+// user (photo or honest initials, never a fake photo), and the
+// Verified badge reflects the REAL Firebase emailVerified flag.
+//
+// Preserved from the previous dashboard: Points Wallet (existing
+// account balance), Transaction History, Account Information,
+// Preferences, and Security & Privacy. What changed: every action is
+// real now — profile editing, password reset, email verification,
+// notification permission status, theme switching, and sign-out all
+// do what they say. There is no account deletion (omitted: it needs
+// Firebase re-authentication to be safe).
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// Shown for every action that needs the account backend (not ported yet).
-const _notPortedMessage =
-    'Hindi pa available — hindi pa naka-port ang account system sa Flutter app.';
+import 'admin_access.dart';
+import 'onboarding/auth_service.dart';
+import 'onboarding/onboarding_state.dart';
+import 'onboarding/permission_service.dart';
+import 'rewards_screen.dart';
+import 'student_id_card.dart';
 
-/// Shown for Sign Out: there is nobody signed in to sign out.
-const _signedOutMessage =
-    'Walang naka-sign in — hindi pa naka-port ang account system sa Flutter app.';
-
-const _prefsNotificationsKey = 'byahetayo_pref_notifications';
-const _prefsLanguageKey = 'byahetayo_pref_language';
+/// The existing account wallet balance. The account system has no
+/// points ledger of its own yet, so this stays 0 — it is never
+/// inflated, and it is a separate bucket from Student Hub sign-in
+/// points (tracked in the Student tab).
+const int accountWalletPoints = 0;
 
 class AccountTab extends StatefulWidget {
   const AccountTab({
     super.key,
     required this.themeMode,
     required this.onThemeModeChanged,
+    required this.authService,
+    required this.user,
+    this.profile,
+    required this.permissionService,
+    this.onViewStudent,
+    this.onViewCommunities,
+    this.onEditProfile,
+    this.onSignInRequested,
+    required this.onSignedOut,
   });
 
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  /// Auth backend (Firebase implementation in production, fake in
+  /// tests). Never null: when Firebase is not configured the service
+  /// reports isConfigured == false and [user] is null.
+  final AuthService authService;
+
+  /// The authenticated Firebase user, or null when signed out or when
+  /// Firebase is not configured. The header never shows a guest
+  /// identity in either case.
+  final AuthUser? user;
+
+  /// On-device profile for [user], or null when none was set up yet.
+  final UserProfile? profile;
+
+  final PermissionService permissionService;
+
+  /// Jump to the Student tab (7-Day Sign-in, the real earn path).
+  final VoidCallback? onViewStudent;
+
+  /// Jump to the Communities tab (where admin actions live).
+  final VoidCallback? onViewCommunities;
+
+  /// Open profile setup in edit mode.
+  final VoidCallback? onEditProfile;
+
+  /// Open the sign-in screen (signed-out state only).
+  final VoidCallback? onSignInRequested;
+
+  /// Called after a successful sign-out so the app gate can show
+  /// sign-in.
+  final VoidCallback onSignedOut;
 
   @override
   State<AccountTab> createState() => _AccountTabState();
 }
 
 class _AccountTabState extends State<AccountTab> {
-  bool _notifications = true;
-  String _language = 'English';
+  NotificationPermissionStatus _notificationStatus =
+      NotificationPermissionStatus.unknown;
+
+  AuthUser? get _user => widget.user;
+  UserProfile? get _profile => widget.profile;
+  bool get _signedIn => _user != null;
+  bool get _isAdmin => isAdminUser(_user);
 
   @override
   void initState() {
     super.initState();
-    _loadPrefs();
+    _loadNotificationStatus();
   }
 
-  Future<void> _loadPrefs() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!mounted) return;
-      setState(() {
-        _notifications = prefs.getBool(_prefsNotificationsKey) ?? true;
-        _language = prefs.getString(_prefsLanguageKey) ?? 'English';
-      });
-    } catch (_) {
-      // Preferences unavailable: keep the defaults. Never crash the tab
-      // over a local setting.
-    }
+  Future<void> _loadNotificationStatus() async {
+    final status = await widget.permissionService.notificationStatus();
+    if (!mounted) return;
+    setState(() => _notificationStatus = status);
   }
 
-  Future<void> _saveNotifications(bool value) async {
-    setState(() => _notifications = value);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefsNotificationsKey, value);
-    } catch (_) {
-      // Local save failed; the switch already reflects the choice.
-    }
-  }
-
-  Future<void> _saveLanguage(String value) async {
-    setState(() => _language = value);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefsLanguageKey, value);
-    } catch (_) {
-      // Local save failed; the selection already reflects the choice.
-    }
-  }
-
-  void _showNotPorted() {
+  void _showSnack(String message) {
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text(_notPortedMessage)));
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showInfoDialog(String title, String body) {
@@ -139,38 +164,6 @@ class _AccountTabState extends State<AccountTab> {
     if (selected != null) widget.onThemeModeChanged(selected);
   }
 
-  Future<void> _pickLanguage() async {
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Language Settings'),
-        children: [
-          RadioGroup<String>(
-            groupValue: _language,
-            onChanged: (value) {
-              if (value != null) Navigator.of(context).pop(value);
-            },
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final language in ['English', 'Filipino'])
-                  RadioListTile<String>(title: Text(language), value: language),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 8, 24, 8),
-            child: Text(
-              'Naka-save ang pinili mo. Hindi pa nito binabago ang wika ng app.',
-              style: TextStyle(fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (selected != null) await _saveLanguage(selected);
-  }
-
   Future<void> _showTransactionHistory() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -192,14 +185,150 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
+  /// Actions that need an account route to sign-in when signed out.
+  void _requireAccount(VoidCallback action) {
+    if (!_signedIn) {
+      widget.onSignInRequested?.call();
+      return;
+    }
+    action();
+  }
+
+  void _openProfile() => _requireAccount(() => widget.onEditProfile?.call());
+
+  void _openStudentId() {
+    _requireAccount(() {
+      final profile = _profile;
+      if (profile == null) {
+        widget.onEditProfile?.call();
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => StudentIdCardScreen(
+            profile: profile,
+            onEditProfile: () {
+              Navigator.of(context).pop();
+              widget.onEditProfile?.call();
+            },
+          ),
+        ),
+      );
+    });
+  }
+
+  void _openRewards() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RewardsScreen(
+          pointsBalance: accountWalletPoints,
+          onOpenStudentHub: () {
+            Navigator.of(context).pop();
+            widget.onViewStudent?.call();
+          },
+        ),
+      ),
+    );
+  }
+
+  String _notificationStatusLabel() {
+    switch (_notificationStatus) {
+      case NotificationPermissionStatus.granted:
+        return 'Allowed';
+      case NotificationPermissionStatus.denied:
+        return 'Not allowed';
+      case NotificationPermissionStatus.permanentlyDenied:
+        return 'Blocked — open system settings';
+      case NotificationPermissionStatus.unknown:
+        return 'Unknown';
+    }
+  }
+
+  Future<void> _handleNotificationSettings() async {
+    switch (_notificationStatus) {
+      case NotificationPermissionStatus.granted:
+        _showInfoDialog(
+          'Notifications allowed',
+          'Notifications are allowed for EstudyanteGO. To turn them off, '
+          'use your device settings.',
+        );
+        return;
+      case NotificationPermissionStatus.permanentlyDenied:
+        await widget.permissionService.openAppSettings();
+        await _loadNotificationStatus();
+        return;
+      case NotificationPermissionStatus.denied:
+      case NotificationPermissionStatus.unknown:
+        final allow = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Allow notifications?'),
+            content: const Text(
+              'EstudyanteGO can send you notifications about community '
+              'updates and service alerts. You can change this anytime '
+              'in your device settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Allow'),
+              ),
+            ],
+          ),
+        );
+        if (allow == true) {
+          await widget.permissionService.requestNotification();
+          await _loadNotificationStatus();
+        }
+        return;
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final user = _user;
+    if (user == null) return;
+    try {
+      await widget.authService.sendPasswordReset(email: user.email);
+      if (!mounted) return;
+      _showSnack('Password reset link sent. Check your email.');
+    } on AuthException catch (e) {
+      if (mounted) _showSnack(e.message);
+    }
+  }
+
+  Future<void> _verifyEmail() async {
+    try {
+      await widget.authService.sendEmailVerification();
+      if (!mounted) return;
+      _showSnack('Verification email sent. Check your inbox.');
+    } on AuthException catch (e) {
+      if (mounted) _showSnack(e.message);
+    }
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await widget.authService.signOut();
+    } on AuthException catch (e) {
+      if (mounted) _showSnack(e.message);
+      return;
+    }
+    if (mounted) widget.onSignedOut();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 600;
-        final header = _headerCard(scheme);
+        final header = _headerCard();
         final wallet = _walletCard();
+        final quickActions = _quickActionsCard();
+        final admin = _isAdmin ? _adminCard() : null;
         final history = Card(
           child: ListTile(
             leading: const Icon(Icons.history),
@@ -212,19 +341,43 @@ class _AccountTabState extends State<AccountTab> {
         final info = _sectionCard(
           title: 'Account Information',
           tiles: [
-            _infoTile(Icons.person_outline, 'Personal Information'),
-            _infoTile(Icons.school_outlined, 'Student Information'),
-            _infoTile(Icons.work_outlined, 'Employment Information'),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('Personal Information'),
+              subtitle: Text(
+                _signedIn
+                    ? '${_profile?.displayName ?? _user!.email}\n${_user!.email}'
+                    : 'Sign in to view',
+              ),
+              isThreeLine: _signedIn,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _openProfile,
+            ),
+            ListTile(
+              leading: const Icon(Icons.school_outlined),
+              title: const Text('Student Information'),
+              subtitle: Text(_studentInfoSummary()),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _openProfile,
+            ),
+            ListTile(
+              leading: const Icon(Icons.work_outlined),
+              title: const Text('Employment Information'),
+              subtitle: Text(_employmentInfoSummary()),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _openProfile,
+            ),
           ],
         );
         final preferences = _sectionCard(
           title: 'Preferences',
           tiles: [
-            SwitchListTile(
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined),
               title: const Text('Notification Settings'),
-              subtitle: const Text('Mga abiso mula sa app'),
-              value: _notifications,
-              onChanged: _saveNotifications,
+              subtitle: Text(_notificationStatusLabel()),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _handleNotificationSettings,
             ),
             ListTile(
               leading: const Icon(Icons.brightness_6_outlined),
@@ -236,33 +389,70 @@ class _AccountTabState extends State<AccountTab> {
             ListTile(
               leading: const Icon(Icons.language),
               title: const Text('Language Settings'),
-              subtitle: Text(_language),
+              subtitle: const Text('English'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: _pickLanguage,
+              onTap: () => _showInfoDialog(
+                'Language',
+                'EstudyanteGO is available in English only for now. '
+                'Real translations are out of scope for this version.',
+              ),
             ),
           ],
         );
         final security = _sectionCard(
           title: 'Security & Privacy',
           tiles: [
-            _actionTile(Icons.lock_outline, 'Change Password', _showNotPorted),
-            _actionTile(
-              Icons.verified_outlined,
-              'Account Verification',
-              _showNotPorted,
-            ),
+            if (_signedIn) ...[
+              ListTile(
+                leading: const Icon(Icons.account_circle_outlined),
+                title: const Text('Session'),
+                subtitle: Text(
+                  'Signed in as ${_user!.email}\n'
+                  'Email ${_user!.emailVerified ? 'verified' : 'not verified'}',
+                ),
+                isThreeLine: true,
+              ),
+              ListTile(
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('Change Password'),
+                subtitle: const Text('Send a reset link to your email'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _changePassword,
+              ),
+              if (_user!.emailVerified)
+                const ListTile(
+                  leading: Icon(Icons.verified_outlined),
+                  title: Text('Account Verification'),
+                  subtitle: Text('Your email is verified.'),
+                )
+              else
+                ListTile(
+                  leading: const Icon(Icons.verified_outlined),
+                  title: const Text('Account Verification'),
+                  subtitle: const Text('Your email is not verified yet.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _verifyEmail,
+                ),
+            ] else
+              const ListTile(
+                leading: Icon(Icons.account_circle_outlined),
+                title: Text('Session'),
+                subtitle: Text('No account signed in.'),
+              ),
             ListTile(
               leading: const Icon(Icons.privacy_tip_outlined),
               title: const Text('Privacy Settings'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showInfoDialog(
                 'Privacy Settings',
-                'Ang Flutter app na ito ay walang account pa. Ang naka-save '
-                    'lang dito sa device ay ang mga local setting mo: sidebar, '
-                    'theme, notification at language. Walang profile, walang '
-                    'points, at walang data na ipinapadala sa server mula sa '
-                    'app na ito. Ang buong privacy policy ay kasama ng account '
-                    'system pag na-port na ito.',
+                _signedIn
+                    ? 'Your account lives in Firebase (email and sign-in '
+                        'state). Your profile, settings, and community '
+                        'posts are stored on this device only. Nothing '
+                        'else is uploaded by this app.'
+                    : 'No account is signed in. Only your on-device '
+                        'settings (sidebar, theme) are stored, and '
+                        'nothing is uploaded by this app.',
               ),
             ),
           ],
@@ -276,22 +466,19 @@ class _AccountTabState extends State<AccountTab> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showInfoDialog(
                 'Help & Support',
-                'ByaheTayo v1.0.0. Ang Flutter app ay nasa development pa. '
-                    'Walang sign-in o support chat dito sa ngayon — ang account '
-                    'system ay hindi pa naka-port. Ang gumaganang feature ngayon '
-                    'ay ang Map at Fares tabs; ang Student at Friends tabs '
-                    'ay may structure na pero walang backend pa.',
+                'EstudyanteGO v1.0.0. For account help, use password reset '
+                'from the Security & Privacy section.',
               ),
             ),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('About ByaheTayo'),
+              title: const Text('About EstudyanteGO'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showInfoDialog(
-                'About ByaheTayo',
-                'ByaheTayo — Northern PH commute at jeepney companion. Trip '
-                    'planner, LTFRB fare calculator, at student hub. '
-                    'Version 1.0.0 (com.byahetayo.app).',
+                'About EstudyanteGO',
+                'EstudyanteGO — Northern PH commute at jeepney companion. Trip '
+                'planner, LTFRB fare calculator, at student hub. '
+                'Version 1.0.0 (com.byahetayo.app).',
               ),
             ),
             ListTile(
@@ -300,9 +487,10 @@ class _AccountTabState extends State<AccountTab> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showInfoDialog(
                 'Terms and Conditions',
-                'Wala pang buong Terms and Conditions dito — kasama ito ng '
-                    'account system pag na-port na. Walang pekeng legal text '
-                    'dito.',
+                'EstudyanteGO is a commute companion. Fares shown are '
+                'LTFRB-based estimates and verified operator fares; '
+                'community posts are user-shared and unverified unless '
+                'marked otherwise.',
               ),
             ),
             ListTile(
@@ -311,22 +499,24 @@ class _AccountTabState extends State<AccountTab> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showInfoDialog(
                 'Privacy Policy',
-                'Ang Flutter app na ito ay walang account pa, kaya walang '
-                    'profile o points data na naka-save. Ang naka-save lang dito '
-                    'sa device ay ang mga local setting mo: sidebar, theme, '
-                    'notification at language. Ang buong privacy policy ay '
-                    'kasama ng account system pag na-port na ito.',
+                'Your Firebase account holds your email and sign-in '
+                'state. Your profile, settings, and community posts stay '
+                'on this device. The app does not sell or share your data.',
               ),
             ),
-            ListTile(
-              leading: Icon(Icons.logout, color: scheme.error),
-              title: Text('Sign Out', style: TextStyle(color: scheme.error)),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text(_signedOutMessage)),
-                );
-              },
-            ),
+            if (_signedIn)
+              ListTile(
+                leading: Icon(
+                  Icons.logout,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  'Sign Out',
+                  style:
+                      TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                onTap: _signOut,
+              ),
           ],
         );
 
@@ -335,6 +525,12 @@ class _AccountTabState extends State<AccountTab> {
           const SizedBox(height: 16),
           wallet,
           const SizedBox(height: 16),
+          quickActions,
+          const SizedBox(height: 16),
+          if (admin != null) ...[
+            admin,
+            const SizedBox(height: 16),
+          ],
           history,
           const SizedBox(height: 16),
           if (twoColumns) ...[
@@ -366,7 +562,9 @@ class _AccountTabState extends State<AccountTab> {
           ],
         ];
 
-        // Full width on purpose: no narrow centered container.
+        // Full width on purpose: no narrow centered container. The
+        // Account page CONTENT is single-column on phones; the shell
+        // (sidebar on tablets) is unchanged.
         return SingleChildScrollView(
           key: const Key('account-scroll-view'),
           child: Padding(
@@ -381,8 +579,78 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
-  Widget _headerCard(ColorScheme scheme) {
-    return Card(
+  String _studentInfoSummary() {
+    final profile = _profile;
+    if (!_signedIn) return 'Sign in to view';
+    if (profile == null || !profile.hasStudentInfo) {
+      return 'Not provided (optional)';
+    }
+    final parts = <String>[];
+    if ((profile.school ?? '').isNotEmpty) parts.add(profile.school!);
+    if ((profile.program ?? '').isNotEmpty) parts.add(profile.program!);
+    if ((profile.year ?? '').isNotEmpty) parts.add(profile.year!);
+    return parts.join(' · ');
+  }
+
+  String _employmentInfoSummary() {
+    final profile = _profile;
+    if (!_signedIn) return 'Sign in to view';
+    if (profile == null || !profile.hasEmploymentInfo) {
+      return 'Not provided (optional)';
+    }
+    final parts = <String>[];
+    if ((profile.jobTitle ?? '').isNotEmpty) parts.add(profile.jobTitle!);
+    if ((profile.company ?? '').isNotEmpty) parts.add(profile.company!);
+    return parts.join(' · ');
+  }
+
+  Widget _headerCard() {
+    final user = _user;
+    if (user == null) {
+      // Signed out (or Firebase not configured): no guest identity, no
+      // guest chip — just an honest signed-out state with a sign-in
+      // action. When Firebase is not configured, the sign-in screen
+      // explains that.
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'No account signed in',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.authService.isConfigured
+                    ? 'Sign in to see your profile, points, and settings.'
+                    : 'Sign-in is not available in this build yet — '
+                        'Firebase is not configured.',
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => widget.onSignInRequested?.call(),
+                child: const Text('Sign In'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final profile = _profile;
+    final photoPath = profile?.photoPath;
+    final hasPhoto =
+        photoPath != null && File(photoPath).existsSync();
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -391,41 +659,83 @@ class _AccountTabState extends State<AccountTab> {
             Row(
               children: [
                 CircleAvatar(
-                  radius: 30,
-                  backgroundColor: scheme.primary,
-                  child: const Icon(
-                    Icons.person,
-                    size: 36,
-                    color: Colors.white,
-                  ),
+                  radius: 32,
+                  backgroundColor: Colors.white,
+                  backgroundImage:
+                      hasPhoto ? FileImage(File(photoPath)) : null,
+                  child: hasPhoto
+                      ? null
+                      : Text(
+                          (profile?.initials ??
+                                  _initialsOf(user.displayName ?? user.email))
+                              ,
+                          style: const TextStyle(
+                            color: Color(0xFF14532D),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 16),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Guest',
-                        style: TextStyle(
-                          fontSize: 22,
+                        profile?.displayName ??
+                            user.displayName ??
+                            user.email,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'Mag-sign in para makita ang profile mo.',
-                        style: TextStyle(fontSize: 14),
+                        user.email,
+                        style: const TextStyle(color: Colors.white70),
                       ),
+                      const SizedBox(height: 8),
+                      if (user.emailVerified)
+                        const Row(
+                          children: [
+                            Icon(Icons.verified,
+                                color: Colors.white, size: 16),
+                            SizedBox(width: 4),
+                            Text(
+                              'Verified',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ],
+                        )
+                      else
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white70),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                          ),
+                          onPressed: _verifyEmail,
+                          icon: const Icon(Icons.mark_email_unread_outlined,
+                              size: 16),
+                          label: const Text('Verify email'),
+                        ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            const Chip(label: Text('Guest account')),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             OutlinedButton(
-              onPressed: _showNotPorted,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white70),
+              ),
+              onPressed: () => widget.onEditProfile?.call(),
               child: const Text('Edit Profile'),
             ),
           ],
@@ -434,15 +744,23 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
+  static String _initialsOf(String name) {
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts[1][0]).toUpperCase();
+  }
+
   Widget _walletCard() {
     return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF16A34A), Color(0xFF059669)],
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -465,7 +783,7 @@ class _AccountTabState extends State<AccountTab> {
             ),
             const SizedBox(height: 12),
             const Text(
-              '0 points',
+              '$accountWalletPoints points',
               key: ValueKey('points-balance'),
               style: TextStyle(
                 color: Colors.white,
@@ -475,22 +793,115 @@ class _AccountTabState extends State<AccountTab> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Wala ka pang points. Kailangan ng account system para '
-              'makaipon at makita ang history.',
+              'This is your account wallet. Student Hub sign-in points '
+              'are tracked separately in the Student tab.',
               style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF16A34A),
+                foregroundColor: const Color(0xFF14532D),
               ),
-              onPressed: _showNotPorted,
+              onPressed: () => widget.onViewStudent?.call(),
               child: const Text('Earn Points'),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _quickActionsCard() {
+    return _sectionCard(
+      title: 'Quick Actions',
+      tiles: [
+        GridView.count(
+          crossAxisCount: 4,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 0.85,
+          children: [
+            _quickTile(
+              Icons.person_outline,
+              'My Profile',
+              _openProfile,
+            ),
+            _quickTile(
+              Icons.badge_outlined,
+              'My Student ID',
+              _openStudentId,
+            ),
+            _quickTile(
+              Icons.history,
+              'Transactions',
+              _showTransactionHistory,
+            ),
+            _quickTile(
+              Icons.card_giftcard_outlined,
+              'Rewards',
+              _openRewards,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _quickTile(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .primary
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _adminCard() {
+    // Admin-only section: visible only to allowlisted admin accounts
+    // (admin_access.dart). The actions jump to the Communities tab,
+    // where the gated admin screens live — no duplicated post state.
+    return _sectionCard(
+      title: 'Admin',
+      tiles: [
+        ListTile(
+          leading: const Icon(Icons.verified_outlined),
+          title: const Text('Post approvals'),
+          subtitle: const Text('Review community submissions'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => widget.onViewCommunities?.call(),
+        ),
+        ListTile(
+          leading: const Icon(Icons.account_balance_outlined),
+          title: const Text('LGU directory'),
+          subtitle: const Text('Manage LGU directory entries'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => widget.onViewCommunities?.call(),
+        ),
+      ],
     );
   }
 
@@ -516,24 +927,6 @@ class _AccountTabState extends State<AccountTab> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _infoTile(IconData icon, String title) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: _showNotPorted,
-    );
-  }
-
-  Widget _actionTile(IconData icon, String title, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
     );
   }
 }

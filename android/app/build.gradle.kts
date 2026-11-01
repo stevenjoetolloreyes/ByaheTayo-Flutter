@@ -4,6 +4,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase: apply the Google Services plugin ONLY when
+// google-services.json has been supplied by the developer at
+// android/app/google-services.json. Without it, the app still builds
+// and runs; Firebase auth reports "not configured" and the app skips
+// auth gating. Do NOT commit a real google-services.json here without
+// checking what it contains.
+if (rootProject.file("app/google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 import java.io.FileInputStream
 import java.util.Properties
 
@@ -25,7 +35,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.byahetayo.app"
+        applicationId = "com.estudyantego.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

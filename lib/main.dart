@@ -1,17 +1,26 @@
 // ByaheTayo — Flutter foundation.
 //
 // Single codebase for Android, iOS and tablets. This file owns only the
-// app shell: Material 3 theme (ByaheTayo brand), adaptive navigation and
-// tab state preservation. Feature ports (trip planner, fare calculator,
-// Firebase, maps, friends) land in their own files under lib/features/
-// and plug into the tab shells below — no tab is a dummy page, each shell
-// names the real feature it will host.
+// app shell: Material 3 theme (ByaheTayo brand), adaptive navigation,
+// tab state preservation, and the first-time gate (splash → onboarding
+// → sign-in → email verification → profile setup → dashboard).
+// Feature ports land in their own files under lib/features/ and plug
+// into the tab shells below — no tab is a dummy page.
 //
 // Wide layout (width >= 600, tablet portrait + landscape) uses a
 // collapsible left sidebar (220dp expanded / 80dp collapsed, preference
 // saved locally). Phones (width < 600) keep the bottom NavigationBar.
-// The Account tab is a real dashboard in lib/features/account_tab.dart.
-// The Fares tab is a real calculator in lib/features/fares_tab.dart.
+// The Account tab is the premium dashboard in
+// lib/features/account_tab.dart. The Fares tab is a real calculator in
+// lib/features/fares_tab.dart.
+//
+// First-time logic (see lib/features/onboarding/onboarding_state.dart):
+// onboarding shows only on first install; a returning user with an
+// active Firebase session goes straight to the dashboard; without a
+// session they go to Sign In; incomplete registration resumes at the
+// right setup step. When Firebase is NOT configured yet (no
+// google-services.json), auth gating is skipped and the dashboard
+// opens after onboarding, so the app stays usable before setup.
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +29,17 @@ import 'features/communities_tab.dart';
 import 'features/fares_tab.dart';
 import 'features/friends_tab.dart';
 import 'features/map_tab.dart';
+import 'features/onboarding/auth_screen.dart';
+import 'features/onboarding/auth_service.dart';
+import 'features/onboarding/firebase_auth_service.dart';
+import 'features/onboarding/firebase_init.dart';
+import 'features/onboarding/notification_prompt.dart';
+import 'features/onboarding/onboarding_screen.dart';
+import 'features/onboarding/onboarding_state.dart';
+import 'features/onboarding/permission_service.dart';
+import 'features/onboarding/profile_setup_screen.dart';
+import 'features/onboarding/splash_screen.dart';
+import 'features/onboarding/verify_email_screen.dart';
 import 'features/student_tab.dart';
 import 'features/student/student_theme.dart';
 
@@ -32,10 +52,14 @@ const _themeModeKey = 'byahetayo_theme_mode';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
+  // Guarded: false when google-services.json is missing or Firebase
+  // fails to start. The app never crashes over Firebase setup.
+  final firebaseConfigured = await initializeFirebase();
   runApp(
     ByaheTayoApp(
       initialSidebarCollapsed: prefs.getBool(_sidebarCollapsedKey) ?? false,
       initialThemeMode: _themeModeFromString(prefs.getString(_themeModeKey)),
+      authService: FirebaseAuthService(isConfigured: firebaseConfigured),
     ),
   );
 }
@@ -177,17 +201,44 @@ class ByaheTayoApp extends StatefulWidget {
     super.key,
     this.initialSidebarCollapsed = false,
     this.initialThemeMode = ThemeMode.system,
+    this.authService,
+    this.permissionService,
   });
 
   final bool initialSidebarCollapsed;
   final ThemeMode initialThemeMode;
+
+  /// Auth backend. Null in tests that pump the app directly means
+  /// "Firebase not configured" (gate falls back to the dashboard).
+  final AuthService? authService;
+
+  /// Notification permission backend. Null means the real
+  /// permission_handler implementation.
+  final PermissionService? permissionService;
 
   @override
   State<ByaheTayoApp> createState() => _ByaheTayoAppState();
 }
 
 class _ByaheTayoAppState extends State<ByaheTayoApp> {
+  // The gate state sits above MaterialApp, so its own context has no
+  // Navigator. Route pushes (profile setup) and dialogs (notification
+  // prompt) go through this key instead.
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
   late ThemeMode _themeMode = widget.initialThemeMode;
+  late final AuthService _authService =
+      widget.authService ?? FirebaseAuthService(isConfigured: false);
+  late final PermissionService _permissionService =
+      widget.permissionService ?? AppPermissionService();
+
+  // ---- First-time gate state ----
+  AppStartDestination? _destination;
+  AuthMode _authMode = AuthMode.signIn;
+  AuthUser? _user;
+  UserProfile? _profile;
+  ProfileStore? _store;
+  int _tabIndex = 0;
 
   Future<void> _setThemeMode(ThemeMode mode) async {
     setState(() => _themeMode = mode);
@@ -199,20 +250,242 @@ class _ByaheTayoAppState extends State<ByaheTayoApp> {
     }
   }
 
+  void _selectTab(int index) {
+    if (_tabIndex == index) return;
+    setState(() => _tabIndex = index);
+  }
+
+  /// Runs while the splash shows: reads the stored flags and the
+  /// current Firebase session, then decides the next screen.
+  Future<AppStartDestination> _resolveStart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = ProfileStore(prefs);
+    final user = _authService.currentUser;
+    final profileDone =
+        user == null ? false : store.isProfileSetupDone(user.uid);
+    _store = store;
+    _user = user;
+    _profile = user == null ? null : store.loadProfile(user.uid);
+    return resolveStartDestination(
+      firebaseConfigured: _authService.isConfigured,
+      onboardingDone: store.onboardingDone,
+      user: user,
+      profileSetupDone: profileDone,
+    );
+  }
+
+  Future<void> _markOnboardingDone() async {
+    final store = _store ?? ProfileStore(await SharedPreferences.getInstance());
+    _store = store;
+    await store.markOnboardingDone();
+  }
+
+  void _goDashboard({bool promptForNotifications = false}) {
+    setState(() => _destination = AppStartDestination.dashboard);
+    if (promptForNotifications && _user != null && _store != null) {
+      final store = _store!;
+      if (!store.notificationPromptShown) {
+        // Show once, right after first authenticated arrival. The flag
+        // is set before the dialog so it never repeats, whatever the
+        // user chooses.
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await store.markNotificationPromptShown();
+          if (!mounted) return;
+          final promptContext = _navigatorKey.currentContext;
+          if (promptContext == null) return;
+          await showNotificationPermissionPrompt(
+            promptContext,
+            _permissionService,
+          );
+        });
+      }
+    }
+  }
+
+  Future<void> _afterAuth(AuthUser user) async {
+    _user = user;
+    final store = _store ?? ProfileStore(await SharedPreferences.getInstance());
+    _store = store;
+    if (!user.emailVerified) {
+      setState(() => _destination = AppStartDestination.verifyEmail);
+      return;
+    }
+    if (!store.isProfileSetupDone(user.uid)) {
+      setState(() => _destination = AppStartDestination.profileSetup);
+      return;
+    }
+    _profile = store.loadProfile(user.uid);
+    _goDashboard(promptForNotifications: true);
+  }
+
+  Future<void> _afterVerified(AuthUser user) async {
+    _user = user;
+    final store = _store ?? ProfileStore(await SharedPreferences.getInstance());
+    _store = store;
+    if (!store.isProfileSetupDone(user.uid)) {
+      setState(() => _destination = AppStartDestination.profileSetup);
+      return;
+    }
+    _profile = store.loadProfile(user.uid);
+    _goDashboard(promptForNotifications: true);
+  }
+
+  void _openProfileSetup({bool isEdit = false}) {
+    final user = _user;
+    final store = _store;
+    final navigator = _navigatorKey.currentState;
+    if (user == null || store == null || navigator == null) return;
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => ProfileSetupScreen(
+          user: user,
+          store: store,
+          initial: _profile,
+          isEdit: isEdit,
+          onSaved: (profile) {
+            setState(() => _profile = profile);
+            navigator.pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _signOut() {
+    setState(() {
+      _user = null;
+      _profile = null;
+      _destination = _authService.isConfigured
+          ? AppStartDestination.signIn
+          : AppStartDestination.dashboard;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ByaheTayo',
+      title: 'EstudyanteGO',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       theme: _lightTheme(),
       darkTheme: _darkTheme(),
       themeMode: _themeMode,
-      home: _HomeShell(
-        initialSidebarCollapsed: widget.initialSidebarCollapsed,
-        themeMode: _themeMode,
-        onThemeModeChanged: _setThemeMode,
-      ),
+      home: _gateWidget(),
     );
+  }
+
+  Widget _gateWidget() {
+    final destination = _destination;
+    if (destination == null) {
+      return SplashScreen(
+        resolve: _resolveStart,
+        onDestination: (next) => setState(() => _destination = next),
+      );
+    }
+    switch (destination) {
+      case AppStartDestination.onboarding:
+        return OnboardingScreen(
+          onGetStarted: () async {
+            await _markOnboardingDone();
+            if (!mounted) return;
+            setState(() {
+              _authMode = AuthMode.createAccount;
+              _destination = AppStartDestination.signIn;
+            });
+          },
+          onSignIn: () async {
+            await _markOnboardingDone();
+            if (!mounted) return;
+            setState(() {
+              _authMode = AuthMode.signIn;
+              _destination = AppStartDestination.signIn;
+            });
+          },
+        );
+      case AppStartDestination.signIn:
+        return AuthScreen(
+          service: _authService,
+          initialMode: _authMode,
+          onSignedIn: _afterAuth,
+          onAccountCreated: (user) {
+            _user = user;
+            setState(() => _destination = AppStartDestination.verifyEmail);
+          },
+        );
+      case AppStartDestination.verifyEmail:
+        final user = _user;
+        if (user == null) {
+          // Should not happen (verify implies a user), but never trap
+          // the user on a screen that needs one.
+          return AuthScreen(
+            service: _authService,
+            initialMode: AuthMode.signIn,
+            onSignedIn: _afterAuth,
+            onAccountCreated: (created) {
+              _user = created;
+              setState(() => _destination = AppStartDestination.verifyEmail);
+            },
+          );
+        }
+        return VerifyEmailScreen(
+          service: _authService,
+          user: user,
+          onVerified: _afterVerified,
+          onUseDifferentAccount: () {
+            setState(() {
+              _user = null;
+              _profile = null;
+              _destination = AppStartDestination.signIn;
+            });
+          },
+        );
+      case AppStartDestination.profileSetup:
+        final user = _user;
+        final store = _store;
+        if (user == null || store == null) {
+          return AuthScreen(
+            service: _authService,
+            initialMode: AuthMode.signIn,
+            onSignedIn: _afterAuth,
+            onAccountCreated: (created) {
+              _user = created;
+              setState(() => _destination = AppStartDestination.verifyEmail);
+            },
+          );
+        }
+        return ProfileSetupScreen(
+          user: user,
+          store: store,
+          initial: _profile,
+          onSaved: (profile) {
+            _profile = profile;
+            _goDashboard(promptForNotifications: true);
+          },
+        );
+      case AppStartDestination.dashboard:
+        return _HomeShell(
+          initialSidebarCollapsed: widget.initialSidebarCollapsed,
+          themeMode: _themeMode,
+          onThemeModeChanged: _setThemeMode,
+          selectedIndex: _tabIndex,
+          onSelect: _selectTab,
+          authService: _authService,
+          user: _user,
+          profile: _profile,
+          permissionService: _permissionService,
+          onViewStudent: () => _selectTab(2),
+          onViewCommunities: () => _selectTab(4),
+          onEditProfile: () => _openProfileSetup(isEdit: true),
+          onSignInRequested: () {
+            setState(() {
+              _authMode = AuthMode.signIn;
+              _destination = AppStartDestination.signIn;
+            });
+          },
+          onSignedOut: _signOut,
+        );
+    }
   }
 }
 
@@ -221,24 +494,40 @@ class _HomeShell extends StatefulWidget {
     required this.initialSidebarCollapsed,
     required this.themeMode,
     required this.onThemeModeChanged,
+    required this.selectedIndex,
+    required this.onSelect,
+    required this.authService,
+    required this.user,
+    required this.profile,
+    required this.permissionService,
+    required this.onViewStudent,
+    required this.onViewCommunities,
+    required this.onEditProfile,
+    required this.onSignInRequested,
+    required this.onSignedOut,
   });
 
   final bool initialSidebarCollapsed;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+  final AuthService authService;
+  final AuthUser? user;
+  final UserProfile? profile;
+  final PermissionService permissionService;
+  final VoidCallback onViewStudent;
+  final VoidCallback onViewCommunities;
+  final VoidCallback onEditProfile;
+  final VoidCallback onSignInRequested;
+  final VoidCallback onSignedOut;
 
   @override
   State<_HomeShell> createState() => _HomeShellState();
 }
 
 class _HomeShellState extends State<_HomeShell> {
-  int _index = 0;
   late bool _collapsed = widget.initialSidebarCollapsed;
-
-  void _select(int i) {
-    if (i == _index) return;
-    setState(() => _index = i);
-  }
 
   Future<void> _toggleSidebar() async {
     setState(() => _collapsed = !_collapsed);
@@ -256,23 +545,40 @@ class _HomeShellState extends State<_HomeShell> {
     // left sidebar. One codebase, both form factors.
     final wide = MediaQuery.sizeOf(context).width >= 600;
     final body = IndexedStack(
-      index: _index,
+      index: widget.selectedIndex,
       children: [
         const MapTab(),
         const FaresTab(),
-        StudentTheme(child: StudentTab(onViewOnMap: () => _select(0), onViewAccount: () => _select(5))),
+        StudentTheme(
+          child: StudentTab(
+            onViewOnMap: () => widget.onSelect(0),
+            onViewAccount: () => widget.onSelect(5),
+          ),
+        ),
         const FriendsTab(),
-        CommunitiesTab(onViewOnMap: () => _select(0)),
+        CommunitiesTab(
+          onViewOnMap: () => widget.onSelect(0),
+          currentUser: widget.user,
+        ),
         AccountTab(
           themeMode: widget.themeMode,
           onThemeModeChanged: widget.onThemeModeChanged,
+          authService: widget.authService,
+          user: widget.user,
+          profile: widget.profile,
+          permissionService: widget.permissionService,
+          onViewStudent: widget.onViewStudent,
+          onViewCommunities: widget.onViewCommunities,
+          onEditProfile: widget.onEditProfile,
+          onSignInRequested: widget.onSignInRequested,
+          onSignedOut: widget.onSignedOut,
         ),
       ],
     );
 
     if (wide) {
       return Scaffold(
-        appBar: AppBar(title: Text(_destinations[_index].label)),
+        appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
         // Top inset is handled by the AppBar; left/right/bottom insets
         // (gesture bar, cutouts) are respected here.
         body: SafeArea(
@@ -282,8 +588,8 @@ class _HomeShellState extends State<_HomeShell> {
             children: [
               _Sidebar(
                 collapsed: _collapsed,
-                selectedIndex: _index,
-                onSelect: _select,
+                selectedIndex: widget.selectedIndex,
+                onSelect: widget.onSelect,
                 onToggle: _toggleSidebar,
               ),
               // Expanded content stays responsive while the sidebar
@@ -296,11 +602,11 @@ class _HomeShellState extends State<_HomeShell> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(_destinations[_index].label)),
+      appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
       body: body,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: _select,
+        selectedIndex: widget.selectedIndex,
+        onDestinationSelected: widget.onSelect,
         destinations: [
           for (final d in _destinations)
             NavigationDestination(
@@ -432,7 +738,7 @@ class _SidebarState extends State<_Sidebar>
                           const SizedBox(width: 12),
                           const Expanded(
                             child: Text(
-                              'ByaheTayo',
+                              'EstudyanteGO',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 18,

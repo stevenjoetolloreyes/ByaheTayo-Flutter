@@ -1,14 +1,15 @@
-// Post approvals — the device-owner admin screen for community
-// submissions.
+// Post approvals — the admin screen for community submissions.
 //
 // PLAIN LANGUAGE: community posts live on THIS DEVICE ONLY, and
-// review here is done by the device owner only. There is no
-// server-side review, no moderator team, and nothing is uploaded.
-// New submissions arrive Pending ("Pending verification"). Approving
-// marks a post Published (it stays in the main list); rejecting hides
-// it from the main list (it stays here until approved again or
-// deleted). The sample CTransco submission arrives Pending like any
-// other post and needs approval here before it counts as published.
+// review here is done only by allowlisted admin accounts (see
+// admin_access.dart) — the previous device-owner rule was replaced by
+// the email allowlist. There is no server-side review, no moderator
+// team, and nothing is uploaded. New submissions arrive Pending
+// ("Pending verification"). Approving marks a post Published (it stays
+// in the main list); rejecting hides it from the main list (it stays
+// here until approved again or deleted). The sample CTransco
+// submission arrives Pending like any other post and needs approval
+// here before it counts as published.
 import 'package:flutter/material.dart';
 
 import 'community_posts.dart';
@@ -43,8 +44,9 @@ class CommunityAdminScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Review is done on this device only, by the device owner. '
-            'There is no server-side review — posts are never uploaded.',
+            'Review is restricted to admin accounts, and posts stay on '
+            'this device only. There is no server-side review — posts '
+            'are never uploaded.',
             style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 16),

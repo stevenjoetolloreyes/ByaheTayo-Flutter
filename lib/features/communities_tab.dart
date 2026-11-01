@@ -4,10 +4,11 @@
 // HONEST STATE: there is no community backend — posts, fare
 // complaints, and LGU directory entries are all saved on this device
 // only (SharedPreferences) and never shared. No invented posts, no
-// votes, no comments. Approval is device-owner only: new posts start
-// Pending ("Pending verification" badge) and only approved posts are
-// Published; the Post approvals screen is the admin — no server
-// review is implied anywhere.
+// votes, no comments. Approval is admin-only (see admin_access.dart):
+// new posts start Pending ("Pending verification" badge) and only
+// approved posts are Published; the Post approvals screen and the LGU
+// directory editor are shown only to allowlisted admin accounts — no
+// server review is implied anywhere.
 //
 // Contains the whole Community section: the Share-info entry + Share a
 // Local Route form, the local posts list with cards (From → To,
@@ -20,20 +21,28 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'admin_access.dart';
 import 'community_admin.dart';
 import 'community_posts.dart';
 import 'fares_tab.dart';
+import 'onboarding/auth_service.dart';
 import 'vehicle_categories.dart';
 import 'lgu_complaint_ui.dart';
 import 'lgu_complaints.dart';
 
 class CommunitiesTab extends StatefulWidget {
-  const CommunitiesTab({super.key, this.onViewOnMap});
+  const CommunitiesTab({super.key, this.onViewOnMap, this.currentUser});
 
   /// Called when a community post's "View on map" is tapped, so the
   /// shell can switch to the Map tab (the jump itself travels through
   /// the communityMapJump notifier, which MapTab consumes).
   final VoidCallback? onViewOnMap;
+
+  /// The authenticated Firebase user, if any. Admin-only actions
+  /// (Post approvals, LGU directory editing) are shown only when this
+  /// user is on the admin allowlist (see admin_access.dart). Null
+  /// (signed out or Firebase not configured) means regular user.
+  final AuthUser? currentUser;
 
   @override
   State<CommunitiesTab> createState() => _CommunitiesTabState();
@@ -233,40 +242,46 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               ],
             ],
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => CommunityAdminScreen(
-                          posts: _posts,
-                          onChanged: (updated) {
-                            setState(() => _posts = updated);
-                            _savePosts();
-                          },
+            // Admin-only actions: Post approvals and the LGU directory
+            // editor are shown only to allowlisted admin accounts
+            // (admin_access.dart). Regular users never see them, so
+            // there is no dead button and no way to reach the editor
+            // without an admin sign-in.
+            if (isAdminUser(widget.currentUser))
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CommunityAdminScreen(
+                            posts: _posts,
+                            onChanged: (updated) {
+                              setState(() => _posts = updated);
+                              _savePosts();
+                            },
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.verified_outlined),
-                  label: const Text('Post approvals'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const LguAdminScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.account_balance_outlined),
-                  label: const Text('LGU directory'),
-                ),
-              ],
-            ),
+                      );
+                    },
+                    icon: const Icon(Icons.verified_outlined),
+                    label: const Text('Post approvals'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LguAdminScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.account_balance_outlined),
+                    label: const Text('LGU directory'),
+                  ),
+                ],
+              ),
           ],
         ),
       ),

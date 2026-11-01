@@ -25,7 +25,11 @@ double _sidebarWidth(WidgetTester tester) {
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    // The app boots through the first-time gate; these sidebar tests
+    // cover the dashboard, so onboarding is already done here.
+    SharedPreferences.setMockInitialValues({
+      'byahetayo_onboarding_done': true,
+    });
   });
 
   testWidgets('sidebar is 220dp wide when expanded (tablet portrait)',
@@ -35,7 +39,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_sidebarWidth(tester), 220);
-    expect(find.text('ByaheTayo'), findsOneWidget);
+    expect(find.text('EstudyanteGO'), findsOneWidget);
     expect(find.byIcon(Icons.chevron_left), findsOneWidget);
   });
 

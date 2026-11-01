@@ -215,7 +215,7 @@ class _BibleScreenState extends State<BibleScreen> {
                     child: shareCardContent(
                       body: daily.text,
                       attribution: '${daily.ref} (KJV)',
-                      footer: 'ByaheTayo · Bible Verse',
+                      footer: 'EstudyanteGO · Bible Verse',
                     ),
                   ),
                   const SizedBox(height: 8),

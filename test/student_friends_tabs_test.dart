@@ -8,6 +8,7 @@ import 'package:byahetayo/features/student_tab.dart';
 import 'package:byahetayo/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget wrap(Widget child) {
@@ -16,7 +17,11 @@ Widget wrap(Widget child) {
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    // The full-app test boots through the first-time gate, so
+    // onboarding is already done here. Direct-tab tests ignore it.
+    SharedPreferences.setMockInitialValues({
+      'byahetayo_onboarding_done': true,
+    });
   });
 
   testWidgets('Student Hub dashboard shows all 7 modules, honest data',
@@ -34,7 +39,11 @@ void main() {
     expect(find.text('My Commute'), findsOneWidget);
     expect(find.text('Daily Quotes'), findsOneWidget);
     expect(find.text('Bible Verse'), findsOneWidget);
-    expect(find.text('Attendance Sheet'), findsOneWidget);
+    // The dashboard attendance card was retitled 'School Calendar'
+    // (landscape spec); its attendance content is preserved inside,
+    // and the Attendance screen stays reachable via quick access.
+    expect(find.text('School Calendar'), findsOneWidget);
+    expect(find.text('Attendance'), findsOneWidget);
     expect(find.text('Church Directory'), findsOneWidget);
     expect(find.text('Tasks & Assignments'), findsOneWidget);
     expect(find.text('Student Profile'), findsOneWidget);
@@ -104,7 +113,7 @@ void main() {
     expect(find.text('Available balance'), findsOneWidget);
   });
 
-  testWidgets('Friends tab shows friend features and honest empty states', (
+  testWidgets('Friends tab shows premium sections and honest empty states', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 3000);
@@ -114,14 +123,21 @@ void main() {
     await tester.pumpWidget(wrap(const FriendsTab()));
     await tester.pumpAndSettle();
     expect(find.text('Friends'), findsOneWidget);
-    expect(find.text('Your Friends'), findsOneWidget);
-    expect(find.text('No friends added yet.'), findsOneWidget);
+    expect(find.text('My Friends'), findsOneWidget);
+    expect(find.text('No friends yet'), findsOneWidget);
+    // The code is now real: generated on-device with a real QR.
     expect(find.text('My Friend Code'), findsOneWidget);
-    expect(find.text("You don't have a friend code yet."), findsOneWidget);
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(find.text('Friend Requests'), findsOneWidget);
+    expect(find.text('No incoming requests'), findsOneWidget);
+    expect(find.text('No outgoing requests'), findsOneWidget);
     // Chats shows directly: the Posts/Chat toggle left with the
     // community content, which now lives in the Communities tab.
     expect(find.text('Chats'), findsOneWidget);
-    expect(find.text('No chats yet.'), findsOneWidget);
+    expect(find.text('No conversations yet'), findsOneWidget);
+    // No fake request actions, no fake presence.
+    expect(find.text('Accept'), findsNothing);
+    expect(find.text('Decline'), findsNothing);
     expect(find.text('Community'), findsNothing);
     expect(find.text('Share info'), findsNothing);
     expect(
@@ -131,19 +147,24 @@ void main() {
     expect(find.text('No announcements or posts yet.'), findsNothing);
   });
 
-  testWidgets('Friends action shows the not-connected message, not success', (
+  testWidgets('Add Friend shows the share path, creates no fake friend', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(wrap(const FriendsTab()));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Get my code'));
+    await tester.tap(find.text('Add Friend'));
     await tester.pumpAndSettle();
     expect(
-      find.text(
-        'Hindi pa available — hindi pa naka-connect ang feature na ito.',
-      ),
+      find.textContaining('no code entry is offered here'),
       findsOneWidget,
     );
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('No friends yet'), findsOneWidget);
   });
 
   testWidgets('Student Hub uses its own light emerald theme even when the app is dark',

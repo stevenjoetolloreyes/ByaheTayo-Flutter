@@ -1,6 +1,10 @@
 // Smoke tests for the ByaheTayo shell: all 6 destinations render and tab
 // switching changes the visible tab on both wide (collapsible sidebar)
 // and phone (NavigationBar) layouts.
+//
+// The app now boots through the first-time gate (splash -> dashboard
+// when onboarding is already done), so these tests set the onboarding
+// flag in mock prefs and settle past the 1.2s splash.
 import 'package:byahetayo/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,19 +20,25 @@ const _labels = [
   'Account',
 ];
 
+Future<void> _pumpApp(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({
+    'byahetayo_onboarding_done': true,
+  });
+  await tester.pumpWidget(const ByaheTayoApp());
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('Map tab shows a real Google Map on launch',
       (WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const ByaheTayoApp());
+    await _pumpApp(tester);
     expect(find.byType(GoogleMap), findsOneWidget);
     expect(find.byIcon(Icons.my_location), findsOneWidget);
   });
 
   testWidgets('Wide layout shows collapsible sidebar with all 6 destinations',
       (WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const ByaheTayoApp());
+    await _pumpApp(tester);
 
     expect(find.byKey(const Key('sidebar-container')), findsOneWidget);
     for (final label in _labels) {
@@ -47,21 +57,23 @@ void main() {
     expect(find.text('Pending verification'), findsOneWidget);
 
     // Switch to Account; the AppBar title and the dashboard follow.
+    // No Firebase in tests, so the account shows the honest
+    // signed-out state — never a "Guest" identity.
     await tester.tap(find.byKey(const Key('sidebar-item-Account')));
     await tester.pumpAndSettle();
-    expect(find.text('Guest'), findsOneWidget);
+    expect(find.text('No account signed in'), findsOneWidget);
     expect(find.text('Points Wallet'), findsOneWidget);
+    expect(find.text('Guest'), findsNothing);
   });
 
   testWidgets('Phone layout shows bottom bar and switches tabs',
       (WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
 
-    await tester.pumpWidget(const ByaheTayoApp());
+    await _pumpApp(tester);
 
     expect(find.byType(NavigationBar), findsOneWidget);
     for (final label in _labels) {
