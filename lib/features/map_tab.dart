@@ -56,11 +56,11 @@ enum TravelMode { transit, motorcycle, bicycle, walking }
 /// Icon per travel mode, shared by the destination panel and the
 /// route-preview mode tabs.
 IconData modeIcon(TravelMode mode) => switch (mode) {
-      TravelMode.transit => Icons.directions_bus,
-      TravelMode.motorcycle => Icons.two_wheeler,
-      TravelMode.bicycle => Icons.directions_bike,
-      TravelMode.walking => Icons.directions_walk,
-    };
+  TravelMode.transit => Icons.directions_bus,
+  TravelMode.motorcycle => Icons.two_wheeler,
+  TravelMode.bicycle => Icons.directions_bike,
+  TravelMode.walking => Icons.directions_walk,
+};
 
 /// Sheet vehicle selection (reference "Select Vehicle Type"). ONE state
 /// on the Map tab drives the selector cards, the user cursor icon, and
@@ -68,30 +68,27 @@ IconData modeIcon(TravelMode mode) => switch (mode) {
 enum VehicleType { bus, car, train, motorcycle, anyVehicle }
 
 String vehicleLabel(VehicleType v) => switch (v) {
-      VehicleType.bus => 'Bus',
-      VehicleType.car => 'Car',
-      VehicleType.train => 'Train',
-      VehicleType.motorcycle => 'Motorcycle',
-      VehicleType.anyVehicle => 'Any Vehicle',
-    };
+  VehicleType.bus => 'Bus',
+  VehicleType.car => 'Car',
+  VehicleType.train => 'Train',
+  VehicleType.motorcycle => 'Motorcycle',
+  VehicleType.anyVehicle => 'Any Vehicle',
+};
 
 IconData vehicleIcon(VehicleType v) => switch (v) {
-      VehicleType.bus => Icons.directions_bus,
-      VehicleType.car => Icons.directions_car,
-      VehicleType.train => Icons.train,
-      VehicleType.motorcycle => Icons.two_wheeler,
-      VehicleType.anyVehicle => Icons.place,
-    };
+  VehicleType.bus => Icons.directions_bus,
+  VehicleType.car => Icons.directions_car,
+  VehicleType.train => Icons.train,
+  VehicleType.motorcycle => Icons.two_wheeler,
+  VehicleType.anyVehicle => Icons.place,
+};
 
 /// Honest vehicle filtering over the app's own hub routes: Bus, Car,
 /// Motorcycle, and Any Vehicle all run on the same road network, so
 /// they see every route; Train sees none — there is no passenger
 /// train service on these Northern Luzon routes, so inventing train
 /// routes would be fabrication. Callers show the empty state for [].
-List<RouteInfo> filterRoutesByVehicle(
-  List<RouteInfo> routes,
-  VehicleType v,
-) {
+List<RouteInfo> filterRoutesByVehicle(List<RouteInfo> routes, VehicleType v) {
   if (v == VehicleType.train) return const [];
   return routes;
 }
@@ -164,8 +161,9 @@ int estimateTripMinutes({
       kph = mountain ? 28 : (sameRegion ? 32 : 40);
       allowance = sameRegion ? 10 : 20;
   }
-  final minimum =
-      mode == TravelMode.walking || mode == TravelMode.bicycle ? 10 : 15;
+  final minimum = mode == TravelMode.walking || mode == TravelMode.bicycle
+      ? 10
+      : 15;
   final raw = (roadKm / kph) * 60 + allowance;
   return math.max(minimum, (raw / 5).round() * 5);
 }
@@ -174,9 +172,7 @@ int estimateTripMinutes({
 enum Direction { northbound, southbound }
 
 Direction directionOf(double originLat, double destLat) {
-  return destLat >= originLat
-      ? Direction.northbound
-      : Direction.southbound;
+  return destLat >= originLat ? Direction.northbound : Direction.southbound;
 }
 
 /// One hub-to-hub route from an origin point, sorted nearest-first by
@@ -202,21 +198,21 @@ List<RouteInfo> routesFrom(double lat, double lng, String originName) {
   for (final hub in hubs) {
     final direct = haversineKm(lat, lng, hub.lat, hub.lng);
     if (direct < 0.5) continue;
-    list.add(RouteInfo(
-      originName: originName,
-      dest: hub,
-      roadKm: roadKmBetween(lat, lng, hub.lat, hub.lng),
-      direction: directionOf(lat, hub.lat),
-    ));
+    list.add(
+      RouteInfo(
+        originName: originName,
+        dest: hub,
+        roadKm: roadKmBetween(lat, lng, hub.lat, hub.lng),
+        direction: directionOf(lat, hub.lat),
+      ),
+    );
   }
   list.sort((a, b) => a.roadKm.compareTo(b.roadKm));
   return list;
 }
 
 /// Groups routes by direction, northbound first (picture-1 sheet style).
-Map<Direction, List<RouteInfo>> groupRoutesByDirection(
-  List<RouteInfo> routes,
-) {
+Map<Direction, List<RouteInfo>> groupRoutesByDirection(List<RouteInfo> routes) {
   return {
     Direction.northbound: routes
         .where((r) => r.direction == Direction.northbound)
@@ -232,9 +228,11 @@ List<RouteInfo> filterRoutesByQuery(List<RouteInfo> routes, String query) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return routes;
   return routes
-      .where((r) =>
-          r.dest.name.toLowerCase().contains(q) ||
-          r.dest.region.toLowerCase().contains(q))
+      .where(
+        (r) =>
+            r.dest.name.toLowerCase().contains(q) ||
+            r.dest.region.toLowerCase().contains(q),
+      )
       .toList();
 }
 
@@ -300,21 +298,175 @@ String? churchesOnlyStyle(String? baseStyle) {
     return baseStyle;
   }
 }
+
 /// A Catholic church returned by Google Places (New) Text Search.
 /// Only the fields the sheet shows; nothing is invented — every
-/// entry comes from the API response.
+/// entry comes from the API response. [photoName] is the Places
+/// photo resource name (places/.../photos/...) when the API
+/// returned one; null for every verified church and for Places
+/// entries without photo data — never a guessed picture.
 class ChurchPlace {
   const ChurchPlace({
     required this.name,
     required this.lat,
     required this.lng,
     this.address = '',
+    this.photoName,
   });
 
   final String name;
   final double lat;
   final double lng;
   final String address;
+  final String? photoName;
+}
+
+/// Photo URL for a church's Places photo, or null when there is no
+/// photo to show (no photo data, or no API key in this build).
+/// Built from the same --dart-define=MAPS_API_KEY route the Routes
+/// and Places calls use. Pure (unit-tested). The media endpoint
+/// takes the key as a query parameter; if the key rejects the
+/// request, the photo slot's errorBuilder falls back to the honest
+/// empty state instead of breaking the panel.
+String? churchPhotoUrl(ChurchPlace church, String apiKey) {
+  final photo = church.photoName;
+  if (photo == null || photo.isEmpty) return null;
+  if (apiKey.isEmpty) return null;
+  return 'https://places.googleapis.com/v1/$photo/media'
+      '?maxWidthPx=800&key=$apiKey';
+}
+
+/// Source filter for the churches sheet. Pure (unit-tested) with
+/// [visibleChurches] below.
+enum ChurchSourceFilter { all, verified, places }
+
+/// Applies the churches sheet's search + source filter to both
+/// lists. Search matches the church name only (case-insensitive,
+/// substring); the source filter picks which list survives. Both
+/// apply together. Pure (unit-tested).
+({List<ChurchPlace> verified, List<ChurchPlace> places}) visibleChurches({
+  required List<ChurchPlace> verified,
+  required List<ChurchPlace> places,
+  required String query,
+  required ChurchSourceFilter filter,
+}) {
+  final q = query.trim().toLowerCase();
+  bool matches(ChurchPlace c) => q.isEmpty || c.name.toLowerCase().contains(q);
+  return (
+    verified: filter == ChurchSourceFilter.places
+        ? const <ChurchPlace>[]
+        : verified.where(matches).toList(),
+    places: filter == ChurchSourceFilter.verified
+        ? const <ChurchPlace>[]
+        : places.where(matches).toList(),
+  );
+}
+
+/// One marker group from grid clustering: a single church, or
+/// several churches close together at the current zoom, shown as
+/// one marker with a count. [lat]/[lng] is the centroid.
+class ChurchCluster {
+  const ChurchCluster({
+    required this.churches,
+    required this.lat,
+    required this.lng,
+  });
+
+  final List<ChurchPlace> churches;
+  final double lat;
+  final double lng;
+
+  bool get isSingle => churches.length == 1;
+  int get count => churches.length;
+}
+
+/// Groups churches into grid clusters for the current zoom, so
+/// close markers collapse into one count marker at low zoom and
+/// split apart as the user zooms in. Pure (unit-tested),
+/// dependency-free: the grid cell is ~60 screen pixels wide
+/// (256 * 2^zoom pixels span 360 degrees of longitude), so the
+/// grouping tracks what the user actually sees. Latitude uses the
+/// same cell size — a small approximation at Northern Luzon
+/// latitudes, fine for grouping markers.
+List<ChurchCluster> clusterChurches(List<ChurchPlace> churches, double zoom) {
+  if (churches.isEmpty) return const [];
+  final cell = 84.375 / math.pow(2, zoom);
+  final cells = <String, List<ChurchPlace>>{};
+  for (final church in churches) {
+    final key = '${(church.lat / cell).floor()}:${(church.lng / cell).floor()}';
+    (cells[key] ??= []).add(church);
+  }
+  return cells.values.map((group) {
+    var lat = 0.0;
+    var lng = 0.0;
+    for (final church in group) {
+      lat += church.lat;
+      lng += church.lng;
+    }
+    return ChurchCluster(
+      churches: group,
+      lat: lat / group.length,
+      lng: lng / group.length,
+    );
+  }).toList();
+}
+
+/// Photo slot for the church details panel. Shows the real Places
+/// photo when the entry carries photo data and the build has an
+/// API key; anything else — every verified church, every Places
+/// entry without photos, a failed load — shows the plain honest
+/// empty state, never a placeholder picture. Standalone so it stays
+/// widget-testable without the map.
+class ChurchPhotoSlot extends StatelessWidget {
+  const ChurchPhotoSlot({
+    super.key,
+    required this.church,
+    required this.apiKey,
+  });
+
+  final ChurchPlace church;
+  final String apiKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = churchPhotoUrl(church, apiKey);
+    if (url == null) return const _ChurchPhotoEmpty();
+    return ClipRRect(
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      child: Image.network(
+        url,
+        height: 180,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const _ChurchPhotoEmpty(),
+      ),
+    );
+  }
+}
+
+class _ChurchPhotoEmpty extends StatelessWidget {
+  const _ChurchPhotoEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 180,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.photo_outlined),
+            SizedBox(height: 8),
+            Text('No photo available'),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Verified Catholic churches bundled in the app (source-checked,
@@ -458,6 +610,7 @@ const verifiedChurches = [
     address: 'Batac, Ilocos Norte',
   ),
 ];
+
 /// whole Northern Luzon, Catholic only). The rectangle is a hard
 /// locationRestriction — churches outside it cannot leak in.
 const double _nLuzonSouth = 16.0;
@@ -532,8 +685,9 @@ List<ChurchPlace> dedupePlacesChurches(
   List<ChurchPlace> places,
   List<ChurchPlace> verified,
 ) {
-  final verifiedNames =
-      verified.map((c) => _normalizeChurchName(c.name)).toSet();
+  final verifiedNames = verified
+      .map((c) => _normalizeChurchName(c.name))
+      .toSet();
   return places.where((p) {
     final n = _normalizeChurchName(p.name);
     if (n.isEmpty) return true;
@@ -556,20 +710,35 @@ List<ChurchPlace> parsePlacesChurches(Map<String, dynamic> json) {
   final out = <ChurchPlace>[];
   for (final p in places) {
     if (p is! Map) continue;
-    final name =
-        p['displayName'] is Map ? (p['displayName'] as Map)['text'] : null;
+    final name = p['displayName'] is Map
+        ? (p['displayName'] as Map)['text']
+        : null;
     final loc = p['location'] is Map ? p['location'] as Map : null;
     final lat = loc?['latitude'];
     final lng = loc?['longitude'];
     if (name is! String || name.isEmpty) continue;
     if (lat is! num || lng is! num) continue;
     final address = p['formattedAddress'];
-    out.add(ChurchPlace(
-      name: name,
-      lat: lat.toDouble(),
-      lng: lng.toDouble(),
-      address: address is String ? address : '',
-    ));
+    // First photo only (the details panel has one slot). No
+    // photos field, or an unusable entry, means no photo — never
+    // a substitute picture.
+    String? photoName;
+    final photos = p['photos'];
+    if (photos is List && photos.isNotEmpty) {
+      final first = photos.first;
+      if (first is Map && first['name'] is String) {
+        photoName = first['name'] as String;
+      }
+    }
+    out.add(
+      ChurchPlace(
+        name: name,
+        lat: lat.toDouble(),
+        lng: lng.toDouble(),
+        address: address is String ? address : '',
+        photoName: photoName,
+      ),
+    );
   }
   return out;
 }
@@ -598,18 +767,19 @@ List<NavStep> parseGoogleSteps(Map<String, dynamic> json) {
       final instruction = nav is Map && nav['instructions'] is String
           ? nav['instructions'] as String
           : 'Continue';
-      out.add(NavStep(
-        instruction: instruction,
-        location: LatLng(lat, lng),
-        distanceMeters: (s['distanceMeters'] as num?)?.toDouble() ?? 0,
-      ));
+      out.add(
+        NavStep(
+          instruction: instruction,
+          location: LatLng(lat, lng),
+          distanceMeters: (s['distanceMeters'] as num?)?.toDouble() ?? 0,
+        ),
+      );
     }
     return out;
   } catch (_) {
     return const [];
   }
 }
-
 
 /// Arrow icon for a turn instruction, derived from the instruction's
 /// own words (never invented): left / right / U-turn / roundabout /
@@ -758,7 +928,6 @@ List<LatLng> navLinePoints({
   return [user, dest];
 }
 
-
 /// One turn-by-turn step from a route leg.
 class NavStep {
   const NavStep({
@@ -868,12 +1037,12 @@ double? resolveTransitFare({
 
 /// Preview label for a route card, following the vehicle selection.
 String previewModeLabel(VehicleType vehicle) => switch (vehicle) {
-      VehicleType.car => 'Car route',
-      VehicleType.motorcycle => 'Motorcycle route',
-      VehicleType.bus => 'Provincial bus',
-      VehicleType.train => 'Train route',
-      VehicleType.anyVehicle => 'Transit route',
-    };
+  VehicleType.car => 'Car route',
+  VehicleType.motorcycle => 'Motorcycle route',
+  VehicleType.bus => 'Provincial bus',
+  VehicleType.train => 'Train route',
+  VehicleType.anyVehicle => 'Transit route',
+};
 
 /// Dark Google Maps tile style, matching the approved iPhone preview
 /// (charcoal map, muted roads, light labels) and the app's dark theme
@@ -932,8 +1101,7 @@ double bearingForMode(MapViewMode mode, double currentBearing) =>
     mode == MapViewMode.perspective3d ? currentBearing : 0;
 
 /// 3D buildings render only in 3D mode.
-bool buildingsForMode(MapViewMode mode) =>
-    mode == MapViewMode.perspective3d;
+bool buildingsForMode(MapViewMode mode) => mode == MapViewMode.perspective3d;
 
 /// Full camera position for a view mode over [target].
 CameraPosition cameraForMode({
@@ -941,13 +1109,12 @@ CameraPosition cameraForMode({
   required LatLng target,
   required double zoom,
   double bearing = 0,
-}) =>
-    CameraPosition(
-      target: target,
-      zoom: zoom,
-      tilt: tiltForMode(mode),
-      bearing: bearingForMode(mode, bearing),
-    );
+}) => CameraPosition(
+  target: target,
+  zoom: zoom,
+  tilt: tiltForMode(mode),
+  bearing: bearingForMode(mode, bearing),
+);
 
 /// Bottom offset of the floating map controls (right column + the
 /// 2D/3D/Satellite pill). The collapsed sheet occupies the bottom
@@ -996,6 +1163,71 @@ class _MapTabState extends State<MapTab> {
   // by hiding church markers, by selecting a hub, and by DIRECTIONS
   // (the route preview card takes over then).
   ChurchPlace? _selectedChurch;
+  // Count-badge icons for church cluster markers, keyed by count.
+  // Generated on first sight of a count (async canvas draw), then
+  // cached; until ready the cluster shows a plain orange marker.
+  final _clusterIcons = <int, BitmapDescriptor>{};
+  final _pendingClusterIcons = <int>{};
+
+  /// Draws a numbered badge icon for a church cluster marker
+  /// (orange circle, white count). Async canvas work; on success
+  /// the marker rebuilds with the badge. Failures keep the plain
+  /// orange marker — clustering never breaks on icon drawing.
+  Future<void> _ensureClusterIcon(int count) async {
+    if (_clusterIcons.containsKey(count) ||
+        _pendingClusterIcons.contains(count)) {
+      return;
+    }
+    _pendingClusterIcons.add(count);
+    try {
+      const size = 120.0;
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      final center = const Offset(size / 2, size / 2);
+      canvas.drawCircle(
+        center,
+        size / 2 - 4,
+        Paint()..color = const Color(0xFFEA580C),
+      );
+      canvas.drawCircle(
+        center,
+        size / 2 - 4,
+        Paint()
+          ..color = const Color(0xFFFFFFFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6,
+      );
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: '$count',
+          style: const TextStyle(
+            color: Color(0xFFFFFFFF),
+            fontSize: 48,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(
+        canvas,
+        center - Offset(textPainter.width / 2, textPainter.height / 2),
+      );
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(size.toInt(), size.toInt());
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (!mounted || bytes == null) return;
+      setState(() {
+        _clusterIcons[count] = BitmapDescriptor.bytes(
+          bytes.buffer.asUint8List(),
+        );
+      });
+    } catch (_) {
+      // Plain orange marker stays.
+    } finally {
+      _pendingClusterIcons.remove(count);
+    }
+  }
+
   // True while the sheet shows a route preview opened from a church
   // (the church panel's DIRECTIONS flow, which builds a synthetic
   // Hub destination). While set, the Nearby Routes browsing chrome
@@ -1143,8 +1375,9 @@ class _MapTabState extends State<MapTab> {
       final image = await picture.toImage(64, 64);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       if (bytes != null && mounted) {
-        setState(() =>
-            _arrowIcon = BitmapDescriptor.bytes(bytes.buffer.asUint8List()));
+        setState(
+          () => _arrowIcon = BitmapDescriptor.bytes(bytes.buffer.asUint8List()),
+        );
       }
     } catch (_) {
       // Fallback: the default green marker (rotation stays 0).
@@ -1159,7 +1392,10 @@ class _MapTabState extends State<MapTab> {
       final icons = <VehicleType, BitmapDescriptor>{};
       for (final v in VehicleType.values) {
         final recorder = ui.PictureRecorder();
-        final canvas = ui.Canvas(recorder, const ui.Rect.fromLTWH(0, 0, 96, 96));
+        final canvas = ui.Canvas(
+          recorder,
+          const ui.Rect.fromLTWH(0, 0, 96, 96),
+        );
         final bg = ui.Paint()
           ..color = const Color(0xFF16A34A)
           ..style = ui.PaintingStyle.fill;
@@ -1203,7 +1439,10 @@ class _MapTabState extends State<MapTab> {
     try {
       const size = 128.0;
       final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(recorder, const ui.Rect.fromLTWH(0, 0, size, size));
+      final canvas = ui.Canvas(
+        recorder,
+        const ui.Rect.fromLTWH(0, 0, size, size),
+      );
       canvas.translate(size / 2, size / 2);
       // Car body outline, front at the top (y negative).
       final body = ui.Path()
@@ -1314,8 +1553,9 @@ class _MapTabState extends State<MapTab> {
       final image = await picture.toImage(size.toInt(), size.toInt());
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       if (bytes != null && mounted) {
-        setState(() =>
-            _carIcon = BitmapDescriptor.bytes(bytes.buffer.asUint8List()));
+        setState(
+          () => _carIcon = BitmapDescriptor.bytes(bytes.buffer.asUint8List()),
+        );
       }
     } catch (_) {
       // Fallback: the vehicle/arrow icons, then the default marker.
@@ -1346,9 +1586,8 @@ class _MapTabState extends State<MapTab> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Shared location gate with the exact strings the app already uses.
@@ -1424,7 +1663,8 @@ class _MapTabState extends State<MapTab> {
     final controller = _controller;
     if (controller == null) return;
     final current = _lastCamera;
-    final target = current?.target ??
+    final target =
+        current?.target ??
         (_userPos != null
             ? LatLng(_userPos!.latitude, _userPos!.longitude)
             : _initialCamera.target);
@@ -1472,7 +1712,8 @@ class _MapTabState extends State<MapTab> {
     for (final h in hubs) {
       if (h.name == route.originName) originHub = h;
     }
-    final mountain = isMountainHub(route.dest) ||
+    final mountain =
+        isMountainHub(route.dest) ||
         (originHub != null && isMountainHub(originHub));
     final sameRegion =
         originHub != null && originHub.region == route.dest.region;
@@ -1496,8 +1737,11 @@ class _MapTabState extends State<MapTab> {
     }
     final destHub = route.dest;
     if (originHub == null) return;
-    final matches = routesFrom(destHub.lat, destHub.lng, destHub.name)
-        .where((r) => r.dest.name == originHub!.name);
+    final matches = routesFrom(
+      destHub.lat,
+      destHub.lng,
+      destHub.name,
+    ).where((r) => r.dest.name == originHub!.name);
     final swapped = matches.isEmpty ? null : matches.first;
     if (_navigating) {
       _navSub?.cancel();
@@ -1506,27 +1750,30 @@ class _MapTabState extends State<MapTab> {
     setState(() {
       _selectedHub = originHub;
       _activeRoute = swapped;
-      _activeRouteOrigin =
-          swapped == null ? null : LatLng(destHub.lat, destHub.lng);
+      _activeRouteOrigin = swapped == null
+          ? null
+          : LatLng(destHub.lat, destHub.lng);
       _roadPoints = null;
       _routeError = null;
       _churchPreview = false;
       _resetNavFields();
     });
     if (swapped != null) {
-      _controller?.animateCamera(CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(
-            math.min(destHub.lat, originHub.lat) - 0.01,
-            math.min(destHub.lng, originHub.lng) - 0.01,
+      _controller?.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(
+              math.min(destHub.lat, originHub.lat) - 0.01,
+              math.min(destHub.lng, originHub.lng) - 0.01,
+            ),
+            northeast: LatLng(
+              math.max(destHub.lat, originHub.lat) + 0.01,
+              math.max(destHub.lng, originHub.lng) + 0.01,
+            ),
           ),
-          northeast: LatLng(
-            math.max(destHub.lat, originHub.lat) + 0.01,
-            math.max(destHub.lng, originHub.lng) + 0.01,
-          ),
+          80,
         ),
-        80,
-      ));
+      );
       _fetchRoadPath(destHub.lat, destHub.lng, originHub);
     } else {
       _moveTo(LatLng(originHub.lat, originHub.lng), zoom: 13);
@@ -1592,10 +1839,7 @@ class _MapTabState extends State<MapTab> {
                   ),
                   Text(
                     route.dest.region,
-                    style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
                   ),
                 ],
               ),
@@ -1613,10 +1857,7 @@ class _MapTabState extends State<MapTab> {
                 if (v == 'save') _toggleSaved(route);
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'share',
-                  child: Text('Share route'),
-                ),
+                const PopupMenuItem(value: 'share', child: Text('Share route')),
                 PopupMenuItem(
                   value: 'save',
                   child: Text(saved ? 'Remove from saved' : 'Save route'),
@@ -1635,8 +1876,11 @@ class _MapTabState extends State<MapTab> {
     final oLat = _userPos?.latitude ?? hubs[_homeHub].lat;
     final oLng = _userPos?.longitude ?? hubs[_homeHub].lng;
     final oName = _userPos != null ? 'Your location' : hubs[_homeHub].name;
-    final matches = routesFrom(oLat, oLng, oName)
-        .where((r) => r.dest.name == hub.name);
+    final matches = routesFrom(
+      oLat,
+      oLng,
+      oName,
+    ).where((r) => r.dest.name == hub.name);
     final route = matches.isEmpty ? null : matches.first;
     if (_navigating) {
       _navSub?.cancel();
@@ -1646,8 +1890,7 @@ class _MapTabState extends State<MapTab> {
       _selectedChurch = null;
       _selectedHub = hub;
       _activeRoute = route;
-      _activeRouteOrigin =
-          route == null ? null : LatLng(oLat, oLng);
+      _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
       _routeError = null;
       _churchPreview = false;
@@ -1655,19 +1898,21 @@ class _MapTabState extends State<MapTab> {
     });
     if (route != null) {
       // Fit both endpoints, padded so the bounds never degenerate.
-      _controller?.animateCamera(CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(
-            math.min(oLat, hub.lat) - 0.01,
-            math.min(oLng, hub.lng) - 0.01,
+      _controller?.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(
+              math.min(oLat, hub.lat) - 0.01,
+              math.min(oLng, hub.lng) - 0.01,
+            ),
+            northeast: LatLng(
+              math.max(oLat, hub.lat) + 0.01,
+              math.max(oLng, hub.lng) + 0.01,
+            ),
           ),
-          northeast: LatLng(
-            math.max(oLat, hub.lat) + 0.01,
-            math.max(oLng, hub.lng) + 0.01,
-          ),
+          80,
         ),
-        80,
-      ));
+      );
       _fetchRoadPath(oLat, oLng, hub);
     } else {
       _moveTo(LatLng(hub.lat, hub.lng), zoom: 13);
@@ -1691,8 +1936,7 @@ class _MapTabState extends State<MapTab> {
     if (_googleApiKey.isEmpty) {
       setState(() => _chip = 'Churches');
       _showChurchesSheet(
-        placesError:
-            'Google Places key is missing in this build — showing verified churches only.',
+        placesError: 'Google Places key is missing in this build — showing verified churches only.',
       );
       return;
     }
@@ -1723,13 +1967,14 @@ class _MapTabState extends State<MapTab> {
           ..set('X-Goog-Api-Key', _googleApiKey)
           ..set(
             'X-Goog-FieldMask',
-            'places.displayName,places.location,places.formattedAddress,nextPageToken',
+            'places.displayName,places.location,places.formattedAddress,places.photos,nextPageToken',
           )
           ..set('X-Android-Package', 'com.byahetayo.app')
           ..set('X-Android-Cert', '89D1B79AD3344B1344A5D72694A1E863953F8534');
         request.write(jsonEncode(placesChurchesBody(pageToken: pageToken)));
-        final response =
-            await request.close().timeout(const Duration(seconds: 20));
+        final response = await request.close().timeout(
+          const Duration(seconds: 20),
+        );
         final body = await response.transform(utf8.decoder).join();
         if (!mounted) return;
         if (response.statusCode != 200) {
@@ -1768,72 +2013,140 @@ class _MapTabState extends State<MapTab> {
   }
 
   void _showChurchesSheet({String? placesError}) {
-    final total = verifiedChurches.length + _churches.length;
+    // Sheet-lifetime search state: the controller lives only while
+    // the sheet is open; the sheet's own rebuilds read its text.
+    final searchController = TextEditingController();
+    var filter = ChurchSourceFilter.all;
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => ListView(
-        shrinkWrap: true,
-        children: [
-          ListTile(
-            title: Text('Catholic Churches · Northern Luzon ($total)'),
-            subtitle: const Text(
-              'Verified entries first, then results from Google Places for "Catholic church".',
-            ),
-          ),
-          if (placesError != null)
-            ListTile(
-              leading: const Icon(Icons.info_outlined),
-              title: Text(placesError),
-            ),
-          if (verifiedChurches.isNotEmpty)
-            const ListTile(
-              title: Text('Verified',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          for (final church in verifiedChurches)
-            ListTile(
-              leading: const Icon(Icons.church_outlined),
-              title: Text(church.name),
-              subtitle: Text(church.address),
-              onTap: () {
-                Navigator.pop(context);
-                _selectChurch(church);
-              },
-            ),
-          if (_churches.isNotEmpty)
-            const ListTile(
-              title: Text('From Google Places',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          for (final church in _churches)
-            ListTile(
-              leading: const Icon(Icons.church_outlined),
-              title: Text(church.name),
-              subtitle: Text(
-                church.address.isEmpty
-                    ? 'Northern Luzon, Philippines'
-                    : church.address,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final visible = visibleChurches(
+            verified: verifiedChurches,
+            places: _churches,
+            query: searchController.text,
+            filter: filter,
+          );
+          final shown = visible.verified.length + visible.places.length;
+          final filtering =
+              searchController.text.trim().isNotEmpty ||
+              filter != ChurchSourceFilter.all;
+          return ListView(
+            shrinkWrap: true,
+            children: [
+              ListTile(
+                title: Text('Catholic Churches · Northern Luzon ($shown)'),
+                subtitle: const Text(
+                  'Verified entries first, then results from Google Places for "Catholic church".',
+                ),
               ),
-              onTap: () {
-                Navigator.pop(context);
-                _selectChurch(church);
-              },
-            ),
-          if (total == 0)
-            const ListTile(title: Text('No churches to show.')),
-          ListTile(
-            leading: const Icon(Icons.visibility_off_outlined),
-            title: const Text('Hide church markers'),
-            onTap: () {
-              Navigator.pop(context);
-              setState(() {
-                _churches = [];
-                _chip = null;
-                _selectedChurch = null;
-              });
-            },
-          ),
-        ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search churches…',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              searchController.clear();
+                              setSheetState(() {});
+                            },
+                          ),
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setSheetState(() {}),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final entry in const [
+                      (ChurchSourceFilter.all, 'All'),
+                      (ChurchSourceFilter.verified, 'Verified'),
+                      (ChurchSourceFilter.places, 'From Places'),
+                    ])
+                      ChoiceChip(
+                        label: Text(entry.$2),
+                        selected: filter == entry.$1,
+                        onSelected: (_) =>
+                            setSheetState(() => filter = entry.$1),
+                      ),
+                  ],
+                ),
+              ),
+              if (placesError != null)
+                ListTile(
+                  leading: const Icon(Icons.info_outlined),
+                  title: Text(placesError),
+                ),
+              if (visible.verified.isNotEmpty)
+                const ListTile(
+                  title: Text(
+                    'Verified',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              for (final church in visible.verified)
+                ListTile(
+                  leading: const Icon(Icons.church_outlined),
+                  title: Text(church.name),
+                  subtitle: Text(church.address),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _selectChurch(church);
+                  },
+                ),
+              if (visible.places.isNotEmpty)
+                const ListTile(
+                  title: Text(
+                    'From Google Places',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              for (final church in visible.places)
+                ListTile(
+                  leading: const Icon(Icons.church_outlined),
+                  title: Text(church.name),
+                  subtitle: Text(
+                    church.address.isEmpty
+                        ? 'Northern Luzon, Philippines'
+                        : church.address,
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _selectChurch(church);
+                  },
+                ),
+              if (shown == 0)
+                ListTile(
+                  title: Text(
+                    filtering
+                        ? 'No churches match your search.'
+                        : 'No churches to show.',
+                  ),
+                ),
+              ListTile(
+                leading: const Icon(Icons.visibility_off_outlined),
+                title: const Text('Hide church markers'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _churches = [];
+                    _chip = null;
+                    _selectedChurch = null;
+                  });
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1919,19 +2232,25 @@ class _MapTabState extends State<MapTab> {
     _fetchRoadPath(oLat, oLng, dest);
   }
 
+  /// Photo slot for the church details panel. Shows the real
+  /// Places photo when the entry carries photo data and the build
+  /// has an API key; anything else — every verified church, every
+  /// Places entry without photos, a failed load — shows the plain
+  /// honest empty state, never a placeholder picture. A standalone
+  /// widget so it stays widget-testable without the map.
+  Widget _churchPhotoSlot(ChurchPlace church) =>
+      ChurchPhotoSlot(church: church, apiKey: _googleApiKey);
+
   /// Church details panel: replaces the Nearby Routes content while
-  /// a church is selected. Collapsed it shows photo placeholder,
-  /// name, address, and the three actions; the detail rows below
-  /// appear as the sheet expands (OPEN animates it to full).
-  /// No photo exists in-app yet (no Places photo fetch, no
-  /// uploads), so the placeholder is an honest icon tile, never a
-  /// stock photo passed off as the church. No rating, hours, or
-  /// contact rows: none are verified, so none are shown.
+  /// a church is selected. Collapsed it shows the photo slot, name,
+  /// address, and the three actions; the detail rows below appear
+  /// as the sheet expands (OPEN animates it to full). No rating,
+  /// hours, or contact rows: none are verified, so none are shown.
   Widget _churchDetailsPanel(ColorScheme scheme, ChurchPlace church) {
-    final verified = verifiedChurches.any((c) =>
-        c.name == church.name &&
-        c.lat == church.lat &&
-        c.lng == church.lng);
+    final verified = verifiedChurches.any(
+      (c) =>
+          c.name == church.name && c.lat == church.lat && c.lng == church.lng,
+    );
     final pos = _userPos;
     final straightKm = pos == null
         ? null
@@ -1992,6 +2311,8 @@ class _MapTabState extends State<MapTab> {
           ],
         ),
         const SizedBox(height: 12),
+        _churchPhotoSlot(church),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
@@ -2033,9 +2354,7 @@ class _MapTabState extends State<MapTab> {
         ListTile(
           leading: const Icon(Icons.church_outlined),
           title: const Text('Denomination'),
-          subtitle: Text(
-            verified ? 'Roman Catholic' : 'Catholic Church',
-          ),
+          subtitle: Text(verified ? 'Roman Catholic' : 'Catholic Church'),
         ),
         if (straightKm != null)
           ListTile(
@@ -2054,9 +2373,7 @@ class _MapTabState extends State<MapTab> {
         ListTile(
           leading: const Icon(Icons.info_outlined),
           title: const Text('Source'),
-          subtitle: Text(
-            verified ? 'Verified listing' : 'Google Places',
-          ),
+          subtitle: Text(verified ? 'Verified listing' : 'Google Places'),
         ),
       ],
     );
@@ -2089,11 +2406,7 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-  Future<void> _fetchRoadPath(
-    double oLat,
-    double oLng,
-    Hub dest,
-  ) async {
+  Future<void> _fetchRoadPath(double oLat, double oLng, Hub dest) async {
     final requestId = ++_roadRequestId;
     if (_googleApiKey.isEmpty) {
       if (mounted) {
@@ -2107,9 +2420,7 @@ class _MapTabState extends State<MapTab> {
       ..connectionTimeout = const Duration(seconds: 15);
     try {
       final request = await client.postUrl(
-        Uri.parse(
-          'https://routes.googleapis.com/directions/v2:computeRoutes',
-        ),
+        Uri.parse('https://routes.googleapis.com/directions/v2:computeRoutes'),
       );
       request.headers
         ..set('Content-Type', 'application/json')
@@ -2117,35 +2428,38 @@ class _MapTabState extends State<MapTab> {
         ..set(
           'X-Goog-FieldMask',
           'routes.duration,routes.distanceMeters,'
-          'routes.polyline.encodedPolyline,'
-          'routes.legs.steps.navigationInstruction,'
-          'routes.legs.steps.distanceMeters,'
-          'routes.legs.steps.startLocation',
+              'routes.polyline.encodedPolyline,'
+              'routes.legs.steps.navigationInstruction,'
+              'routes.legs.steps.distanceMeters,'
+              'routes.legs.steps.startLocation',
         )
         ..set('X-Android-Package', 'com.byahetayo.app')
         ..set('X-Android-Cert', '89D1B79AD3344B1344A5D72694A1E863953F8534');
-      request.write(jsonEncode({
-        'origin': {
-          'location': {
-            'latLng': {'latitude': oLat, 'longitude': oLng},
+      request.write(
+        jsonEncode({
+          'origin': {
+            'location': {
+              'latLng': {'latitude': oLat, 'longitude': oLng},
+            },
           },
-        },
-        'destination': {
-          'location': {
-            'latLng': {'latitude': dest.lat, 'longitude': dest.lng},
+          'destination': {
+            'location': {
+              'latLng': {'latitude': dest.lat, 'longitude': dest.lng},
+            },
           },
-        },
-        'travelMode': 'DRIVE',
-        'routingPreference': 'TRAFFIC_UNAWARE',
-        'routeModifiers': routeModifiersJson(
-          avoidHighways: _avoidHighways,
-          avoidTolls: _avoidTolls,
-          avoidFerries: _avoidFerries,
-        ),
-        'languageCode': 'en',
-      }));
-      final response =
-          await request.close().timeout(const Duration(seconds: 20));
+          'travelMode': 'DRIVE',
+          'routingPreference': 'TRAFFIC_UNAWARE',
+          'routeModifiers': routeModifiersJson(
+            avoidHighways: _avoidHighways,
+            avoidTolls: _avoidTolls,
+            avoidFerries: _avoidFerries,
+          ),
+          'languageCode': 'en',
+        }),
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
       final body = await response.transform(utf8.decoder).join();
       if (!mounted || requestId != _roadRequestId) return;
       if (response.statusCode != 200) {
@@ -2161,28 +2475,28 @@ class _MapTabState extends State<MapTab> {
         return;
       }
       final decoded = jsonDecode(body) as Map<String, dynamic>;
-      final firstRoute = decoded['routes'] is List &&
-              (decoded['routes'] as List).isNotEmpty
+      final firstRoute =
+          decoded['routes'] is List && (decoded['routes'] as List).isNotEmpty
           ? (decoded['routes'] as List).first
           : null;
       final polyline = firstRoute is Map ? firstRoute['polyline'] : null;
       final duration = firstRoute is Map ? firstRoute['duration'] : null;
-      final distanceM =
-          firstRoute is Map ? firstRoute['distanceMeters'] : null;
+      final distanceM = firstRoute is Map ? firstRoute['distanceMeters'] : null;
       final encoded = polyline is Map ? polyline['encodedPolyline'] : null;
-      final points =
-          encoded is String ? decodePolyline(encoded) : const <LatLng>[];
+      final points = encoded is String
+          ? decodePolyline(encoded)
+          : const <LatLng>[];
       final steps = parseGoogleSteps(decoded);
       if (points.isNotEmpty && requestId == _roadRequestId) {
         setState(() {
           _roadPoints = points;
           _routeError = null;
           _routeDurationSec = parseGoogleDuration(duration);
-          _routeDistanceKm =
-              distanceM is num ? distanceM.toDouble() / 1000 : 0;
+          _routeDistanceKm = distanceM is num ? distanceM.toDouble() / 1000 : 0;
           _navSteps = steps.isEmpty ? null : steps;
-          _maneuverIdx =
-              steps.map((s) => nearestPointIndex(points, s.location)).toList();
+          _maneuverIdx = steps
+              .map((s) => nearestPointIndex(points, s.location))
+              .toList();
           _navStepIndex = 0;
         });
       } else if (requestId == _roadRequestId) {
@@ -2196,7 +2510,6 @@ class _MapTabState extends State<MapTab> {
       client.close();
     }
   }
-
 
   /// Resets navigation fields only (no stream work — callers that
   /// need it cancel the subscription themselves first).
@@ -2223,19 +2536,21 @@ class _MapTabState extends State<MapTab> {
     final user = _userPos;
     final dest = _activeRoute?.dest;
     if (user == null || dest == null) return;
-    _controller?.animateCamera(CameraUpdate.newLatLngBounds(
-      LatLngBounds(
-        southwest: LatLng(
-          math.min(user.latitude, dest.lat) - 0.01,
-          math.min(user.longitude, dest.lng) - 0.01,
+    _controller?.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(
+            math.min(user.latitude, dest.lat) - 0.01,
+            math.min(user.longitude, dest.lng) - 0.01,
+          ),
+          northeast: LatLng(
+            math.max(user.latitude, dest.lat) + 0.01,
+            math.max(user.longitude, dest.lng) + 0.01,
+          ),
         ),
-        northeast: LatLng(
-          math.max(user.latitude, dest.lat) + 0.01,
-          math.max(user.longitude, dest.lng) + 0.01,
-        ),
+        80,
       ),
-      80,
-    ));
+    );
   }
 
   /// Asks before ending navigation from the bottom bar (arrival
@@ -2341,14 +2656,16 @@ class _MapTabState extends State<MapTab> {
     // The camera follows the snapped position, so the view stays
     // on the road even when raw GPS drifts a few metres off it.
     final display = snapToRoute(user, _roadPoints);
-    _controller?.animateCamera(CameraUpdate.newCameraPosition(
-      CameraPosition(
-        target: display,
-        zoom: 17,
-        bearing: _northUp ? 0 : bearing,
-        tilt: 45,
+    _controller?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: display,
+          zoom: 17,
+          bearing: _northUp ? 0 : bearing,
+          tilt: 45,
+        ),
       ),
-    ));
+    );
     if (_voiceOn &&
         _navSteps != null &&
         _navSteps!.isNotEmpty &&
@@ -2359,12 +2676,7 @@ class _MapTabState extends State<MapTab> {
       );
     }
     if (dest != null && !_arrived) {
-      final d = haversineKm(
-        pos.latitude,
-        pos.longitude,
-        dest.lat,
-        dest.lng,
-      );
+      final d = haversineKm(pos.latitude, pos.longitude, dest.lat, dest.lng);
       if (d <= 0.15) {
         _arrived = true;
         _showArrivalDialog(dest);
@@ -2412,14 +2724,16 @@ class _MapTabState extends State<MapTab> {
   void _recenterNav() {
     final pos = _userPos;
     if (pos == null) return;
-    _controller?.animateCamera(CameraUpdate.newCameraPosition(
-      CameraPosition(
-        target: LatLng(pos.latitude, pos.longitude),
-        zoom: 17,
-        bearing: _northUp ? 0 : _navBearing,
-        tilt: 45,
+    _controller?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(pos.latitude, pos.longitude),
+          zoom: 17,
+          bearing: _northUp ? 0 : _navBearing,
+          tilt: 45,
+        ),
       ),
-    ));
+    );
   }
 
   void _showArrivalDialog(Hub dest) {
@@ -2457,44 +2771,45 @@ class _MapTabState extends State<MapTab> {
       _tracking = true;
     });
     await _moveTo(LatLng(position.latitude, position.longitude), zoom: 15);
-    _trackSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 20,
-      ),
-    ).listen((pos) {
-      if (!_tracking || !mounted) return;
-      setState(() => _userPos = pos);
-      _controller?.animateCamera(
-        CameraUpdate.newLatLng(LatLng(pos.latitude, pos.longitude)),
-      );
-      // Live preview: a user-origin preview route refreshes when
-      // the user actually moves (no camera yank — the follow above
-      // already moves the view). Hub-origin routes never refresh:
-      // their origin does not move.
-      final route = _activeRoute;
-      final origin = _activeRouteOrigin;
-      if (!_navigating &&
-          route != null &&
-          route.originName == 'Your location' &&
-          origin != null &&
-          _selectedHub != null) {
-        final moved = haversineKm(
-          pos.latitude,
-          pos.longitude,
-          origin.latitude,
-          origin.longitude,
-        );
-        if (shouldRefreshPreview(
-          movedKm: moved,
-          lastRefreshAt: _lastPreviewRefreshAt,
-          now: DateTime.now(),
-        )) {
-          _lastPreviewRefreshAt = DateTime.now();
-          _refreshPreviewRoute();
-        }
-      }
-    });
+    _trackSub =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 20,
+          ),
+        ).listen((pos) {
+          if (!_tracking || !mounted) return;
+          setState(() => _userPos = pos);
+          _controller?.animateCamera(
+            CameraUpdate.newLatLng(LatLng(pos.latitude, pos.longitude)),
+          );
+          // Live preview: a user-origin preview route refreshes when
+          // the user actually moves (no camera yank — the follow above
+          // already moves the view). Hub-origin routes never refresh:
+          // their origin does not move.
+          final route = _activeRoute;
+          final origin = _activeRouteOrigin;
+          if (!_navigating &&
+              route != null &&
+              route.originName == 'Your location' &&
+              origin != null &&
+              _selectedHub != null) {
+            final moved = haversineKm(
+              pos.latitude,
+              pos.longitude,
+              origin.latitude,
+              origin.longitude,
+            );
+            if (shouldRefreshPreview(
+              movedKm: moved,
+              lastRefreshAt: _lastPreviewRefreshAt,
+              now: DateTime.now(),
+            )) {
+              _lastPreviewRefreshAt = DateTime.now();
+              _refreshPreviewRoute();
+            }
+          }
+        });
   }
 
   /// Recomputes a user-origin preview route from the current
@@ -2505,8 +2820,11 @@ class _MapTabState extends State<MapTab> {
     final hub = _selectedHub;
     final pos = _userPos;
     if (hub == null || pos == null || _navigating) return;
-    final matches = routesFrom(pos.latitude, pos.longitude, 'Your location')
-        .where((r) => r.dest.name == hub.name);
+    final matches = routesFrom(
+      pos.latitude,
+      pos.longitude,
+      'Your location',
+    ).where((r) => r.dest.name == hub.name);
     if (matches.isEmpty) return;
     setState(() {
       _activeRoute = matches.first;
@@ -2586,8 +2904,9 @@ class _MapTabState extends State<MapTab> {
     final toIndex = hubs.indexWhere((h) => h.name == toName);
     if (toIndex < 0) return;
     setState(() {
-      _fromIndex =
-          fromName == 'Your location' ? -1 : hubs.indexWhere((h) => h.name == fromName);
+      _fromIndex = fromName == 'Your location'
+          ? -1
+          : hubs.indexWhere((h) => h.name == fromName);
       if (_fromIndex < -1) _fromIndex = _homeHub;
       _toIndex = toIndex;
       _destinationMode = true;
@@ -2603,10 +2922,20 @@ class _MapTabState extends State<MapTab> {
     if (_fromIndex == -1) {
       final pos = _userPos;
       if (pos != null) {
-        return (lat: pos.latitude, lng: pos.longitude, name: 'Your location', hub: null);
+        return (
+          lat: pos.latitude,
+          lng: pos.longitude,
+          name: 'Your location',
+          hub: null,
+        );
       }
       final fallback = hubs[_homeHub];
-      return (lat: fallback.lat, lng: fallback.lng, name: fallback.name, hub: fallback);
+      return (
+        lat: fallback.lat,
+        lng: fallback.lng,
+        name: fallback.name,
+        hub: fallback,
+      );
     }
     final hub = hubs[_fromIndex];
     return (lat: hub.lat, lng: hub.lng, name: hub.name, hub: hub);
@@ -2614,8 +2943,16 @@ class _MapTabState extends State<MapTab> {
 
   List<RouteInfo> _currentRoutes() {
     final origin = _userPos != null && _stopView != _StopView.all
-        ? (lat: _userPos!.latitude, lng: _userPos!.longitude, name: 'Your location')
-        : (lat: hubs[_homeHub].lat, lng: hubs[_homeHub].lng, name: hubs[_homeHub].name);
+        ? (
+            lat: _userPos!.latitude,
+            lng: _userPos!.longitude,
+            name: 'Your location',
+          )
+        : (
+            lat: hubs[_homeHub].lat,
+            lng: hubs[_homeHub].lng,
+            name: hubs[_homeHub].name,
+          );
     var routes = routesFrom(origin.lat, origin.lng, origin.name);
     if (_stopView == _StopView.nearest && routes.isNotEmpty) {
       routes = [routes.first];
@@ -2670,14 +3007,10 @@ class _MapTabState extends State<MapTab> {
         // dashed = direct-line fallback.
         patterns: solid
             ? const []
-            : [
-                PatternItem.dash(24),
-                PatternItem.gap(12),
-              ],
+            : [PatternItem.dash(24), PatternItem.gap(12)],
       ),
     };
   }
-
 
   Set<Marker> _markers() {
     final markers = <Marker>{};
@@ -2689,14 +3022,16 @@ class _MapTabState extends State<MapTab> {
       // route is active (a selected route still needs its pins).
       if (_chip == 'Churches' && _activeRoute == null) continue;
       final selected = _selectedHub?.name == hub.name;
-      markers.add(Marker(
-        markerId: MarkerId(hub.name),
-        position: LatLng(hub.lat, hub.lng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          selected ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueGreen,
+      markers.add(
+        Marker(
+          markerId: MarkerId(hub.name),
+          position: LatLng(hub.lat, hub.lng),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            selected ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueGreen,
+          ),
+          onTap: () => _selectHub(hub),
         ),
-        onTap: () => _selectHub(hub),
-      ));
+      );
     }
     // Nav cursor only: the realistic car when Car is the selected
     // vehicle, otherwise the selected vehicle's own icon. Rotates
@@ -2710,59 +3045,92 @@ class _MapTabState extends State<MapTab> {
       } else {
         customIcon = _vehicleIcons?[_vehicle] ?? _arrowIcon;
       }
-      markers.add(Marker(
-        markerId: const MarkerId('user-vehicle'),
-        position: _navigating
-            ? snapToRoute(
-                LatLng(_userPos!.latitude, _userPos!.longitude),
-                _roadPoints,
-              )
-            : LatLng(_userPos!.latitude, _userPos!.longitude),
-        icon: customIcon ??
-            BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueGreen,
-            ),
-        rotation: customIcon == null ? 0 : (_navigating ? _navBearing : 0),
-        anchor: const Offset(0.5, 0.5),
-        flat: true,
-      ));
+      markers.add(
+        Marker(
+          markerId: const MarkerId('user-vehicle'),
+          position: _navigating
+              ? snapToRoute(
+                  LatLng(_userPos!.latitude, _userPos!.longitude),
+                  _roadPoints,
+                )
+              : LatLng(_userPos!.latitude, _userPos!.longitude),
+          icon:
+              customIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          rotation: customIcon == null ? 0 : (_navigating ? _navBearing : 0),
+          anchor: const Offset(0.5, 0.5),
+          flat: true,
+        ),
+      );
     }
-    // Catholic church markers: verified bundled churches first,
-    // then Google Places results. Only while the Churches chip is
-    // active and not navigating, so they never clutter a route.
-    // Tapping one flies the camera there.
+    // Catholic church markers, grid-clustered by zoom: verified
+    // bundled churches + Google Places results. Only while the
+    // Churches chip is active and not navigating, so they never
+    // clutter a route. Tapping one flies the camera there;
+    // tapping a cluster zooms toward it until it splits.
     if (!_navigating && _chip == 'Churches') {
-      for (final church in verifiedChurches) {
-        markers.add(Marker(
-          markerId: MarkerId('verified-church:${church.name}'),
-          position: LatLng(church.lat, church.lng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            _isSelectedChurch(church)
-                ? BitmapDescriptor.hueAzure
-                : BitmapDescriptor.hueViolet,
-          ),
-          infoWindow: InfoWindow(
-            title: church.name,
-            snippet: church.address,
-          ),
-          onTap: () => _selectChurch(church),
-        ));
-      }
-      for (final church in _churches) {
-        markers.add(Marker(
-          markerId: MarkerId('church:${church.name}'),
-          position: LatLng(church.lat, church.lng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            _isSelectedChurch(church)
-                ? BitmapDescriptor.hueAzure
-                : BitmapDescriptor.hueViolet,
-          ),
-          infoWindow: InfoWindow(
-            title: church.name,
-            snippet: church.address,
-          ),
-          onTap: () => _selectChurch(church),
-        ));
+      final zoom = _lastCamera?.zoom ?? _initialCamera.zoom;
+      final clusters = clusterChurches([
+        ...verifiedChurches,
+        ..._churches,
+      ], zoom);
+      for (final cluster in clusters) {
+        if (cluster.isSingle) {
+          final church = cluster.churches.first;
+          final verified = verifiedChurches.any(
+            (c) =>
+                c.name == church.name &&
+                c.lat == church.lat &&
+                c.lng == church.lng,
+          );
+          markers.add(
+            Marker(
+              markerId: MarkerId(
+                '${verified ? 'verified-church' : 'church'}:${church.name}',
+              ),
+              position: LatLng(church.lat, church.lng),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                _isSelectedChurch(church)
+                    ? BitmapDescriptor.hueAzure
+                    : BitmapDescriptor.hueViolet,
+              ),
+              infoWindow: InfoWindow(
+                title: church.name,
+                snippet: church.address,
+              ),
+              onTap: () => _selectChurch(church),
+            ),
+          );
+        } else {
+          final count = cluster.count;
+          markers.add(
+            Marker(
+              markerId: MarkerId(
+                'church-cluster:${cluster.lat.toStringAsFixed(5)},'
+                '${cluster.lng.toStringAsFixed(5)}',
+              ),
+              position: LatLng(cluster.lat, cluster.lng),
+              icon:
+                  _clusterIcons[count] ??
+                  BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueOrange,
+                  ),
+              infoWindow: InfoWindow(
+                title: '$count churches',
+                snippet: 'Tap to zoom in',
+              ),
+              onTap: () {
+                _controller?.animateCamera(
+                  CameraUpdate.newLatLngZoom(
+                    LatLng(cluster.lat, cluster.lng),
+                    math.min(zoom + 2, 20.0),
+                  ),
+                );
+              },
+            ),
+          );
+          _ensureClusterIcon(count);
+        }
       }
     }
     return markers;
@@ -2772,9 +3140,11 @@ class _MapTabState extends State<MapTab> {
     final q = _searchQuery.trim().toLowerCase();
     if (q.isEmpty) return const [];
     return hubs
-        .where((h) =>
-            h.name.toLowerCase().contains(q) ||
-            h.region.toLowerCase().contains(q))
+        .where(
+          (h) =>
+              h.name.toLowerCase().contains(q) ||
+              h.region.toLowerCase().contains(q),
+        )
         .take(6)
         .toList();
   }
@@ -2847,43 +3217,51 @@ class _MapTabState extends State<MapTab> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (!_navigating && _activeRoute != null) _routePreviewCard(),
-                if (!_navigating && _activeRoute == null) Material(
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(28),
-                  // Light search bar on the dark map, exactly like the
-                  // approved iPhone preview (and the Davao reference).
-                  color: Colors.white,
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(color: Colors.black87),
-                    decoration: InputDecoration(
-                      hintText: 'Search places, landmarks, or streets',
-                      hintStyle: const TextStyle(color: Colors.black54),
-                      prefixIcon:
-                          const Icon(Icons.menu, color: Colors.black54),
-                      suffixIcon: _searchQuery.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.clear,
-                                  color: Colors.black54),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(28),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                if (!_navigating && _activeRoute == null)
+                  Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(28),
+                    // Light search bar on the dark map, exactly like the
+                    // approved iPhone preview (and the Davao reference).
+                    color: Colors.white,
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      style: const TextStyle(color: Colors.black87),
+                      decoration: InputDecoration(
+                        hintText: 'Search places, landmarks, or streets',
+                        hintStyle: const TextStyle(color: Colors.black54),
+                        prefixIcon: const Icon(
+                          Icons.menu,
+                          color: Colors.black54,
+                        ),
+                        suffixIcon: _searchQuery.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(
+                                  Icons.clear,
+                                  color: Colors.black54,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(28),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                if (!_navigating && _activeRoute == null && (searchResults.isNotEmpty || _searchQuery.trim().isNotEmpty))
+                if (!_navigating &&
+                    _activeRoute == null &&
+                    (searchResults.isNotEmpty ||
+                        _searchQuery.trim().isNotEmpty))
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Material(
@@ -2904,85 +3282,89 @@ class _MapTabState extends State<MapTab> {
                           : Column(
                               mainAxisSize: MainAxisSize.min,
                               children: searchResults
-                                  .map((hub) => ListTile(
-                                        leading: const Icon(
-                                          Icons.place_outlined,
+                                  .map(
+                                    (hub) => ListTile(
+                                      leading: const Icon(
+                                        Icons.place_outlined,
+                                        color: Colors.black54,
+                                      ),
+                                      title: Text(
+                                        hub.name,
+                                        style: const TextStyle(
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        hub.region,
+                                        style: const TextStyle(
                                           color: Colors.black54,
                                         ),
-                                        title: Text(
-                                          hub.name,
-                                          style: const TextStyle(
-                                            color: Colors.black87,
-                                          ),
-                                        ),
-                                        subtitle: Text(
-                                          hub.region,
-                                          style: const TextStyle(
-                                            color: Colors.black54,
-                                          ),
-                                        ),
-                                        onTap: () {
-                                          _searchController.clear();
-                                          setState(() => _searchQuery = '');
-                                          FocusScope.of(context).unfocus();
-                                          _selectHub(hub);
-                                        },
-                                      ))
+                                      ),
+                                      onTap: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                        FocusScope.of(context).unfocus();
+                                        _selectHub(hub);
+                                      },
+                                    ),
+                                  )
                                   .toList(),
                             ),
                     ),
                   ),
-                if (!_navigating && _activeRoute == null) const SizedBox(height: 8),
-                if (!_navigating && _activeRoute == null) SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final chip in const [
-                        'Malls',
-                        'Schools',
-                        'Hospitals',
-                        'Churches',
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ActionChip(
-                            label: Text(chip),
-                            backgroundColor: _chip == chip
-                                ? scheme.primary
-                                : scheme.surface,
-                            labelStyle: TextStyle(
-                              color: _chip == chip
-                                  ? scheme.onPrimary
-                                  : scheme.onSurface,
-                            ),
-                            side: BorderSide(color: scheme.outline),
-                            onPressed: () {
-                              if (chip == 'Churches') {
-                                // Toggle: tap = churches-only map,
-                                // tap again = back to the normal map
-                                // (hub pins + base POIs return).
-                                // While loading, ignore taps.
-                                if (_churchesLoading) return;
-                                if (_chip == 'Churches') {
-                                  setState(() {
-                                    _churches = [];
-                                    _chip = null;
-                                    _selectedChurch = null;
-                                  });
+                if (!_navigating && _activeRoute == null)
+                  const SizedBox(height: 8),
+                if (!_navigating && _activeRoute == null)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final chip in const [
+                          'Malls',
+                          'Schools',
+                          'Hospitals',
+                          'Churches',
+                        ])
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ActionChip(
+                              label: Text(chip),
+                              backgroundColor: _chip == chip
+                                  ? scheme.primary
+                                  : scheme.surface,
+                              labelStyle: TextStyle(
+                                color: _chip == chip
+                                    ? scheme.onPrimary
+                                    : scheme.onSurface,
+                              ),
+                              side: BorderSide(color: scheme.outline),
+                              onPressed: () {
+                                if (chip == 'Churches') {
+                                  // Toggle: tap = churches-only map,
+                                  // tap again = back to the normal map
+                                  // (hub pins + base POIs return).
+                                  // While loading, ignore taps.
+                                  if (_churchesLoading) return;
+                                  if (_chip == 'Churches') {
+                                    setState(() {
+                                      _churches = [];
+                                      _chip = null;
+                                      _selectedChurch = null;
+                                    });
+                                  } else {
+                                    _fetchChurches();
+                                  }
                                 } else {
-                                  _fetchChurches();
+                                  _snack(
+                                    'Walang verified places data pa para sa $chip.',
+                                  );
                                 }
-                              } else {
-                                _snack(
-                                  'Walang verified places data pa para sa $chip.',
-                                );
-                              }
-                            },
+                              },
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
                 if (_navigating) _navBanner(),
                 // Vehicle selector inside navigation: switching
                 // changes the live cursor (Car = the realistic car)
@@ -3002,8 +3384,7 @@ class _MapTabState extends State<MapTab> {
                               avatar: Icon(vehicleIcon(v), size: 18),
                               label: Text(vehicleLabel(v)),
                               selected: _vehicle == v,
-                              onSelected: (_) =>
-                                  setState(() => _vehicle = v),
+                              onSelected: (_) => setState(() => _vehicle = v),
                             ),
                           ),
                       ],
@@ -3033,24 +3414,21 @@ class _MapTabState extends State<MapTab> {
                 _LogoToggleButton(
                   tooltip: sheetToggleTooltip(_sheetHidden),
                   onPressed: () => setState(() => _sheetHidden = !_sheetHidden),
-
                 ),
                 const SizedBox(height: 10),
               ],
               _MapControlButton(
                 icon: Icons.add,
                 tooltip: 'Zoom in',
-                onPressed: () => _controller?.animateCamera(
-                  CameraUpdate.zoomIn(),
-                ),
+                onPressed: () =>
+                    _controller?.animateCamera(CameraUpdate.zoomIn()),
               ),
               const SizedBox(height: 10),
               _MapControlButton(
                 icon: Icons.remove,
                 tooltip: 'Zoom out',
-                onPressed: () => _controller?.animateCamera(
-                  CameraUpdate.zoomOut(),
-                ),
+                onPressed: () =>
+                    _controller?.animateCamera(CameraUpdate.zoomOut()),
               ),
               const SizedBox(height: 10),
               _MapControlButton(
@@ -3094,7 +3472,6 @@ class _MapTabState extends State<MapTab> {
                   onPressed: _overviewNav,
                 ),
               ],
-
             ],
           ),
         ),
@@ -3137,12 +3514,7 @@ class _MapTabState extends State<MapTab> {
         ),
         // Navigator bottom bar + re-center pill (Google-style).
         if (_navigating)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: _navBottomBar(),
-          ),
+          Positioned(left: 16, right: 16, bottom: 16, child: _navBottomBar()),
         if (_navigating)
           Positioned(
             right: 16,
@@ -3159,11 +3531,7 @@ class _MapTabState extends State<MapTab> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.navigation,
-                        color: Colors.white,
-                        size: 18,
-                      ),
+                      Icon(Icons.navigation, color: Colors.white, size: 18),
                       SizedBox(width: 6),
                       Text(
                         'Re-center',
@@ -3238,7 +3606,9 @@ class _MapTabState extends State<MapTab> {
                             TextButton(
                               onPressed: _toggleDestinationMode,
                               child: Text(
-                                _destinationMode ? 'Back to routes' : 'Plan a Trip',
+                                _destinationMode
+                                    ? 'Back to routes'
+                                    : 'Plan a Trip',
                               ),
                             ),
                           ],
@@ -3259,7 +3629,7 @@ class _MapTabState extends State<MapTab> {
                   ),
                 );
               },
-              ),
+            ),
           ),
       ],
     );
@@ -3277,8 +3647,7 @@ class _MapTabState extends State<MapTab> {
         if (route.originName == 'Your location') {
           _fromIndex = -1;
         } else {
-          final fromIdx =
-              hubs.indexWhere((h) => h.name == route.originName);
+          final fromIdx = hubs.indexWhere((h) => h.name == route.originName);
           _fromIndex = fromIdx < 0 ? _homeHub : fromIdx;
         }
       }
@@ -3325,9 +3694,7 @@ class _MapTabState extends State<MapTab> {
                     setState(() => _sheetSearchQuery = '');
                   },
                 ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       const SizedBox(height: 12),
@@ -3337,71 +3704,71 @@ class _MapTabState extends State<MapTab> {
       // In a church-originated preview these three rows hide, so
       // only the church route card shows below the search bar.
       if (showBrowsingChrome(_churchPreview)) ...[
-      Wrap(
-        spacing: 8,
-        children: [
-          ChoiceChip(
-            label: const Text('All stops'),
-            selected: _stopView == _StopView.all,
-            onSelected: (_) => setState(() => _stopView = _StopView.all),
-          ),
-          ChoiceChip(
-            label: const Text('Nearest stop'),
-            selected: _stopView == _StopView.nearest,
-            onSelected: (_) => setState(() => _stopView = _StopView.nearest),
-          ),
-          FilterChip(
-            label: const Text('Live Tracking'),
-            selected: _tracking,
-            onSelected: (_) => _toggleTracking(),
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
-      // Direction filters with live counts.
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
+        Wrap(
+          spacing: 8,
           children: [
-            for (final entry in {
-              'All': allCount,
-              'Northbound': northCount,
-              'Southbound': southCount,
-            }.entries)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text('${entry.key} (${entry.value})'),
-                  selected: _direction == entry.key,
-                  onSelected: (_) => setState(() => _direction = entry.key),
-                ),
-              ),
+            ChoiceChip(
+              label: const Text('All stops'),
+              selected: _stopView == _StopView.all,
+              onSelected: (_) => setState(() => _stopView = _StopView.all),
+            ),
+            ChoiceChip(
+              label: const Text('Nearest stop'),
+              selected: _stopView == _StopView.nearest,
+              onSelected: (_) => setState(() => _stopView = _StopView.nearest),
+            ),
+            FilterChip(
+              label: const Text('Live Tracking'),
+              selected: _tracking,
+              onSelected: (_) => _toggleTracking(),
+            ),
           ],
         ),
-      ),
-      const SizedBox(height: 12),
-      // AM/PM selection + honest schedule note.
-      Row(
-        children: [
-          SegmentedButton<_AmPm>(
-            segments: const [
-              ButtonSegment(value: _AmPm.am, label: Text('AM')),
-              ButtonSegment(value: _AmPm.pm, label: Text('PM')),
+        const SizedBox(height: 12),
+        // Direction filters with live counts.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final entry in {
+                'All': allCount,
+                'Northbound': northCount,
+                'Southbound': southCount,
+              }.entries)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text('${entry.key} (${entry.value})'),
+                    selected: _direction == entry.key,
+                    onSelected: (_) => setState(() => _direction = entry.key),
+                  ),
+                ),
             ],
-            selected: {_amPm},
-            onSelectionChanged: (values) =>
-                setState(() => _amPm = values.first),
           ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Walang verified timetable pa — hindi pa makakapag-filter '
-              'ng departures ang AM/PM.',
-              style: TextStyle(fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        // AM/PM selection + honest schedule note.
+        Row(
+          children: [
+            SegmentedButton<_AmPm>(
+              segments: const [
+                ButtonSegment(value: _AmPm.am, label: Text('AM')),
+                ButtonSegment(value: _AmPm.pm, label: Text('PM')),
+              ],
+              selected: {_amPm},
+              onSelectionChanged: (values) =>
+                  setState(() => _amPm = values.first),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Walang verified timetable pa — hindi pa makakapag-filter '
+                'ng departures ang AM/PM.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
       ],
       const SizedBox(height: 12),
       if (_selectedHub != null)
@@ -3499,9 +3866,7 @@ class _MapTabState extends State<MapTab> {
                           children: [
                             for (final s in _navSteps!)
                               ListTile(
-                                leading: Icon(
-                                  navArrowIcon(s.instruction),
-                                ),
+                                leading: Icon(navArrowIcon(s.instruction)),
                                 title: Text(shortAction(s.instruction)),
                                 trailing: Text(
                                   formatNavDistance(s.distanceMeters / 1000),
@@ -3532,15 +3897,15 @@ class _MapTabState extends State<MapTab> {
                         onPressed: () => _toggleSaved(_activeRoute!),
                         icon: Icon(
                           _savedRoutes.contains(
-                            '${_activeRoute!.originName}>${_activeRoute!.dest.name}',
-                          )
+                                '${_activeRoute!.originName}>${_activeRoute!.dest.name}',
+                              )
                               ? Icons.favorite
                               : Icons.favorite_border,
                         ),
                         label: Text(
                           _savedRoutes.contains(
-                            '${_activeRoute!.originName}>${_activeRoute!.dest.name}',
-                          )
+                                '${_activeRoute!.originName}>${_activeRoute!.dest.name}',
+                              )
                               ? 'Saved'
                               : 'Save',
                         ),
@@ -3568,35 +3933,35 @@ class _MapTabState extends State<MapTab> {
       // The direction-grouped stops list (and its empty state) hides
       // in a church-originated preview, like the rows above.
       if (showBrowsingChrome(_churchPreview)) ...[
-      if (visible.isEmpty)
-        Card(
-          child: ListTile(
-            title: Text(
-              _vehicle == VehicleType.train
-                  ? 'No available routes for this vehicle type.'
-                  : _sheetSearchQuery.trim().isEmpty
-                      ? 'Walang ruta sa filter na ito.'
-                      : 'Walang rutang nakita para sa "$_sheetSearchQuery".',
+        if (visible.isEmpty)
+          Card(
+            child: ListTile(
+              title: Text(
+                _vehicle == VehicleType.train
+                    ? 'No available routes for this vehicle type.'
+                    : _sheetSearchQuery.trim().isEmpty
+                    ? 'Walang ruta sa filter na ito.'
+                    : 'Walang rutang nakita para sa "$_sheetSearchQuery".',
+              ),
+              subtitle: Text(
+                _vehicle == VehicleType.train
+                    ? 'There is no passenger train service on these routes.'
+                    : 'Subukan ang ibang search, direksyon o stop view.',
+              ),
+              trailing: _vehicle == VehicleType.train
+                  ? TextButton(
+                      onPressed: () =>
+                          setState(() => _vehicle = VehicleType.anyVehicle),
+                      child: const Text('View other vehicles'),
+                    )
+                  : null,
             ),
-            subtitle: Text(
-              _vehicle == VehicleType.train
-                  ? 'There is no passenger train service on these routes.'
-                  : 'Subukan ang ibang search, direksyon o stop view.',
-            ),
-            trailing: _vehicle == VehicleType.train
-                ? TextButton(
-                    onPressed: () =>
-                        setState(() => _vehicle = VehicleType.anyVehicle),
-                    child: const Text('View other vehicles'),
-                  )
-                : null,
-          ),
-        )
-      else if (_direction == 'All')
-        for (final dir in Direction.values)
-          ..._directionGroup(dir, visible, scheme)
-      else
-        for (final route in visible) _routeCard(route, scheme),
+          )
+        else if (_direction == 'All')
+          for (final dir in Direction.values)
+            ..._directionGroup(dir, visible, scheme)
+        else
+          for (final route in visible) _routeCard(route, scheme),
       ],
       if (_savedRoutes.isNotEmpty) ...[
         const SizedBox(height: 16),
@@ -3675,8 +4040,7 @@ class _MapTabState extends State<MapTab> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w400,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                       color: selected ? scheme.primary : null,
                     ),
                   ),
@@ -3780,10 +4144,10 @@ class _MapTabState extends State<MapTab> {
           _vehicle == VehicleType.car
               ? Icons.directions_car_outlined
               : _vehicle == VehicleType.motorcycle
-                  ? Icons.two_wheeler_outlined
-                  : _vehicle == VehicleType.train
-                      ? Icons.train_outlined
-                      : Icons.directions_bus_outlined,
+              ? Icons.two_wheeler_outlined
+              : _vehicle == VehicleType.train
+              ? Icons.train_outlined
+              : Icons.directions_bus_outlined,
         ),
         title: Text('${route.originName} → ${route.dest.name}'),
         subtitle: Text(
@@ -3832,10 +4196,7 @@ class _MapTabState extends State<MapTab> {
           padding: EdgeInsets.all(14),
           child: Text(
             'Getting your location…',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
         ),
       );
@@ -3951,8 +4312,9 @@ class _MapTabState extends State<MapTab> {
       // Purely Google when available: remaining (Google polyline
       // sum) over Google's own distance, times Google's duration.
       // The x1.22 roadKm estimate is only the fallback.
-      final full =
-          _routeDistanceKm > 0 ? _routeDistanceKm : (_activeRoute?.roadKm ?? 0);
+      final full = _routeDistanceKm > 0
+          ? _routeDistanceKm
+          : (_activeRoute?.roadKm ?? 0);
       final mins = remainingMinutes(
         remainingKm: remaining,
         fullKm: full,
@@ -3966,8 +4328,9 @@ class _MapTabState extends State<MapTab> {
         subText = '${remaining.toStringAsFixed(1)} km to ${dest.name}';
       }
     }
-    final speedText =
-        _navSpeedKmh > 0.5 ? '${_navSpeedKmh.round()} km/h' : '-- km/h';
+    final speedText = _navSpeedKmh > 0.5
+        ? '${_navSpeedKmh.round()} km/h'
+        : '-- km/h';
     return Material(
       color: const Color(0xFF1F2226),
       borderRadius: BorderRadius.circular(16),
@@ -3995,10 +4358,7 @@ class _MapTabState extends State<MapTab> {
                   ),
                   Text(
                     subText,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
@@ -4011,9 +4371,7 @@ class _MapTabState extends State<MapTab> {
               tooltip: _voiceOn ? 'Mute voice' : 'Unmute voice',
               onPressed: () {
                 setState(() => _voiceOn = !_voiceOn);
-                if (_voiceOn &&
-                    _navSteps != null &&
-                    _navSteps!.isNotEmpty) {
+                if (_voiceOn && _navSteps != null && _navSteps!.isNotEmpty) {
                   _speakInstruction(
                     _navSteps![_navStepIndex.clamp(0, _navSteps!.length - 1)]
                         .instruction,
@@ -4038,7 +4396,6 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-
   Widget _destinationPanel(ColorScheme scheme) {
     final origin = _origin();
     final dest = hubs[_toIndex];
@@ -4047,7 +4404,7 @@ class _MapTabState extends State<MapTab> {
     final roadKm = math.max(1.0, direct * 1.22);
     final mountain =
         (origin.hub != null && isMountainHub(origin.hub!)) ||
-            isMountainHub(dest);
+        isMountainHub(dest);
     final sameRegion = origin.hub != null && origin.hub!.region == dest.region;
     final minutes = estimateTripMinutes(
       roadKm: roadKm,
@@ -4076,8 +4433,7 @@ class _MapTabState extends State<MapTab> {
       vehicle: VehicleType.bus,
       roadKm: roadKm,
     );
-    final transitFareText =
-        transitFare == null ? 'No fare' : peso(transitFare);
+    final transitFareText = transitFare == null ? 'No fare' : peso(transitFare);
     double? walkKm;
     if (_fromIndex == -1) {
       walkKm = 0;
@@ -4182,10 +4538,10 @@ class _MapTabState extends State<MapTab> {
                   mode == TravelMode.transit
                       ? Icons.directions_bus_outlined
                       : mode == TravelMode.motorcycle
-                          ? Icons.two_wheeler_outlined
-                          : mode == TravelMode.bicycle
-                              ? Icons.directions_bike_outlined
-                              : Icons.directions_walk_outlined,
+                      ? Icons.two_wheeler_outlined
+                      : mode == TravelMode.bicycle
+                      ? Icons.directions_bike_outlined
+                      : Icons.directions_walk_outlined,
                 ),
                 title: Text(mode.label),
                 subtitle: Text(
@@ -4206,12 +4562,9 @@ class _MapTabState extends State<MapTab> {
                         ),
                         visualDensity: VisualDensity.compact,
                       ),
-                    if (modeMinutes[mode] == fastest)
-                      const SizedBox(width: 8),
+                    if (modeMinutes[mode] == fastest) const SizedBox(width: 8),
                     Text(
-                      mode == TravelMode.transit
-                          ? transitFareText
-                          : 'No fare',
+                      mode == TravelMode.transit ? transitFareText : 'No fare',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -4223,11 +4576,7 @@ class _MapTabState extends State<MapTab> {
           const SizedBox(height: 12),
         ],
         if (sameHub)
-          const Card(
-            child: ListTile(
-              title: Text('Choose two different hubs.'),
-            ),
-          )
+          const Card(child: ListTile(title: Text('Choose two different hubs.')))
         else
           Card(
             child: Padding(
@@ -4258,8 +4607,8 @@ class _MapTabState extends State<MapTab> {
                     walkKm == null
                         ? '—'
                         : walkKm == 0
-                            ? 'You are here'
-                            : '${walkKm.toStringAsFixed(1)} km to origin',
+                        ? 'You are here'
+                        : '${walkKm.toStringAsFixed(1)} km to origin',
                   ),
                   _resultRow('Estimated fare', fareText),
                   if (fareNote != null) ...[
@@ -4310,7 +4659,6 @@ class _MapTabState extends State<MapTab> {
                       ),
                     ],
                   ),
-
                 ],
               ),
             ),
@@ -4373,11 +4721,8 @@ class _MapControlButton extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : iconRotation == null
-                ? Icon(icon)
-                : Transform.rotate(
-                    angle: iconRotation!,
-                    child: Icon(icon),
-                  ),
+            ? Icon(icon)
+            : Transform.rotate(angle: iconRotation!, child: Icon(icon)),
         tooltip: tooltip,
         onPressed: onPressed,
       ),
@@ -4411,11 +4756,7 @@ class _LogoToggleButton extends StatelessWidget {
           child: const SizedBox(
             width: 48,
             height: 48,
-            child: Icon(
-              Icons.directions_bus,
-              color: Colors.white,
-              size: 26,
-            ),
+            child: Icon(Icons.directions_bus, color: Colors.white, size: 26),
           ),
         ),
       ),
@@ -4443,8 +4784,7 @@ class _MapModeSegment extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color:
-              selected ? const Color(0xFF16A34A) : Colors.transparent,
+          color: selected ? const Color(0xFF16A34A) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
