@@ -1,5 +1,5 @@
-import 'package:byahetayo/features/community_admin.dart';
-import 'package:byahetayo/features/community_posts.dart';
+import 'package:estudyantego/features/community_admin.dart';
+import 'package:estudyantego/features/community_posts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -40,17 +40,17 @@ const _rejected = CommunityPost(
 );
 
 void main() {
-  testWidgets('admin screen states device-only review plainly', (
+  testWidgets('admin screen states shared review plainly', (
     tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: CommunityAdminScreen(posts: const [_pending], onChanged: (_) {}),
+        home: CommunityAdminScreen(localPosts: const [_pending], onLocalChanged: (_) {}),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('no server-side review'), findsOneWidget);
-    expect(find.text('Pending verification'), findsOneWidget);
+    expect(find.textContaining('visible to all users once approved'), findsOneWidget);
+    expect(find.text('Local posts — Pending verification'), findsOneWidget);
     expect(find.text('Vigan City → Cabugao'), findsOneWidget);
     expect(find.text('Operator: CTransco'), findsOneWidget);
   });
@@ -62,8 +62,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityAdminScreen(
-          posts: const [_pending],
-          onChanged: (list) => changed = list,
+          localPosts: const [_pending],
+          onLocalChanged: (list) => changed = list,
         ),
       ),
     );
@@ -82,8 +82,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityAdminScreen(
-          posts: const [_pending],
-          onChanged: (list) => changed = list,
+          localPosts: const [_pending],
+          onLocalChanged: (list) => changed = list,
         ),
       ),
     );
@@ -101,14 +101,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityAdminScreen(
-          posts: const [_approved, _rejected],
-          onChanged: (_) {},
+          localPosts: const [_approved, _rejected],
+          onLocalChanged: (_) {},
         ),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Published'), findsOneWidget);
-    expect(find.text('Rejected'), findsOneWidget);
+    expect(find.text('Local posts — Published'), findsOneWidget);
+    expect(find.text('Local posts — Rejected'), findsOneWidget);
     expect(find.text('Cabugao → Vigan City'), findsOneWidget);
     expect(find.text('Sinait → Cabugao'), findsOneWidget);
   });
@@ -120,8 +120,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityAdminScreen(
-          posts: const [_rejected],
-          onChanged: (list) => changed = list,
+          localPosts: const [_rejected],
+          onLocalChanged: (list) => changed = list,
         ),
       ),
     );

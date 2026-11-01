@@ -1,4 +1,4 @@
-// ByaheTayo splash screen.
+// EstudyanteGO splash screen.
 //
 // Deep emerald gradient, logo mark + wordmark, and a one-shot loading
 // bar. The screen resolves the next destination (onboarding, sign-in,

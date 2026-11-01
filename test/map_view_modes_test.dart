@@ -1,7 +1,7 @@
 // Unit tests for the Map tab's 2D / 3D / Satellite view modes.
 // Pure camera-parameter mapping only — no GoogleMap widget needed,
 // so these run without a platform view.
-import 'package:byahetayo/features/map_tab.dart';
+import 'package:estudyantego/features/map_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 

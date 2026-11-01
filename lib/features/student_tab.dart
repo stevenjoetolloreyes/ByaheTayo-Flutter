@@ -1233,8 +1233,8 @@ class _StudentTabState extends State<StudentTab> {
       icon: Icons.calendar_month_outlined,
       title: 'School Calendar',
       subtitle: schoolLabel == null || schoolLabel.isEmpty
-          ? 'Meron pasok at wala — holidays naka-red.'
-          : '$schoolLabel · Meron pasok at wala',
+          ? 'School days and no-school days — holidays in red.'
+          : '$schoolLabel · School days and no-school days',
       children: [
         Text('${monthName(now.month)} ${now.year}',
             style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -1325,7 +1325,7 @@ class _StudentTabState extends State<StudentTab> {
         if (schoolLabel == null || schoolLabel.isEmpty) ...[
           const SizedBox(height: 8),
           const Text(
-              'Walang school na naka-save — lagay mo yung school mo sa Account → Student Information para magpakita yung school events dito.'),
+              'No school saved — add your school in Account → Student Information to show school events here.'),
         ] else if (monthEvents.isNotEmpty) ...[
           const SizedBox(height: 8),
           const Text('Events this month',
@@ -1340,7 +1340,7 @@ class _StudentTabState extends State<StudentTab> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                        '${formatEventRange(e)} · ${e.name} · ${e.noClasses ? 'Wala pasok' : 'May pasok'}'),
+                        '${formatEventRange(e)} · ${e.name} · ${e.noClasses ? 'No classes' : 'Has classes'}'),
                   ),
                 ],
               ),

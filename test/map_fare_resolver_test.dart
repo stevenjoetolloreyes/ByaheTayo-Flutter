@@ -1,6 +1,6 @@
 // Unit tests for the vehicle-aware preview fare (no GoogleMap needed).
-import 'package:byahetayo/features/fares_tab.dart';
-import 'package:byahetayo/features/map_tab.dart';
+import 'package:estudyantego/features/fares_tab.dart';
+import 'package:estudyantego/features/map_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

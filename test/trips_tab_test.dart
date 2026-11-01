@@ -1,5 +1,5 @@
 // Widget tests for the Trips tab (no location, no storage needed).
-import 'package:byahetayo/features/trips_tab.dart';
+import 'package:estudyantego/features/trips_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

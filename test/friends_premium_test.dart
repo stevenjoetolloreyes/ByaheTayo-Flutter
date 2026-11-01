@@ -8,9 +8,9 @@
 // and chats have premium empty states with NO Accept/Decline buttons,
 // NO fake conversations, NO timestamps, NO unread badges, and NO
 // online indicators anywhere.
-import 'package:byahetayo/features/friend_sharing.dart';
-import 'package:byahetayo/features/friend_store.dart';
-import 'package:byahetayo/features/friends_tab.dart';
+import 'package:estudyantego/features/friend_sharing.dart';
+import 'package:estudyantego/features/friend_store.dart';
+import 'package:estudyantego/features/friends_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';

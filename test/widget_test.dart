@@ -1,11 +1,11 @@
-// Smoke tests for the ByaheTayo shell: all 6 destinations render and tab
+// Smoke tests for the EstudyanteGO shell: all 6 destinations render and tab
 // switching changes the visible tab on both wide (collapsible sidebar)
 // and phone (NavigationBar) layouts.
 //
 // The app now boots through the first-time gate (splash -> dashboard
 // when onboarding is already done), so these tests set the onboarding
 // flag in mock prefs and settle past the 1.2s splash.
-import 'package:byahetayo/main.dart';
+import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -24,7 +24,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
   SharedPreferences.setMockInitialValues({
     'byahetayo_onboarding_done': true,
   });
-  await tester.pumpWidget(const ByaheTayoApp());
+  await tester.pumpWidget(const EstudyanteGOApp());
   await tester.pumpAndSettle();
 }
 

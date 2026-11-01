@@ -5,18 +5,18 @@
 //
 // All auth/permission behavior goes through the fakes in
 // test_fakes.dart — no real Firebase config is ever required.
-import 'package:byahetayo/features/account_tab.dart';
-import 'package:byahetayo/features/admin_access.dart';
-import 'package:byahetayo/features/communities_tab.dart';
-import 'package:byahetayo/features/onboarding/auth_screen.dart';
-import 'package:byahetayo/features/onboarding/auth_service.dart';
-import 'package:byahetayo/features/onboarding/notification_prompt.dart';
-import 'package:byahetayo/features/onboarding/onboarding_screen.dart';
-import 'package:byahetayo/features/onboarding/onboarding_state.dart';
-import 'package:byahetayo/features/onboarding/permission_service.dart';
-import 'package:byahetayo/features/onboarding/profile_setup_screen.dart';
-import 'package:byahetayo/features/onboarding/splash_screen.dart';
-import 'package:byahetayo/features/onboarding/verify_email_screen.dart';
+import 'package:estudyantego/features/account_tab.dart';
+import 'package:estudyantego/features/admin_access.dart';
+import 'package:estudyantego/features/communities_tab.dart';
+import 'package:estudyantego/features/onboarding/auth_screen.dart';
+import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/features/onboarding/notification_prompt.dart';
+import 'package:estudyantego/features/onboarding/onboarding_screen.dart';
+import 'package:estudyantego/features/onboarding/onboarding_state.dart';
+import 'package:estudyantego/features/onboarding/permission_service.dart';
+import 'package:estudyantego/features/onboarding/profile_setup_screen.dart';
+import 'package:estudyantego/features/onboarding/splash_screen.dart';
+import 'package:estudyantego/features/onboarding/verify_email_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -397,7 +397,13 @@ void main() {
       expect(find.text('Community updates'), findsOneWidget);
       expect(find.text('Get Started'), findsOneWidget);
       expect(find.text('Sign In'), findsOneWidget);
-      expect(find.text('Skip'), findsNothing);
+      // Skip stays visible on every screen, including the last one,
+      // and routes to the existing sign-in flow.
+      expect(find.text('Skip'), findsOneWidget);
+
+      await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+      expect(signedIn, isTrue);
 
       await tester.tap(find.text('Get Started'));
       expect(gotStarted, isTrue);
@@ -612,12 +618,27 @@ void main() {
       // Email is read-only, name prefilled from the Firebase user.
       expect(_fieldByLabel('Full name *'), findsOneWidget);
 
+      // School: searchable dropdown, select the listed UNP entry.
+      await tester.ensureVisible(_fieldByLabel('School'));
+      await tester.pumpAndSettle();
+      await tester.tap(_fieldByLabel('School'));
+      await tester.pumpAndSettle();
       await tester.enterText(
-        _fieldByLabel('School'),
-        'University of Northern Philippines',
+        find.byKey(const Key('dropdown-search')),
+        'northern',
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('University of Northern Philippines'));
+      await tester.pumpAndSettle();
+      // Program: not a listed program, so it goes through manual entry.
+      await tester.ensureVisible(_fieldByLabel('Program / course'));
+      await tester.pumpAndSettle();
+      await tester.tap(_fieldByLabel('Program / course'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Other / Enter manually'));
+      await tester.pumpAndSettle();
       await tester.enterText(
-        _fieldByLabel('Program / course'),
+        _fieldByLabel('Enter program / course'),
         'Diploma in Computer Technology',
       );
       await tester.enterText(
@@ -629,6 +650,7 @@ void main() {
 
       expect(saved?.displayName, 'Steven Reyes');
       expect(saved?.school, 'University of Northern Philippines');
+      expect(saved?.program, 'Diploma in Computer Technology');
       expect(saved?.jobTitle, 'Student');
       expect(store.isProfileSetupDone('uid-1'), isTrue);
       expect(
@@ -970,7 +992,7 @@ void main() {
       await _tapVisible(tester, 'Transactions');
       // The dashboard tile and the opened sheet both show these texts.
       expect(find.text('Transaction History'), findsWidgets);
-      expect(find.text('Wala pang transactions.'), findsWidgets);
+      expect(find.text('No transactions yet.'), findsWidgets);
     });
   });
 }

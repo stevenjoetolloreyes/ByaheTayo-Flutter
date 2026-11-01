@@ -1603,7 +1603,7 @@ class _MapTabState extends State<MapTab> {
 
   Future<Position?> _ensurePosition() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
-      _snack('Buksan mo muna yung Location (GPS) ng phone.');
+      _snack('Turn on Location (GPS) on your phone first.');
       return null;
     }
     var permission = await Geolocator.checkPermission();
@@ -1612,7 +1612,7 @@ class _MapTabState extends State<MapTab> {
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      _snack('Kailangan ng location permission para makita kung nasaan ka.');
+      _snack('Location permission is needed to see where you are.');
       return null;
     }
     return Geolocator.getCurrentPosition();
@@ -1969,7 +1969,7 @@ class _MapTabState extends State<MapTab> {
             'X-Goog-FieldMask',
             'places.displayName,places.location,places.formattedAddress,places.photos,nextPageToken',
           )
-          ..set('X-Android-Package', 'com.byahetayo.app')
+          ..set('X-Android-Package', 'com.estudyantego.app')
           ..set('X-Android-Cert', '89D1B79AD3344B1344A5D72694A1E863953F8534');
         request.write(jsonEncode(placesChurchesBody(pageToken: pageToken)));
         final response = await request.close().timeout(
@@ -2433,7 +2433,7 @@ class _MapTabState extends State<MapTab> {
               'routes.legs.steps.distanceMeters,'
               'routes.legs.steps.startLocation',
         )
-        ..set('X-Android-Package', 'com.byahetayo.app')
+        ..set('X-Android-Package', 'com.estudyantego.app')
         ..set('X-Android-Cert', '89D1B79AD3344B1344A5D72694A1E863953F8534');
       request.write(
         jsonEncode({
@@ -2887,10 +2887,10 @@ class _MapTabState extends State<MapTab> {
     setState(() {
       if (_savedRoutes.contains(key)) {
         _savedRoutes.remove(key);
-        _snack('Tinanggal sa saved routes.');
+        _snack('Removed from saved routes.');
       } else {
         _savedRoutes.add(key);
-        _snack('Saved na ang rutang ito.');
+        _snack('This route has been saved.');
       }
     });
     _persistSaved();
@@ -3271,11 +3271,11 @@ class _MapTabState extends State<MapTab> {
                       child: searchResults.isEmpty
                           ? const ListTile(
                               title: Text(
-                                'Walang hub na nakita.',
+                                'No hub found.',
                                 style: TextStyle(color: Colors.black87),
                               ),
                               subtitle: Text(
-                                'Hubs lang ang nase-search dito sa ngayon.',
+                                'Only hubs can be searched here for now.',
                                 style: TextStyle(color: Colors.black54),
                               ),
                             )
@@ -3356,7 +3356,7 @@ class _MapTabState extends State<MapTab> {
                                   }
                                 } else {
                                   _snack(
-                                    'Walang verified places data pa para sa $chip.',
+                                    'No verified places data yet for $chip.',
                                   );
                                 }
                               },
@@ -3404,7 +3404,7 @@ class _MapTabState extends State<MapTab> {
           ),
           child: Column(
             children: [
-              // ByaheTayo logo toggle (main mode only): hides the
+              // EstudyanteGO logo toggle (main mode only): hides the
               // bottom sheet completely for a full-map view; tap
               // again to bring it back. The button itself stays
               // visible while the sheet is hidden — it is the way
@@ -3762,8 +3762,8 @@ class _MapTabState extends State<MapTab> {
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
-                'Walang verified timetable pa — hindi pa makakapag-filter '
-                'ng departures ang AM/PM.',
+                'No verified timetable yet — AM/PM cannot filter '
+                'departures yet.',
                 style: TextStyle(fontSize: 12),
               ),
             ),
@@ -3797,7 +3797,7 @@ class _MapTabState extends State<MapTab> {
               ),
               // The tapped location's flow: origin → destination plus
               // the real computed numbers. No intermediate stops exist
-              // in ByaheTayo's data, so the flow is the two endpoints.
+              // in EstudyanteGO's data, so the flow is the two endpoints.
               if (_activeRoute != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -3940,13 +3940,13 @@ class _MapTabState extends State<MapTab> {
                 _vehicle == VehicleType.train
                     ? 'No available routes for this vehicle type.'
                     : _sheetSearchQuery.trim().isEmpty
-                    ? 'Walang ruta sa filter na ito.'
-                    : 'Walang rutang nakita para sa "$_sheetSearchQuery".',
+                    ? 'No routes for this filter.'
+                    : 'No routes found for "$_sheetSearchQuery".',
               ),
               subtitle: Text(
                 _vehicle == VehicleType.train
                     ? 'There is no passenger train service on these routes.'
-                    : 'Subukan ang ibang search, direksyon o stop view.',
+                    : 'Try a different search, direction, or stop view.',
               ),
               trailing: _vehicle == VehicleType.train
                   ? TextButton(
@@ -4730,7 +4730,7 @@ class _MapControlButton extends StatelessWidget {
   }
 }
 
-/// ByaheTayo logo toggle: same look as the sidebar header logo
+/// EstudyanteGO logo toggle: same look as the sidebar header logo
 /// mark (green rounded square, white bus icon — 0xFF16A34A),
 /// sized to the floating controls column (48x48 like the other
 /// buttons). Tapping it hides/shows the main-mode bottom sheet;

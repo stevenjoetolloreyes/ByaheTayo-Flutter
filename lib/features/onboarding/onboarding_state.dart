@@ -1,4 +1,4 @@
-// First-time / profile state for ByaheTayo onboarding.
+// First-time / profile state for EstudyanteGO onboarding.
 //
 // ADDITIVE ONLY: every key here is new. No existing SharedPreferences
 // key is read with a new meaning or overwritten. Profiles live in the
@@ -56,6 +56,7 @@ class UserProfile {
     required this.displayName,
     required this.email,
     this.photoPath,
+    this.photoUrl,
     this.school,
     this.program,
     this.year,
@@ -66,6 +67,9 @@ class UserProfile {
   final String displayName;
   final String email;
   final String? photoPath;
+
+  /// Google profile photo URL (null unless set by Google sign-up).
+  final String? photoUrl;
   final String? school;
   final String? program;
   final String? year;
@@ -97,6 +101,7 @@ class UserProfile {
     String? displayName,
     String? email,
     String? photoPath,
+    String? photoUrl,
     String? school,
     String? program,
     String? year,
@@ -107,6 +112,7 @@ class UserProfile {
       displayName: displayName ?? this.displayName,
       email: email ?? this.email,
       photoPath: photoPath ?? this.photoPath,
+      photoUrl: photoUrl ?? this.photoUrl,
       school: school ?? this.school,
       program: program ?? this.program,
       year: year ?? this.year,
@@ -120,6 +126,7 @@ class UserProfile {
       'displayName': displayName,
       'email': email,
       'photoPath': photoPath,
+      'photoUrl': photoUrl,
       'school': school,
       'program': program,
       'year': year,
@@ -137,6 +144,7 @@ class UserProfile {
       displayName: name,
       email: email,
       photoPath: json['photoPath'] as String?,
+      photoUrl: json['photoUrl'] as String?,
       school: json['school'] as String?,
       program: json['program'] as String?,
       year: json['year'] as String?,
@@ -182,6 +190,7 @@ class ProfileStore {
         displayName: profile.displayName,
         email: profile.email,
         photoPath: profile.photoPath,
+        photoUrl: profile.photoUrl,
         school: flatSchool.isEmpty ? null : flatSchool,
         program: profile.program,
         year: profile.year,

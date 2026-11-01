@@ -1,4 +1,4 @@
-// Fares tab — LTFRB fare calculator (ByaheTayo web app parity).
+// Fares tab — LTFRB fare calculator (EstudyanteGO web app parity).
 //
 // Faithful port of the web app's faresController.js: same 11 vehicle
 // rates, same formula, same 14 hubs, same distance rule (straight-line
@@ -351,7 +351,7 @@ class _FaresTabState extends State<FaresTab> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Buksan mo muna yung Location (GPS) ng phone.'),
+              content: Text('Turn on Location (GPS) on your phone first.'),
             ),
           );
         }
@@ -367,7 +367,7 @@ class _FaresTabState extends State<FaresTab> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Kailangan ng location permission para makita kung nasaan ka.',
+                'Location permission is needed to see where you are.',
               ),
             ),
           );
@@ -413,7 +413,7 @@ class _FaresTabState extends State<FaresTab> {
             ),
             const SizedBox(height: 2),
             Text(
-              'LTFRB fare calculator — parehong rates at formula ng web app.',
+              'LTFRB fare calculator — same rates and formula as the web app.',
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
@@ -480,16 +480,16 @@ class _FaresTabState extends State<FaresTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    sectionTitle('Biyahe'),
+                    sectionTitle('Trip'),
                     SegmentedButton<_OriginMode>(
                       segments: const [
                         ButtonSegment(
                           value: _OriginMode.location,
-                          label: Text('Lokasyon ko'),
+                          label: Text('My location'),
                         ),
                         ButtonSegment(
                           value: _OriginMode.hub,
-                          label: Text('Pumili ng hub'),
+                          label: Text('Choose a hub'),
                         ),
                       ],
                       selected: {_originMode},
@@ -504,8 +504,8 @@ class _FaresTabState extends State<FaresTab> {
                           Expanded(
                             child: Text(
                               _deviceLat == null
-                                  ? 'Wala pang lokasyon. Pindutin para kunin ang kinaroroonan mo.'
-                                  : 'Nakuha na ang lokasyon mo.',
+                                  ? 'No location yet. Tap to get your current location.'
+                                  : 'Your location has been found.',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ),
@@ -522,8 +522,8 @@ class _FaresTabState extends State<FaresTab> {
                                   )
                                 : Text(
                                     _deviceLat == null
-                                        ? 'Gamitin ang lokasyon ko'
-                                        : 'I-refresh',
+                                        ? 'Use my location'
+                                        : 'Refresh',
                                   ),
                           ),
                         ],
@@ -533,7 +533,7 @@ class _FaresTabState extends State<FaresTab> {
                         value: _originHub,
                         isExpanded: true,
                         decoration: InputDecoration(
-                          labelText: 'Mula sa',
+                          labelText: 'From',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -559,7 +559,7 @@ class _FaresTabState extends State<FaresTab> {
                       value: _destHub,
                       isExpanded: true,
                       decoration: InputDecoration(
-                        labelText: 'Papunta sa',
+                        labelText: 'To',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -587,7 +587,7 @@ class _FaresTabState extends State<FaresTab> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Kinuwenta: ${directKm!.toStringAsFixed(1)} km na direktang distansya + 22% road allowance. Pwedeng mag-iba sa aktwal na ruta.',
+                        'Calculated: ${directKm!.toStringAsFixed(1)} km straight-line distance + 22% road allowance. May differ from the actual route.',
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
@@ -611,12 +611,12 @@ class _FaresTabState extends State<FaresTab> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Walang nationwide tricycle rate',
+                            'No nationwide tricycle rate',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'Tingnan ang fare matrix ng LGU. Ang tricycle fares ay itinakda ng local ordinance, kaya hindi gagawa ang EstudyanteGO ng national estimate.',
+                            'Check the LGU fare matrix. Tricycle fares are set by local ordinance, so EstudyanteGO does not provide a national estimate.',
                           ),
                         ],
                       )
@@ -625,12 +625,12 @@ class _FaresTabState extends State<FaresTab> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Kailangan ng starting location',
+                            'Starting location needed',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'Gamitin ang lokasyon mo o pumili ng starting hub para makuwenta ang distansya at pasahe.',
+                            'Use your location or choose a starting hub to compute the distance and fare.',
                           ),
                         ],
                       )
@@ -643,14 +643,14 @@ class _FaresTabState extends State<FaresTab> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Estimate lang. Ang distansya ay tinatantya mula sa coordinates at pwedeng mag-iba sa aktwal na ruta. Ang official fare matrix ng operator ang masusunod sa sisingilin. Ang ₱20 ordinary city-bus minimum at ₱100 provincial-bus minimum ay ina-apply bago ang discount. Ang rates ay ayon sa temporary national fare guide, epektibo Sept. 28–Dec. 31, 2026. Ang tricycle fares ay itinakda ng bawat LGU, hindi ng isang national formula.',
+              'Estimate only. Distance is approximated from coordinates and may differ from the actual route. The official fare matrix of the operator governs what is charged. The ₱20 ordinary city-bus minimum and ₱100 provincial-bus minimum are applied before the discount. Rates follow the temporary national fare guide, effective Sept. 28–Dec. 31, 2026. Tricycle fares are set by each LGU, not by a national formula.',
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 24),
             sectionTitle('Posted operator fares'),
             Text(
-              'Pasahe na mismong inilathala ng mga operator — reference list lang ito. Hindi ito kinuwenta ng calculator sa itaas, at hindi pinaghalo ang posted fare sa formula fare.',
+              'Fares published by the operators themselves — this is a reference list only. It was not computed by the calculator above, and posted fares are not mixed with formula fares.',
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
@@ -659,7 +659,7 @@ class _FaresTabState extends State<FaresTab> {
               _OperatorFareGroupCard(group: group),
             const SizedBox(height: 12),
             Text(
-              'Ang listahang ito ay sumasaklaw lang sa mga pasahe na opisyal na inilathala ng mga operator. Ang mga pasahe na hindi opisyal na nailathala ay hindi tinataya o isinasama.',
+              'This list covers only fares officially published by operators. Fares that were not officially published are not estimated or included.',
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
@@ -726,9 +726,9 @@ class _FareAmount extends StatelessWidget {
   Widget build(BuildContext context) {
     final result = computeFare(rate, roadKm, discounted);
     final baseCopy =
-        '${peso(rate.base)} ang sakop sa unang ${rate.bracket.toStringAsFixed(rate.bracket.truncateToDouble() == rate.bracket ? 0 : 1)} km, tapos ${peso(rate.perKm)} kada susunod na km.';
+        '${peso(rate.base)} covers the first ${rate.bracket.toStringAsFixed(rate.bracket.truncateToDouble() == rate.bracket ? 0 : 1)} km, then ${peso(rate.perKm)} for each succeeding km.';
     final minimumCopy = rate.minimum != null
-        ? ' Ang ${peso(rate.minimum!)} minimum ay ina-apply kapag mas mababa ang formula.'
+        ? ' Ang ${peso(rate.minimum!)} minimum applies when the formula result is lower.'
         : '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -745,7 +745,7 @@ class _FareAmount extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '${discounted ? '20% discount applied; nearest ₱0.25 ang pinapakita.' : 'Regular fare.'} $baseCopy$minimumCopy${rate.local ? ' Dagupan local ordinance example.' : ' Estimate mula sa temporary national guide.'}',
+          '${discounted ? '20% discount applied; nearest ₱0.25 shown.' : 'Regular fare.'} $baseCopy$minimumCopy${rate.local ? ' Dagupan local ordinance example.' : ' Estimate from the temporary national guide.'}',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       ],

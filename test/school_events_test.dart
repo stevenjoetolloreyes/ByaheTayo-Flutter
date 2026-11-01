@@ -1,5 +1,5 @@
 // Tests for the school-dependent event layer (UNP built-in calendar).
-import 'package:byahetayo/features/school_events.dart';
+import 'package:estudyantego/features/school_events.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,17 +1,18 @@
-// Communities tab — local-only community posts, moved out of the
+// Communities tab — shared + local community posts, moved out of the
 // Friends tab (user's call: Communities is its own nav destination).
 //
-// HONEST STATE: there is no community backend — posts, fare
-// complaints, and LGU directory entries are all saved on this device
-// only (SharedPreferences) and never shared. No invented posts, no
-// votes, no comments. Approval is admin-only (see admin_access.dart):
-// new posts start Pending ("Pending verification" badge) and only
-// approved posts are Published; the Post approvals screen and the LGU
-// directory editor are shown only to allowlisted admin accounts — no
-// server review is implied anywhere.
+// HONEST STATE: shared posts live in Firestore and are visible to
+// other users once approved; local posts (older saves + the sample)
+// stay on this device only (SharedPreferences) and are never uploaded.
+// Fare complaints and LGU directory entries are still saved on this
+// device only. No invented posts, no votes, no comments. Approval is
+// admin-only (see admin_access.dart): new shared posts start Pending
+// ("Pending verification" badge) and only approved posts are Published
+// to all users; the Post approvals screen and the LGU directory editor
+// are shown only to allowlisted admin accounts.
 //
-// Contains the whole Community section: the Share-info entry + Share a
-// Local Route form, the local posts list with cards (From → To,
+// Contains the whole Community section: the Share-info entry + Share
+// a Route form, the shared + local post lists with cards (From → To,
 // vehicle, fare, photo, View Route details, View on map jump, Report
 // Overpriced Fare flow), the saved-complaints list, and the LGU
 // directory admin entry.
@@ -23,6 +24,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'admin_access.dart';
 import 'community_admin.dart';
+import 'community_post_repository.dart';
 import 'community_posts.dart';
 import 'fares_tab.dart';
 import 'onboarding/auth_service.dart';
@@ -31,7 +33,12 @@ import 'lgu_complaint_ui.dart';
 import 'lgu_complaints.dart';
 
 class CommunitiesTab extends StatefulWidget {
-  const CommunitiesTab({super.key, this.onViewOnMap, this.currentUser});
+  const CommunitiesTab({
+    super.key,
+    this.onViewOnMap,
+    this.currentUser,
+    this.postRepository,
+  });
 
   /// Called when a community post's "View on map" is tapped, so the
   /// shell can switch to the Map tab (the jump itself travels through
@@ -44,12 +51,27 @@ class CommunitiesTab extends StatefulWidget {
   /// (signed out or Firebase not configured) means regular user.
   final AuthUser? currentUser;
 
+  /// Shared-post storage. Null when Firebase is not configured: the
+  /// shared section then says so honestly instead of pretending.
+  final PostRepository? postRepository;
+
   @override
   State<CommunitiesTab> createState() => _CommunitiesTabState();
 }
 
 class _CommunitiesTabState extends State<CommunitiesTab> {
-  List<CommunityPost> _posts = [];
+  /// Device-only posts (older saves + the sample). Never uploaded.
+  List<CommunityPost> _localPosts = [];
+
+  /// Firestore posts visible to the current user (approved, plus own
+  /// pending posts and all pending posts for admins).
+  List<CommunityPost> _sharedPosts = [];
+
+  /// Last shared-load failure, shown honestly instead of an empty
+  /// list. Null means no failure.
+  String? _sharedError;
+
+  var _sharedLoading = false;
 
   /// Locally saved fare complaints (on-device only, never sent by the
   /// app). Shown once at least one exists.
@@ -58,27 +80,68 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   @override
   void initState() {
     super.initState();
-    _loadPosts();
+    _loadLocalPosts();
+    _loadSharedPosts();
     _loadComplaints();
   }
 
-  Future<void> _loadPosts() async {
+  Future<void> _loadLocalPosts() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final loaded = await loadCommunityPosts(prefs);
       final posts = await ensureSampleCommunityPost(prefs, loaded);
-      if (mounted) setState(() => _posts = posts);
+      if (mounted) setState(() => _localPosts = posts);
     } catch (_) {
       // Local posts are a bonus; a failed load leaves the empty state.
     }
   }
 
-  Future<void> _savePosts() async {
+  Future<void> _saveLocalPosts() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await saveCommunityPosts(prefs, _posts);
+      await saveCommunityPosts(prefs, _localPosts);
     } catch (_) {
       // The in-memory list still shows the post for this session.
+    }
+  }
+
+  /// Loads shared posts. Signed-out users and missing repositories
+  /// are not errors — the section explains itself. A real Firestore
+  /// failure is stored and shown, never swallowed into an empty list.
+  Future<void> _loadSharedPosts() async {
+    final repository = widget.postRepository;
+    if (repository == null || widget.currentUser == null) {
+      if (mounted) {
+        setState(() {
+          _sharedPosts = [];
+          _sharedError = null;
+          _sharedLoading = false;
+        });
+      }
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _sharedLoading = true;
+        _sharedError = null;
+      });
+    }
+    try {
+      final posts = await repository.loadVisiblePosts(widget.currentUser);
+      if (mounted) {
+        setState(() {
+          _sharedPosts = posts;
+          _sharedLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _sharedPosts = [];
+          _sharedError = sharedPostsErrorMessage(e);
+          _sharedLoading = false;
+        });
+      }
     }
   }
 
@@ -122,7 +185,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
         _communitySection(),
         const SizedBox(height: 16),
         Text(
-          'Community posts you create are saved on this device only — they are not shared with other users.',
+          'New posts are shared with the community and become visible '
+          'to everyone once approved. Older posts saved on this device '
+          'stay local.',
           style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
         ),
       ],
@@ -174,12 +239,17 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
     );
   }
 
-  /// Community section: local-only posts, or the honest empty state
-  /// when none exist yet. No invented posts, no badges, no counts.
+  /// Community section: shared posts first, then the author's local
+  /// posts — every card chipped so the two kinds are never confused.
+  /// No invented posts, no badges, no counts.
   Widget _communitySection() {
     final scheme = Theme.of(context).colorScheme;
-    final visiblePosts =
-        _posts.where(showPostInCommunityList).toList();
+    final visibleLocal =
+        _localPosts.where(showPostInCommunityList).toList();
+    final nothingToShow = _sharedPosts.isEmpty &&
+        visibleLocal.isEmpty &&
+        !_sharedLoading &&
+        _sharedError == null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -203,10 +273,79 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Local posts only — saved on this device, not shared.',
+              'Shared posts are visible to everyone once approved. '
+              'Posts marked Local stay on this device.',
               style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
             ),
-            if (visiblePosts.isEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Shared posts',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            if (widget.currentUser == null)
+              Text(
+                'Sign in to see posts shared by the community.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: scheme.onSurfaceVariant,
+                ),
+              )
+            else if (widget.postRepository == null)
+              Text(
+                "Community sharing isn't available yet — the shared "
+                'database hasn\'t been set up.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: scheme.onSurfaceVariant,
+                ),
+              )
+            else if (_sharedLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_sharedError != null) ...[
+              Text(
+                'Couldn\'t load shared posts. $_sharedError',
+                style: TextStyle(fontSize: 13, color: scheme.error),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: _loadSharedPosts,
+                child: const Text('Retry'),
+              ),
+            ] else if (_sharedPosts.isEmpty)
+              Text(
+                'No shared posts yet.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: scheme.onSurfaceVariant,
+                ),
+              )
+            else
+              for (final post in _sharedPosts) ...[
+                _postCard(post, scheme),
+                const SizedBox(height: 8),
+              ],
+            if (visibleLocal.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Your local posts',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Saved on this device only — never uploaded.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final post in visibleLocal) ...[
+                _postCard(post, scheme),
+                const SizedBox(height: 8),
+              ],
+            ],
+            if (nothingToShow) ...[
               const SizedBox(height: 8),
               const Text('No announcements or posts yet.'),
               const SizedBox(height: 4),
@@ -214,12 +353,6 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                 'There is no community feed yet — no posts are shown, and none are invented here.',
                 style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
               ),
-            ] else ...[
-              const SizedBox(height: 12),
-              for (final post in visiblePosts) ...[
-                _postCard(post, scheme),
-                const SizedBox(height: 8),
-              ],
             ],
             if (_complaints.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -257,11 +390,14 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => CommunityAdminScreen(
-                            posts: _posts,
-                            onChanged: (updated) {
-                              setState(() => _posts = updated);
-                              _savePosts();
+                            localPosts: _localPosts,
+                            onLocalChanged: (updated) {
+                              setState(() => _localPosts = updated);
+                              _saveLocalPosts();
                             },
+                            sharedPosts: _sharedPosts,
+                            postRepository: widget.postRepository,
+                            onSharedChanged: _loadSharedPosts,
                           ),
                         ),
                       );
@@ -327,7 +463,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                 ),
               ),
               Chip(
-                label: const Text('Local post'),
+                label: Text(post.isShared ? 'Shared post' : 'Local post'),
                 visualDensity: VisualDensity.compact,
                 labelStyle: TextStyle(color: scheme.onSurfaceVariant),
               ),
@@ -470,7 +606,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Local post — saved on this device, not shared.',
+                post.isShared
+                    ? 'Shared post — visible to all users once approved.'
+                    : 'Local post — saved on this device, not shared.',
                 style: TextStyle(
                   fontSize: 13,
                   color: scheme.onSurfaceVariant,
@@ -596,20 +734,29 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
 
   /// Create sheet (reference Local Transport form, updated): From +
   /// To + vehicle + fare required, hours + photo optional, location
-  /// = one of ByaheTayo's own 14 hubs. Saves locally only.
+  /// = one of EstudyanteGO's own 14 hubs. New posts are shared via
+  /// Firestore (never saved locally); failures surface honestly in
+  /// the sheet and nothing is saved.
   Future<void> _openCreateSheet() async {
-    final post = await showModalBottomSheet<CommunityPost>(
+    final created = await showModalBottomSheet<SharedPostCreation>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _CreatePostSheet(),
+      builder: (_) => _CreatePostSheet(
+        postRepository: widget.postRepository,
+        currentUser: widget.currentUser,
+      ),
     );
-    if (post == null || !mounted) return;
-    setState(() => _posts = [..._posts, post]);
-    await _savePosts();
+    if (created == null || !mounted) return;
+    await _loadSharedPosts();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Post saved locally — pending verification.'),
+      SnackBar(
+        content: Text(
+          created.photoDropped
+              ? 'Post shared — pending verification. Shared without '
+                  'its photo (too large).'
+              : 'Post shared — pending verification.',
+        ),
       ),
     );
   }
@@ -617,10 +764,15 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
 
 /// Create-post sheet content. Owns its controllers so they are disposed
 /// with the sheet itself (after its exit transition), never while the
-/// sheet's fields are still built. Pops with the finished post, or null
-/// when dismissed.
+/// sheet's fields are still built. Pops with the created shared post,
+/// or null when dismissed. Sharing requires a signed-in user and a
+/// configured repository; otherwise the sheet shows the honest error
+/// and saves nothing.
 class _CreatePostSheet extends StatefulWidget {
-  const _CreatePostSheet();
+  const _CreatePostSheet({this.postRepository, this.currentUser});
+
+  final PostRepository? postRepository;
+  final AuthUser? currentUser;
 
   @override
   State<_CreatePostSheet> createState() => _CreatePostSheetState();
@@ -694,12 +846,12 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Share a local route',
+              'Share a route',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 4),
             Text(
-              'Saved on this device only — not shared.',
+              'Shared with the community once approved by an admin.',
               style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
@@ -817,7 +969,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
             const SizedBox(height: 16),
             FilledButton(
               onPressed: _save,
-              child: const Text('Save post'),
+              child: const Text('Share post'),
             ),
           ],
         ),
@@ -825,7 +977,11 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
     );
   }
 
-  void _save() {
+  /// Validates, then shares via Firestore. A missing repository or a
+  /// signed-out user is an honest inline error, never a silent local
+  /// save pretending to be shared. A Firestore failure likewise stays
+  /// in the sheet with its message.
+  Future<void> _save() async {
     final formError = communityFormError(
       from: _fromController.text,
       to: _toController.text,
@@ -839,28 +995,51 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
       setState(() => _error = formError);
       return;
     }
+    final repository = widget.postRepository;
+    if (repository == null) {
+      setState(() {
+        _error = "Community sharing isn't available yet — the shared "
+            'database hasn\'t been set up.';
+      });
+      return;
+    }
+    final user = widget.currentUser;
+    if (user == null) {
+      setState(() {
+        _error = 'Sign in to share a post with the community.';
+      });
+      return;
+    }
     final from = _fromController.text.trim();
     final to = _toController.text.trim();
-    Navigator.of(context).pop(
-      CommunityPost(
-        routeName: '$from → $to',
-        from: from,
-        to: to,
-        vehicles: _selectedVehicles.toList(),
-        hours: _hoursController.text.trim(),
-        // The legacy single fare stays 0: the per-vehicle fares below
-        // are authoritative for new posts.
-        fare: 0,
-        hubName: _selectedHub,
-        photoBase64: _photoBase64,
-        faresByVehicle: {
-          for (final vehicle in _selectedVehicles)
-            vehicle: double.parse(
-              _fareControllers[vehicle]!.text.trim(),
-            ),
-        },
-        operatorName: _operatorController.text.trim(),
-      ),
-    );
+    try {
+      final created = await repository.createPost(
+        CommunityPost(
+          routeName: '$from → $to',
+          from: from,
+          to: to,
+          vehicles: _selectedVehicles.toList(),
+          hours: _hoursController.text.trim(),
+          // The legacy single fare stays 0: the per-vehicle fares below
+          // are authoritative for new posts.
+          fare: 0,
+          hubName: _selectedHub,
+          photoBase64: _photoBase64,
+          faresByVehicle: {
+            for (final vehicle in _selectedVehicles)
+              vehicle: double.parse(
+                _fareControllers[vehicle]!.text.trim(),
+              ),
+          },
+          operatorName: _operatorController.text.trim(),
+        ),
+        user,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(created);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = sharedPostsErrorMessage(e));
+    }
   }
 }

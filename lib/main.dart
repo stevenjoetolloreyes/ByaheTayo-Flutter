@@ -1,7 +1,7 @@
-// ByaheTayo — Flutter foundation.
+// EstudyanteGO — Flutter foundation.
 //
 // Single codebase for Android, iOS and tablets. This file owns only the
-// app shell: Material 3 theme (ByaheTayo brand), adaptive navigation,
+// app shell: Material 3 theme (EstudyanteGO brand), adaptive navigation,
 // tab state preservation, and the first-time gate (splash → onboarding
 // → sign-in → email verification → profile setup → dashboard).
 // Feature ports land in their own files under lib/features/ and plug
@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'features/account_tab.dart';
 import 'features/communities_tab.dart';
+import 'features/community_post_repository.dart';
 import 'features/fares_tab.dart';
 import 'features/friends_tab.dart';
 import 'features/map_tab.dart';
@@ -56,7 +57,7 @@ Future<void> main() async {
   // fails to start. The app never crashes over Firebase setup.
   final firebaseConfigured = await initializeFirebase();
   runApp(
-    ByaheTayoApp(
+    EstudyanteGOApp(
       initialSidebarCollapsed: prefs.getBool(_sidebarCollapsedKey) ?? false,
       initialThemeMode: _themeModeFromString(prefs.getString(_themeModeKey)),
       authService: FirebaseAuthService(isConfigured: firebaseConfigured),
@@ -196,8 +197,8 @@ const _destinations = <_Destination>[
   _Destination('Account', Icons.person_outlined, Icons.person),
 ];
 
-class ByaheTayoApp extends StatefulWidget {
-  const ByaheTayoApp({
+class EstudyanteGOApp extends StatefulWidget {
+  const EstudyanteGOApp({
     super.key,
     this.initialSidebarCollapsed = false,
     this.initialThemeMode = ThemeMode.system,
@@ -217,10 +218,10 @@ class ByaheTayoApp extends StatefulWidget {
   final PermissionService? permissionService;
 
   @override
-  State<ByaheTayoApp> createState() => _ByaheTayoAppState();
+  State<EstudyanteGOApp> createState() => _EstudyanteGOAppState();
 }
 
-class _ByaheTayoAppState extends State<ByaheTayoApp> {
+class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
   // The gate state sits above MaterialApp, so its own context has no
   // Navigator. Route pushes (profile setup) and dialogs (notification
   // prompt) go through this key instead.
@@ -559,6 +560,9 @@ class _HomeShellState extends State<_HomeShell> {
         CommunitiesTab(
           onViewOnMap: () => widget.onSelect(0),
           currentUser: widget.user,
+          postRepository: widget.authService.isConfigured
+              ? FirestorePostRepository()
+              : null,
         ),
         AccountTab(
           themeMode: widget.themeMode,
@@ -622,7 +626,7 @@ class _HomeShellState extends State<_HomeShell> {
 
 /// Collapsible left sidebar for the wide layout.
 ///
-/// Expanded (220dp): logo + "ByaheTayo" name at the top, then icon + label
+/// Expanded (220dp): logo + "EstudyanteGO" name at the top, then icon + label
 /// rows. Collapsed (80dp): icons only, centered, labels hidden, selected
 /// indicator preserved, every icon wrapped in a Tooltip. The chevron
 /// toggle sits at the very top. Width animates (~225ms, easeInOut);

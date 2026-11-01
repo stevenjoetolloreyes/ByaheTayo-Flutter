@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'auth_service.dart';
 import 'onboarding_state.dart';
+import 'student_info_fields.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({
@@ -42,12 +43,35 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
-  late final TextEditingController _schoolController;
-  late final TextEditingController _programController;
-  late final TextEditingController _yearController;
+  late final TextEditingController _schoolManualController;
+  late final TextEditingController _programManualController;
   late final TextEditingController _jobController;
   late final TextEditingController _companyController;
+
+  /// Selected listed school, or null when none / manual mode.
+  String? _selectedSchool;
+
+  /// True when the user picked the manual school option (or the saved
+  /// school is not a listed school, so it must stay editable as text).
+  bool _schoolManual = false;
+
+  /// Selected listed program, or null when none / manual mode.
+  ProgramOption? _selectedProgram;
+
+  /// True when the user picked the manual program option (or the saved
+  /// program is not a listed program).
+  bool _programManual = false;
+
+  /// Selected year level, or null when none.
+  String? _year;
+
+  /// Legacy free-text year that no dropdown option covers. Preserved
+  /// verbatim on save until the user picks a dropdown year, so the
+  /// switch to the dropdown never silently drops a saved value.
+  String? _legacyYear;
+
   String? _photoPath;
+  String? _photoUrl;
   bool _saving = false;
   String? _error;
 
@@ -61,26 +85,77 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           widget.user.email.split('@').first,
     );
     _emailController = TextEditingController(text: widget.user.email);
-    _schoolController = TextEditingController(text: initial?.school ?? '');
-    _programController =
-        TextEditingController(text: initial?.program ?? '');
-    _yearController = TextEditingController(text: initial?.year ?? '');
+    _schoolManualController = TextEditingController();
+    _programManualController = TextEditingController();
     _jobController = TextEditingController(text: initial?.jobTitle ?? '');
     _companyController =
         TextEditingController(text: initial?.company ?? '');
     _photoPath = initial?.photoPath;
+    _photoUrl = initial?.photoUrl;
+
+    // Prefill student fields from the existing profile. A saved value
+    // that matches a listed entry lands on the option; any other
+    // non-empty saved value lands in the manual field, so editing
+    // never loses what was saved before.
+    final savedSchool = (initial?.school ?? '').trim();
+    if (savedSchool.isNotEmpty) {
+      final canonical = canonicalSchool(savedSchool);
+      if (canonical != null) {
+        _selectedSchool = canonical;
+      } else {
+        _schoolManual = true;
+        _schoolManualController.text = savedSchool;
+      }
+    }
+    final savedProgram = (initial?.program ?? '').trim();
+    if (savedProgram.isNotEmpty) {
+      final matched = matchProgram(savedProgram);
+      if (matched != null) {
+        _selectedProgram = matched;
+      } else {
+        _programManual = true;
+        _programManualController.text = savedProgram;
+      }
+    }
+    final savedYear = (initial?.year ?? '').trim();
+    if (savedYear.isNotEmpty) {
+      _year = normalizeYearLevel(savedYear);
+      if (_year == null) _legacyYear = savedYear;
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _schoolController.dispose();
-    _programController.dispose();
-    _yearController.dispose();
+    _schoolManualController.dispose();
+    _programManualController.dispose();
     _jobController.dispose();
     _companyController.dispose();
     super.dispose();
+  }
+
+  /// Effective school value for save: the listed selection, or the
+  /// manual text (canonicalized when it duplicates a listed school).
+  /// Empty means "no school set" — valid, and the store writes '' to
+  /// the calendar contract key (never an "empty school entry").
+  String? _effectiveSchool() {
+    if (_schoolManual) {
+      final manual = _schoolManualController.text.trim();
+      if (manual.isEmpty) return null;
+      return canonicalSchool(manual) ?? manual;
+    }
+    return _selectedSchool;
+  }
+
+  String? _effectiveProgram() {
+    if (_programManual) {
+      final manual = _programManualController.text.trim();
+      if (manual.isEmpty) return null;
+      final matched = matchProgram(manual);
+      return matched?.display ?? manual;
+    }
+    return _selectedProgram?.display;
   }
 
   Future<void> _pickPhoto() async {
@@ -121,9 +196,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         displayName: name,
         email: widget.user.email,
         photoPath: _photoPath,
-        school: _emptyToNull(_schoolController.text),
-        program: _emptyToNull(_programController.text),
-        year: _emptyToNull(_yearController.text),
+        photoUrl: _photoUrl,
+        school: _effectiveSchool(),
+        program: _effectiveProgram(),
+        year: _year ?? _legacyYear,
         jobTitle: _emptyToNull(_jobController.text),
         company: _emptyToNull(_companyController.text),
       );
@@ -151,6 +227,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final photo = _photoPath;
+    final photoUrl = _photoUrl;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEdit ? 'Edit profile' : 'Set up your profile'),
@@ -167,9 +244,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   child: CircleAvatar(
                     radius: 48,
                     backgroundColor: scheme.primary,
-                    backgroundImage:
-                        photo != null ? FileImage(File(photo)) : null,
-                    child: photo == null
+                    backgroundImage: photo != null
+                        ? FileImage(File(photo))
+                        : photoUrl != null
+                            ? NetworkImage(photoUrl)
+                            : null,
+                    child: photo == null && photoUrl == null
                         ? Text(
                             _initials(_nameController.text),
                             style: const TextStyle(
@@ -215,30 +295,128 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _schoolController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'School',
-                  border: OutlineInputBorder(),
-                ),
+              SearchableDropdownField(
+                label: 'School',
+                displayValue: _schoolManual
+                    ? (_schoolManualController.text.trim().isEmpty
+                        ? null
+                        : _schoolManualController.text.trim())
+                    : _selectedSchool,
+                options: philippineSchools,
+                manualOptionLabel: manualSchoolOption,
+                onSelected: (value) {
+                  setState(() {
+                    if (value == manualSchoolOption) {
+                      _schoolManual = true;
+                      _selectedSchool = null;
+                    } else {
+                      _schoolManual = false;
+                      _selectedSchool = value;
+                      _schoolManualController.clear();
+                    }
+                  });
+                },
+                onCleared: () {
+                  setState(() {
+                    _schoolManual = false;
+                    _selectedSchool = null;
+                    _schoolManualController.clear();
+                  });
+                },
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _programController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Program / course',
-                  border: OutlineInputBorder(),
+              if (_schoolManual) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _schoolManualController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Enter university / college',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
-              ),
+              ],
               const SizedBox(height: 12),
-              TextField(
-                controller: _yearController,
+              SearchableDropdownField(
+                label: 'Program / course',
+                displayValue: _programManual
+                    ? (_programManualController.text.trim().isEmpty
+                        ? null
+                        : _programManualController.text.trim())
+                    : _selectedProgram?.display,
+                options: philippinePrograms.map((p) => p.display).toList(),
+                manualOptionLabel: manualProgramOption,
+                onSelected: (value) {
+                  setState(() {
+                    if (value == manualProgramOption) {
+                      _programManual = true;
+                      _selectedProgram = null;
+                    } else {
+                      _programManual = false;
+                      _selectedProgram = matchProgram(value);
+                      _programManualController.clear();
+                    }
+                  });
+                },
+                onCleared: () {
+                  setState(() {
+                    _programManual = false;
+                    _selectedProgram = null;
+                    _programManualController.clear();
+                  });
+                },
+              ),
+              if (_programManual) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _programManualController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Enter program / course',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String?>(
+                // A legacy free-text year shows as its own item so the
+                // field never claims "Not set" while a value is saved.
+                value: _year ?? _legacyYear,
                 decoration: const InputDecoration(
                   labelText: 'Year level',
                   border: OutlineInputBorder(),
                 ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Not set'),
+                  ),
+                  ...yearLevels.map(
+                    (year) => DropdownMenuItem<String?>(
+                      value: year,
+                      child: Text(year),
+                    ),
+                  ),
+                  if (_legacyYear != null &&
+                      !yearLevels.contains(_legacyYear))
+                    DropdownMenuItem<String?>(
+                      value: _legacyYear,
+                      child: Text(_legacyYear!),
+                    ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    if (value == null) {
+                      _year = null;
+                      _legacyYear = null;
+                    } else if (yearLevels.contains(value)) {
+                      _year = value;
+                      _legacyYear = null;
+                    }
+                    // Re-selecting the legacy item leaves it untouched.
+                  });
+                },
               ),
               const SizedBox(height: 24),
               const Text(

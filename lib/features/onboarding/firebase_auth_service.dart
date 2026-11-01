@@ -6,6 +6,7 @@
 // [AuthNotConfiguredException], so the app never crashes on a device
 // built before google-services.json was supplied.
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'auth_service.dart';
 
@@ -26,6 +27,7 @@ class FirebaseAuthService implements AuthService {
       uid: user.uid,
       email: user.email ?? '',
       displayName: user.displayName,
+      photoUrl: user.photoURL,
       emailVerified: user.emailVerified,
     );
   }
@@ -133,7 +135,68 @@ class FirebaseAuthService implements AuthService {
   Future<void> signOut() async {
     _requireConfigured();
     await _auth.signOut();
+    // Best-effort Google session cleanup so the next Google tap shows
+    // the account chooser again. Skipped when Google was never
+    // initialized (its methods require initialize() first).
+    if (_googleInitialized) {
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (_) {
+        // Firebase sign-out already happened; ignore Google cleanup
+        // failures.
+      }
+    }
   }
+
+  /// True once [GoogleSignIn.instance.initialize] has completed.
+  /// initialize() must be called exactly once per process; the flag
+  /// keeps later Google taps from re-initializing (undefined behavior
+  /// per the plugin docs). It stays false when initialize throws, so
+  /// the next tap retries.
+  static bool _googleInitialized = false;
+
+  Future<void> _ensureGoogleInitialized() async {
+    if (_googleInitialized) return;
+    await GoogleSignIn.instance.initialize();
+    _googleInitialized = true;
+  }
+
+  /// Shared Google flow for login and signup: native account chooser,
+  /// Firebase credential sign-in. Returns null ONLY when the user
+  /// canceled. The login-vs-signup rule lives at the call site (the
+  /// auth screen checks/creates the EstudyanteGO profile); this
+  /// method never touches ProfileStore.
+  Future<AuthUser?> _googleAuth() async {
+    _requireConfigured();
+    try {
+      await _ensureGoogleInitialized();
+      final account = await GoogleSignIn.instance.authenticate();
+      final idToken = account.authentication.idToken;
+      if (idToken == null) {
+        throw const AuthException(
+          'Google sign-in did not return an ID token.',
+        );
+      }
+      final credential = fb.GoogleAuthProvider.credential(idToken: idToken);
+      final userCredential = await _auth.signInWithCredential(credential);
+      final user = userCredential.user;
+      if (user == null) {
+        throw const AuthException('Google sign-in failed. Please try again.');
+      }
+      return _fromFirebase(user);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return null;
+      throw const AuthException('Google sign-in failed. Please try again.');
+    } on fb.FirebaseAuthException catch (e) {
+      throw AuthException(_messageForCode(e.code));
+    }
+  }
+
+  @override
+  Future<AuthUser?> signInWithGoogle() => _googleAuth();
+
+  @override
+  Future<AuthUser?> signUpWithGoogle() => _googleAuth();
 
   /// Friendly, generic messages. Sign-in failures deliberately do not say
   /// whether the email exists.
@@ -147,6 +210,8 @@ class FirebaseAuthService implements AuthService {
         return 'Incorrect email or password.';
       case 'email-already-in-use':
         return 'An account with this email already exists. Try signing in.';
+      case 'account-exists-with-different-credential':
+        return 'This email is already registered with a different sign-in method. Try signing in with email and password.';
       case 'weak-password':
         return 'Password must be at least 6 characters.';
       case 'too-many-requests':

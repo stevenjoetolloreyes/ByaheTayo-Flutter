@@ -1,6 +1,6 @@
 // Tests for the Philippine holiday list + school-day kinds
 // (Proclamation No. 1006 for 2026, plus the Eid proclamations).
-import 'package:byahetayo/features/ph_holidays.dart';
+import 'package:estudyantego/features/ph_holidays.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

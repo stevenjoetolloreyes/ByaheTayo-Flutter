@@ -95,7 +95,7 @@ class _TripsTabState extends State<TripsTab> {
     setState(() => _locating = true);
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        _snack('Buksan mo muna yung Location (GPS) ng phone.');
+        _snack('Turn on Location (GPS) on your phone first.');
         return;
       }
       var permission = await Geolocator.checkPermission();
@@ -104,7 +104,7 @@ class _TripsTabState extends State<TripsTab> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        _snack('Kailangan ng location permission para makita kung nasaan ka.');
+        _snack('Location permission is needed to see where you are.');
         return;
       }
       final position = await Geolocator.getCurrentPosition();
@@ -133,10 +133,10 @@ class _TripsTabState extends State<TripsTab> {
     setState(() {
       if (_savedRoutes.contains(key)) {
         _savedRoutes.remove(key);
-        _snack('Tinanggal sa saved routes.');
+        _snack('Removed from saved routes.');
       } else {
         _savedRoutes.add(key);
-        _snack('Saved na ang rutang ito.');
+        _snack('This route has been saved.');
       }
     });
     _persistSaved();
@@ -260,8 +260,8 @@ class _TripsTabState extends State<TripsTab> {
         if (routes.isEmpty)
           Card(
             child: ListTile(
-              title: Text('Walang rutang nakita para sa “$_searchQuery”.'),
-              subtitle: const Text('Subukan ang ibang destination.'),
+              title: Text('No routes found for “$_searchQuery”.'),
+              subtitle: const Text('Try a different destination.'),
             ),
           )
         else
@@ -521,8 +521,8 @@ class _TripsTabState extends State<TripsTab> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Walang verified timetable pa — hindi pa makakapag-filter '
-              'ng departures ang AM/PM.',
+              'No verified timetable yet — AM/PM cannot filter '
+              'departures yet.',
               style: TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 12),

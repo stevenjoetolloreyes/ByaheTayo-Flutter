@@ -1,20 +1,23 @@
-// Community posts — local-only contributions in the Communities tab.
+// Community posts in the Communities tab.
 //
-// HONEST SHAPE: the Flutter app has no social backend, so posts created
-// here are saved with SharedPreferences ON THIS DEVICE ONLY. They are
-// never uploaded and never shown to other users — the UI labels them
-// "Local post" and says so. No vote/comment counts (no other users),
-// no map-preview thumbnails (no static-map source). "View on map" jumps
-// the real Map tab to the post's hub (a real hub, never free text);
-// "View Route" opens a details view of the post itself.
+// TWO KINDS, always labeled: SHARED posts live in Firestore
+// (collection `community_posts`) and are visible to other users once
+// approved; LOCAL posts live in SharedPreferences ON THIS DEVICE ONLY
+// and are never uploaded. The UI labels every card "Shared post" or
+// "Local post" and says which is which. No vote/comment counts (no
+// other users vote), no map-preview thumbnails (no static-map source).
+// "View on map" jumps the real Map tab to the post's hub (a real hub,
+// never free text); "View Route" opens a details view of the post
+// itself.
 //
-// APPROVAL (device-owner only, no server review exists): every new
-// submission starts Pending and is badged "Pending verification".
-// The in-app Post approvals screen (opened from the Communities tab)
-// lets the device owner approve or reject submissions; only approved
-// items are badged "Published". Rejected items are hidden from the
-// main list and stay visible in the admin screen until deleted.
-// The UI states plainly that review is by the device owner only.
+// APPROVAL (admin-only, see admin_access.dart): every new submission
+// starts Pending and is badged "Pending verification". The in-app Post
+// approvals screen (opened from the Communities tab) lets allowlisted
+// admins approve or reject submissions; only approved items are badged
+// "Published" and shown to all users. Rejected items are hidden from
+// the main list and stay visible in the admin screen until deleted.
+// Local posts keep their old device-only approval behavior; the sample
+// CTransco submission stays local-only and is never uploaded.
 //
 // A route IS its From → To: the form asks for From and To, and the
 // stored routeName is derived from them ("From → To"). Older posts
@@ -27,7 +30,7 @@
 // are kept verbatim in storage and mapped for display only.
 //
 // Davao data is NOT copied: route names, hubs, vehicles, and fares here
-// come from the user and from ByaheTayo's own 14 hubs.
+// come from the user and from EstudyanteGO's own 14 hubs.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -93,6 +96,9 @@ class CommunityPost {
     this.faresByVehicle = const {},
     this.operatorName = '',
     this.status = PostStatus.pending,
+    this.id,
+    this.authorUid = '',
+    this.createdAt,
   });
 
   final String routeName;
@@ -126,8 +132,29 @@ class CommunityPost {
   /// approved (see [postStatusFromString]).
   final PostStatus status;
 
+  /// Firestore document id. Non-null exactly for shared posts; local
+  /// posts (SharedPreferences, sample post, legacy posts) have null.
+  final String? id;
+
+  /// Firebase UID of the author. Empty for local posts, which predate
+  /// sharing and have no author identity.
+  final String authorUid;
+
+  /// When the shared post was created (server timestamp). Null for
+  /// local posts.
+  final DateTime? createdAt;
+
+  /// True for Firestore-backed posts, false for device-only posts.
+  bool get isShared => id != null;
+
   /// Copy with a new approval status (used by the admin screen).
-  CommunityPost copyWith({PostStatus? status}) => CommunityPost(
+  CommunityPost copyWith({
+    PostStatus? status,
+    String? id,
+    String? authorUid,
+    DateTime? createdAt,
+  }) =>
+      CommunityPost(
         routeName: routeName,
         vehicles: vehicles,
         hours: hours,
@@ -139,6 +166,9 @@ class CommunityPost {
         faresByVehicle: faresByVehicle,
         operatorName: operatorName,
         status: status ?? this.status,
+        id: id ?? this.id,
+        authorUid: authorUid ?? this.authorUid,
+        createdAt: createdAt ?? this.createdAt,
       );
 
   /// Card title: the route itself when From/To exist, otherwise the

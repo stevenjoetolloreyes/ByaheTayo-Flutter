@@ -5,7 +5,7 @@
 // below with mocked Places entries (no network: the photo-present
 // case asserts only that an Image widget is built, not that bytes
 // load).
-import 'package:byahetayo/features/map_tab.dart';
+import 'package:estudyantego/features/map_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

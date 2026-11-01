@@ -1,67 +1,152 @@
 // Post approvals — the admin screen for community submissions.
 //
-// PLAIN LANGUAGE: community posts live on THIS DEVICE ONLY, and
-// review here is done only by allowlisted admin accounts (see
-// admin_access.dart) — the previous device-owner rule was replaced by
-// the email allowlist. There is no server-side review, no moderator
-// team, and nothing is uploaded. New submissions arrive Pending
-// ("Pending verification"). Approving marks a post Published (it stays
-// in the main list); rejecting hides it from the main list (it stays
-// here until approved again or deleted). The sample CTransco
-// submission arrives Pending like any other post and needs approval
-// here before it counts as published.
+// TWO KINDS, kept visibly separate: SHARED posts (Firestore) are
+// reviewed here by allowlisted admin accounts (see admin_access.dart)
+// and become visible to all users once approved; LOCAL posts stay on
+// this device and keep their old device-only approval behavior. The
+// sample CTransco submission is local-only and is never uploaded.
+// Rejected posts stay visible here until approved again or deleted.
 import 'package:flutter/material.dart';
 
+import 'community_post_repository.dart';
 import 'community_posts.dart';
 import 'vehicle_categories.dart';
 
-class CommunityAdminScreen extends StatelessWidget {
+class CommunityAdminScreen extends StatefulWidget {
   const CommunityAdminScreen({
     super.key,
-    required this.posts,
-    required this.onChanged,
+    required this.localPosts,
+    required this.onLocalChanged,
+    this.sharedPosts = const [],
+    this.postRepository,
+    this.onSharedChanged,
   });
 
-  /// All posts on the device (pending, published, and rejected).
-  final List<CommunityPost> posts;
+  /// Device-only posts (pending, published, and rejected).
+  final List<CommunityPost> localPosts;
 
-  /// Called with the updated list after any approve/reject/delete,
-  /// so the caller can persist it and refresh its own list.
-  final ValueChanged<List<CommunityPost>> onChanged;
+  /// Called with the updated local list after any approve/reject/
+  /// delete, so the caller can persist it.
+  final ValueChanged<List<CommunityPost>> onLocalChanged;
+
+  /// Shared posts visible to the admin (approved + all pending).
+  final List<CommunityPost> sharedPosts;
+
+  /// Firestore storage for shared-post actions. Null when sharing
+  /// isn't configured — shared review is then unavailable.
+  final PostRepository? postRepository;
+
+  /// Called after a shared-post action succeeds, so the caller can
+  /// reload its shared list.
+  final VoidCallback? onSharedChanged;
+
+  @override
+  State<CommunityAdminScreen> createState() => _CommunityAdminScreenState();
+}
+
+class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
+  late List<CommunityPost> _local = widget.localPosts;
+  late List<CommunityPost> _shared = widget.sharedPosts;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final pending =
-        posts.where((p) => p.status == PostStatus.pending).toList();
-    final published =
-        posts.where((p) => p.status == PostStatus.approved).toList();
-    final rejected =
-        posts.where((p) => p.status == PostStatus.rejected).toList();
+    final sharedPending =
+        _shared.where((p) => p.status == PostStatus.pending).toList();
+    final sharedPublished =
+        _shared.where((p) => p.status == PostStatus.approved).toList();
+    final sharedRejected =
+        _shared.where((p) => p.status == PostStatus.rejected).toList();
+    final localPending =
+        _local.where((p) => p.status == PostStatus.pending).toList();
+    final localPublished =
+        _local.where((p) => p.status == PostStatus.approved).toList();
+    final localRejected =
+        _local.where((p) => p.status == PostStatus.rejected).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Post approvals')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Review is restricted to admin accounts, and posts stay on '
-            'this device only. There is no server-side review — posts '
-            'are never uploaded.',
+            'Shared posts are reviewed by admin accounts and become '
+            'visible to all users once approved. Local posts stay on '
+            'this device only.',
             style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
+          if (widget.postRepository == null) ...[
+            Text(
+              "Shared-post review isn't available — the shared "
+              'database hasn\'t been set up.',
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            _section(
+              context,
+              'Shared posts — Pending verification',
+              sharedPending,
+              'No shared submissions waiting for review.',
+              actions: (post) => [
+                FilledButton(
+                  onPressed: () =>
+                      _setSharedStatus(post, PostStatus.approved),
+                  child: const Text('Approve'),
+                ),
+                OutlinedButton(
+                  onPressed: () =>
+                      _setSharedStatus(post, PostStatus.rejected),
+                  child: const Text('Reject'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _section(
+              context,
+              'Shared posts — Published',
+              sharedPublished,
+              'No published shared posts yet.',
+              actions: (post) => [
+                OutlinedButton(
+                  onPressed: () =>
+                      _setSharedStatus(post, PostStatus.rejected),
+                  child: const Text('Reject'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _section(
+              context,
+              'Shared posts — Rejected',
+              sharedRejected,
+              'No rejected shared posts.',
+              actions: (post) => [
+                FilledButton(
+                  onPressed: () =>
+                      _setSharedStatus(post, PostStatus.approved),
+                  child: const Text('Approve'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _deleteShared(context, post),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
           _section(
             context,
-            'Pending verification',
-            pending,
-            'No submissions waiting for review.',
+            'Local posts — Pending verification',
+            localPending,
+            'No local submissions waiting for review.',
             actions: (post) => [
               FilledButton(
-                onPressed: () => _setStatus(post, PostStatus.approved),
+                onPressed: () => _setLocalStatus(post, PostStatus.approved),
                 child: const Text('Approve'),
               ),
               OutlinedButton(
-                onPressed: () => _setStatus(post, PostStatus.rejected),
+                onPressed: () => _setLocalStatus(post, PostStatus.rejected),
                 child: const Text('Reject'),
               ),
             ],
@@ -69,12 +154,12 @@ class CommunityAdminScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _section(
             context,
-            'Published',
-            published,
-            'No published posts yet.',
+            'Local posts — Published',
+            localPublished,
+            'No published local posts yet.',
             actions: (post) => [
               OutlinedButton(
-                onPressed: () => _setStatus(post, PostStatus.rejected),
+                onPressed: () => _setLocalStatus(post, PostStatus.rejected),
                 child: const Text('Reject'),
               ),
             ],
@@ -82,16 +167,16 @@ class CommunityAdminScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _section(
             context,
-            'Rejected',
-            rejected,
-            'No rejected posts.',
+            'Local posts — Rejected',
+            localRejected,
+            'No rejected local posts.',
             actions: (post) => [
               FilledButton(
-                onPressed: () => _setStatus(post, PostStatus.approved),
+                onPressed: () => _setLocalStatus(post, PostStatus.approved),
                 child: const Text('Approve'),
               ),
               OutlinedButton(
-                onPressed: () => _delete(context, post),
+                onPressed: () => _deleteLocal(context, post),
                 child: const Text('Delete'),
               ),
             ],
@@ -101,22 +186,89 @@ class CommunityAdminScreen extends StatelessWidget {
     );
   }
 
-  void _setStatus(CommunityPost post, PostStatus status) {
-    onChanged(
-      posts
-          .map((p) => identical(p, post) ? p.copyWith(status: status) : p)
-          .toList(),
-    );
+  void _setLocalStatus(CommunityPost post, PostStatus status) {
+    final updated = _local
+        .map((p) => identical(p, post) ? p.copyWith(status: status) : p)
+        .toList();
+    setState(() => _local = updated);
+    widget.onLocalChanged(updated);
   }
 
-  Future<void> _delete(BuildContext context, CommunityPost post) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _deleteLocal(
+    BuildContext context,
+    CommunityPost post,
+  ) async {
+    final confirmed = await _confirmDelete(context, post, local: true);
+    if (confirmed != true) return;
+    final updated = _local.where((p) => !identical(p, post)).toList();
+    setState(() => _local = updated);
+    widget.onLocalChanged(updated);
+  }
+
+  Future<void> _setSharedStatus(
+    CommunityPost post,
+    PostStatus status,
+  ) async {
+    final repository = widget.postRepository;
+    if (repository == null) return;
+    try {
+      await repository.updatePostStatus(post, status);
+      if (!mounted) return;
+      setState(() {
+        _shared = _shared
+            .map((p) => identical(p, post) ? p.copyWith(status: status) : p)
+            .toList();
+      });
+      widget.onSharedChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(sharedPostsErrorMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _deleteShared(
+    BuildContext context,
+    CommunityPost post,
+  ) async {
+    final repository = widget.postRepository;
+    if (repository == null) return;
+    // Captured before any await: the parameter context must not be
+    // used across async gaps.
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await _confirmDelete(context, post, local: false);
+    if (confirmed != true) return;
+    try {
+      await repository.deletePost(post);
+      if (!mounted) return;
+      setState(() {
+        _shared = _shared.where((p) => !identical(p, post)).toList();
+      });
+      widget.onSharedChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(sharedPostsErrorMessage(e))),
+      );
+    }
+  }
+
+  Future<bool?> _confirmDelete(
+    BuildContext context,
+    CommunityPost post, {
+    required bool local,
+  }) {
+    return showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete this post?'),
         content: Text(
-          'This removes "${post.displayTitle}" from this device. '
-          'This cannot be undone.',
+          local
+              ? 'This removes "${post.displayTitle}" from this device. '
+                  'This cannot be undone.'
+              : 'This removes "${post.displayTitle}" for all users. '
+                  'This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -130,9 +282,6 @@ class CommunityAdminScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
-      onChanged(posts.where((p) => !identical(p, post)).toList());
-    }
   }
 
   Widget _section(

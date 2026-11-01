@@ -1,9 +1,12 @@
-import 'package:byahetayo/features/communities_tab.dart';
-import 'package:byahetayo/features/community_posts.dart';
-import 'package:byahetayo/features/lgu_complaints.dart';
+import 'package:estudyantego/features/communities_tab.dart';
+import 'package:estudyantego/features/community_posts.dart';
+import 'package:estudyantego/features/lgu_complaints.dart';
+import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_fakes.dart';
 
 FareComplaint _complaint({
   String reference = 'BT-20261101-0001',
@@ -380,9 +383,16 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    const user = AuthUser(uid: 'u1', email: 'user@example.com');
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: CommunitiesTab(onViewOnMap: () {})),
+        home: Scaffold(
+          body: CommunitiesTab(
+            onViewOnMap: () {},
+            currentUser: user,
+            postRepository: FakePostRepository(),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -397,7 +407,7 @@ void main() {
     await tester.pumpAndSettle();
     // Field order: From, To, per-vehicle fare, hours, operator.
     await tester.enterText(fields.at(2), '60');
-    await tester.tap(find.text('Save post'));
+    await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     expect(find.text('Cabugao → Vigan City'), findsWidgets);
 

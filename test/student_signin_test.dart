@@ -1,8 +1,8 @@
 // Widget tests for the 7-Day Sign-in page and dashboard card.
-import 'package:byahetayo/features/student/signin_screen.dart';
-import 'package:byahetayo/features/student/student_data.dart';
-import 'package:byahetayo/features/student/student_theme.dart';
-import 'package:byahetayo/features/student_tab.dart';
+import 'package:estudyantego/features/student/signin_screen.dart';
+import 'package:estudyantego/features/student/student_data.dart';
+import 'package:estudyantego/features/student/student_theme.dart';
+import 'package:estudyantego/features/student_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

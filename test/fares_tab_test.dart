@@ -1,6 +1,6 @@
 // Tests for the Fares tab: formula, distance, peso format, and the
 // tab rendering + computing from a typed distance.
-import 'package:byahetayo/features/fares_tab.dart';
+import 'package:estudyantego/features/fares_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -60,11 +60,11 @@ void main() {
     );
     expect(find.text('Traditional jeepney'), findsOneWidget);
     // No distance yet: the guidance state shows.
-    expect(find.textContaining('Kailangan ng starting location'),
+    expect(find.textContaining('Starting location needed'),
         findsOneWidget);
     // Switch to hub origin: Cabugao -> Vigan City auto-computes
     // (no manual distance field anymore).
-    await tester.tap(find.text('Pumili ng hub'));
+    await tester.tap(find.text('Choose a hub'));
     await tester.pump();
     expect(find.text('32.3 km'), findsOneWidget);
     expect(find.textContaining('₱72'), findsWidgets);

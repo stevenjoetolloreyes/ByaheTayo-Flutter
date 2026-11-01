@@ -1,4 +1,4 @@
-import 'package:byahetayo/features/operator_fares.dart';
+import 'package:estudyantego/features/operator_fares.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

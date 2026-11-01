@@ -7,9 +7,9 @@
 // toggle), language honestly shows English only, Edit Profile opens the
 // real profile screen, and Sign Out really signs out to the sign-in
 // screen. Auth/permission behavior goes through the fakes.
-import 'package:byahetayo/features/onboarding/auth_service.dart';
-import 'package:byahetayo/features/onboarding/permission_service.dart';
-import 'package:byahetayo/main.dart';
+import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/features/onboarding/permission_service.dart';
+import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,7 +43,7 @@ Future<void> _pumpApp(
         '{"displayName":"Steven Reyes","email":"steven@example.com"}',
     ...?extraPrefs,
   });
-  await tester.pumpWidget(ByaheTayoApp(
+  await tester.pumpWidget(EstudyanteGOApp(
     authService: auth ?? FakeAuthService(user: _user),
     permissionService: permissions ?? FakePermissionService(),
   ));
@@ -240,7 +240,7 @@ void main() {
     await _tapVisible(tester, 'Transactions');
     // The dashboard tile and the opened sheet both show these texts.
     expect(find.text('Transaction History'), findsNWidgets(2));
-    expect(find.text('Wala pang transactions.'), findsWidgets);
+    expect(find.text('No transactions yet.'), findsWidgets);
   });
 
   testWidgets('no overflow at tablet portrait and landscape sizes',

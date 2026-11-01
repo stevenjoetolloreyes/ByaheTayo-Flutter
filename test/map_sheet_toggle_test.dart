@@ -3,7 +3,7 @@
 // view, so widget presence is covered by analyze, not here.
 // What these prove: the toggle's offset + tooltip rules, including
 // the navigation scope guard (nav never drops its controls).
-import 'package:byahetayo/features/map_tab.dart';
+import 'package:estudyantego/features/map_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -3,8 +3,8 @@
 // per-operator source notes, and the section rendering in the tab.
 // Dataset counts themselves are covered by operator_fares_test.dart;
 // these tests cover only the new wiring (grouping + notes + UI).
-import 'package:byahetayo/features/fares_tab.dart';
-import 'package:byahetayo/features/operator_fares.dart';
+import 'package:estudyantego/features/fares_tab.dart';
+import 'package:estudyantego/features/operator_fares.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

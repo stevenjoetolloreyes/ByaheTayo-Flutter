@@ -1,8 +1,8 @@
 // Unit tests for the Map tab's pure route logic (no GoogleMap needed).
 import 'dart:convert';
 
-import 'package:byahetayo/features/fares_tab.dart';
-import 'package:byahetayo/features/map_tab.dart';
+import 'package:estudyantego/features/fares_tab.dart';
+import 'package:estudyantego/features/map_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';

@@ -7,8 +7,10 @@
 // screens under test exercise their real code paths.
 import 'dart:async';
 
-import 'package:byahetayo/features/onboarding/auth_service.dart';
-import 'package:byahetayo/features/onboarding/permission_service.dart';
+import 'package:estudyantego/features/community_post_repository.dart';
+import 'package:estudyantego/features/community_posts.dart';
+import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/features/onboarding/permission_service.dart';
 
 class _Record {
   _Record(this.password, this.displayName, this.verified);
@@ -36,6 +38,14 @@ class FakeAuthService implements AuthService {
   final List<String> resetEmailsSent = [];
   bool verificationEmailSent = false;
   int signOutCount = 0;
+
+  /// Google stub: the user a Google tap returns (null = unset).
+  AuthUser? googleUser;
+
+  /// When true, Google taps behave as user-canceled (return null).
+  bool googleCanceled = false;
+  int googleSignInCount = 0;
+  int googleSignUpCount = 0;
 
   final _controller = StreamController<AuthUser?>.broadcast();
 
@@ -120,6 +130,30 @@ class FakeAuthService implements AuthService {
   }
 
   @override
+  Future<AuthUser?> signInWithGoogle() async {
+    _checkConfigured();
+    googleSignInCount++;
+    if (googleCanceled) return null;
+    final user = googleUser;
+    if (user == null) return null;
+    _user = user;
+    _controller.add(_user);
+    return user;
+  }
+
+  @override
+  Future<AuthUser?> signUpWithGoogle() async {
+    _checkConfigured();
+    googleSignUpCount++;
+    if (googleCanceled) return null;
+    final user = googleUser;
+    if (user == null) return null;
+    _user = user;
+    _controller.add(_user);
+    return user;
+  }
+
+  @override
   Future<void> signOut() async {
     _checkConfigured();
     _user = null;
@@ -154,5 +188,78 @@ class FakePermissionService implements PermissionService {
   @override
   Future<void> openAppSettings() async {
     settingsOpenedCount++;
+  }
+}
+
+/// In-memory [PostRepository] mirroring the Firestore visibility rule
+/// (see [sharedPostVisibleTo]) and the photo guard: a photo larger
+/// than [kMaxSharedDocBytes] is dropped, never failed over.
+class FakePostRepository implements PostRepository {
+  final List<CommunityPost> stored = [];
+  int _nextId = 1;
+
+  /// When true, [createPost] throws, simulating a Firestore failure
+  /// (e.g. database not created yet).
+  bool failCreates = false;
+
+  @override
+  Future<List<CommunityPost>> loadVisiblePosts(AuthUser? user) async {
+    final visible =
+        stored.where((p) => sharedPostVisibleTo(p, user)).toList();
+    visible.sort((a, b) {
+      final aTime = a.createdAt ?? DateTime(2000);
+      final bTime = b.createdAt ?? DateTime(2000);
+      return bTime.compareTo(aTime);
+    });
+    return visible;
+  }
+
+  @override
+  Future<SharedPostCreation> createPost(
+    CommunityPost post,
+    AuthUser author,
+  ) async {
+    if (failCreates) {
+      throw Exception('Simulated Firestore failure.');
+    }
+    var photo = post.photoBase64;
+    var photoDropped = false;
+    if (photo != null && photo.length > kMaxSharedDocBytes) {
+      photo = null;
+      photoDropped = true;
+    }
+    final created = CommunityPost(
+      routeName: post.routeName,
+      vehicles: post.vehicles,
+      hours: post.hours,
+      fare: post.fare,
+      hubName: post.hubName,
+      from: post.from,
+      to: post.to,
+      photoBase64: photo,
+      faresByVehicle: post.faresByVehicle,
+      operatorName: post.operatorName,
+      status: PostStatus.pending,
+      id: 'fake-${_nextId++}',
+      authorUid: author.uid,
+      createdAt: DateTime.now(),
+    );
+    stored.add(created);
+    return (post: created, photoDropped: photoDropped);
+  }
+
+  @override
+  Future<void> updatePostStatus(
+    CommunityPost post,
+    PostStatus status,
+  ) async {
+    final index = stored.indexWhere((p) => p.id == post.id);
+    if (index < 0) throw StateError('Post not found.');
+    stored[index] = stored[index].copyWith(status: status);
+  }
+
+  @override
+  Future<void> deletePost(CommunityPost post) async {
+    stored.removeWhere((p) => p.id == post.id);
   }
 }

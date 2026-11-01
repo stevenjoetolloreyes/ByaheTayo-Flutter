@@ -1,7 +1,10 @@
 import 'dart:convert';
 
-import 'package:byahetayo/features/community_posts.dart';
-import 'package:byahetayo/features/communities_tab.dart';
+import 'package:estudyantego/features/community_posts.dart';
+import 'package:estudyantego/features/communities_tab.dart';
+import 'package:estudyantego/features/onboarding/auth_service.dart';
+
+import 'test_fakes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -257,7 +260,7 @@ void main() {
     expect(result, isEmpty);
   });
 
-  testWidgets('community create form validates and the post appears', (
+  testWidgets('community create form validates and the shared post appears', (
     tester,
   ) async {
     // Seed flag set so the sample does not appear in this flow test.
@@ -266,35 +269,43 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    const user = AuthUser(uid: 'u1', email: 'user@example.com');
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: CommunitiesTab())),
+      MaterialApp(
+        home: Scaffold(
+          body: CommunitiesTab(
+            currentUser: user,
+            postRepository: FakePostRepository(),
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('No announcements or posts yet.'), findsOneWidget);
     await tester.tap(find.text('Share info'));
     await tester.pumpAndSettle();
-    expect(find.text('Share a local route'), findsOneWidget);
+    expect(find.text('Share a route'), findsOneWidget);
     // Empty save shows the From validation first.
-    await tester.tap(find.text('Save post'));
+    await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     expect(
       find.text('Add a starting location (From) for this route.'),
       findsOneWidget,
     );
     await tester.enterText(find.byType(TextField).at(0), 'Cabugao');
-    await tester.tap(find.text('Save post'));
+    await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     expect(
       find.text('Add a destination (To) for this route.'),
       findsOneWidget,
     );
     await tester.enterText(find.byType(TextField).at(1), 'Vigan City');
-    await tester.tap(find.text('Save post'));
+    await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     expect(find.text('Pick at least one vehicle type.'), findsOneWidget);
     await tester.tap(find.text('Traditional Jeepney'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save post'));
+    await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     expect(
       find.text('Add a fare above ₱0 for Traditional Jeepney.'),
@@ -302,10 +313,10 @@ void main() {
     );
     // Field order: From, To, per-vehicle fare, hours, operator.
     await tester.enterText(find.byType(TextField).at(2), '60');
-    await tester.tap(find.text('Save post'));
+    await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     expect(find.text('Cabugao → Vigan City'), findsOneWidget);
-    expect(find.text('Local post'), findsOneWidget);
+    expect(find.text('Shared post'), findsOneWidget);
     expect(find.text('Pending verification'), findsOneWidget);
     expect(find.text('Traditional Jeepney: ₱60.00'), findsOneWidget);
     expect(find.text('View Route'), findsOneWidget);
@@ -320,8 +331,16 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    const user = AuthUser(uid: 'u1', email: 'user@example.com');
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: CommunitiesTab())),
+      MaterialApp(
+        home: Scaffold(
+          body: CommunitiesTab(
+            currentUser: user,
+            postRepository: FakePostRepository(),
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Share info'));
@@ -331,7 +350,7 @@ void main() {
     await tester.tap(find.text('Traditional Jeepney'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(2), '60');
-    await tester.tap(find.text('Save post'));
+    await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('View Route'));
     await tester.pumpAndSettle();

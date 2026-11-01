@@ -1,4 +1,4 @@
-// Premium Account page — ByaheTayo Flutter app (Account tab).
+// Premium Account page — EstudyanteGO Flutter app (Account tab).
 //
 // Premium Travel App + Material 3 + minimalist card UI. No guest
 // accounts anywhere: the header shows the authenticated Firebase
@@ -178,7 +178,7 @@ class _AccountTabState extends State<AccountTab> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             SizedBox(height: 12),
-            Text('Wala pang transactions.'),
+            Text('No transactions yet.'),
           ],
         ),
       ),
@@ -333,7 +333,7 @@ class _AccountTabState extends State<AccountTab> {
           child: ListTile(
             leading: const Icon(Icons.history),
             title: const Text('Transaction History'),
-            subtitle: const Text('Wala pang transactions.'),
+            subtitle: const Text('No transactions yet.'),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showTransactionHistory,
           ),
@@ -478,7 +478,7 @@ class _AccountTabState extends State<AccountTab> {
                 'About EstudyanteGO',
                 'EstudyanteGO — Northern PH commute at jeepney companion. Trip '
                 'planner, LTFRB fare calculator, at student hub. '
-                'Version 1.0.0 (com.byahetayo.app).',
+                'Version 1.0.0 (com.estudyantego.app).',
               ),
             ),
             ListTile(

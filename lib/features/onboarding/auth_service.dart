@@ -1,4 +1,4 @@
-// Authentication abstraction for ByaheTayo.
+// Authentication abstraction for EstudyanteGO.
 //
 // The app talks to auth ONLY through [AuthService]. The production
 // implementation ([FirebaseAuthService]) delegates to Firebase Auth, and
@@ -14,19 +14,28 @@ class AuthUser {
     required this.uid,
     required this.email,
     this.displayName,
+    this.photoUrl,
     this.emailVerified = false,
   });
 
   final String uid;
   final String email;
   final String? displayName;
+
+  /// Google profile photo URL (null for email/password accounts).
+  final String? photoUrl;
   final bool emailVerified;
 
-  AuthUser copyWith({bool? emailVerified, String? displayName}) {
+  AuthUser copyWith({
+    bool? emailVerified,
+    String? displayName,
+    String? photoUrl,
+  }) {
     return AuthUser(
       uid: uid,
       email: email,
       displayName: displayName ?? this.displayName,
+      photoUrl: photoUrl ?? this.photoUrl,
       emailVerified: emailVerified ?? this.emailVerified,
     );
   }
@@ -86,6 +95,20 @@ abstract class AuthService {
   /// Reloads the current user from Firebase (picks up a verified email)
   /// and returns the fresh user, or null when signed out.
   Future<AuthUser?> reloadUser();
+
+  /// Google sign-in for LOGIN ONLY. Returns the Firebase user, or null
+  /// when the user canceled the Google flow. The caller (Sign In
+  /// screen) must verify an EstudyanteGO profile exists for the UID
+  /// and sign out immediately when it does not — this method alone
+  /// never creates a profile.
+  Future<AuthUser?> signInWithGoogle();
+
+  /// Google sign-up. Same Firebase flow as [signInWithGoogle] (Google
+  /// creates the Firebase account when new); the caller (Create
+  /// Account screen) creates the UID-keyed EstudyanteGO profile from
+  /// the returned user and reuses an existing profile instead of
+  /// duplicating it.
+  Future<AuthUser?> signUpWithGoogle();
 
   Future<void> signOut();
 }

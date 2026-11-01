@@ -1,5 +1,5 @@
 // Unit tests for the Student Hub's pure helpers (no storage, no UI).
-import 'package:byahetayo/features/student/student_data.dart';
+import 'package:estudyantego/features/student/student_data.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Subject _subject({

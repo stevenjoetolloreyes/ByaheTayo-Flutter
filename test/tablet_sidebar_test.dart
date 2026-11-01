@@ -5,7 +5,7 @@
 // Tooltips on every icon; chevron toggle at the top; ~225ms animation;
 // selection never resets on toggle; preference persisted under
 // 'byahetayo_sidebar_collapsed'; phones keep the bottom NavigationBar.
-import 'package:byahetayo/main.dart';
+import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,7 +35,7 @@ void main() {
   testWidgets('sidebar is 220dp wide when expanded (tablet portrait)',
       (WidgetTester tester) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const ByaheTayoApp());
+    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
 
     expect(_sidebarWidth(tester), 220);
@@ -46,7 +46,7 @@ void main() {
   testWidgets('toggle collapses to 80dp, hides labels, keeps tooltips',
       (WidgetTester tester) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const ByaheTayoApp());
+    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
 
     // 'Fares' is unselected, so it only exists as a sidebar label.
@@ -71,13 +71,13 @@ void main() {
   testWidgets('selection is preserved across collapse and expand',
       (WidgetTester tester) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const ByaheTayoApp());
+    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('sidebar-item-Fares')));
     await tester.pumpAndSettle();
     expect(
-      find.text('LTFRB fare calculator — parehong rates at formula ng web app.'),
+      find.text('LTFRB fare calculator — same rates and formula as the web app.'),
       findsOneWidget,
     );
 
@@ -87,7 +87,7 @@ void main() {
     // label is gone while collapsed.
     expect(find.text('Fares'), findsOneWidget);
     expect(
-      find.text('LTFRB fare calculator — parehong rates at formula ng web app.'),
+      find.text('LTFRB fare calculator — same rates and formula as the web app.'),
       findsOneWidget,
     );
 
@@ -96,7 +96,7 @@ void main() {
     // Expanded again: AppBar + calculator content + sidebar label.
     expect(find.text('Fares'), findsNWidgets(2));
     expect(
-      find.text('LTFRB fare calculator — parehong rates at formula ng web app.'),
+      find.text('LTFRB fare calculator — same rates and formula as the web app.'),
       findsOneWidget,
     );
   });
@@ -108,7 +108,7 @@ void main() {
     // Widget honors the restored initial value (main() loads the pref and
     // passes it in).
     await tester.pumpWidget(
-      const ByaheTayoApp(initialSidebarCollapsed: true),
+      const EstudyanteGOApp(initialSidebarCollapsed: true),
     );
     await tester.pumpAndSettle();
     expect(_sidebarWidth(tester), 80);
@@ -117,7 +117,7 @@ void main() {
   testWidgets('toggling saves the collapsed preference',
       (WidgetTester tester) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const ByaheTayoApp());
+    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
@@ -129,13 +129,13 @@ void main() {
   testWidgets('no overflow at tablet portrait and landscape sizes',
       (WidgetTester tester) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const ByaheTayoApp());
+    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
 
     await _setSurface(tester, const Size(1280, 800));
-    await tester.pumpWidget(const ByaheTayoApp());
+    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
@@ -144,7 +144,7 @@ void main() {
   testWidgets('phones keep the bottom NavigationBar, no sidebar',
       (WidgetTester tester) async {
     await _setSurface(tester, const Size(390, 844));
-    await tester.pumpWidget(const ByaheTayoApp());
+    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
 
     expect(find.byType(NavigationBar), findsOneWidget);

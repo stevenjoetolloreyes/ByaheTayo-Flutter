@@ -6,7 +6,7 @@
 // gates on showBrowsingChrome, and the _churchPreview flag lifecycle
 // (set in _selectChurchDestination; cleared on card X, hub/route
 // selection, swap, and navigation end) is documented beside the flag.
-import 'package:byahetayo/features/map_tab.dart';
+import 'package:estudyantego/features/map_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

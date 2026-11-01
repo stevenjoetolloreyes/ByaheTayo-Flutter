@@ -1,4 +1,4 @@
-// Admin access for ByaheTayo (user rule, Nov 1).
+// Admin access for EstudyanteGO (user rule, Nov 1).
 //
 // ONLY these two emails are admins. The check compares the
 // AUTHENTICATED Firebase user's email (FirebaseAuth currentUser.email,

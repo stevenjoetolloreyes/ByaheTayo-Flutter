@@ -1,0 +1,52 @@
+// EstudyanteGO Firestore security rules — shared community posts.
+//
+// Collection: community_posts
+// Document fields: routeName, vehicles, hours, fare, hubName, from,
+//   to, photoBase64 (optional), faresByVehicle, operatorName,
+//   status ('pending' | 'approved' | 'rejected'), authorUid,
+//   createdAt (server timestamp).
+//
+// Visibility (mirrored client-side in
+// lib/features/community_post_repository.dart — these rules are the
+// real enforcement):
+//   approved posts  → any signed-in user may read
+//   pending posts   → only the author (authorUid == uid) or an admin
+//   rejected posts  → nobody may read them
+// Creates must stamp the caller's own UID and start pending. Status
+// changes and deletes are admin-only (allowlisted emails below).
+// LGU complaints stay local-only and never touch Firestore.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email in [
+        'stevenjoereyes0625@gmail.com',
+        'stevenjoereyes23@gmail.com',
+      ];
+    }
+
+    match /community_posts/{postId} {
+      allow read: if isSignedIn()
+        && (resource.data.status == 'approved'
+          || resource.data.authorUid == request.auth.uid
+          || isAdmin());
+
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      // Admins may change ONLY the status field (approve/reject).
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status']);
+
+      allow delete: if isAdmin();
+    }
+  }
+}

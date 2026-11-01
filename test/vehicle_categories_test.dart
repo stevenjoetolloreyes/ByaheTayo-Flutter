@@ -1,5 +1,5 @@
-import 'package:byahetayo/features/fares_tab.dart';
-import 'package:byahetayo/features/vehicle_categories.dart';
+import 'package:estudyantego/features/fares_tab.dart';
+import 'package:estudyantego/features/vehicle_categories.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
