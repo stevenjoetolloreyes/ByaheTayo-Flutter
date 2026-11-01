@@ -4,10 +4,11 @@
 // rates, same formula, same 14 hubs, same distance rule (straight-line
 // distance + 22% road allowance). Differences from the web version are
 // deliberate and small: the tab does NOT auto-prompt for location on
-// open (tap "Gamitin ang lokasyon ko" instead), and a manual distance
-// field is offered for trips outside the 14 hubs. No dummy data: every
-// number shown comes from the rate table below or from the distance
-// the user actually picked/typed. Tricycle fares outside Dagupan have
+// open (tap "Gamitin ang lokasyon ko" instead), and the distance is
+// always auto-computed (straight-line + 22% road allowance) — there is
+// no manual distance field. No dummy data: every number shown comes
+// from the rate table below or from the distance the user actually
+// picked. Tricycle fares outside Dagupan have
 // NO national rate, so that mode shows the honest LGU-matrix message
 // instead of inventing a number.
 import 'dart:math' as math;
@@ -306,28 +307,12 @@ class _FaresTabState extends State<FaresTab> {
   double? _deviceLat;
   double? _deviceLng;
   bool _locating = false;
-  final _manualController = TextEditingController();
-
-  @override
-  void dispose() {
-    _manualController.dispose();
-    super.dispose();
-  }
 
   FareRate? get _rate {
     for (final r in fareRates) {
       if (r.id == _rateId) return r;
     }
     return null; // 'tricycle-local': no rate, handled as a special state.
-  }
-
-  /// Manual distance wins when it parses to a positive number.
-  double? get _manualKm {
-    final text = _manualController.text.trim().replaceAll(',', '.');
-    if (text.isEmpty) return null;
-    final value = double.tryParse(text);
-    if (value == null || value <= 0) return null;
-    return value;
   }
 
   /// Direct (straight-line) distance for the computed modes, null when
@@ -351,11 +336,9 @@ class _FaresTabState extends State<FaresTab> {
     );
   }
 
-  /// Road distance shown and used for the fare: manual override, else
-  /// max(0.1, direct * 1.22) like the web calculator.
+  /// Road distance shown and used for the fare: always auto-computed
+  /// as max(0.1, direct * 1.22) like the web calculator.
   double? get _roadKm {
-    final manual = _manualKm;
-    if (manual != null) return manual;
     final direct = _directKm;
     if (direct == null) return null;
     return math.max(0.1, direct * 1.22);
@@ -408,7 +391,6 @@ class _FaresTabState extends State<FaresTab> {
     final rate = _rate;
     final roadKm = _roadKm;
     final directKm = _directKm;
-    final manual = _manualKm;
 
     Widget sectionTitle(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -596,21 +578,7 @@ class _FaresTabState extends State<FaresTab> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      key: const Key('manual-distance'),
-                      controller: _manualController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'O kaya, i-type ang distansya (km)',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
+
                     if (roadKm != null) ...[
                       Text(
                         '${roadKm.toStringAsFixed(1)} km',
@@ -619,9 +587,7 @@ class _FaresTabState extends State<FaresTab> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        manual != null
-                            ? 'I-type na distansya (hindi galing sa mapa).'
-                            : 'Kinuwenta: ${directKm!.toStringAsFixed(1)} km na direktang distansya + 22% road allowance. Pwedeng mag-iba sa aktwal na ruta.',
+                        'Kinuwenta: ${directKm!.toStringAsFixed(1)} km na direktang distansya + 22% road allowance. Pwedeng mag-iba sa aktwal na ruta.',
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),

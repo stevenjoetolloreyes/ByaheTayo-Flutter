@@ -54,7 +54,7 @@ void main() {
     });
   });
 
-  testWidgets('Fares tab computes from a typed distance', (tester) async {
+  testWidgets('Fares tab auto-computes hub-to-hub distance', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: FaresTab())),
     );
@@ -62,8 +62,11 @@ void main() {
     // No distance yet: the guidance state shows.
     expect(find.textContaining('Kailangan ng starting location'),
         findsOneWidget);
-    await tester.enterText(find.byKey(const Key('manual-distance')), '10');
+    // Switch to hub origin: Cabugao -> Vigan City auto-computes
+    // (no manual distance field anymore).
+    await tester.tap(find.text('Pumili ng hub'));
     await tester.pump();
-    expect(find.textContaining('₱26'), findsWidgets);
+    expect(find.text('32.3 km'), findsOneWidget);
+    expect(find.textContaining('₱72'), findsWidgets);
   });
 }
