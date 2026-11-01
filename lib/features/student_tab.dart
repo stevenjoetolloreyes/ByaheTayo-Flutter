@@ -6,7 +6,7 @@
 // grid: on tablets it looked sparse with mismatched card heights).
 // Section order follows the landscape spec: Sign-in, Bible,
 // Allowance, Classes, Notes, Upcoming, Church Directory, Tasks,
-// Profile, then the preserved Attendance, Quotes, and Commute.
+// Profile, then the School Calendar, Quotes, and Commute.
 //
 // Honest mappings for reference-only items:
 // - Tasks shortcut -> Classes screen (assignments live there).
@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'ph_holidays.dart';
 import 'student/allowance_screen.dart';
 import 'student/attendance_screen.dart';
 import 'student/bible_screen.dart';
@@ -65,7 +66,7 @@ class _StudentTabState extends State<StudentTab> {
   List<Quiz> _quizzes = [];
   List<QuizAttempt> _attempts = [];
   List<AttendanceRecord> _attendance = [];
-  double _attendanceGoal = 90;
+
   List<String> _savedKeys = [];
   List<String> _commuteFavs = [];
   List<CommuteExpense> _commuteExpenses = [];
@@ -97,8 +98,7 @@ class _StudentTabState extends State<StudentTab> {
         await StudentStorage.loadList(StudentStorage.attemptsKey);
     final attendance =
         await StudentStorage.loadList(StudentStorage.attendanceKey);
-    final attendanceGoal = await StudentStorage.loadDouble(
-        StudentStorage.attendanceGoalKey, 90);
+
     final commuteFavs =
         await StudentStorage.loadStrings(StudentStorage.commuteFavsKey);
     final commuteExpenses =
@@ -120,7 +120,7 @@ class _StudentTabState extends State<StudentTab> {
       _quizzes = quizzes.map(Quiz.fromJson).toList();
       _attempts = attempts.map(QuizAttempt.fromJson).toList();
       _attendance = attendance.map(AttendanceRecord.fromJson).toList();
-      _attendanceGoal = attendanceGoal;
+
       _savedKeys = prefs.getStringList('byahetayo_saved_routes') ?? [];
       _commuteFavs = commuteFavs;
       _commuteExpenses =
@@ -237,48 +237,49 @@ class _StudentTabState extends State<StudentTab> {
     required IconData icon,
     required String title,
     String? subtitle,
-    required VoidCallback onOpen,
+    VoidCallback? onOpen,
     required List<Widget> children,
   }) {
     final scheme = Theme.of(context).colorScheme;
+    final header = Row(
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: scheme.primary.withValues(alpha: 0.12),
+          child: Icon(icon, color: scheme.primary, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700)),
+              if (subtitle != null)
+                Text(subtitle,
+                    style: TextStyle(
+                        fontSize: 13, color: scheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        if (onOpen != null) const Icon(Icons.chevron_right),
+      ],
+    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            InkWell(
-              onTap: onOpen,
-              borderRadius: BorderRadius.circular(12),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor:
-                        scheme.primary.withValues(alpha: 0.12),
-                    child: Icon(icon, color: scheme.primary, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title,
-                            style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700)),
-                        if (subtitle != null)
-                          Text(subtitle,
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: scheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right),
-                ],
+            if (onOpen == null)
+              header
+            else
+              InkWell(
+                onTap: onOpen,
+                borderRadius: BorderRadius.circular(12),
+                child: header,
               ),
-            ),
             const SizedBox(height: 12),
             ...children,
           ],
@@ -1280,7 +1281,6 @@ class _StudentTabState extends State<StudentTab> {
   // reachable from the dashboard.)
 
   Widget _attendanceWidget(BuildContext context) {
-    final stats = attendanceStats(_attendance);
     final now = DateTime.now();
     final monthRecords = _attendance
         .where((r) => r.date.year == now.year && r.date.month == now.month)
@@ -1293,36 +1293,17 @@ class _StudentTabState extends State<StudentTab> {
     final monthStart = DateTime(now.year, now.month, 1);
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final firstWeekday = monthStart.weekday; // 1 = Mon
-    final byDay = <int, AttendanceRecord>{};
-    for (final r in monthRecords) {
-      byDay.putIfAbsent(r.date.day, () => r);
-    }
+    final monthHolidays = philippineHolidaysInMonth(now.year, now.month);
+    final scheme = Theme.of(context).colorScheme;
 
     return _widgetCard(
       context,
-      icon: Icons.checklist_outlined,
-      title: 'Attendance Sheet',
-      subtitle: 'Manually recorded by you — not school-verified.',
-      onOpen: () => _open(const AttendanceScreen()),
+      icon: Icons.calendar_month_outlined,
+      title: 'School Calendar',
+      subtitle: 'Meron pasok at wala — holidays naka-red.',
       children: [
-        Text('Overall attendance',
-            style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-        Text('${stats.percent.toStringAsFixed(1)}%',
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-        LinearProgressIndicator(
-          value: (stats.percent / 100).clamp(0, 1).toDouble(),
-        ),
-        const SizedBox(height: 2),
-        Text('Goal: ${_attendanceGoal.toStringAsFixed(0)}%'),
-        const SizedBox(height: 8),
-        _row('Present', '${stats.present}'),
-        _row('Absent', '${stats.absent}'),
-        _row('Late', '${stats.late}'),
-        _row('Excused', '${stats.excused}'),
-        _row('Half-day', '${stats.half}'),
-        const SizedBox(height: 8),
-        const Text('This month calendar',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        Text('${monthName(now.month)} ${now.year}',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         Row(
           children: [
@@ -1346,30 +1327,56 @@ class _StudentTabState extends State<StudentTab> {
           itemBuilder: (_, i) {
             if (i < firstWeekday - 1) return const SizedBox.shrink();
             final day = i - (firstWeekday - 1) + 1;
-            final record = byDay[day];
+            final kind = schoolDayKind(DateTime(now.year, now.month, day));
             final isToday = day == now.day;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: isToday
-                      ? BoxDecoration(
-                          border: Border.all(
-                              color: Theme.of(context).colorScheme.primary),
-                          borderRadius: BorderRadius.circular(8),
-                        )
-                      : null,
-                  child: Text('$day', style: const TextStyle(fontSize: 12)),
+            final Color? dayColor = switch (kind) {
+              SchoolDayKind.holiday => scheme.error,
+              SchoolDayKind.weekend => scheme.onSurfaceVariant,
+              SchoolDayKind.schoolDay => null,
+            };
+            return Center(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: isToday
+                    ? BoxDecoration(
+                        border: Border.all(color: scheme.primary),
+                        borderRadius: BorderRadius.circular(8),
+                      )
+                    : null,
+                child: Text(
+                  '$day',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: dayColor,
+                    fontWeight: kind == SchoolDayKind.holiday
+                        ? FontWeight.w800
+                        : null,
+                  ),
                 ),
-                if (record != null)
-                  Icon(Icons.circle,
-                      size: 6,
-                      color: _attendanceColor(context, record.status)),
-              ],
+              ),
             );
           },
         ),
+        if (monthHolidays.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          const Text('Holidays this month',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          for (final h in monthHolidays)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.circle, size: 8, color: scheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                        '${monthShortName(now.month)} ${h.day} · ${h.name}'),
+                  ),
+                ],
+              ),
+            ),
+        ],
         const SizedBox(height: 8),
         const Text('Subject breakdown',
             style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1389,19 +1396,4 @@ class _StudentTabState extends State<StudentTab> {
   }
 }
 
-Color _attendanceColor(BuildContext context, String status) {
-  switch (status) {
-    case 'present':
-      return Colors.green;
-    case 'absent':
-      return Theme.of(context).colorScheme.error;
-    case 'late':
-      return Colors.orange;
-    case 'excused':
-      return Colors.blueGrey;
-    case 'half':
-      return Colors.teal;
-    default:
-      return Colors.grey;
-  }
-}
+
