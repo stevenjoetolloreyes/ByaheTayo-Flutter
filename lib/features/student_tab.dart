@@ -23,6 +23,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ph_holidays.dart';
+import 'school_events.dart';
 import 'student/allowance_screen.dart';
 import 'student/attendance_screen.dart';
 import 'student/bible_screen.dart';
@@ -73,6 +74,7 @@ class _StudentTabState extends State<StudentTab> {
   List<CheckinRecord> _checkins = [];
   Set<String> _quoteFavs = {};
   List<String> _quoteHistory = [];
+  String? _school;
   final _quoteKey = GlobalKey();
 
   @override
@@ -122,6 +124,7 @@ class _StudentTabState extends State<StudentTab> {
       _attendance = attendance.map(AttendanceRecord.fromJson).toList();
 
       _savedKeys = prefs.getStringList('byahetayo_saved_routes') ?? [];
+      _school = prefs.getString('byahetayo_profile_school');
       _commuteFavs = commuteFavs;
       _commuteExpenses =
           commuteExpenses.map(CommuteExpense.fromJson).toList();
@@ -1294,13 +1297,17 @@ class _StudentTabState extends State<StudentTab> {
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final firstWeekday = monthStart.weekday; // 1 = Mon
     final monthHolidays = philippineHolidaysInMonth(now.year, now.month);
+    final monthEvents = schoolEventsInMonth(_school, now.year, now.month);
+    final schoolLabel = _school?.trim();
     final scheme = Theme.of(context).colorScheme;
 
     return _widgetCard(
       context,
       icon: Icons.calendar_month_outlined,
       title: 'School Calendar',
-      subtitle: 'Meron pasok at wala — holidays naka-red.',
+      subtitle: schoolLabel == null || schoolLabel.isEmpty
+          ? 'Meron pasok at wala — holidays naka-red.'
+          : '$schoolLabel · Meron pasok at wala',
       children: [
         Text('${monthName(now.month)} ${now.year}',
             style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -1327,32 +1334,43 @@ class _StudentTabState extends State<StudentTab> {
           itemBuilder: (_, i) {
             if (i < firstWeekday - 1) return const SizedBox.shrink();
             final day = i - (firstWeekday - 1) + 1;
-            final kind = schoolDayKind(DateTime(now.year, now.month, day));
+            final dayDate = DateTime(now.year, now.month, day);
+            final kind = schoolDayKind(dayDate);
+            final dayEvents = schoolEventsOnDay(_school, dayDate);
+            final hasNoClassEvent = dayEvents.any((e) => e.noClasses);
             final isToday = day == now.day;
             final Color? dayColor = switch (kind) {
               SchoolDayKind.holiday => scheme.error,
               SchoolDayKind.weekend => scheme.onSurfaceVariant,
-              SchoolDayKind.schoolDay => null,
+              SchoolDayKind.schoolDay =>
+                hasNoClassEvent ? scheme.onSurfaceVariant : null,
             };
             return Center(
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: isToday
-                    ? BoxDecoration(
-                        border: Border.all(color: scheme.primary),
-                        borderRadius: BorderRadius.circular(8),
-                      )
-                    : null,
-                child: Text(
-                  '$day',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: dayColor,
-                    fontWeight: kind == SchoolDayKind.holiday
-                        ? FontWeight.w800
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: isToday
+                        ? BoxDecoration(
+                            border: Border.all(color: scheme.primary),
+                            borderRadius: BorderRadius.circular(8),
+                          )
                         : null,
+                    child: Text(
+                      '$day',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: dayColor,
+                        fontWeight: kind == SchoolDayKind.holiday
+                            ? FontWeight.w800
+                            : null,
+                      ),
+                    ),
                   ),
-                ),
+                  if (dayEvents.isNotEmpty)
+                    const Icon(Icons.circle, size: 6, color: Colors.blue),
+                ],
               ),
             );
           },
@@ -1372,6 +1390,30 @@ class _StudentTabState extends State<StudentTab> {
                   Expanded(
                     child: Text(
                         '${monthShortName(now.month)} ${h.day} · ${h.name}'),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        if (schoolLabel == null || schoolLabel.isEmpty) ...[
+          const SizedBox(height: 8),
+          const Text(
+              'Walang school na naka-save — lagay mo yung school mo sa Account → Student Information para magpakita yung school events dito.'),
+        ] else if (monthEvents.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          const Text('Events this month',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          for (final e in monthEvents)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                children: [
+                  const Icon(Icons.circle, size: 8, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                        '${formatEventRange(e)} · ${e.name} · ${e.noClasses ? 'Wala pasok' : 'May pasok'}'),
                   ),
                 ],
               ),
