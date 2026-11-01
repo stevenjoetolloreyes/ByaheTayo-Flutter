@@ -3,9 +3,9 @@
 // Dashboard rule: every summary line comes from real on-device data
 // (a zero balance is shown as ₱0, never an invented amount); module
 // cards open real screens.
-import 'package:byahetayo/features/friends_tab.dart';
-import 'package:byahetayo/features/student_tab.dart';
-import 'package:byahetayo/main.dart';
+import 'package:estudyantego/features/friends_tab.dart';
+import 'package:estudyantego/features/student_tab.dart';
+import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -44,13 +44,7 @@ void main() {
     // and the Attendance screen stays reachable via quick access.
     expect(find.text('School Calendar'), findsOneWidget);
     expect(find.text('Attendance'), findsOneWidget);
-    expect(find.text('Church Directory'), findsOneWidget);
     expect(find.text('Tasks & Assignments'), findsOneWidget);
-    expect(find.text('Student Profile'), findsOneWidget);
-    expect(
-        find.text(
-            'Catholic churches across Northern Luzon, loaded live on the Map.'),
-        findsOneWidget);
     expect(find.text('No pending tasks.'), findsOneWidget);
     // Real zero state, not an invented amount.
     expect(find.text('Available Balance'), findsOneWidget);
@@ -60,20 +54,6 @@ void main() {
         find.textContaining('Saved routes are shared with the Map tab.'),
         findsOneWidget);
     expect(find.text('No recent study activity.'), findsOneWidget);
-  });
-
-  testWidgets('Student profile card jumps to the Account tab',
-      (tester) async {
-    var called = false;
-    tester.view.physicalSize = const Size(390, 6000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-        wrap(StudentTab(onViewAccount: () => called = true)));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('View Account'));
-    expect(called, isTrue);
   });
 
   testWidgets('Student Hub cards stack in one column even at 800px wide',
@@ -174,7 +154,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      const ByaheTayoApp(initialThemeMode: ThemeMode.dark),
+      const EstudyanteGOApp(initialThemeMode: ThemeMode.dark),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Student', skipOffstage: true));

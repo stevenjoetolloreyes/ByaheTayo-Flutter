@@ -5,8 +5,8 @@
 // screen size (his 12:09 correction overruled the earlier 2/3-column
 // grid: on tablets it looked sparse with mismatched card heights).
 // Section order follows the landscape spec: Sign-in, Bible,
-// Allowance, Classes, Notes, Upcoming, Church Directory, Tasks,
-// Profile, then the School Calendar, Quotes, and Commute.
+// Allowance, Classes, Notes, Upcoming, Tasks,
+// then the School Calendar, Quotes, and Commute.
 //
 // Honest mappings for reference-only items:
 // - Tasks shortcut -> Classes screen (assignments live there).
@@ -41,13 +41,10 @@ import 'map_tab.dart' as maps;
 class StudentTab extends StatefulWidget {
   const StudentTab({super.key, this.onViewOnMap, this.onViewAccount});
 
-  /// Switches the shell to the Map tab (used by My Commute jumps and
-  /// the Church Directory card).
+  /// Switches the shell to the Map tab (used by My Commute jumps).
   final VoidCallback? onViewOnMap;
 
-  /// Switches the shell to the Account tab (used by the Student
-  /// Profile card). Null in bare widget tests, where the button is
-  /// hidden instead of dead.
+  /// Switches the shell to the Account tab. Null in bare widget tests.
   final VoidCallback? onViewAccount;
 
   @override
@@ -204,9 +201,7 @@ class _StudentTabState extends State<StudentTab> {
       _classesWidget(context),
       _notesWidget(context),
       _upcomingWidget(context),
-      _churchWidget(context),
       _tasksWidget(context),
-      _profileWidget(context),
       _attendanceWidget(context),
       _quotesWidget(context),
       _commuteWidget(context),
@@ -1023,29 +1018,6 @@ class _StudentTabState extends State<StudentTab> {
     );
   }
 
-  // --------------------------------------------------- church directory
-  // Entry point to the Map's Churches chip: real Catholic churches
-  // across Luzon, loaded live from Google Places. The card itself
-  // shows no list — the markers + list live on the Map.
-
-  Widget _churchWidget(BuildContext context) {
-    return _widgetCard(
-      context,
-      icon: Icons.church_outlined,
-      title: 'Church Directory',
-      subtitle: 'Catholic churches across Northern Luzon.',
-      onOpen: () => widget.onViewOnMap?.call(),
-      children: const [
-        Text('Catholic churches across Northern Luzon, loaded live on the Map.'),
-        SizedBox(height: 4),
-        Text(
-          'Tap this card to open the Map, then tap Churches. Results come from Google Places.',
-          style: TextStyle(fontSize: 12),
-        ),
-      ],
-    );
-  }
-
   // ------------------------------------------------- tasks & assignments
 
   Widget _tasksWidget(BuildContext context) {
@@ -1073,51 +1045,6 @@ class _StudentTabState extends State<StudentTab> {
           for (final a in pending.take(4))
             _row(subjectName(a.subjectId),
                 '${a.title} · ${formatDate(a.due)}'),
-      ],
-    );
-  }
-
-  // ------------------------------------------------------ student profile
-  // Guest state mirrors the Account tab exactly (same strings), so
-  // the dashboard never claims an account that does not exist. The
-  // button only appears when the shell provides the jump callback.
-
-  Widget _profileWidget(BuildContext context) {
-    return _widgetCard(
-      context,
-      icon: Icons.person_outlined,
-      title: 'Student Profile',
-      subtitle: 'Your account at a glance.',
-      onOpen: () => widget.onViewAccount?.call(),
-      children: [
-        const Row(
-          children: [
-            CircleAvatar(
-              radius: 22,
-              child: Icon(Icons.person, size: 26),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Guest',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
-                  Text('Mag-sign in para makita ang profile mo.'),
-                ],
-              ),
-            ),
-          ],
-        ),
-        if (widget.onViewAccount != null) ...[
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () => widget.onViewAccount?.call(),
-            icon: const Icon(Icons.account_circle_outlined, size: 18),
-            label: const Text('View Account'),
-          ),
-        ],
       ],
     );
   }
