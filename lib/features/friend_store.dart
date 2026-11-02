@@ -1,16 +1,22 @@
 // On-device friend data for the Friends tab.
 //
-// HONESTY RULES (this app has NO social backend):
+// HONESTY RULES:
 // - The friend code is REAL: a UUID v4 generated once on this device
-//   and persisted. It is the device owner's code, not a server-issued
-//   identity, and the UI never claims otherwise.
+//   and persisted. When cloud sync is available, the same code is
+//   claimed once as the user's cloud code (see
+//   friend_cloud_repository.dart); an established cloud code is
+//   never overwritten, and on a (near-impossible) collision the
+//   minted cloud code replaces the local one so the shown code is
+//   always the code other devices can look up.
 // - The friends list is REAL local data only: it starts empty and is
 //   only ever filled with entries that were actually stored. Nothing
 //   is seeded, and no friend is ever fabricated from a typed code.
-// - Friend requests and chats cannot arrive without a backend, so they
-//   have NO storage and NO fake entries — the tab shows empty states.
+//   Cloud friends (accepted requests only) are kept separate and are
+//   never written into this local list.
+// - Chats still have NO backend: the tab shows the honest empty
+//   state, never fake conversations.
 //
-// ADDITIVE ONLY: both keys below are new. No existing
+// ADDITIVE ONLY: the cloud-code key below is new. No existing
 // SharedPreferences key is read with a new meaning or overwritten.
 import 'dart:convert';
 
@@ -22,6 +28,12 @@ const friendCodeKey = 'byahetayo_friend_code';
 
 /// JSON list of locally stored friends.
 const friendsListKey = 'byahetayo_friends';
+
+/// The cloud code established for this user, cached after the first
+/// successful backfill (see friend_cloud_repository.dart). Kept
+/// separate from [friendCodeKey] so the local code is never silently
+/// replaced by a cloud value except through [saveFriendCode].
+const cloudFriendCodeKey = 'byahetayo_cloud_friend_code';
 
 /// One locally stored friend. Only a name is required; a code is kept
 /// when one was actually stored with the entry.
@@ -67,6 +79,17 @@ class FriendStore {
   }
 
   String? get friendCode => _prefs.getString(friendCodeKey);
+
+  /// Overwrites the local code. Used only when cloud backfill mints
+  /// a fresh code on collision, so the displayed code stays the code
+  /// other devices can look up.
+  Future<void> saveFriendCode(String code) =>
+      _prefs.setString(friendCodeKey, code);
+
+  String? get cloudFriendCode => _prefs.getString(cloudFriendCodeKey);
+
+  Future<void> saveCloudFriendCode(String code) =>
+      _prefs.setString(cloudFriendCodeKey, code);
 
   List<FriendEntry> loadFriends() {
     final raw = _prefs.getString(friendsListKey);

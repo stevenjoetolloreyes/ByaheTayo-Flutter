@@ -28,6 +28,7 @@ import 'features/account_tab.dart';
 import 'features/communities_tab.dart';
 import 'features/community_post_repository.dart';
 import 'features/fares_tab.dart';
+import 'features/friend_cloud_repository.dart';
 import 'features/friends_tab.dart';
 import 'features/map_tab.dart';
 import 'features/onboarding/auth_screen.dart';
@@ -639,7 +640,14 @@ class _HomeShellState extends State<_HomeShell> {
             walletController: _walletController,
           ),
         ),
-        const FriendsTab(),
+        FriendsTab(
+          cloudRepository: widget.authService.isConfigured
+              ? FirestoreFriendCloudRepository()
+              : null,
+          cloudUserId: widget.user?.uid,
+          cloudUserName:
+              widget.user?.displayName ?? widget.user?.email,
+        ),
         CommunitiesTab(
           onViewOnMap: () => widget.onSelect(0),
           currentUser: widget.user,

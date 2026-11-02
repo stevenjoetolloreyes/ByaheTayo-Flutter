@@ -1,30 +1,39 @@
 // Friends tab — premium social travel design.
 //
-// Sections, in order: My Friends (real local friends + message
-// actions), My Friend Code (real on-device code + real QR + real
+// Sections, in order: My Friends (real friends + message
+// actions), My Friend Code (real code + real QR + real
 // copy/share), Friend Requests (incoming + outgoing), Chats.
 //
-// HONESTY RULES — this app has NO social backend, so:
+// HONESTY RULES:
 // - The friend code is genuinely generated on-device (UUID v4,
 //   persisted in SharedPreferences) and encoded in a real QR code.
 //   Copy uses the real clipboard; Share uses the real share sheet.
-// - Search filters ONLY actually-stored local friends. With none
+//   When a cloud repository is provided, the same code is claimed
+//   once as the user's cloud code (never overwritten); without a
+//   repository the tab stays local-only.
+// - Search filters ONLY actually-stored friends (local entries plus
+//   cloud friends from accepted requests, when synced). With none
 //   stored, the section shows its honest empty state.
-// - Add Friend shows the real code/QR share path plus an honest note
-//   that cross-device adding needs cloud sync (not yet enabled).
-//   There is NO code-entry field: without a backend a typed code
-//   cannot be validated, so it must never be presented as a friend.
-// - Friend Requests cannot arrive or be delivered without a backend:
-//   both subsections show premium empty states, and NO Accept/Decline
+// - Add Friend shows the real code/QR share path. With cloud sync
+//   it also offers an exact-code entry field: a typed code is
+//   looked up by exact document ID (never listed) and only a real
+//   match can receive a request. Without cloud sync there is NO
+//   code-entry field: without a backend a typed code cannot be
+//   validated, so it must never be presented as a friend.
+// - Friend Requests: with cloud sync, pending incoming requests
+//   render with real Accept/Decline actions and outgoing requests
+//   render with their real status. Without cloud sync both
+//   subsections show premium empty states, and NO Accept/Decline
 //   buttons are rendered for requests that do not exist.
 // - Chats / real-time messaging / notifications cannot be real
-//   without a backend: the conversation list shows its honest empty
-//   state only. No fake conversations, last messages, timestamps, or
-//   unread badges are ever rendered.
+//   without a messaging backend: the conversation list shows its
+//   honest empty state only. No fake conversations, last messages,
+//   timestamps, or unread badges are ever rendered.
 // - Online status is NEVER rendered: presence requires a backend and
 //   any green dot would be invented.
-// - Storage stays on-device (friend_store.dart); true cross-device
-//   SYNC is out of scope until a backend is explicitly approved.
+// - Local friends are never promoted into cloud friendships: the
+//   cloud friends list is derived from accepted requests only, and
+//   local entries stay local cache.
 //
 // Design: premium Material 3, Deep Emerald Green #14532D accents,
 // white cards, soft gray background, single-column mobile content
@@ -34,6 +43,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'friend_cloud_repository.dart';
 import 'friend_sharing.dart';
 import 'friend_store.dart';
 
@@ -42,13 +52,31 @@ const _syncNeededMessage =
     'Chats need cloud sync, which is not enabled yet.';
 
 class FriendsTab extends StatefulWidget {
-  const FriendsTab({super.key, this.sharing, this.codeGenerator});
+  const FriendsTab({
+    super.key,
+    this.sharing,
+    this.codeGenerator,
+    this.cloudRepository,
+    this.cloudUserId,
+    this.cloudUserName,
+  });
 
   /// Copy/share backend. Null means the real clipboard + share sheet.
   final FriendSharing? sharing;
 
   /// Overrides UUID generation (tests use a deterministic code).
   final String Function()? codeGenerator;
+
+  /// Cloud friend-code + request backend. Null means the tab stays
+  /// local-only (the legacy behavior): no code entry, no request
+  /// rows, honest empty states. Null when Firebase is unconfigured.
+  final FriendCloudRepository? cloudRepository;
+
+  /// The signed-in user's UID + display name for cloud requests.
+  /// Both a repository and a UID must be set for cloud features to
+  /// appear; a repository without a UID stays local-only.
+  final String? cloudUserId;
+  final String? cloudUserName;
 
   @override
   State<FriendsTab> createState() => _FriendsTabState();
@@ -61,10 +89,35 @@ class _FriendsTabState extends State<FriendsTab> {
   List<FriendEntry> _friends = [];
   String _query = '';
 
+  /// Cloud state. Empty when cloud is unavailable. [_cloudFailed]
+  /// records a sync failure: local data stays visible and the
+  /// Friend Requests card shows an inline note (never an overlay
+  /// SnackBar — an overlay could cover other tabs' content, since
+  /// this tab is built eagerly inside the shell's IndexedStack).
+  String? _cloudCode;
+  List<FriendRequest> _incoming = [];
+  List<FriendRequest> _outgoing = [];
+  List<CloudFriend> _cloudFriends = [];
+  bool _cloudFailed = false;
+
+  /// Code-entry state for the Add Friend sheet.
+  final TextEditingController _codeController = TextEditingController();
+  String? _codeError;
+  bool _sending = false;
+
+  bool get _cloudEnabled =>
+      widget.cloudRepository != null && widget.cloudUserId != null;
+
   @override
   void initState() {
     super.initState();
     _init();
+  }
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
@@ -79,15 +132,78 @@ class _FriendsTabState extends State<FriendsTab> {
       _code = code;
       _friends = store.loadFriends();
     });
+    if (_cloudEnabled) await _syncCloud();
   }
 
+  /// Claims the cloud code (backfill once, never overwrites) and
+  /// loads requests + cloud friends. Remote failure never blocks
+  /// the tab: local data stays visible with an honest error.
+  Future<void> _syncCloud() async {
+    final repo = widget.cloudRepository;
+    final uid = widget.cloudUserId;
+    final localCode = _code;
+    if (repo == null || uid == null || localCode == null) return;
+    try {
+      final cloudCode =
+          await repo.ensureCloudCode(uid: uid, localCode: localCode);
+      if (cloudCode != localCode) {
+        // Collision minted a fresh code: adopt it locally so the
+        // displayed code is the code other devices can look up.
+        final prefs = await SharedPreferences.getInstance();
+        await FriendStore(prefs).saveFriendCode(cloudCode);
+        if (!mounted) return;
+        setState(() => _code = cloudCode);
+      }
+      await _refreshCloudLists();
+      if (!mounted) return;
+      setState(() {
+        _cloudCode = cloudCode;
+        _cloudFailed = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cloudFailed = true);
+    }
+  }
+
+  /// Re-reads incoming/outgoing requests + cloud friends.
+  Future<void> _refreshCloudLists() async {
+    final repo = widget.cloudRepository;
+    final uid = widget.cloudUserId;
+    if (repo == null || uid == null) return;
+    final incoming = await repo.fetchIncoming(uid);
+    final outgoing = await repo.fetchOutgoing(uid);
+    final friends = await repo.fetchFriends(uid);
+    if (!mounted) return;
+    setState(() {
+      _incoming = incoming;
+      _outgoing = outgoing;
+      _cloudFriends = friends;
+    });
+  }
+
+  /// Cloud friends first (derived from accepted requests only),
+  /// then local friends. Local entries are never merged into cloud
+  /// friendships — they are displayed as the local data they are,
+  /// and are never written back to the cloud.
   List<FriendEntry> get _visibleFriends {
+    final all = [
+      ..._cloudFriends.map(
+        (f) => FriendEntry(name: f.displayName, code: f.code),
+      ),
+      ..._friends,
+    ];
     final query = _query.trim().toLowerCase();
-    if (query.isEmpty) return _friends;
-    return _friends
+    if (query.isEmpty) return all;
+    return all
         .where((f) => f.name.toLowerCase().contains(query))
         .toList();
   }
+
+  /// Pending incoming requests (accepted counterparts appear in My
+  /// Friends; declined ones are resolved and hidden).
+  List<FriendRequest> get _pendingIncoming =>
+      _incoming.where((r) => r.isPending).toList();
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context)
@@ -115,35 +231,143 @@ class _FriendsTabState extends State<FriendsTab> {
     }
   }
 
+  Future<void> _respond(FriendRequest request, bool accept) async {
+    final repo = widget.cloudRepository;
+    final uid = widget.cloudUserId;
+    if (repo == null || uid == null) return;
+    try {
+      await repo.respondToRequest(
+        requestId: request.id,
+        uid: uid,
+        accept: accept,
+      );
+      await _refreshCloudLists();
+      if (mounted) {
+        _showSnack(
+          accept ? 'Friend request accepted.' : 'Friend request declined.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showSnack('Could not update that request. Please try again.');
+      }
+    }
+  }
+
+  /// Looks a typed code up exactly and sends a request. Returns an
+  /// error message to show inline, or null on success.
+  Future<String?> _sendCodeRequest(String rawCode) async {
+    final repo = widget.cloudRepository;
+    final uid = widget.cloudUserId;
+    if (repo == null || uid == null) return 'Cloud sync is not available.';
+    final code = rawCode.trim();
+    if (code.isEmpty) return 'Enter a friend code first.';
+    try {
+      final found = await repo.lookupCode(code);
+      if (found == null) return 'No friend found with that code.';
+      if (found.uid == uid) return 'That is your own code.';
+      await repo.sendRequest(
+        fromUid: uid,
+        fromName: widget.cloudUserName,
+        fromCode: _cloudCode ?? _code ?? '',
+        toUid: found.uid,
+        toCode: found.code,
+      );
+      await _refreshCloudLists();
+      return null;
+    } on StateError catch (e) {
+      // Duplicate-guard + stale-code messages are user-safe.
+      return e.message;
+    } catch (_) {
+      return 'Could not send that request. Please try again.';
+    }
+  }
+
   void _showAddFriendSheet() {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Add Friend',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Share your friend code with someone you travel with.',
-              ),
-              const SizedBox(height: 20),
-              _friendCodeDisplay(),
-              const SizedBox(height: 20),
-              const _SyncNoteCard(),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
-            ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Add Friend',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Share your friend code with someone you travel with.',
+                ),
+                const SizedBox(height: 20),
+                _friendCodeDisplay(),
+                const SizedBox(height: 20),
+                if (_cloudEnabled) ...[
+                  TextField(
+                    controller: _codeController,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter a friend code',
+                      prefixIcon: Icon(Icons.person_add_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                    ),
+                    onChanged: (_) {
+                      if (_codeError != null) {
+                        setSheetState(() => _codeError = null);
+                      }
+                    },
+                  ),
+                  if (_codeError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _codeError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _sending
+                        ? null
+                        : () async {
+                            setSheetState(() {
+                              _sending = true;
+                              _codeError = null;
+                            });
+                            final error = await _sendCodeRequest(
+                              _codeController.text,
+                            );
+                            if (!mounted) return;
+                            // The sheet may have been dismissed
+                            // mid-send; guard its own context too.
+                            if (!context.mounted) return;
+                            setSheetState(() {
+                              _sending = false;
+                              _codeError = error;
+                            });
+                            if (error == null) {
+                              _codeController.clear();
+                              Navigator.of(context).pop();
+                              _showSnack('Friend request sent.');
+                            }
+                          },
+                    child: const Text('Send request'),
+                  ),
+                ] else
+                  const _SyncNoteCard(),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -216,10 +440,16 @@ class _FriendsTabState extends State<FriendsTab> {
                         ? 'No friends yet'
                         : 'No friends match "$_query"',
                     note: _query.trim().isEmpty
-                        ? 'When you add friends, they will appear here. '
-                            'Tap Add Friend above to share your code.'
-                        : 'Try a different name. Search only covers '
-                            'friends stored on this device.',
+                        ? (_cloudEnabled
+                            ? 'When you add friends, they will appear '
+                                'here. Tap Add Friend above to share '
+                                'your code or enter a friend\'s code.'
+                            : 'When you add friends, they will appear here. '
+                                'Tap Add Friend above to share your code.')
+                        : (_cloudEnabled
+                            ? 'Try a different name.'
+                            : 'Try a different name. Search only covers '
+                                'friends stored on this device.'),
                   )
                 : Column(
                     children: [
@@ -245,29 +475,81 @@ class _FriendsTabState extends State<FriendsTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_cloudEnabled && _cloudFailed) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outlined,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Could not sync friend requests. Showing '
+                          'on-device data.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 const Text(
                   'Incoming',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
-                _emptyState(
-                  icon: Icons.inbox_outlined,
-                  title: 'No incoming requests',
-                  note: 'Incoming requests will appear here once cloud '
-                      'sync is enabled.',
-                ),
+                if (!_cloudEnabled)
+                  _emptyState(
+                    icon: Icons.inbox_outlined,
+                    title: 'No incoming requests',
+                    note: 'Incoming requests will appear here once cloud '
+                        'sync is enabled.',
+                  )
+                else if (_pendingIncoming.isEmpty)
+                  _emptyState(
+                    icon: Icons.inbox_outlined,
+                    title: 'No incoming requests',
+                    note: 'New friend requests will appear here.',
+                  )
+                else
+                  Column(
+                    children: [
+                      for (final request in _pendingIncoming)
+                        _incomingRequestRow(request),
+                    ],
+                  ),
                 const SizedBox(height: 16),
                 const Text(
                   'Outgoing',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
-                _emptyState(
-                  icon: Icons.outbox_outlined,
-                  title: 'No outgoing requests',
-                  note: 'Outgoing requests will appear here once cloud '
-                      'sync is enabled.',
-                ),
+                if (!_cloudEnabled)
+                  _emptyState(
+                    icon: Icons.outbox_outlined,
+                    title: 'No outgoing requests',
+                    note: 'Outgoing requests will appear here once cloud '
+                        'sync is enabled.',
+                  )
+                else if (_outgoing.isEmpty)
+                  _emptyState(
+                    icon: Icons.outbox_outlined,
+                    title: 'No outgoing requests',
+                    note: 'Requests you send will appear here with their '
+                        'status.',
+                  )
+                else
+                  Column(
+                    children: [
+                      for (var i = 0; i < _outgoing.length; i++) ...[
+                        if (i > 0) const Divider(height: 1),
+                        _outgoingRequestRow(_outgoing[i]),
+                      ],
+                    ],
+                  ),
               ],
             ),
           ),
@@ -285,8 +567,11 @@ class _FriendsTabState extends State<FriendsTab> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Friend data is stored only on this device. Cross-device '
-            'sync needs cloud sync, which is not enabled yet.',
+            _cloudEnabled
+                ? 'Friend codes and requests sync across your devices. '
+                    'Chats are not available yet.'
+                : 'Friend data is stored only on this device. Cross-device '
+                    'sync needs cloud sync, which is not enabled yet.',
             style: TextStyle(fontSize: 13, color: muted),
           ),
         ],
@@ -328,6 +613,160 @@ class _FriendsTabState extends State<FriendsTab> {
             icon: const Icon(Icons.message_outlined),
             tooltip: 'Message ${friend.name}',
             onPressed: () => _showSnack(_syncNeededMessage),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One pending incoming request: initials avatar + name + code,
+  /// then real Accept/Decline actions. Only rendered for requests
+  /// that actually exist.
+  Widget _incomingRequestRow(FriendRequest request) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.12),
+                child: Text(
+                  FriendEntry(name: request.nameFor(true)).initials,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.nameFor(true),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      request.fromCode,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color:
+                            Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _requestActions(request),
+        ],
+      ),
+    );
+  }
+
+  /// Accept + Decline stay in one row when the card is wide enough
+  /// and stack full-width on narrow cards — same convention as the
+  /// Copy/Share buttons, never cramped, never overflowing.
+  Widget _requestActions(FriendRequest request) {
+    final acceptButton = FilledButton.icon(
+      onPressed: () => _respond(request, true),
+      icon: const Icon(Icons.check, size: 18),
+      label: const Text('Accept'),
+    );
+    final declineButton = OutlinedButton.icon(
+      onPressed: () => _respond(request, false),
+      icon: const Icon(Icons.close, size: 18),
+      label: const Text('Decline'),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 280) {
+          return Row(
+            children: [
+              Expanded(child: acceptButton),
+              const SizedBox(width: 12),
+              Expanded(child: declineButton),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            acceptButton,
+            const SizedBox(height: 12),
+            declineButton,
+          ],
+        );
+      },
+    );
+  }
+
+  /// One outgoing request: name + code + its real status.
+  Widget _outgoingRequestRow(FriendRequest request) {
+    final status = request.isAccepted
+        ? 'Accepted'
+        : request.isDeclined
+            ? 'Declined'
+            : 'Pending';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: Theme.of(context)
+                .colorScheme
+                .primary
+                .withValues(alpha: 0.12),
+            child: Text(
+              FriendEntry(name: request.nameFor(false)).initials,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.nameFor(false),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  request.toCode,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            status,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -515,9 +954,10 @@ class _FriendsTabState extends State<FriendsTab> {
   }
 }
 
-/// Honest note used by the Add Friend sheet: cross-device adding needs
-/// cloud sync, so no code entry is offered (a typed code cannot be
-/// validated or confirmed without a backend).
+/// Honest note used by the Add Friend sheet only when no cloud
+/// repository is available: cross-device adding needs cloud sync,
+/// so no code entry is offered (a typed code cannot be validated
+/// or confirmed without a backend).
 class _SyncNoteCard extends StatelessWidget {
   const _SyncNoteCard();
 

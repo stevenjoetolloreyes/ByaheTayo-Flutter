@@ -25,6 +25,15 @@
 // Owner-only: a signed-in user may read or write ONLY the document
 // whose ID equals their own UID. No admin override — a student's
 // school/program/year is theirs alone.
+//
+// Friend codes + requests (see
+// lib/features/friend_cloud_repository.dart):
+//   friend_codes/{code}     — document ID IS the code; get-only
+//     lookup, so codes can never be listed or enumerated.
+//   user_friend_codes/{uid} — owner-only mapping from UID to code.
+//   friend_requests/{id}    — participant-only; created pending by
+//     the sender, answered (accept/decline) by the recipient only,
+//     never deleted.
 
 rules_version = '2';
 
@@ -95,6 +104,48 @@ service cloud.firestore {
         && request.resource.data.dayIndex >= 1
         && request.resource.data.dayIndex <= 7;
       allow update, delete: if false;
+    }
+
+    // Friend codes — exact-code lookup docs. The document ID IS the
+    // code: lookup is a get-only read (listing is denied), so codes
+    // cannot be enumerated. Creates stamp the caller's UID and must
+    // match the document ID; only the owner may change or delete.
+    match /friend_codes/{code} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.code == code;
+      allow update, delete: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+    // Per-user friend-code mapping (owner-only): lets a user find
+    // their own cloud code without listing anyone else's.
+    match /user_friend_codes/{userId} {
+      allow read, write: if isSignedIn()
+        && request.auth.uid == userId;
+    }
+
+    // Friend requests — participant-only. A request may be created
+    // only by its sender, starting pending, to someone else. Only
+    // the recipient may change its status (accept/decline), and only
+    // the status field may change. Reads are limited to requests
+    // the user sent or received; deletes are denied.
+    match /friend_requests/{requestId} {
+      allow read: if isSignedIn()
+        && (resource.data.from == request.auth.uid
+          || resource.data.to == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to != request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if isSignedIn()
+        && resource.data.to == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['accepted', 'declined']
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt']);
+      allow delete: if false;
     }
   }
 }
