@@ -1176,4 +1176,98 @@ void main() {
       expect(find.text('Forgot password?'), findsOneWidget);
     });
   });
+
+  group('Onboarding layout (Modern Minimalist refinement)', () {
+    // The shared frame: one contain-fit illustration canvas on every
+    // page, so swiping never jumps in size. (The header brand uses a
+    // scaleDown FittedBox, which this predicate excludes.)
+    Finder containIllustration() => find.byWidgetPredicate(
+          (widget) =>
+              widget is FittedBox && widget.fit == BoxFit.contain,
+        );
+    Finder illustrationCanvas() => find.byWidgetPredicate(
+          (widget) =>
+              widget is SizedBox &&
+              widget.width == 320 &&
+              widget.height == 300,
+        );
+    const titles = [
+      'Explore the Map',
+      'Plan Your Trip',
+      'Know Your Fare',
+      'Community Updates',
+    ];
+
+    testWidgets('identical illustration frame on all four pages',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        OnboardingScreen(
+          onGetStarted: () {},
+          onSignIn: () {},
+        ),
+      ));
+      for (var i = 0; i < titles.length; i++) {
+        expect(find.text(titles[i]), findsOneWidget);
+        expect(containIllustration(), findsOneWidget);
+        expect(illustrationCanvas(), findsOneWidget);
+        if (i < titles.length - 1) {
+          await tester.tap(find.text('Next'));
+          await tester.pumpAndSettle();
+        }
+      }
+    });
+
+    testWidgets('light and dark themes paint the onboarding background',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        OnboardingScreen(
+          onGetStarted: () {},
+          onSignIn: () {},
+          themeMode: ThemeMode.light,
+        ),
+      ));
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        const Color(0xFFF8FAFC),
+      );
+      await tester.pumpWidget(_wrap(
+        OnboardingScreen(
+          onGetStarted: () {},
+          onSignIn: () {},
+          themeMode: ThemeMode.dark,
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        const Color(0xFF101816),
+      );
+    });
+
+    testWidgets('small phone renders every page without overflow',
+        (WidgetTester tester) async {
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      await tester.pumpWidget(_wrap(
+        OnboardingScreen(
+          onGetStarted: () {},
+          onSignIn: () {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+      for (var i = 0; i < titles.length; i++) {
+        expect(find.text(titles[i]), findsOneWidget);
+        if (i < titles.length - 1) {
+          await tester.tap(find.text('Next'));
+          await tester.pumpAndSettle();
+        }
+      }
+      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.text('Sign In'), findsOneWidget);
+    });
+  });
 }
