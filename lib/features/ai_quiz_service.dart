@@ -2,8 +2,9 @@
 //
 // HONEST SPLIT (binding):
 // - This service DISPLAYS nothing and GRANTS nothing. It only turns
-//   pasted study text into quiz questions by calling Gemini through
-//   the Firebase AI Logic SDK (Gemini Developer API backend).
+//   pasted study text — or attached photos/documents — into quiz
+//   questions by calling Gemini through the Firebase AI Logic SDK
+//   (Gemini Developer API backend).
 // - No API key lives in the app: the Gemini Developer API backend
 //   needs none when called through AI Logic. App Check (activated
 //   in firebase_init.dart) is what protects these calls.
@@ -15,6 +16,7 @@
 //   are saved only to the existing LOCAL quiz store when the user
 //   taps Save (same store the Notes screen already uses).
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:firebase_ai/firebase_ai.dart';
 
@@ -57,11 +59,67 @@ class AiQuizGeneration {
   bool get succeeded => questions.isNotEmpty && error == null;
 }
 
+/// One file attached to a generation request: raw bytes plus the
+/// MIME type Gemini needs to read them (image/jpeg, image/png,
+/// application/pdf, ...). Plain-text files are NOT sent this way —
+/// they are read as text and reuse [generateFromText].
+class AiQuizAttachment {
+  const AiQuizAttachment({required this.mimeType, required this.bytes});
+
+  final String mimeType;
+  final Uint8List bytes;
+}
+
+/// MIME types Gemini accepts as inline data for quiz generation.
+/// Anything else (including docx — a zip of XML, not readable as
+/// inline data) is rejected with a user-facing error, never faked.
+const Set<String> kAiQuizMediaMimeTypes = {
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+};
+
+/// Total inline-data budget per request. Gemini's inline limit is
+/// 20 MB; 15 MB leaves headroom for the prompt and encoding.
+const int kAiQuizMaxMediaBytes = 15 * 1024 * 1024;
+
+/// Builds the multimodal request for attached study material.
+/// Pure (no model call) so tests can assert on its parts: a text
+/// prompt first, then one inline-data part per attachment.
+Content buildMediaContent(
+  List<AiQuizAttachment> attachments, {
+  int questionCount = 5,
+}) {
+  final count = questionCount.clamp(1, 10);
+  final prompt = 'You are a study assistant. Read the attached study '
+      'material (photos of notes and/or documents) and create exactly '
+      '$count multiple-choice quiz questions from it. '
+      'Reply with JSON ONLY — no explanation, no Markdown fences '
+      'around anything except the JSON itself. The JSON must be an '
+      'array of objects with exactly these fields: "question" '
+      '(string), "options" (array of exactly 4 strings), '
+      '"correctIndex" (integer 0-3 pointing at the correct option), '
+      'and "explanation" (one short sentence explaining the answer).';
+  return Content.multi([
+    TextPart(prompt),
+    for (final attachment in attachments)
+      InlineDataPart(attachment.mimeType, attachment.bytes),
+  ]);
+}
+
 /// Contract for quiz generation. Tests inject a fake; production uses
 /// [FirebaseAiQuizGenerator].
 abstract class AiQuizGenerator {
   Future<AiQuizGeneration> generateFromText(
     String contextText, {
+    int questionCount = 5,
+  });
+
+  Future<AiQuizGeneration> generateFromMedia(
+    List<AiQuizAttachment> attachments, {
     int questionCount = 5,
   });
 }
@@ -162,8 +220,46 @@ class FirebaseAiQuizGenerator implements AiQuizGenerator {
         '"correctIndex" (integer 0-3 pointing at the correct option), '
         'and "explanation" (one short sentence explaining the answer).\n\n'
         'Study text:\n$context';
+    return _callModel([Content.text(prompt)]);
+  }
+
+  @override
+  Future<AiQuizGeneration> generateFromMedia(
+    List<AiQuizAttachment> attachments, {
+    int questionCount = 5,
+  }) async {
+    if (attachments.isEmpty) {
+      return const AiQuizGeneration(
+        questions: [],
+        error: 'Attach a photo or document first.',
+      );
+    }
+    if (attachments
+        .any((a) => !kAiQuizMediaMimeTypes.contains(a.mimeType))) {
+      return const AiQuizGeneration(
+        questions: [],
+        error: 'Only images and PDF documents are supported for quiz '
+            'generation.',
+      );
+    }
+    final totalBytes =
+        attachments.fold<int>(0, (sum, a) => sum + a.bytes.length);
+    if (totalBytes > kAiQuizMaxMediaBytes) {
+      return const AiQuizGeneration(
+        questions: [],
+        error: 'The attached files are too large — pick files '
+            'totalling under 15 MB.',
+      );
+    }
+    return _callModel(
+        [buildMediaContent(attachments, questionCount: questionCount)]);
+  }
+
+  /// One model call shared by the text and media paths: same JSON
+  /// parsing, same never-throws contract.
+  Future<AiQuizGeneration> _callModel(List<Content> content) async {
     try {
-      final response = await _model.generateContent([Content.text(prompt)]);
+      final response = await _model.generateContent(content);
       final text = response.text;
       if (text == null || text.trim().isEmpty) {
         return const AiQuizGeneration(

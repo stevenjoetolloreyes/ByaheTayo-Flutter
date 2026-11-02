@@ -53,6 +53,16 @@
          user taps "Allow activity tracking" on the Walking Goal
          card, never at launch. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- AI quiz generation: photograph notes (Camera) and pick
+         pictures (gallery) for Gemini multimodal input. The system
+         photo picker is used on Android 13+; READ_MEDIA_IMAGES
+         covers older gallery access and READ_EXTERNAL_STORAGE is
+         capped at Android 12 and below. Requested only when the
+         user taps Camera / Picture on the generate screen, never
+         at launch. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
          https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.

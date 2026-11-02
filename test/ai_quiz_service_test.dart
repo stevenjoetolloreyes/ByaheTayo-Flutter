@@ -1,28 +1,47 @@
 // Unit tests for the AI quiz parser + generator contract.
 // No network, no real model calls: the parser is pure and the
 // generator is exercised through a fake.
+import 'dart:typed_data';
+
+import 'package:estudyantego/features/ai_quiz_input.dart';
 import 'package:estudyantego/features/ai_quiz_service.dart';
+import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeAiQuizGenerator implements AiQuizGenerator {
-  const FakeAiQuizGenerator({this.result});
+  FakeAiQuizGenerator({this.result});
 
   final AiQuizGeneration? result;
+
+  /// Last call received, for wiring assertions in screen tests.
+  String? lastText;
+  List<AiQuizAttachment>? lastMedia;
+
+  static const canned = AiQuizGeneration(questions: [
+    AiQuizQuestion(
+      question: 'What is 2 + 2?',
+      options: ['3', '4', '5', '6'],
+      correctIndex: 1,
+      explanation: 'Basic addition.',
+    ),
+  ]);
 
   @override
   Future<AiQuizGeneration> generateFromText(
     String contextText, {
     int questionCount = 5,
   }) async {
-    return result ??
-        const AiQuizGeneration(questions: [
-          AiQuizQuestion(
-            question: 'What is 2 + 2?',
-            options: ['3', '4', '5', '6'],
-            correctIndex: 1,
-            explanation: 'Basic addition.',
-          ),
-        ]);
+    lastText = contextText;
+    return result ?? canned;
+  }
+
+  @override
+  Future<AiQuizGeneration> generateFromMedia(
+    List<AiQuizAttachment> attachments, {
+    int questionCount = 5,
+  }) async {
+    lastMedia = attachments;
+    return result ?? canned;
   }
 }
 
@@ -101,6 +120,77 @@ void main() {
       expect(mapped.type, 'mcq');
       expect(mapped.answer, 'd');
       expect(mapped.correctIndex, 3);
+    });
+  });
+
+  group('buildMediaContent', () {
+    test('prompt first, then one inline part per attachment', () {
+      final content = buildMediaContent(
+        [
+          AiQuizAttachment(
+            mimeType: 'image/jpeg',
+            bytes: Uint8List.fromList([1, 2, 3]),
+          ),
+          AiQuizAttachment(
+            mimeType: 'application/pdf',
+            bytes: Uint8List.fromList([4, 5]),
+          ),
+        ],
+        questionCount: 3,
+      );
+      expect(content.parts.length, 3);
+      final prompt = content.parts.first as TextPart;
+      expect(prompt.text, contains('exactly 3'));
+      final image = content.parts[1] as InlineDataPart;
+      expect(image.mimeType, 'image/jpeg');
+      expect(image.bytes, [1, 2, 3]);
+      final doc = content.parts[2] as InlineDataPart;
+      expect(doc.mimeType, 'application/pdf');
+    });
+  });
+
+  group('FirebaseAiQuizGenerator media guards', () {
+    test('empty attachments return an error without touching Firebase',
+        () async {
+      final generator = FirebaseAiQuizGenerator();
+      final result = await generator.generateFromMedia([]);
+      expect(result.succeeded, isFalse);
+      expect(result.error, contains('Attach a photo'));
+    });
+
+    test('unsupported MIME type is rejected, never faked', () async {
+      final generator = FirebaseAiQuizGenerator();
+      final result = await generator.generateFromMedia([
+        AiQuizAttachment(
+          mimeType: 'application/msword',
+          bytes: Uint8List.fromList([1]),
+        ),
+      ]);
+      expect(result.succeeded, isFalse);
+      expect(result.error, contains('Only images and PDF'));
+    });
+
+    test('oversized attachments are rejected before any model call',
+        () async {
+      final generator = FirebaseAiQuizGenerator();
+      final result = await generator.generateFromMedia([
+        AiQuizAttachment(
+          mimeType: 'image/jpeg',
+          bytes: Uint8List(kAiQuizMaxMediaBytes + 1),
+        ),
+      ]);
+      expect(result.succeeded, isFalse);
+      expect(result.error, contains('too large'));
+    });
+  });
+
+  group('mimeTypeForExtension', () {
+    test('maps supported types, rejects docx', () {
+      expect(mimeTypeForExtension('jpg'), 'image/jpeg');
+      expect(mimeTypeForExtension('PDF'), 'application/pdf');
+      expect(mimeTypeForExtension('txt'), 'text/plain');
+      expect(mimeTypeForExtension('docx'), isNull);
+      expect(mimeTypeForExtension('xlsx'), isNull);
     });
   });
 }

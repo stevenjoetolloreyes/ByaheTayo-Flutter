@@ -7,13 +7,18 @@
 // tests can inject a fake; production uses Firebase AI Logic.
 import 'package:flutter/material.dart';
 
+import 'ai_quiz_input.dart';
 import 'ai_quiz_service.dart';
 import 'student/student_data.dart';
 
 class AiQuizGenerateScreen extends StatefulWidget {
-  const AiQuizGenerateScreen({super.key, this.generator});
+  const AiQuizGenerateScreen({super.key, this.generator, this.pickInput});
 
   final AiQuizGenerator? generator;
+
+  /// Override for the system pickers; widget tests inject a fake.
+  /// Production default is [pickQuizInput].
+  final Future<AiQuizPickedInput?> Function(AiQuizInputSource)? pickInput;
 
   @override
   State<AiQuizGenerateScreen> createState() => _AiQuizGenerateScreenState();
@@ -28,10 +33,45 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   bool _loading = false;
   bool _saved = false;
 
+  /// Attached study material (camera / picture / document). When set,
+  /// Generate uses it instead of the pasted text; clearing it returns
+  /// to the paste-text flow.
+  AiQuizPickedInput? _picked;
+  String? _pickError;
+
   @override
   void dispose() {
     _contextController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pick(AiQuizInputSource source) async {
+    final pick = widget.pickInput ?? pickQuizInput;
+    setState(() => _pickError = null);
+    AiQuizPickedInput? picked;
+    try {
+      picked = await pick(source);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _pickError = _pickErrorMessage(e));
+      return;
+    }
+    if (!mounted || picked == null) return; // User cancelled.
+    setState(() {
+      _picked = picked;
+      _result = null;
+      _saved = false;
+    });
+  }
+
+  String _pickErrorMessage(Object e) {
+    if (e is FormatException) return e.message;
+    final text = e.toString().toLowerCase();
+    if (text.contains('permission') || text.contains('denied')) {
+      return 'Permission denied — allow camera and photo access to '
+          'use this, then try again.';
+    }
+    return 'Could not pick that file. Try again.';
   }
 
   Future<void> _generate() async {
@@ -40,10 +80,24 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
       _result = null;
       _saved = false;
     });
-    final result = await _generator.generateFromText(
-      _contextController.text,
-      questionCount: _count,
-    );
+    final picked = _picked;
+    final AiQuizGeneration result;
+    if (picked != null && picked.hasMedia) {
+      result = await _generator.generateFromMedia(
+        picked.attachments,
+        questionCount: _count,
+      );
+    } else if (picked != null && picked.hasText) {
+      result = await _generator.generateFromText(
+        picked.text!,
+        questionCount: _count,
+      );
+    } else {
+      result = await _generator.generateFromText(
+        _contextController.text,
+        questionCount: _count,
+      );
+    }
     if (!mounted) return;
     setState(() {
       _result = result;
@@ -54,7 +108,10 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   Future<void> _save() async {
     final result = _result;
     if (result == null || !result.succeeded) return;
-    final firstLine = _contextController.text.trim().split('\n').first.trim();
+    final pasted = _contextController.text.trim();
+    final firstLine = pasted.isEmpty
+        ? (_picked?.label ?? '')
+        : pasted.split('\n').first.trim();
     final title = firstLine.isEmpty
         ? 'AI Generated Quiz'
         : (firstLine.length > 40
@@ -98,6 +155,62 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 12),
+            const Text('Or generate from:'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () => _pick(AiQuizInputSource.camera),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Camera'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () => _pick(AiQuizInputSource.gallery),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Picture'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () => _pick(AiQuizInputSource.documents),
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: const Text('Documents'),
+                  ),
+                ),
+              ],
+            ),
+            if (_picked != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Chip(
+                  label: Text(_picked!.label),
+                  deleteIcon: const Icon(Icons.close, size: 18),
+                  onDeleted: () => setState(() => _picked = null),
+                ),
+              ),
+            ],
+            if (_pickError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _pickError!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             SegmentedButton<int>(
               segments: const [
