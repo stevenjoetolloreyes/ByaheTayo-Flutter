@@ -36,6 +36,7 @@ import 'features/onboarding/firebase_auth_service.dart';
 import 'features/onboarding/firebase_init.dart';
 import 'features/onboarding/notification_prompt.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/points_wallet_repository.dart';
 import 'features/profile_repository.dart';
 import 'features/onboarding/onboarding_state.dart';
 import 'features/onboarding/permission_service.dart';
@@ -598,6 +599,18 @@ class _HomeShell extends StatefulWidget {
 class _HomeShellState extends State<_HomeShell> {
   late bool _collapsed = widget.initialSidebarCollapsed;
 
+  /// Shared wallet state, created once per shell: the real Firestore
+  /// backend when Firebase is configured, local-only mode otherwise
+  /// (widget tests keep the legacy 0-balance display). Passed to
+  /// the Student and Account tabs so a sign-in claim updates the
+  /// Account UI immediately.
+  late final PointsWalletController _walletController =
+      PointsWalletController(
+    repository: widget.authService.isConfigured
+        ? FirestorePointsWalletRepository()
+        : null,
+  );
+
   Future<void> _toggleSidebar() async {
     setState(() => _collapsed = !_collapsed);
     try {
@@ -622,6 +635,8 @@ class _HomeShellState extends State<_HomeShell> {
           child: StudentTab(
             onViewOnMap: () => widget.onSelect(0),
             onViewAccount: () => widget.onSelect(5),
+            user: widget.user,
+            walletController: _walletController,
           ),
         ),
         const FriendsTab(),
@@ -639,6 +654,7 @@ class _HomeShellState extends State<_HomeShell> {
           user: widget.user,
           profile: widget.profile,
           permissionService: widget.permissionService,
+          walletController: _walletController,
           onViewStudent: widget.onViewStudent,
           onViewCommunities: widget.onViewCommunities,
           onEditProfile: widget.onEditProfile,

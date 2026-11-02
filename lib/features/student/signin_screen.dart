@@ -1,20 +1,35 @@
 // 7-Day Attendance Sign-in — daily check-in with streaks and
-// local reward points.
+// reward points.
 //
 // This is NOT the Attendance Sheet (class attendance records). A
 // sign-in is a once-a-day app check-in: one record per calendar date
-// (Asia/Manila device date), a streak of consecutive days, a 7-day
-// cycle with a Day 7 completion reward, and a history log. Points are
-// always re-derived from the record log — never from a stored counter
-// — and duplicate check-ins are blocked both in the UI and in the
-// save handler. Points live on this device only and are separate
-// from the Account Points Wallet (which needs an account backend).
+// (Asia/Manila), a streak of consecutive days, a 7-day cycle with a
+// Day 7 completion reward, and a history log. Points are always
+// re-derived from the record log — never from a stored counter —
+// and duplicate check-ins are blocked both in the UI and in the
+// save handler.
+//
+// TWO MODES: with a [walletController] that has a real backend
+// (remote mode), progress is derived from the Firestore ledger and
+// a claim is an atomic, idempotent transaction credited to the
+// unified Account Points Wallet. Without one (unconfigured builds,
+// bare widget tests), the screen keeps its legacy local-only
+// behavior: device dates, local records, local points.
 import 'package:flutter/material.dart';
 
+import '../points_wallet_repository.dart';
 import 'student_data.dart';
 
 class SigninScreen extends StatefulWidget {
-  const SigninScreen({super.key});
+  const SigninScreen({super.key, this.userId, this.walletController});
+
+  /// The signed-in user's UID. Null in bare widget tests (legacy
+  /// local-only mode).
+  final String? userId;
+
+  /// Shared wallet state. Null in bare widget tests (legacy
+  /// local-only mode).
+  final PointsWalletController? walletController;
 
   @override
   State<SigninScreen> createState() => _SigninScreenState();
@@ -22,14 +37,47 @@ class SigninScreen extends StatefulWidget {
 
 class _SigninScreenState extends State<SigninScreen> {
   List<CheckinRecord> _records = [];
+  bool _claiming = false;
+
+  /// Remote mode: a controller with a real backend is wired.
+  bool get _remote => widget.walletController?.remote ?? false;
+
+  /// "Today" for all streak math: the Manila date in remote mode,
+  /// the device date in legacy local mode.
+  DateTime get _today =>
+      _remote ? widget.walletController!.manilaToday : DateTime.now();
 
   @override
   void initState() {
     super.initState();
+    widget.walletController?.addListener(_onWalletChanged);
     _load();
   }
 
+  @override
+  void dispose() {
+    widget.walletController?.removeListener(_onWalletChanged);
+    super.dispose();
+  }
+
+  void _onWalletChanged() {
+    if (!mounted || !_remote) return;
+    setState(() {
+      _records = widget.walletController!.derivedRecords;
+    });
+  }
+
   Future<void> _load() async {
+    final controller = widget.walletController;
+    final uid = widget.userId;
+    if (_remote && controller != null && uid != null) {
+      await controller.loadForUser(uid);
+      if (!mounted) return;
+      setState(() {
+        _records = controller.derivedRecords;
+      });
+      return;
+    }
     final records =
         await StudentStorage.loadList(StudentStorage.checkinsKey);
     if (!mounted) return;
@@ -44,6 +92,10 @@ class _SigninScreenState extends State<SigninScreen> {
       _records.map((r) => r.toJson()).toList());
 
   Future<void> _checkIn() async {
+    if (_remote) {
+      await _checkInRemote();
+      return;
+    }
     final today = DateTime.now();
     // Duplicate guard, re-checked at save time.
     if (hasCheckedInToday(_records, today)) return;
@@ -72,10 +124,47 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
+  /// Remote claim: one atomic, idempotent ledger transaction. A
+  /// failed claim writes nothing locally (see the repository file
+  /// header for why) — the user sees an honest error and retries.
+  Future<void> _checkInRemote() async {
+    if (_claiming) return;
+    final controller = widget.walletController;
+    if (controller == null) return;
+    setState(() => _claiming = true);
+    final outcome = await controller.claimToday();
+    if (!mounted) return;
+    setState(() => _claiming = false);
+    switch (outcome.status) {
+      case ClaimStatus.credited:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(outcome.dayIndex == 7
+                ? 'Day 7 complete! +${outcome.points} points.'
+                : 'Checked in! Day ${outcome.dayIndex} '
+                    '· +${outcome.points} points.'),
+          ),
+        );
+      case ClaimStatus.alreadyClaimed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Already checked in today.')),
+        );
+      case ClaimStatus.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not sync your check-in. Check your '
+                'connection and try again.'),
+          ),
+        );
+      case ClaimStatus.unavailable:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final today = DateTime.now();
+    final today = _today;
     final streak = checkinStreak(_records, today);
     final checkedToday = hasCheckedInToday(_records, today);
     final checkedCells = currentCycleChecked(_records, today);
@@ -183,7 +272,7 @@ class _SigninScreenState extends State<SigninScreen> {
             )
           else
             FilledButton.icon(
-              onPressed: _checkIn,
+              onPressed: _claiming ? null : _checkIn,
               icon: const Icon(Icons.check),
               label: Text(todayDay == 7
                   ? 'Check in — Day 7 reward!'
@@ -216,9 +305,11 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
               ),
           const SizedBox(height: 16),
-          const Text(
-            'Dates follow this phone\'s calendar (Asia/Manila). Points are saved on this device only and are separate from the Account Points Wallet.',
-            style: TextStyle(fontSize: 12),
+          Text(
+            _remote
+                ? 'Dates follow Asia/Manila time. Points are saved to your account and show in your Account Points Wallet.'
+                : 'Dates follow this phone\'s calendar (Asia/Manila). Points are saved on this device only and are separate from the Account Points Wallet.',
+            style: const TextStyle(fontSize: 12),
           ),
         ],
       ),

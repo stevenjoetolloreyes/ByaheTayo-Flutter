@@ -63,5 +63,38 @@ service cloud.firestore {
       allow read, write: if isSignedIn()
         && request.auth.uid == userId;
     }
+
+    // Points wallet cache (one document per user — see
+    // lib/features/points_wallet_repository.dart). The balance is
+    // repaired from the ledger on load, so the doc itself only
+    // needs owner-only access; the ledger rules below are the
+    // real amount enforcement.
+    match /points_wallets/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Points ledger — APPEND-ONLY. A signed-in user may read only
+    // their own entries and may create only their own sign-in
+    // credits: the document ID must equal the entry's referenceId
+    // (the `signin_<uid>_<date>` idempotency reference), points
+    // must be a reward-table value (10, or 50 on Day 7), and the
+    // cycle day must be 1..7. Updates and deletes are denied, so
+    // history can never be rewritten or erased.
+    match /points_transactions/{txnId} {
+      allow read: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.referenceId == txnId
+        && request.resource.data.type == 'signin'
+        && request.resource.data.status == 'completed'
+        && request.resource.data.points is int
+        && request.resource.data.points in [10, 50]
+        && request.resource.data.dayIndex is int
+        && request.resource.data.dayIndex >= 1
+        && request.resource.data.dayIndex <= 7;
+      allow update, delete: if false;
+    }
   }
 }

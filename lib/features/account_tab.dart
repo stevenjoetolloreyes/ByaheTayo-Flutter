@@ -20,14 +20,9 @@ import 'admin_access.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/permission_service.dart';
+import 'points_wallet_repository.dart';
 import 'rewards_screen.dart';
 import 'student_id_card.dart';
-
-/// The existing account wallet balance. The account system has no
-/// points ledger of its own yet, so this stays 0 — it is never
-/// inflated, and it is a separate bucket from Student Hub sign-in
-/// points (tracked in the Student tab).
-const int accountWalletPoints = 0;
 
 class AccountTab extends StatefulWidget {
   const AccountTab({
@@ -38,6 +33,7 @@ class AccountTab extends StatefulWidget {
     required this.user,
     this.profile,
     required this.permissionService,
+    this.walletController,
     this.onViewStudent,
     this.onViewCommunities,
     this.onEditProfile,
@@ -62,6 +58,11 @@ class AccountTab extends StatefulWidget {
   final UserProfile? profile;
 
   final PermissionService permissionService;
+
+  /// Shared wallet state (null in bare widget tests). When it has a
+  /// real backend, the wallet card and transaction history show live
+  /// ledger data; otherwise the legacy 0-balance display is kept.
+  final PointsWalletController? walletController;
 
   /// Jump to the Student tab (7-Day Sign-in, the real earn path).
   final VoidCallback? onViewStudent;
@@ -92,10 +93,55 @@ class _AccountTabState extends State<AccountTab> {
   bool get _signedIn => _user != null;
   bool get _isAdmin => isAdminUser(_user);
 
+  /// Remote mode: the wallet controller has a real backend.
+  bool get _walletRemote => widget.walletController?.remote ?? false;
+
+  /// Live balance in remote mode, 0 in legacy mode.
+  int get _balance => widget.walletController?.balance ?? 0;
+
+  /// Live total earned in remote mode, 0 in legacy mode.
+  int get _totalEarned => widget.walletController?.totalEarned ?? 0;
+
+  /// Live ledger entries in remote mode, empty in legacy mode.
+  List<PointsTransaction> get _entries =>
+      _walletRemote ? widget.walletController!.entries : const [];
+
   @override
   void initState() {
     super.initState();
+    widget.walletController?.addListener(_onWalletChanged);
     _loadNotificationStatus();
+    _loadWallet();
+  }
+
+  @override
+  void didUpdateWidget(AccountTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.walletController != widget.walletController) {
+      oldWidget.walletController?.removeListener(_onWalletChanged);
+      widget.walletController?.addListener(_onWalletChanged);
+    }
+    if (oldWidget.user?.uid != widget.user?.uid) {
+      _loadWallet();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.walletController?.removeListener(_onWalletChanged);
+    super.dispose();
+  }
+
+  void _onWalletChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _loadWallet() {
+    final uid = _user?.uid;
+    final controller = widget.walletController;
+    if (uid != null && controller != null) {
+      controller.loadForUser(uid);
+    }
   }
 
   Future<void> _loadNotificationStatus() async {
@@ -165,21 +211,36 @@ class _AccountTabState extends State<AccountTab> {
   }
 
   Future<void> _showTransactionHistory() async {
+    final entries = _entries;
     await showModalBottomSheet<void>(
       context: context,
-      builder: (context) => const Padding(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Transaction History',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            SizedBox(height: 12),
-            Text('No transactions yet.'),
-          ],
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Transaction History',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              if (entries.isEmpty)
+                const Text('No transactions yet.')
+              else
+                for (final entry in entries)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(entry.description),
+                    subtitle: Text(entry.date),
+                    trailing: Text(
+                      '+${entry.points} pts',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+            ],
+          ),
         ),
       ),
     );
@@ -221,7 +282,7 @@ class _AccountTabState extends State<AccountTab> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => RewardsScreen(
-          pointsBalance: accountWalletPoints,
+          pointsBalance: _balance,
           onOpenStudentHub: () {
             Navigator.of(context).pop();
             widget.onViewStudent?.call();
@@ -333,7 +394,11 @@ class _AccountTabState extends State<AccountTab> {
           child: ListTile(
             leading: const Icon(Icons.history),
             title: const Text('Transaction History'),
-            subtitle: const Text('No transactions yet.'),
+            subtitle: Text(
+              _entries.isEmpty
+                  ? 'No transactions yet.'
+                  : '${_entries.length} transactions',
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showTransactionHistory,
           ),
@@ -782,20 +847,30 @@ class _AccountTabState extends State<AccountTab> {
               ],
             ),
             const SizedBox(height: 12),
-            const Text(
-              '$accountWalletPoints points',
-              key: ValueKey('points-balance'),
-              style: TextStyle(
+            Text(
+              '$_balance points',
+              key: const ValueKey('points-balance'),
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 36,
                 fontWeight: FontWeight.w800,
               ),
             ),
+            if (_walletRemote) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Total earned: $_totalEarned points',
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            ],
             const SizedBox(height: 4),
-            const Text(
-              'This is your account wallet. Student Hub sign-in points '
-              'are tracked separately in the Student tab.',
-              style: TextStyle(color: Colors.white70, fontSize: 14),
+            Text(
+              _walletRemote
+                  ? 'Your points from the 7-Day Sign-in, saved to your '
+                      'account. They follow you across devices.'
+                  : 'This is your account wallet. Student Hub sign-in points '
+                      'are tracked separately in the Student tab.',
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 16),
             ElevatedButton(

@@ -22,7 +22,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'onboarding/auth_service.dart';
 import 'ph_holidays.dart';
+import 'points_wallet_repository.dart';
 import 'school_events.dart';
 import 'student/allowance_screen.dart';
 import 'student/attendance_screen.dart';
@@ -39,13 +41,27 @@ import 'fares_tab.dart' as fares;
 import 'map_tab.dart' as maps;
 
 class StudentTab extends StatefulWidget {
-  const StudentTab({super.key, this.onViewOnMap, this.onViewAccount});
+  const StudentTab({
+    super.key,
+    this.onViewOnMap,
+    this.onViewAccount,
+    this.user,
+    this.walletController,
+  });
 
   /// Switches the shell to the Map tab (used by My Commute jumps).
   final VoidCallback? onViewOnMap;
 
   /// Switches the shell to the Account tab. Null in bare widget tests.
   final VoidCallback? onViewAccount;
+
+  /// The signed-in user. Null in bare widget tests.
+  final AuthUser? user;
+
+  /// Shared wallet state (null in bare widget tests). When it has a
+  /// real backend, the sign-in card reads ledger-derived progress
+  /// instead of the local cache.
+  final PointsWalletController? walletController;
 
   @override
   State<StudentTab> createState() => _StudentTabState();
@@ -74,10 +90,35 @@ class _StudentTabState extends State<StudentTab> {
   String? _school;
   final _quoteKey = GlobalKey();
 
+  /// Remote mode: the wallet controller has a real backend.
+  bool get _signinRemote => widget.walletController?.remote ?? false;
+
+  /// Records the sign-in card reads: ledger-derived in remote mode
+  /// (so a claim made in the Sign-in screen shows here immediately),
+  /// the local cache otherwise.
+  List<CheckinRecord> get _signinRecords =>
+      _signinRemote ? widget.walletController!.derivedRecords : _checkins;
+
+  /// "Today" for the sign-in card: Manila date in remote mode,
+  /// device date otherwise.
+  DateTime get _signinToday =>
+      _signinRemote ? widget.walletController!.manilaToday : DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    widget.walletController?.addListener(_onWalletChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    widget.walletController?.removeListener(_onWalletChanged);
+    super.dispose();
+  }
+
+  void _onWalletChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -368,18 +409,22 @@ class _StudentTabState extends State<StudentTab> {
   /// dedicated sign-in page.
   Widget _signinWidget(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final today = DateTime.now();
-    final streak = checkinStreak(_checkins, today);
-    final checkedToday = hasCheckedInToday(_checkins, today);
-    final checkedCells = currentCycleChecked(_checkins, today);
+    final records = _signinRecords;
+    final today = _signinToday;
+    final streak = checkinStreak(records, today);
+    final checkedToday = hasCheckedInToday(records, today);
+    final checkedCells = currentCycleChecked(records, today);
     final todayDay = checkedToday
-        ? _checkins
+        ? records
             .firstWhere((r) => dateKey(r.date) == dateKey(today))
             .dayIndex
         : nextCycleDay(streak);
     return Card(
       child: InkWell(
-        onTap: () => _open(const SigninScreen()),
+        onTap: () => _open(SigninScreen(
+          userId: widget.user?.uid,
+          walletController: widget.walletController,
+        )),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -455,7 +500,7 @@ class _StudentTabState extends State<StudentTab> {
               LinearProgressIndicator(value: checkedCells / 7),
               const SizedBox(height: 4),
               Text(
-                  'Weekly progress: $checkedCells/7 · Total points: ${totalCheckinPoints(_checkins)}'),
+                  'Weekly progress: $checkedCells/7 · Total points: ${totalCheckinPoints(records)}'),
               Text('$streak day streak',
                   style: const TextStyle(fontWeight: FontWeight.w700)),
               Text(checkedToday
