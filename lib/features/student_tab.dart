@@ -4,9 +4,10 @@
 // Layout: single column of full-width landscape cards on every
 // screen size (his 12:09 correction overruled the earlier 2/3-column
 // grid: on tablets it looked sparse with mismatched card heights).
-// Section order follows the landscape spec: Sign-in, Bible,
-// Allowance, Classes, Notes, Upcoming, Tasks,
-// then the School Calendar, Quotes, and Commute.
+// Section order (Full Development Update Phase 1): Walking Goal,
+// Sign-in, Bible, Quick Buttons, then the pre-existing summary
+// widgets (Allowance, Classes, Notes, Upcoming, Tasks, Attendance,
+// Quotes, Commute) kept below the quick buttons.
 //
 // Honest mappings for reference-only items:
 // - Tasks shortcut -> Classes screen (assignments live there).
@@ -40,6 +41,9 @@ import 'student/signin_screen.dart';
 import 'student/signin_components.dart';
 import 'student/student_data.dart';
 import 'student/student_theme.dart';
+import 'student/walking_goal_card.dart';
+import 'student/walking_goal_screen.dart';
+import 'student/walking_repository.dart';
 import 'fares_tab.dart' as fares;
 import 'map_tab.dart' as maps;
 
@@ -51,6 +55,7 @@ class StudentTab extends StatefulWidget {
     this.user,
     this.profile,
     this.walletController,
+    this.walkingController,
   });
 
   /// Switches the shell to the Map tab (used by My Commute jumps).
@@ -72,6 +77,11 @@ class StudentTab extends StatefulWidget {
   /// real backend, the sign-in card reads ledger-derived progress
   /// instead of the local cache.
   final PointsWalletController? walletController;
+
+  /// Shared walking state (null in bare widget tests, in which case
+  /// the tab owns a controller backed by the platform sensor — which
+  /// degrades to "not available" under test, never a crash).
+  final WalkingController? walkingController;
 
   @override
   State<StudentTab> createState() => _StudentTabState();
@@ -100,6 +110,9 @@ class _StudentTabState extends State<StudentTab> {
   String? _school;
   final _quoteKey = GlobalKey();
 
+  late final WalkingController _walking;
+  bool _walkingOwned = false;
+
   /// Remote mode: the wallet controller has a real backend.
   bool get _signinRemote => widget.walletController?.remote ?? false;
 
@@ -118,16 +131,26 @@ class _StudentTabState extends State<StudentTab> {
   void initState() {
     super.initState();
     widget.walletController?.addListener(_onWalletChanged);
+    _walking = widget.walkingController ?? WalkingController();
+    _walkingOwned = widget.walkingController == null;
+    _walking.addListener(_onWalkingChanged);
+    _walking.init();
     _load();
   }
 
   @override
   void dispose() {
     widget.walletController?.removeListener(_onWalletChanged);
+    _walking.removeListener(_onWalkingChanged);
+    if (_walkingOwned) _walking.dispose();
     super.dispose();
   }
 
   void _onWalletChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onWalkingChanged() {
     if (mounted) setState(() {});
   }
 
@@ -183,10 +206,14 @@ class _StudentTabState extends State<StudentTab> {
     });
   }
 
-  Future<void> _open(Widget screen) async {
+  Future<void> _open(Widget screen, {bool darkAware = false}) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => StudentTheme(child: screen)),
+      MaterialPageRoute(
+        builder: (_) => darkAware
+            ? StudentHubTheme(child: screen)
+            : StudentTheme(child: screen),
+      ),
     );
     _load();
   }
@@ -242,12 +269,22 @@ class _StudentTabState extends State<StudentTab> {
     final wide = MediaQuery.sizeOf(context).width >= 600;
     // Single column of full-width cards on EVERY screen size (his
     // 12:09 correction: the tablet 2/3-column grid looked sparse
-    // with mismatched card heights — "wag ganito"). Sections stack
-    // in spec order; shortcuts stay responsive (3x2 grid on phones,
-    // one row of 6 on wide screens).
+    // with mismatched card heights — "wag ganito").
+    //
+    // Phase 1 hub order (Full Development Update §1): greeting →
+    // Walking Goal → sign-in → Bible → quick buttons. The eight
+    // pre-existing summary widgets (allowance, classes, notes,
+    // upcoming, tasks, attendance, quotes, commute) are kept BELOW
+    // the quick buttons rather than deleted: the same spec also
+    // says "do not remove existing sections", and every one of
+    // those screens stays one tap away via the quick buttons.
+    // Shortcuts stay responsive (3x2 grid on phones, one row of 6
+    // on wide screens).
     final sections = [
+      _walkingWidget(context),
       _signinWidget(context),
       _bibleWidget(context),
+      _quickAccess(context, wide),
       _allowanceWidget(context),
       _classesWidget(context),
       _notesWidget(context),
@@ -269,7 +306,6 @@ class _StudentTabState extends State<StudentTab> {
             profile: widget.profile,
           ),
           const SizedBox(height: AppLayout.headerGap),
-          _quickAccess(context, wide),
           for (final s in sections) ...[
             const SizedBox(height: AppLayout.cardGap),
             s,
@@ -393,12 +429,14 @@ class _StudentTabState extends State<StudentTab> {
         .toList();
     if (wide) {
       return Row(
+        key: const ValueKey('quick-access'),
         children: [
           for (final c in cards) Expanded(child: c),
         ],
       );
     }
     return GridView(
+      key: const ValueKey('quick-access'),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -408,6 +446,21 @@ class _StudentTabState extends State<StudentTab> {
         mainAxisSpacing: 8,
       ),
       children: cards,
+    );
+  }
+
+  // ------------------------------------------------------- walking goal
+
+  /// Walking Goal hub card (Phase 1). Opens the details screen
+  /// wrapped in the dark-aware hub theme so it renders correctly
+  /// in both modes; other module screens keep the light wrapper.
+  Widget _walkingWidget(BuildContext context) {
+    return WalkingGoalCard(
+      controller: _walking,
+      onOpen: () => _open(
+        WalkingGoalScreen(controller: _walking),
+        darkAware: true,
+      ),
     );
   }
 
@@ -627,6 +680,7 @@ class _StudentTabState extends State<StudentTab> {
   Widget _bibleWidget(BuildContext context) {
     final daily = verseOfDay(DateTime.now());
     return Card(
+      key: const ValueKey('bible-hub-card'),
       child: InkWell(
         onTap: () => _open(const BibleScreen()),
         borderRadius: BorderRadius.circular(AppLayout.cardRadius),
