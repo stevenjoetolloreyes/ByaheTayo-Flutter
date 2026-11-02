@@ -11,15 +11,18 @@
 //   - The AI Scanner does not exist yet: its section shows the
 //     free-scan allowance and the paid-scan price, but no scan can
 //     be started from here.
-//   - Watch Ads & Earn Credits is BLOCKED on a missing AdMob SDK,
-//     missing ad units, and a missing SSV server: no ad is shown
-//     or simulated and no credits are granted for ads. A verified
-//     ad will pay 0.50 credits once that setup exists.
+//   - Watch Ads & Earn Credits shows real ads through the AdMob
+//     SDK (Google test IDs until the real ad units are filled in
+//     via the web edit). A completed ad still grants NOTHING:
+//     verified crediting (0.50 credits per verified ad) needs the
+//     SSV server, which does not exist yet, and no client callback
+//     is ever treated as verified. The UI says so plainly.
 //   - History rows show the spec's Source + ad fields (network,
 //     reward reference, verification status); ad rows only ever
 //     appear once a trusted server writes them.
 import 'package:flutter/material.dart';
 
+import 'ad_service.dart';
 import 'credits_repository.dart';
 import 'rewards_center.dart';
 
@@ -36,6 +39,7 @@ class RewardsScreen extends StatelessWidget {
     this.scanFreeRemaining = freeScansPerDay,
     this.dailyAdLimit = 5,
     this.onRedeem,
+    this.adService,
   });
 
   /// The existing account wallet balance (not a new currency).
@@ -65,6 +69,48 @@ class RewardsScreen extends StatelessWidget {
 
   /// One-button redeem-all (null in local-only mode).
   final Future<RedeemOutcome> Function()? onRedeem;
+
+  /// Shared AdMob state (null in bare widget tests and in
+  /// local-only mode, in which case the Watch Ads card keeps its
+  /// honest no-ads notice and no ad is attempted).
+  final AdService? adService;
+
+  /// Rewarded-ad tap: shows one ad and reports the outcome
+  /// honestly. No outcome here grants credits — not even
+  /// `completed`, which is only a client-side callback, not
+  /// verified crediting (that needs the SSV server).
+  Future<void> _watchAd(BuildContext context) async {
+    final service = adService;
+    if (service == null) return;
+    final result = await service.showRewardedAd();
+    if (!context.mounted) return;
+    final message = switch (result) {
+      RewardedAdResult.completed =>
+        'Ad completed. This completion is not verified crediting, '
+            'so no credits were granted. Once the server '
+            'verification is connected, one verified ad will earn '
+            '0.50 credits.',
+      RewardedAdResult.skipped => 'Ad not completed — no credits granted.',
+      RewardedAdResult.failed =>
+        'The ad could not be shown. No credits granted.',
+      RewardedAdResult.noFill =>
+        'No ad available right now. Try again later. '
+            'No credits granted.',
+    };
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Watch Ads & Earn Credits'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -301,14 +347,29 @@ class RewardsScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'Not available yet. Rewarded ads need an '
-                        'AdMob setup (SDK, ad units, publisher '
-                        'account) and a server that verifies '
-                        'completed ads before any credits are '
-                        'granted. No ad is shown here and no '
-                        'credits are granted for ads today.',
-                      ),
+                      if (adService == null)
+                        const Text(
+                          'Not available yet. Rewarded ads need an '
+                          'AdMob setup (SDK, ad units, publisher '
+                          'account) and a server that verifies '
+                          'completed ads before any credits are '
+                          'granted. No ad is shown here and no '
+                          'credits are granted for ads today.',
+                        )
+                      else ...[
+                        const Text(
+                          'Watch a rewarded ad. A completed ad does '
+                          'NOT grant credits yet: verified crediting '
+                          'starts once the server verification is '
+                          'connected, and no client-side completion '
+                          'is ever treated as verified.',
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: () => _watchAd(context),
+                          child: const Text('Watch ad'),
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         'When available, one verified ad earns '

@@ -15,8 +15,11 @@
 // unified Account Points Wallet. Without one (unconfigured builds,
 // bare widget tests), the screen keeps its legacy local-only
 // behavior: device dates, local records, local points.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../ad_service.dart';
 import '../app_layout.dart';
 import '../points_wallet_repository.dart';
 import 'signin_components.dart';
@@ -24,8 +27,12 @@ import 'student_data.dart';
 import 'student_theme.dart';
 
 class SigninScreen extends StatefulWidget {
-  const SigninScreen({super.key, this.userId, this.walletController,
-    this.onViewWallet});
+  const SigninScreen(
+      {super.key,
+      this.userId,
+      this.walletController,
+      this.onViewWallet,
+      this.adService});
 
   /// The signed-in user's UID. Null in bare widget tests (legacy
   /// local-only mode).
@@ -39,6 +46,14 @@ class SigninScreen extends StatefulWidget {
   /// tab). Null in bare widget tests; the Total Points stat is
   /// then untappable.
   final VoidCallback? onViewWallet;
+
+  /// Shared AdMob state (null in bare widget tests, in which case
+  /// no login popup is attempted). When present, the login popup
+  /// interstitial is shown once per app session after a successful
+  /// sign-in award (see _maybeShowLoginPopupAd): it never blocks
+  /// auth or access, grants no credits, and stays silent when
+  /// there is no inventory.
+  final AdService? adService;
 
   @override
   State<SigninScreen> createState() => _SigninScreenState();
@@ -134,6 +149,18 @@ class _SigninScreenState extends State<SigninScreen> {
             : 'Checked in! Day $dayIndex · +$points points.'),
       ),
     );
+    _maybeShowLoginPopupAd();
+  }
+
+  /// Login popup ad: fire-and-forget, once per app session (the
+  /// service enforces it). Called only after a successful award, so
+  /// the popup never precedes the +10, never blocks anything, and
+  /// never depends on the award: the award is already final when
+  /// this runs, and a missing ad changes nothing.
+  void _maybeShowLoginPopupAd() {
+    final adService = widget.adService;
+    if (adService == null) return;
+    unawaited(adService.showLoginPopupAd());
   }
 
   /// Remote claim: one atomic, idempotent ledger transaction. A
@@ -157,10 +184,14 @@ class _SigninScreenState extends State<SigninScreen> {
                     '· +${outcome.points} points.'),
           ),
         );
+        // Eligible login: signed in and today's award is final.
+        _maybeShowLoginPopupAd();
       case ClaimStatus.alreadyClaimed:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Already checked in today.')),
         );
+        // Today's award already exists: same eligible login.
+        _maybeShowLoginPopupAd();
       case ClaimStatus.failed:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

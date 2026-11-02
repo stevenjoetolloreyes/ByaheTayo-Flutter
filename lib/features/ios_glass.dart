@@ -11,12 +11,15 @@
 // no duplicated nav/wallet components — the shell reuses its one
 // destinations list and passes it into [GlassBottomNav].
 //
-// DESIGN (approved direction): deep emerald #14532D background,
-// frosted translucent glass cards (real BackdropFilter blur),
-// thin glowing green-white borders, rounded glass surfaces, soft
-// shadows, white high-contrast text, emerald accent. No excessive
-// neon, no heavy transparency: glass fill stays at 12% white so
-// text stays readable over the emerald gradient.
+// DESIGN (approved direction, refined Nov 2 from the user's glossy
+// reference): vivid emerald background with flowing aurora light
+// shapes, bright luminous glass cards (real BackdropFilter blur),
+// strong top-edge highlights, rounded glass surfaces, soft
+// shadows, white high-contrast text, emerald accent. The aurora
+// shapes behind the cards are what make the glass read as glass:
+// without something luminous to refract, the cards look like
+// solid dark panels. Fills stay translucent enough that white
+// text stays readable over the emerald background.
 //
 // iOS typography: glass surfaces render text with the SF Pro
 // family (`.SF Pro Text`), which iOS resolves to the system font.
@@ -43,23 +46,32 @@ bool get iosGlassEnabled {
 }
 
 /// Deep emerald page background (approved #14532D at the top,
-/// darkening toward the bottom so glass cards stay legible).
+/// darkening toward the bottom so glass cards stay legible),
+/// plus the luminous aurora greens that flow behind the glass.
 abstract final class IosGlassColors {
   static const Color backgroundTop = Color(0xFF14532D);
   static const Color backgroundBottom = Color(0xFF0A2E1A);
   static const Color accent = Color(0xFF16A34A);
   static const Color accentGlow = Color(0xFF22C55E);
+
+  /// Aurora light shapes (bright greens, used only as soft radial
+  /// glows and the diagonal streak behind the cards).
+  static const Color auroraBright = Color(0xFF4ADE80);
+  static const Color auroraMid = Color(0xFF22C55E);
+  static const Color auroraDeep = Color(0xFF16A34A);
 }
 
 /// Frosted glass surface geometry.
 abstract final class IosGlassMetrics {
   static const double cardRadius = 24;
-  static const double cardBlur = 20;
-  static const double navBlur = 24;
+  static const double cardBlur = 28;
+  static const double navBlur = 28;
   static const double navItemMinHeight = 64;
 }
 
-/// Full-page emerald gradient behind glass surfaces. The child
+/// Full-page emerald gradient behind glass surfaces, with flowing
+/// aurora light shapes (soft radial glows + one diagonal light
+/// streak) layered between the gradient and the child. The child
 /// keeps its own padding; this only paints the background.
 class IosGlassBackground extends StatelessWidget {
   const IosGlassBackground({super.key, required this.child});
@@ -79,15 +91,107 @@ class IosGlassBackground extends StatelessWidget {
           end: Alignment.bottomCenter,
         ),
       ),
-      child: child,
+      child: Stack(
+        children: [
+          // Aurora glows: luminous radial gradients with a bright
+          // near-white core fading through green to transparent.
+          // Kept strong on purpose: faint glows disappear behind
+          // the glass and the cards read as solid panels.
+          Positioned(
+            top: -70,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _auroraBlob(
+                300,
+                IosGlassColors.auroraBright,
+                0.70,
+              ),
+            ),
+          ),
+          Positioned(
+            top: -90,
+            right: -70,
+            child: _auroraBlob(
+              340,
+              IosGlassColors.auroraBright,
+              0.75,
+            ),
+          ),
+          Positioned(
+            top: 240,
+            left: -110,
+            child: _auroraBlob(
+              380,
+              IosGlassColors.auroraMid,
+              0.65,
+            ),
+          ),
+          Positioned(
+            bottom: 140,
+            right: -90,
+            child: _auroraBlob(
+              320,
+              IosGlassColors.auroraDeep,
+              0.70,
+            ),
+          ),
+          // Diagonal light streak flowing across the page.
+          Positioned.fill(
+            child: Transform.rotate(
+              angle: -0.5,
+              child: Center(
+                child: Container(
+                  width: 900,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0.0),
+                        Colors.white.withValues(alpha: 0.16),
+                        IosGlassColors.auroraBright
+                            .withValues(alpha: 0.30),
+                        Colors.white.withValues(alpha: 0.0),
+                      ],
+                      stops: const [0.0, 0.35, 0.55, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
+  /// One luminous radial glow blob of [size] logical pixels:
+  /// bright core, green mid, transparent edge.
+  static Widget _auroraBlob(double size, Color color, double alpha) {
+    final core = Color.lerp(color, Colors.white, 0.35)!;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          colors: [
+            core.withValues(alpha: alpha),
+            color.withValues(alpha: alpha * 0.6),
+            color.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 0.45, 1.0],
+        ),
+      ),
     );
   }
 }
 
 /// One frosted glass card: real blur over whatever is behind it,
-/// translucent white fill, thin light border, soft shadow, white
-/// high-contrast text (SF Pro on iOS) inherited by children that
-/// do not set their own color.
+/// luminous gradient fill (brighter at the top, so light appears
+/// to fall across the card), strong top-edge highlight, soft
+/// shadow, white high-contrast text (SF Pro on iOS) inherited by
+/// children that do not set their own color.
 class GlassCard extends StatelessWidget {
   const GlassCard({super.key, required this.child, this.padding});
 
@@ -106,38 +210,74 @@ class GlassCard extends StatelessWidget {
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0.30),
+                Colors.white.withValues(alpha: 0.14),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
             borderRadius:
                 BorderRadius.circular(IosGlassMetrics.cardRadius),
+            // Uniform border color: Flutter asserts when a
+            // borderRadius meets non-uniform side colors, so the
+            // bright top edge is a highlight overlay below, not a
+            // thicker top BorderSide.
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.28),
+              color: Colors.white.withValues(alpha: 0.35),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
+                color: Colors.black.withValues(alpha: 0.20),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          // Transparent Material INSIDE the frosted background so
-          // ListTile/InkWell ink paints above the glass fill instead
-          // of being hidden behind it (Flutter asserts otherwise).
-          child: Material(
-            type: MaterialType.transparency,
-            child: DefaultTextStyle.merge(
-              style: const TextStyle(
-                color: Colors.white,
-                fontFamily: '.SF Pro Text',
-              ),
-              child: IconTheme.merge(
-                data: const IconThemeData(color: Colors.white),
-                child: Padding(
-                  padding: padding ?? const EdgeInsets.all(16),
-                  child: child,
+          child: Stack(
+            children: [
+              // Transparent Material INSIDE the frosted background
+              // so ListTile/InkWell ink paints above the glass fill
+              // instead of being hidden behind it (Flutter asserts
+              // otherwise).
+              Material(
+                type: MaterialType.transparency,
+                child: DefaultTextStyle.merge(
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: '.SF Pro Text',
+                  ),
+                  child: IconTheme.merge(
+                    data: const IconThemeData(color: Colors.white),
+                    child: Padding(
+                      padding: padding ?? const EdgeInsets.all(16),
+                      child: child,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              // Glossy top-edge highlight: a bright line inset
+              // from the corners, fading at both ends.
+              Positioned(
+                top: 0,
+                left: 20,
+                right: 20,
+                child: Container(
+                  height: 1.2,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0.0),
+                        Colors.white.withValues(alpha: 0.70),
+                        Colors.white.withValues(alpha: 0.0),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -183,10 +323,10 @@ class GlassNavDestination {
 
 /// iPhone glass bottom navigation: the SAME 6 tabs in the SAME
 /// order with the SAME icons/labels/destinations as the Material
-/// NavigationBar — only the appearance changes (frosted bar,
-/// thin glass top border, soft emerald glow on the active tab).
-/// Tap targets are 56dp tall (above the 44pt iOS minimum) and the
-/// bar extends through the home-indicator area.
+/// NavigationBar — only the appearance changes (glossy frosted
+/// bar, bright glass top border, bright green glow pill on the
+/// active tab). Tap targets are 56dp tall (above the 44pt iOS
+/// minimum) and the bar extends through the home-indicator area.
 class GlassBottomNav extends StatelessWidget {
   const GlassBottomNav({
     super.key,
@@ -213,10 +353,18 @@ class GlassBottomNav extends StatelessWidget {
         child: Container(
           key: const Key('glass-nav'),
           decoration: BoxDecoration(
-            color: IosGlassColors.backgroundTop.withValues(alpha: 0.72),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0.20),
+                IosGlassColors.backgroundTop.withValues(alpha: 0.80),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
             border: Border(
               top: BorderSide(
-                color: Colors.white.withValues(alpha: 0.22),
+                color: Colors.white.withValues(alpha: 0.45),
+                width: 1.0,
               ),
             ),
           ),
@@ -276,18 +424,24 @@ class GlassBottomNav extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color:
-                          IosGlassColors.accent.withValues(alpha: 0.38),
+                      gradient: const LinearGradient(
+                        colors: [
+                          IosGlassColors.accentGlow,
+                          IosGlassColors.accent,
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.25),
+                        color: Colors.white.withValues(alpha: 0.55),
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: IosGlassColors.accentGlow
-                              .withValues(alpha: 0.45),
-                          blurRadius: 16,
-                          spreadRadius: 1,
+                              .withValues(alpha: 0.65),
+                          blurRadius: 20,
+                          spreadRadius: 2,
                         ),
                       ],
                     ),

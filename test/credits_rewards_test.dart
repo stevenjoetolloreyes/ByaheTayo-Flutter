@@ -438,7 +438,7 @@ void main() {
   });
 
   // --- Widget: hub card. ---
-  testWidgets('Rewards Center card shows balances + ads-blocked notice',
+  testWidgets('Rewards Center card shows balances + watch-ads pointer',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -460,7 +460,7 @@ void main() {
     expect(find.textContaining('3/3'), findsOneWidget);
     expect(find.text('Redeem all points'), findsOneWidget);
     expect(
-      find.textContaining('not available yet'),
+      find.textContaining('Watch Ads & Earn Credits'),
       findsWidgets,
     );
   });

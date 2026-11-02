@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'ad_service.dart';
 import 'app_layout.dart';
 import 'credits_repository.dart';
 import 'onboarding/auth_service.dart';
@@ -60,6 +61,7 @@ class StudentTab extends StatefulWidget {
     this.walletController,
     this.creditsController,
     this.walkingController,
+    this.adService,
   });
 
   /// Switches the shell to the Map tab (used by My Commute jumps).
@@ -91,6 +93,11 @@ class StudentTab extends StatefulWidget {
   /// the tab owns a controller backed by the platform sensor — which
   /// degrades to "not available" under test, never a crash).
   final WalkingController? walkingController;
+
+  /// Shared AdMob state (null in bare widget tests, in which case
+  /// the Rewards screen keeps its honest no-ads notice and no login
+  /// popup is attempted).
+  final AdService? adService;
 
   @override
   State<StudentTab> createState() => _StudentTabState();
@@ -224,6 +231,7 @@ class _StudentTabState extends State<StudentTab> {
               credits?.scanCounter.freeRemaining ?? freeScansPerDay,
           dailyAdLimit: credits?.settings.dailyAdLimit ?? 5,
           onRedeem: _redeemCallback(),
+          adService: widget.adService,
         ),
         darkAware: true,
       ),
@@ -596,6 +604,7 @@ class _StudentTabState extends State<StudentTab> {
           userId: widget.user?.uid,
           walletController: widget.walletController,
           onViewWallet: widget.onViewAccount,
+          adService: widget.adService,
         )),
         borderRadius: BorderRadius.circular(AppLayout.cardRadius),
         child: Padding(

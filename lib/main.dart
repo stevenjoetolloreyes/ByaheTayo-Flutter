@@ -21,10 +21,13 @@
 // right setup step. When Firebase is NOT configured yet (no
 // google-services.json), auth gating is skipped and the dashboard
 // opens after onboarding, so the app stays usable before setup.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'features/account_tab.dart';
+import 'features/ad_service.dart';
 import 'features/app_layout.dart';
 import 'features/communities_tab.dart';
 import 'features/community_post_repository.dart';
@@ -633,6 +636,17 @@ class _HomeShellState extends State<_HomeShell> {
         : null,
   );
 
+  /// Shared AdMob state (ads phase), created once per shell.
+  /// Initialized in initState without awaiting: ads must never
+  /// block the shell, and the service never throws.
+  late final AdService _adService = GoogleMobileAdsService();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_adService.initialize());
+  }
+
   Future<void> _toggleSidebar() async {
     setState(() => _collapsed = !_collapsed);
     try {
@@ -661,6 +675,7 @@ class _HomeShellState extends State<_HomeShell> {
             profile: widget.profile,
             walletController: _walletController,
             creditsController: _creditsController,
+            adService: _adService,
           ),
         ),
         FriendsTab(
@@ -687,6 +702,7 @@ class _HomeShellState extends State<_HomeShell> {
           permissionService: widget.permissionService,
           walletController: _walletController,
           creditsController: _creditsController,
+          adService: _adService,
           onViewStudent: widget.onViewStudent,
           onViewCommunities: widget.onViewCommunities,
           onEditProfile: widget.onEditProfile,

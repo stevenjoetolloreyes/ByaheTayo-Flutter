@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../ai_quiz_generate_screen.dart';
 import '../app_layout.dart';
 import 'student_data.dart';
 
@@ -340,6 +341,20 @@ class _NotesScreenState extends State<NotesScreen> {
                       ),
                   ],
                 ] else ...[
+                  FilledButton.icon(
+                    onPressed: () async {
+                      final saved = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AiQuizGenerateScreen(),
+                        ),
+                      );
+                      if (saved == true) _load();
+                    },
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    label: const Text('Generate quiz from text (AI)'),
+                  ),
+                  const SizedBox(height: AppSpacing.s8),
                   if (_quizzes.isEmpty)
                     const Card(
                         child: ListTile(
