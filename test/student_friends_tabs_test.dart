@@ -3,6 +3,7 @@
 // Dashboard rule: every summary line comes from real on-device data
 // (a zero balance is shown as ₱0, never an invented amount); module
 // cards open real screens.
+import 'package:estudyantego/features/floating_nav.dart';
 import 'package:estudyantego/features/friends_tab.dart';
 import 'package:estudyantego/features/student/student_theme.dart';
 import 'package:estudyantego/features/student_tab.dart';
@@ -20,13 +21,12 @@ void main() {
   setUp(() {
     // The full-app test boots through the first-time gate, so
     // onboarding is already done here. Direct-tab tests ignore it.
-    SharedPreferences.setMockInitialValues({
-      'byahetayo_onboarding_done': true,
-    });
+    SharedPreferences.setMockInitialValues({'byahetayo_onboarding_done': true});
   });
 
-  testWidgets('Student Hub dashboard shows all 7 modules, honest data',
-      (tester) async {
+  testWidgets('Student Hub dashboard shows all 7 modules, honest data', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 6000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -52,13 +52,15 @@ void main() {
     expect(find.textContaining('₱0'), findsWidgets);
     expect(find.text('No classes today.'), findsOneWidget);
     expect(
-        find.textContaining('Saved routes are shared with the Map tab.'),
-        findsOneWidget);
+      find.textContaining('Saved routes are shared with the Map tab.'),
+      findsOneWidget,
+    );
     expect(find.text('No recent study activity.'), findsOneWidget);
   });
 
-  testWidgets('Student Hub cards stack in one column even at 800px wide',
-      (tester) async {
+  testWidgets('Student Hub cards stack in one column even at 800px wide', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -121,10 +123,7 @@ void main() {
     expect(find.text('Decline'), findsNothing);
     expect(find.text('Community'), findsNothing);
     expect(find.text('Share info'), findsNothing);
-    expect(
-      find.text('Know something that can help commuters?'),
-      findsNothing,
-    );
+    expect(find.text('Know something that can help commuters?'), findsNothing);
     expect(find.text('No announcements or posts yet.'), findsNothing);
   });
 
@@ -148,30 +147,32 @@ void main() {
     expect(find.text('No friends yet'), findsOneWidget);
   });
 
-  testWidgets('Student Hub follows Dark Mode with charcoal cards when the app is dark',
-      (tester) async {
-    // Nov 2 Dark Mode polish: the old rule ("Hub keeps its light
-    // emerald theme even when the app is dark") is superseded — the
-    // Hub tab now follows Dark Mode with the charcoal student
-    // theme. Module screens opened from it still keep the light
-    // StudentTheme wrapper (their approved light design).
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      const EstudyanteGOApp(initialThemeMode: ThemeMode.dark),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Student', skipOffstage: true));
-    await tester.pumpAndSettle();
-    expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
-    final context = tester.element(find.byType(StudentTab));
-    final theme = Theme.of(context);
-    expect(theme.scaffoldBackgroundColor, kStudentDarkBg);
-    expect(theme.colorScheme.surface, kStudentDarkCard);
-    expect(theme.colorScheme.primary, kStudentEmeraldAccent);
-    expect(theme.colorScheme.outline, kStudentDarkBorder);
-    expect(find.byType(NavigationBar), findsOneWidget);
-  });
+  testWidgets(
+    'Student Hub follows Dark Mode with charcoal cards when the app is dark',
+    (tester) async {
+      // Nov 2 Dark Mode polish: the old rule ("Hub keeps its light
+      // emerald theme even when the app is dark") is superseded — the
+      // Hub tab now follows Dark Mode with the charcoal student
+      // theme. Module screens opened from it still keep the light
+      // StudentTheme wrapper (their approved light design).
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        const EstudyanteGOApp(initialThemeMode: ThemeMode.dark),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Student', skipOffstage: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
+      final context = tester.element(find.byType(StudentTab));
+      final theme = Theme.of(context);
+      expect(theme.scaffoldBackgroundColor, kStudentDarkBg);
+      expect(theme.colorScheme.surface, kStudentDarkCard);
+      expect(theme.colorScheme.primary, kStudentEmeraldAccent);
+      expect(theme.colorScheme.outline, kStudentDarkBorder);
+      expect(find.byType(FloatingGlassNav), findsOneWidget);
+    },
+  );
 }

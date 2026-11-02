@@ -3,6 +3,7 @@
 // only: there is no payment provider, so Subscribe Now must stop at
 // a confirmation sheet with an honest note — never a charge,
 // verification, or activation.
+import 'package:estudyantego/features/floating_nav.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
@@ -32,10 +33,12 @@ Future<void> _pumpApp(WidgetTester tester) async {
     'byahetayo_profile_uid-1':
         '{"displayName":"Steven Reyes","email":"steven@example.com"}',
   });
-  await tester.pumpWidget(EstudyanteGOApp(
-    authService: FakeAuthService(user: _user),
-    permissionService: FakePermissionService(),
-  ));
+  await tester.pumpWidget(
+    EstudyanteGOApp(
+      authService: FakeAuthService(user: _user),
+      permissionService: FakePermissionService(),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -45,17 +48,16 @@ Future<void> _openAccount(WidgetTester tester) async {
 }
 
 Future<void> _openMembership(WidgetTester tester) async {
-  await tester.ensureVisible(
-    find.byKey(const Key('subscription-member-card')),
-  );
+  await tester.ensureVisible(find.byKey(const Key('subscription-member-card')));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('subscription-member-card')));
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('Account shows Subscription Member card with Free Plan',
-      (WidgetTester tester) async {
+  testWidgets('Account shows Subscription Member card with Free Plan', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await _pumpApp(tester);
     await _openAccount(tester);
@@ -68,8 +70,9 @@ void main() {
     expect(find.text('Free Plan'), findsOneWidget);
   });
 
-  testWidgets('card tap opens Membership and keeps tab navigation visible',
-      (WidgetTester tester) async {
+  testWidgets('card tap opens Membership and keeps tab navigation visible', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await _pumpApp(tester);
     await _openAccount(tester);
@@ -84,15 +87,13 @@ void main() {
     expect(find.text('Upgrade to Pro'), findsOneWidget);
     // Membership lives inside the Account tab: the tab navigation
     // (sidebar here) stays visible, and Account content is swapped out.
-    expect(
-      find.byKey(const Key('sidebar-item-Account')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('sidebar-item-Account')), findsOneWidget);
     expect(find.text('Quick Actions'), findsNothing);
   });
 
-  testWidgets('Monthly/Yearly switching updates all displayed prices',
-      (WidgetTester tester) async {
+  testWidgets('Monthly/Yearly switching updates all displayed prices', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await _pumpApp(tester);
     await _openAccount(tester);
@@ -116,8 +117,9 @@ void main() {
     expect(find.text('₱299 / month'), findsOneWidget);
   });
 
-  testWidgets('plan selection updates action button and details screen',
-      (WidgetTester tester) async {
+  testWidgets('plan selection updates action button and details screen', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await _pumpApp(tester);
     await _openAccount(tester);
@@ -142,8 +144,9 @@ void main() {
     expect(find.text('Upgrade Your Experience'), findsOneWidget);
   });
 
-  testWidgets('Subscribe Now stops at confirmation, never activates',
-      (WidgetTester tester) async {
+  testWidgets('Subscribe Now stops at confirmation, never activates', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await _pumpApp(tester);
     await _openAccount(tester);
@@ -181,8 +184,9 @@ void main() {
     expect(find.text('Free Plan'), findsOneWidget);
   });
 
-  testWidgets('phone width: nav visible on Membership, hidden on Details',
-      (WidgetTester tester) async {
+  testWidgets('phone width: nav visible on Membership, hidden on Details', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(390, 844));
     await _pumpApp(tester);
 
@@ -190,7 +194,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openMembership(tester);
 
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(FloatingGlassNav), findsOneWidget);
 
     await tester.ensureVisible(
       find.byKey(const Key('membership-action-button')),
@@ -199,6 +203,6 @@ void main() {
     await tester.tap(find.byKey(const Key('membership-action-button')));
     await tester.pumpAndSettle();
     expect(find.text('Pro Plan'), findsNWidgets(2));
-    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(FloatingGlassNav), findsNothing);
   });
 }

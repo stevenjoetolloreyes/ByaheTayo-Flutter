@@ -4,7 +4,8 @@
 // with icons only, centered, labels hidden, selected indicator preserved,
 // Tooltips on every icon; chevron toggle at the top; ~225ms animation;
 // selection never resets on toggle; preference persisted under
-// 'byahetayo_sidebar_collapsed'; phones keep the bottom NavigationBar.
+// 'byahetayo_sidebar_collapsed'; phones keep the bottom FloatingGlassNav.
+import 'package:estudyantego/features/floating_nav.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,22 +19,19 @@ Future<void> _setSurface(WidgetTester tester, Size size) async {
 }
 
 double _sidebarWidth(WidgetTester tester) {
-  return tester
-      .getSize(find.byKey(const Key('sidebar-container')))
-      .width;
+  return tester.getSize(find.byKey(const Key('sidebar-container'))).width;
 }
 
 void main() {
   setUp(() {
     // The app boots through the first-time gate; these sidebar tests
     // cover the dashboard, so onboarding is already done here.
-    SharedPreferences.setMockInitialValues({
-      'byahetayo_onboarding_done': true,
-    });
+    SharedPreferences.setMockInitialValues({'byahetayo_onboarding_done': true});
   });
 
-  testWidgets('sidebar is 220dp wide when expanded (tablet portrait)',
-      (WidgetTester tester) async {
+  testWidgets('sidebar is 220dp wide when expanded (tablet portrait)', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
@@ -43,8 +41,9 @@ void main() {
     expect(find.byIcon(Icons.chevron_left), findsOneWidget);
   });
 
-  testWidgets('toggle collapses to 80dp, hides labels, keeps tooltips',
-      (WidgetTester tester) async {
+  testWidgets('toggle collapses to 80dp, hides labels, keeps tooltips', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
@@ -68,8 +67,9 @@ void main() {
     expect(find.text('Fares'), findsOneWidget);
   });
 
-  testWidgets('selection is preserved across collapse and expand',
-      (WidgetTester tester) async {
+  testWidgets('selection is preserved across collapse and expand', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
@@ -77,7 +77,9 @@ void main() {
     await tester.tap(find.byKey(const Key('sidebar-item-Fares')));
     await tester.pumpAndSettle();
     expect(
-      find.text('LTFRB fare calculator — same rates and formula as the web app.'),
+      find.text(
+        'LTFRB fare calculator — same rates and formula as the web app.',
+      ),
       findsOneWidget,
     );
 
@@ -87,7 +89,9 @@ void main() {
     // label is gone while collapsed.
     expect(find.text('Fares'), findsOneWidget);
     expect(
-      find.text('LTFRB fare calculator — same rates and formula as the web app.'),
+      find.text(
+        'LTFRB fare calculator — same rates and formula as the web app.',
+      ),
       findsOneWidget,
     );
 
@@ -96,13 +100,16 @@ void main() {
     // Expanded again: AppBar + calculator content + sidebar label.
     expect(find.text('Fares'), findsNWidgets(2));
     expect(
-      find.text('LTFRB fare calculator — same rates and formula as the web app.'),
+      find.text(
+        'LTFRB fare calculator — same rates and formula as the web app.',
+      ),
       findsOneWidget,
     );
   });
 
-  testWidgets('restored collapsed value renders the 80dp sidebar',
-      (WidgetTester tester) async {
+  testWidgets('restored collapsed value renders the 80dp sidebar', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
 
     // Widget honors the restored initial value (main() loads the pref and
@@ -114,8 +121,9 @@ void main() {
     expect(_sidebarWidth(tester), 80);
   });
 
-  testWidgets('toggling saves the collapsed preference',
-      (WidgetTester tester) async {
+  testWidgets('toggling saves the collapsed preference', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
@@ -126,8 +134,9 @@ void main() {
     expect(prefs.getBool('byahetayo_sidebar_collapsed'), isTrue);
   });
 
-  testWidgets('no overflow at tablet portrait and landscape sizes',
-      (WidgetTester tester) async {
+  testWidgets('no overflow at tablet portrait and landscape sizes', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(800, 1280));
     await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
@@ -141,13 +150,14 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('phones keep the bottom NavigationBar, no sidebar',
-      (WidgetTester tester) async {
+  testWidgets('phones keep the bottom FloatingGlassNav, no sidebar', (
+    WidgetTester tester,
+  ) async {
     await _setSurface(tester, const Size(390, 844));
     await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(FloatingGlassNav), findsOneWidget);
     expect(find.byKey(const Key('sidebar-container')), findsNothing);
   });
 }

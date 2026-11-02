@@ -1,10 +1,11 @@
 // Smoke tests for the EstudyanteGO shell: all 6 destinations render and tab
 // switching changes the visible tab on both wide (collapsible sidebar)
-// and phone (NavigationBar) layouts.
+// and phone (FloatingGlassNav) layouts.
 //
 // The app now boots through the first-time gate (splash -> dashboard
 // when onboarding is already done), so these tests set the onboarding
 // flag in mock prefs and settle past the 1.2s splash.
+import 'package:estudyantego/features/floating_nav.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,23 +22,23 @@ const _labels = [
 ];
 
 Future<void> _pumpApp(WidgetTester tester) async {
-  SharedPreferences.setMockInitialValues({
-    'byahetayo_onboarding_done': true,
-  });
+  SharedPreferences.setMockInitialValues({'byahetayo_onboarding_done': true});
   await tester.pumpWidget(const EstudyanteGOApp());
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('Map tab shows a real Google Map on launch',
-      (WidgetTester tester) async {
+  testWidgets('Map tab shows a real Google Map on launch', (
+    WidgetTester tester,
+  ) async {
     await _pumpApp(tester);
     expect(find.byType(GoogleMap), findsOneWidget);
     expect(find.byIcon(Icons.my_location), findsOneWidget);
   });
 
-  testWidgets('Wide layout shows collapsible sidebar with all 6 destinations',
-      (WidgetTester tester) async {
+  testWidgets('Wide layout shows collapsible sidebar with all 6 destinations', (
+    WidgetTester tester,
+  ) async {
     await _pumpApp(tester);
 
     expect(find.byKey(const Key('sidebar-container')), findsOneWidget);
@@ -48,8 +49,10 @@ void main() {
     // Switch to Communities: the moved Community section follows.
     await tester.tap(find.byKey(const Key('sidebar-item-Communities')));
     await tester.pumpAndSettle();
-    expect(find.text('Know something that can help commuters?'),
-        findsOneWidget);
+    expect(
+      find.text('Know something that can help commuters?'),
+      findsOneWidget,
+    );
     expect(find.text('Community'), findsOneWidget);
     // First launch seeds the pending CTransco sample, so the tab
     // shows it instead of the empty state.
@@ -66,8 +69,9 @@ void main() {
     expect(find.text('Guest'), findsNothing);
   });
 
-  testWidgets('Phone layout shows bottom bar and switches tabs',
-      (WidgetTester tester) async {
+  testWidgets('Phone layout shows bottom bar and switches tabs', (
+    WidgetTester tester,
+  ) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.physicalSize = const Size(390, 844);
@@ -75,17 +79,14 @@ void main() {
 
     await _pumpApp(tester);
 
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(FloatingGlassNav), findsOneWidget);
     for (final label in _labels) {
       expect(find.text(label, skipOffstage: true), findsWidgets);
     }
 
     await tester.tap(find.text('Student', skipOffstage: true));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Student Hub', skipOffstage: true),
-      findsOneWidget,
-    );
+    expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
 
     // Communities sits after Friends: switching shows the moved section.
     // (The section title sits below the share card, so the finder needs
@@ -93,13 +94,7 @@ void main() {
     // is selected and the content is in the tree.)
     await tester.tap(find.text('Communities', skipOffstage: true));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Community', skipOffstage: false),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Share info', skipOffstage: true),
-      findsOneWidget,
-    );
+    expect(find.text('Community', skipOffstage: false), findsOneWidget);
+    expect(find.text('Share info', skipOffstage: true), findsOneWidget);
   });
 }
