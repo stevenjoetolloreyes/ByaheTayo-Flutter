@@ -24,6 +24,7 @@ import 'onboarding/permission_service.dart';
 import 'points_wallet_repository.dart';
 import 'rewards_screen.dart';
 import 'student_id_card.dart';
+import 'subscription_membership.dart';
 
 class AccountTab extends StatefulWidget {
   const AccountTab({
@@ -88,6 +89,11 @@ class AccountTab extends StatefulWidget {
 class _AccountTabState extends State<AccountTab> {
   NotificationPermissionStatus _notificationStatus =
       NotificationPermissionStatus.unknown;
+
+  /// Membership screen shown INSIDE the Account tab (the shell's
+  /// bottom navigation / sidebar stays visible). The Account page
+  /// itself is unchanged; only this flag swaps its content.
+  bool _showingMembership = false;
 
   AuthUser? get _user => widget.user;
   UserProfile? get _profile => widget.profile;
@@ -384,6 +390,13 @@ class _AccountTabState extends State<AccountTab> {
 
   @override
   Widget build(BuildContext context) {
+    // Membership lives inside the Account tab so the shell's
+    // navigation stays visible, matching the approved preview.
+    if (_showingMembership) {
+      return SubscriptionMembershipScreen(
+        onBack: () => setState(() => _showingMembership = false),
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 600;
@@ -590,6 +603,8 @@ class _AccountTabState extends State<AccountTab> {
           header,
           const SizedBox(height: AppLayout.cardGap),
           wallet,
+          const SizedBox(height: AppLayout.cardGap),
+          _subscriptionCard(),
           const SizedBox(height: AppLayout.cardGap),
           quickActions,
           const SizedBox(height: AppLayout.cardGap),
@@ -880,6 +895,87 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
+  /// Subscription Member card (approved preview/screenshot).
+  ///
+  /// NOTE: this card did not exist in the code before this change —
+  /// the approved preview and the user's Account screenshot both show
+  /// it between Points Wallet and Quick Actions, so it was added
+  /// there (and nowhere else) to give the Membership flow its entry
+  /// point. Everything else on the Account page is untouched. The
+  /// card always shows the real current plan (Free): there is no
+  /// payment provider, so no paid plan can ever be active.
+  Widget _subscriptionCard() {
+    return Card(
+      color: const Color(0xFFDCFCE7),
+      child: InkWell(
+        key: const Key('subscription-member-card'),
+        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+        onTap: () => setState(() => _showingMembership = true),
+        child: Padding(
+          padding: AppLayout.cardPadding,
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Center(
+                  child: CrownIcon(size: 28, color: Color(0xFF14532D)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Subscription Member',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Unlock premium features and get more benefits.',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF14532D),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Free Plan',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _quickActionsCard() {
     return _sectionCard(
       title: 'Quick Actions',
@@ -941,6 +1037,12 @@ class _AccountTabState extends State<AccountTab> {
           Text(
             label,
             textAlign: TextAlign.center,
+            // Guard: the wide test font wraps labels to 3 lines and
+            // overflows the fixed grid cell on narrow phones. On a
+            // real phone (Roboto) labels fit in 1–2 lines, so this
+            // cap never clips visible text there.
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: AppText.smallSemiBold,
           ),
         ],
