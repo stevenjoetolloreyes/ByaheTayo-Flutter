@@ -9,8 +9,11 @@
 // (An earlier Emerald Dark theme shipped Nov 1, 09:57; the redesign
 // reference the user sent later that day specifies this light theme,
 // so the Hub follows the reference now.)
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import '../app_layout.dart';
+import '../onboarding/onboarding_state.dart';
 
 const kStudentEmerald = Color(0xFF14532D);
 const kStudentEmeraldDark = Color(0xFF0A2E1A);
@@ -67,15 +70,24 @@ String greetingFor(DateTime now) {
 }
 
 /// Dashboard header: emerald gradient banner with the greeting,
-/// title, subtitle, profile placeholder, and a notification bell.
+/// title, subtitle, profile photo, and a notification bell.
 /// The bell shows a real empty state (this app has no notification
-/// system, so there is never a fake unread dot). The profile circle
-/// is a placeholder icon until an account system exists — no photo
-/// is baked into the app.
+/// system, so there is never a fake unread dot).
+///
+/// The profile circle shows the EXACT SAME photo the Account Profile
+/// shows: [profile]'s `photoPath` (the local file picked in profile
+/// setup / Edit Profile), read fresh on every build from the same
+/// [UserProfile] object the shell passes to the Account tab — so an
+/// Account-side photo change reflects here automatically, with no
+/// second copy of the image anywhere. When there is no stored photo
+/// (or its file is gone), the default person icon shows instead.
 Widget studentHeader({
   required String greetingName,
   required VoidCallback onBell,
+  UserProfile? profile,
 }) {
+  final photoPath = profile?.photoPath;
+  final hasPhoto = photoPath != null && File(photoPath).existsSync();
   return Container(
     padding: const EdgeInsets.all(20),
     decoration: const BoxDecoration(
@@ -89,10 +101,13 @@ Widget studentHeader({
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const CircleAvatar(
+        CircleAvatar(
           radius: 26,
           backgroundColor: Colors.white24,
-          child: Icon(Icons.person, color: Colors.white, size: 30),
+          backgroundImage: hasPhoto ? FileImage(File(photoPath)) : null,
+          child: hasPhoto
+              ? null
+              : const Icon(Icons.person, color: Colors.white, size: 30),
         ),
         const SizedBox(width: 12),
         Expanded(

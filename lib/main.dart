@@ -638,6 +638,7 @@ class _HomeShellState extends State<_HomeShell> {
             onViewOnMap: () => widget.onSelect(0),
             onViewAccount: () => widget.onSelect(5),
             user: widget.user,
+            profile: widget.profile,
             walletController: _walletController,
           ),
         ),

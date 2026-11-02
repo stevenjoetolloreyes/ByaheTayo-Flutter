@@ -24,6 +24,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_layout.dart';
 import 'onboarding/auth_service.dart';
+import 'onboarding/onboarding_state.dart';
 import 'ph_holidays.dart';
 import 'points_wallet_repository.dart';
 import 'school_events.dart';
@@ -47,6 +48,7 @@ class StudentTab extends StatefulWidget {
     this.onViewOnMap,
     this.onViewAccount,
     this.user,
+    this.profile,
     this.walletController,
   });
 
@@ -58,6 +60,12 @@ class StudentTab extends StatefulWidget {
 
   /// The signed-in user. Null in bare widget tests.
   final AuthUser? user;
+
+  /// The same profile object the shell passes to the Account tab.
+  /// The welcome card reads its `photoPath` on every build, so it
+  /// always shows the Account Profile photo with no second copy.
+  /// Null in bare widget tests (default avatar shows instead).
+  final UserProfile? profile;
 
   /// Shared wallet state (null in bare widget tests). When it has a
   /// real backend, the sign-in card reads ledger-derived progress
@@ -257,6 +265,7 @@ class _StudentTabState extends State<StudentTab> {
           studentHeader(
             greetingName: greetingFor(DateTime.now()),
             onBell: _showNotifications,
+            profile: widget.profile,
           ),
           const SizedBox(height: AppLayout.headerGap),
           _quickAccess(context, wide),
