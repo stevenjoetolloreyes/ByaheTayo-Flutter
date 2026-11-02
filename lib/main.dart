@@ -31,6 +31,7 @@ import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/fares_tab.dart';
 import 'features/friend_cloud_repository.dart';
+import 'features/ios_glass.dart';
 import 'features/friends_tab.dart';
 import 'features/map_tab.dart';
 import 'features/onboarding/auth_screen.dart';
@@ -720,21 +721,40 @@ class _HomeShellState extends State<_HomeShell> {
       );
     }
 
+    // iPhone only: same 6 tabs, same order, same destinations —
+    // only the bar's appearance turns to glass, and the AppBar
+    // matches the emerald page. Android keeps NavigationBar.
+    // Tablets (wide branch above) are untouched on every platform.
+    final glass = iosGlassEnabled;
     return Scaffold(
-      appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
-      body: body,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: widget.selectedIndex,
-        onDestinationSelected: widget.onSelect,
-        destinations: [
-          for (final d in _destinations)
-            NavigationDestination(
-              icon: Icon(d.icon),
-              selectedIcon: Icon(d.selectedIcon),
-              label: d.label,
-            ),
-        ],
+      appBar: AppBar(
+        title: Text(_destinations[widget.selectedIndex].label),
+        backgroundColor:
+            glass ? IosGlassColors.backgroundTop : null,
+        foregroundColor: glass ? Colors.white : null,
       ),
+      body: body,
+      bottomNavigationBar: glass
+          ? GlassBottomNav(
+              selectedIndex: widget.selectedIndex,
+              onSelect: widget.onSelect,
+              destinations: [
+                for (final d in _destinations)
+                  GlassNavDestination(d.label, d.icon, d.selectedIcon),
+              ],
+            )
+          : NavigationBar(
+              selectedIndex: widget.selectedIndex,
+              onDestinationSelected: widget.onSelect,
+              destinations: [
+                for (final d in _destinations)
+                  NavigationDestination(
+                    icon: Icon(d.icon),
+                    selectedIcon: Icon(d.selectedIcon),
+                    label: d.label,
+                  ),
+              ],
+            ),
     );
   }
 }

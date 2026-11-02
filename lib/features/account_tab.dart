@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
 import 'credits_repository.dart';
+import 'ios_glass.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/permission_service.dart';
@@ -458,27 +459,34 @@ class _AccountTabState extends State<AccountTab> {
         onBack: () => setState(() => _showingMembership = false),
       );
     }
+    // iPhone glass branch: appearance only — same sections, same
+    // order, same taps. Android (and tests) take the Material path.
+    final glass = iosGlassEnabled;
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 600;
-        final header = _headerCard();
-        final wallet = _walletCard();
-        final quickActions = _quickActionsCard();
-        final admin = _isAdmin ? _adminCard() : null;
-        final history = Card(
-          child: ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('Transaction History'),
-            subtitle: Text(
-              _entries.isEmpty
-                  ? 'No transactions yet.'
-                  : '${_entries.length} transactions',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showTransactionHistory,
+        final header = _headerCard(glass);
+        final wallet = _walletCard(glass);
+        final quickActions = _quickActionsCard(glass);
+        final admin = _isAdmin ? _adminCard(glass) : null;
+        final historyTile = ListTile(
+          leading: const Icon(Icons.history),
+          title: const Text('Transaction History'),
+          subtitle: Text(
+            _entries.isEmpty
+                ? 'No transactions yet.'
+                : '${_entries.length} transactions',
           ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _showTransactionHistory,
         );
+        final history = glass
+            ? GlassCard(
+                child: GlassListTheme(child: historyTile),
+              )
+            : Card(child: historyTile);
         final info = _sectionCard(
+          glass: glass,
           title: 'Account Information',
           tiles: [
             ListTile(
@@ -510,6 +518,7 @@ class _AccountTabState extends State<AccountTab> {
           ],
         );
         final preferences = _sectionCard(
+          glass: glass,
           title: 'Preferences',
           tiles: [
             ListTile(
@@ -540,6 +549,7 @@ class _AccountTabState extends State<AccountTab> {
           ],
         );
         final security = _sectionCard(
+          glass: glass,
           title: 'Security & Privacy',
           tiles: [
             if (_signedIn) ...[
@@ -598,6 +608,7 @@ class _AccountTabState extends State<AccountTab> {
           ],
         );
         final actions = _sectionCard(
+          glass: glass,
           title: 'Account Actions',
           tiles: [
             ListTile(
@@ -665,7 +676,7 @@ class _AccountTabState extends State<AccountTab> {
           const SizedBox(height: AppLayout.cardGap),
           wallet,
           const SizedBox(height: AppLayout.cardGap),
-          _subscriptionCard(),
+          _subscriptionCard(glass),
           const SizedBox(height: AppLayout.cardGap),
           quickActions,
           const SizedBox(height: AppLayout.cardGap),
@@ -707,7 +718,7 @@ class _AccountTabState extends State<AccountTab> {
         // Full width on purpose: no narrow centered container. The
         // Account page CONTENT is single-column on phones; the shell
         // (sidebar on tablets) is unchanged.
-        return SingleChildScrollView(
+        final scrollView = SingleChildScrollView(
           key: const Key('account-scroll-view'),
           child: Padding(
             padding: AppLayout.pagePaddingTab,
@@ -717,6 +728,10 @@ class _AccountTabState extends State<AccountTab> {
             ),
           ),
         );
+        if (glass) {
+          return IosGlassBackground(child: scrollView);
+        }
+        return scrollView;
       },
     );
   }
@@ -746,37 +761,41 @@ class _AccountTabState extends State<AccountTab> {
     return parts.join(' · ');
   }
 
-  Widget _headerCard() {
+  Widget _headerCard(bool glass) {
     final user = _user;
     if (user == null) {
       // Signed out (or Firebase not configured): no guest identity, no
       // guest chip — just an honest signed-out state with a sign-in
       // action. When Firebase is not configured, the sign-in screen
       // explains that.
+      final content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'No account signed in',
+            style: AppText.titleSmall,
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          Text(
+            widget.authService.isConfigured
+                ? 'Sign in to see your profile, points, and settings.'
+                : 'Sign-in is not available in this build yet — '
+                    'Firebase is not configured.',
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => widget.onSignInRequested?.call(),
+            child: const Text('Sign In'),
+          ),
+        ],
+      );
+      if (glass) {
+        return GlassCard(child: content);
+      }
       return Card(
         child: Padding(
           padding: AppLayout.cardPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'No account signed in',
-                style: AppText.titleSmall,
-              ),
-              const SizedBox(height: AppSpacing.s8),
-              Text(
-                widget.authService.isConfigured
-                    ? 'Sign in to see your profile, points, and settings.'
-                    : 'Sign-in is not available in this build yet — '
-                        'Firebase is not configured.',
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () => widget.onSignInRequested?.call(),
-                child: const Text('Sign In'),
-              ),
-            ],
-          ),
+          child: content,
         ),
       );
     }
@@ -784,23 +803,14 @@ class _AccountTabState extends State<AccountTab> {
     final photoPath = profile?.photoPath;
     final hasPhoto =
         photoPath != null && File(photoPath).existsSync();
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    // Same inner content on both paths; only the wrapper changes
+    // (emerald gradient on Material, frosted glass on iPhone).
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                CircleAvatar(
+            CircleAvatar(
                   radius: 32,
                   backgroundColor: Colors.white,
                   backgroundImage:
@@ -877,7 +887,25 @@ class _AccountTabState extends State<AccountTab> {
               child: const Text('Edit Profile'),
             ),
           ],
+        );
+    if (glass) {
+      return GlassCard(
+        padding: const EdgeInsets.all(20),
+        child: content,
+      );
+    }
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: content,
       ),
     );
   }
@@ -890,25 +918,15 @@ class _AccountTabState extends State<AccountTab> {
     return (parts.first[0] + parts[1][0]).toUpperCase();
   }
 
-  Widget _walletCard() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _walletCard(bool glass) {
+    // Same inner content on both paths; only the wrapper changes.
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Text(
-                  'Points Wallet',
+            Text(
+              'Points Wallet',
                   style: AppText.heading.copyWith(color: Colors.white),
                 ),
                 Spacer(),
@@ -958,7 +976,25 @@ class _AccountTabState extends State<AccountTab> {
               child: const Text('Earn Points'),
             ),
           ],
+        );
+    if (glass) {
+      return GlassCard(
+        padding: const EdgeInsets.all(20),
+        child: content,
+      );
+    }
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: content,
       ),
     );
   }
@@ -972,10 +1008,16 @@ class _AccountTabState extends State<AccountTab> {
   /// point. Everything else on the Account page is untouched. The
   /// card always shows the real current plan (Free): there is no
   /// payment provider, so no paid plan can ever be active.
-  Widget _subscriptionCard() {
-    return Card(
-      color: const Color(0xFFDCFCE7),
-      child: InkWell(
+  Widget _subscriptionCard(bool glass) {
+    // Same row on both paths; glass only recolors it for emerald.
+    final tileColor = glass
+        ? Colors.white.withValues(alpha: 0.12)
+        : const Color(0xFF16A34A).withValues(alpha: 0.12);
+    final crownColor = glass ? Colors.white : const Color(0xFF14532D);
+    final titleColor = glass ? Colors.white : null;
+    final subtitleColor = glass ? Colors.white70 : Colors.black54;
+    final chevronColor = glass ? Colors.white : null;
+    final inkWell = InkWell(
         key: const Key('subscription-member-card'),
         borderRadius: BorderRadius.circular(AppLayout.cardRadius),
         onTap: () => setState(() => _showingMembership = true),
@@ -987,11 +1029,11 @@ class _AccountTabState extends State<AccountTab> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                  color: tileColor,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Center(
-                  child: CrownIcon(size: 28, color: Color(0xFF14532D)),
+                child: Center(
+                  child: CrownIcon(size: 28, color: crownColor),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1004,12 +1046,13 @@ class _AccountTabState extends State<AccountTab> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
+                        color: titleColor,
                       ),
                     ),
                     SizedBox(height: 2),
                     Text(
                       'Unlock premium features and get more benefits.',
-                      style: TextStyle(color: Colors.black54),
+                      style: TextStyle(color: subtitleColor),
                     ),
                     SizedBox(height: 8),
                     Align(
@@ -1036,16 +1079,23 @@ class _AccountTabState extends State<AccountTab> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
+              Icon(Icons.chevron_right, color: chevronColor),
             ],
           ),
         ),
-      ),
+      );
+    if (glass) {
+      return GlassCard(child: inkWell);
+    }
+    return Card(
+      color: const Color(0xFFDCFCE7),
+      child: inkWell,
     );
   }
 
-  Widget _quickActionsCard() {
+  Widget _quickActionsCard(bool glass) {
     return _sectionCard(
+      glass: glass,
       title: 'Quick Actions',
       tiles: [
         GridView.count(
@@ -1060,21 +1110,25 @@ class _AccountTabState extends State<AccountTab> {
               Icons.person_outline,
               'My Profile',
               _openProfile,
+              glass,
             ),
             _quickTile(
               Icons.badge_outlined,
               'My Student ID',
               _openStudentId,
+              glass,
             ),
             _quickTile(
               Icons.history,
               'Transactions',
               _showTransactionHistory,
+              glass,
             ),
             _quickTile(
               Icons.card_giftcard_outlined,
               'Rewards',
               _openRewards,
+              glass,
             ),
           ],
         ),
@@ -1082,7 +1136,8 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
-  Widget _quickTile(IconData icon, String label, VoidCallback onTap) {
+  Widget _quickTile(
+      IconData icon, String label, VoidCallback onTap, bool glass) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
@@ -1093,13 +1148,20 @@ class _AccountTabState extends State<AccountTab> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .primary
-                  .withValues(alpha: 0.12),
+              color: glass
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+            child: Icon(
+              icon,
+              color: glass
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.primary,
+            ),
           ),
           const SizedBox(height: AppSpacing.s8),
           Text(
@@ -1118,11 +1180,12 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
-  Widget _adminCard() {
+  Widget _adminCard(bool glass) {
     // Admin-only section: visible only to allowlisted admin accounts
     // (admin_access.dart). The actions jump to the Communities tab,
     // where the gated admin screens live — no duplicated post state.
     return _sectionCard(
+      glass: glass,
       title: 'Admin',
       tiles: [
         ListTile(
@@ -1143,24 +1206,34 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
-  Widget _sectionCard({required String title, required List<Widget> tiles}) {
+  Widget _sectionCard(
+      {required String title,
+      required List<Widget> tiles,
+      bool glass = false}) {
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Text(
+            title,
+            style: AppText.cardTitle,
+          ),
+        ),
+        const Divider(height: 8),
+        ...tiles,
+      ],
+    );
+    if (glass) {
+      return GlassCard(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
+        child: GlassListTheme(child: content),
+      );
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Text(
-                title,
-                style: AppText.cardTitle,
-              ),
-            ),
-            const Divider(height: 8),
-            ...tiles,
-          ],
-        ),
+        child: content,
       ),
     );
   }
