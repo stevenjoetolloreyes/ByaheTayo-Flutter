@@ -5,7 +5,9 @@
 // other users once approved; local posts (older saves + the sample)
 // stay on this device only (SharedPreferences) and are never uploaded.
 // Fare complaints and LGU directory entries are still saved on this
-// device only. No invented posts, no votes, no comments. Approval is
+// device only. No invented posts. Like / Dislike / Comment live on
+// approved shared posts (Firestore) and device-locally on local posts
+// (see community_interactions.dart). Approval is
 // admin-only (see admin_access.dart): new shared posts start Pending
 // ("Pending verification" badge) and only approved posts are Published
 // to all users; the Post approvals screen and the LGU directory editor
@@ -25,6 +27,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
 import 'community_admin.dart';
+import 'community_interactions.dart';
 import 'community_post_repository.dart';
 import 'community_posts.dart';
 import 'fares_tab.dart';
@@ -77,6 +80,13 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   /// Locally saved fare complaints (on-device only, never sent by the
   /// app). Shown once at least one exists.
   List<FareComplaint> _complaints = [];
+
+  /// Interaction storage, picked per post in [_postCard]: Firestore
+  /// for approved shared posts, device-only for local posts (a local
+  /// post is never uploaded by reacting or commenting). Constructing
+  /// these touches no backend — Firestore is only reached on use.
+  final _sharedInteractions = FirestorePostInteractionRepository();
+  final _localInteractions = LocalPostInteractionRepository();
 
   @override
   void initState() {
@@ -515,6 +525,20 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               label: const Text('Report Overpriced Fare'),
             ),
           ),
+          // Like / Dislike / Comment. Approved shared posts use
+          // Firestore; local posts use device-only storage. Pending
+          // and rejected shared posts are not public, so they get no
+          // interaction row (the widget itself enforces the same).
+          if (!post.isShared || post.status == PostStatus.approved) ...[
+            const SizedBox(height: AppSpacing.s8),
+            CommunityPostInteractionWidget(
+              post: post,
+              currentUser: widget.currentUser,
+              repository: post.isShared
+                  ? _sharedInteractions
+                  : _localInteractions,
+            ),
+          ],
         ],
       ),
     );

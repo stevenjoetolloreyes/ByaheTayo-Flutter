@@ -68,6 +68,126 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Post interactions — Like / Dislike / Comment on approved
+    // shared posts (see lib/features/community_interactions.dart).
+    //
+    // community_reactions/{postId_uid}: one document per user per
+    // post — the document ID binds the reaction to its post and its
+    // author, so a duplicate reaction is impossible by construction.
+    // Toggle-off deletes the document; switching rewrites it.
+    // community_post_stats/{postId}: display counters maintained by
+    // the SAME app transaction that writes the reaction or comment.
+    // Rules bound every write to a single valid step (one counter
+    // ±1, or a like↔dislike switch); the reaction and comment
+    // documents themselves are the auditable source, and a client
+    // that bypasses the app could still step a counter without a
+    // matching reaction — the same client-plus-rules shape limit as
+    // the points ledger, not a proof of counts.
+    // community_comments/{commentId}: public comments on approved
+    // posts only. Authors delete only their own comments; edits are
+    // denied outright.
+    //
+    // The read rule for reactions includes the null arm: the reaction
+    // transaction first reads a document that may not exist yet, and
+    // a resource.data-only read rule would deny that read (resource
+    // is null) and break every first reaction — the same bug fixed
+    // Nov 2 in points_transactions.
+    function postIsApproved(postId) {
+      return get(/databases/$(database)/documents/community_posts/$(postId))
+        .data.status == 'approved';
+    }
+
+    function stepDelta(oldVal, newVal) {
+      return newVal - oldVal;
+    }
+
+    match /community_reactions/{reactionId} {
+      allow read: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && reactionId == request.resource.data.postId + '_' + request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.value in ['like', 'dislike']
+        && postIsApproved(request.resource.data.postId);
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['value', 'updatedAt'])
+        && request.resource.data.value in ['like', 'dislike']
+        && postIsApproved(resource.data.postId);
+      allow delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    match /community_post_stats/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && postIsApproved(postId)
+        && request.resource.data.keys()
+          .hasOnly(['likeCount', 'dislikeCount', 'commentCount', 'updatedAt'])
+        && request.resource.data.likeCount is int
+        && request.resource.data.dislikeCount is int
+        && request.resource.data.commentCount is int
+        && request.resource.data.likeCount >= 0
+        && request.resource.data.dislikeCount >= 0
+        && request.resource.data.commentCount >= 0
+        && request.resource.data.likeCount
+          + request.resource.data.dislikeCount
+          + request.resource.data.commentCount == 1;
+      allow update: if isSignedIn()
+        && postIsApproved(postId)
+        && request.resource.data.keys()
+          .hasOnly(['likeCount', 'dislikeCount', 'commentCount', 'updatedAt'])
+        && request.resource.data.likeCount is int
+        && request.resource.data.dislikeCount is int
+        && request.resource.data.commentCount is int
+        && request.resource.data.likeCount >= 0
+        && request.resource.data.dislikeCount >= 0
+        && request.resource.data.commentCount >= 0
+        && (
+          (request.resource.data.commentCount == resource.data.commentCount
+            && ((stepDelta(resource.data.likeCount, request.resource.data.likeCount) == 1
+              && stepDelta(resource.data.dislikeCount, request.resource.data.dislikeCount) == 0)
+              || (stepDelta(resource.data.likeCount, request.resource.data.likeCount) == 0
+                && stepDelta(resource.data.dislikeCount, request.resource.data.dislikeCount) == 1)
+              || (stepDelta(resource.data.likeCount, request.resource.data.likeCount) == -1
+                && stepDelta(resource.data.dislikeCount, request.resource.data.dislikeCount) == 0)
+              || (stepDelta(resource.data.likeCount, request.resource.data.likeCount) == 0
+                && stepDelta(resource.data.dislikeCount, request.resource.data.dislikeCount) == -1)
+              || (stepDelta(resource.data.likeCount, request.resource.data.likeCount) == -1
+                && stepDelta(resource.data.dislikeCount, request.resource.data.dislikeCount) == 1)
+              || (stepDelta(resource.data.likeCount, request.resource.data.likeCount) == 1
+                && stepDelta(resource.data.dislikeCount, request.resource.data.dislikeCount) == -1)))
+          || (request.resource.data.likeCount == resource.data.likeCount
+            && request.resource.data.dislikeCount == resource.data.dislikeCount
+            && (stepDelta(resource.data.commentCount, request.resource.data.commentCount) == 1
+              || stepDelta(resource.data.commentCount, request.resource.data.commentCount) == -1))
+        );
+      allow delete: if false;
+    }
+
+    match /community_comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.postId is string
+        && request.resource.data.postId.size() > 0
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.text.matches('.*\\S.*')
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 100
+        && (!('photoUrl' in request.resource.data)
+          || request.resource.data.photoUrl is string)
+        && request.resource.data.createdAt == request.time
+        && postIsApproved(request.resource.data.postId);
+      allow update: if false;
+      allow delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+    }
+
     match /student_profiles/{userId} {
       allow read, write: if isSignedIn()
         && request.auth.uid == userId;

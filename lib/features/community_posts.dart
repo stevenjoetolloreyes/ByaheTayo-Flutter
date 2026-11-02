@@ -4,8 +4,10 @@
 // (collection `community_posts`) and are visible to other users once
 // approved; LOCAL posts live in SharedPreferences ON THIS DEVICE ONLY
 // and are never uploaded. The UI labels every card "Shared post" or
-// "Local post" and says which is which. No vote/comment counts (no
-// other users vote), no map-preview thumbnails (no static-map source).
+// "Local post" and says which is which. Like / Dislike / Comment live
+// on approved shared posts (see community_interactions.dart) and
+// device-locally on local posts; no map-preview thumbnails (no
+// static-map source).
 // "View on map" jumps the real Map tab to the post's hub (a real hub,
 // never free text); "View Route" opens a details view of the post
 // itself.
