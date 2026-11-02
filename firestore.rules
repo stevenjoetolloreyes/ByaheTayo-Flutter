@@ -1,4 +1,5 @@
-// EstudyanteGO Firestore security rules — shared community posts.
+// EstudyanteGO Firestore security rules — shared community posts
+// and server-side student profiles.
 //
 // Collection: community_posts
 // Document fields: routeName, vehicles, hours, fare, hubName, from,
@@ -15,6 +16,15 @@
 // Creates must stamp the caller's own UID and start pending. Status
 // changes and deletes are admin-only (allowlisted emails below).
 // LGU complaints stay local-only and never touch Firestore.
+//
+// Collection: student_profiles
+// Document ID: the authenticated Firebase UID (one document per
+//   user — see lib/features/profile_repository.dart).
+// Document fields: school, program, yearLevel (nullable strings),
+//   updatedAt (server timestamp).
+// Owner-only: a signed-in user may read or write ONLY the document
+// whose ID equals their own UID. No admin override — a student's
+// school/program/year is theirs alone.
 
 rules_version = '2';
 
@@ -47,6 +57,11 @@ service cloud.firestore {
           .hasOnly(['status']);
 
       allow delete: if isAdmin();
+    }
+
+    match /student_profiles/{userId} {
+      allow read, write: if isSignedIn()
+        && request.auth.uid == userId;
     }
   }
 }

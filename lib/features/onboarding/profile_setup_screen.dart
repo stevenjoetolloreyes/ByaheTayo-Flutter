@@ -14,12 +14,14 @@ import 'package:path_provider/path_provider.dart';
 import 'auth_service.dart';
 import 'onboarding_state.dart';
 import 'student_info_fields.dart';
+import '../profile_repository.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({
     super.key,
     required this.user,
     required this.store,
+    this.profileRepository,
     this.initial,
     this.isEdit = false,
     required this.onSaved,
@@ -27,6 +29,12 @@ class ProfileSetupScreen extends StatefulWidget {
 
   final AuthUser user;
   final ProfileStore store;
+
+  /// Remote student-profile store. Null (the default, used by older
+  /// tests) means local-only: the save path behaves exactly as
+  /// before. When provided, every save also writes the remote
+  /// document — see [_save].
+  final StudentProfileRepository? profileRepository;
 
   /// Existing profile for edit mode; null for first-time setup.
   final UserProfile? initial;
@@ -204,6 +212,36 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         company: _emptyToNull(_companyController.text),
       );
       await widget.store.saveProfile(widget.user.uid, profile);
+      // Remote save (when a repository is wired): the local save
+      // above already succeeded, so a remote failure must NEVER
+      // corrupt or blank local data — and must never trap the user
+      // on this screen (e.g. while the Firestore rules are not yet
+      // published, every remote write fails). Surface it honestly
+      // via a SnackBar (shown on the root messenger, so it survives
+      // the gate switch to the dashboard) and proceed: the next
+      // authenticated start backfills the missing remote document
+      // from the intact local data.
+      final repo = widget.profileRepository;
+      if (repo != null) {
+        try {
+          await repo.saveProfile(
+            widget.user.uid,
+            StudentProfile.fromUserProfile(profile),
+          );
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Saved on this device, but could not sync to the '
+                  'server (${studentProfileSyncErrorMessage(e)}). '
+                  'It will sync on your next sign-in.',
+                ),
+              ),
+            );
+          }
+        }
+      }
       if (!widget.isEdit) {
         await widget.store.markProfileSetupDone(widget.user.uid);
       }

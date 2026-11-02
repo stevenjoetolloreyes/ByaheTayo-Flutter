@@ -36,6 +36,7 @@ import 'features/onboarding/firebase_auth_service.dart';
 import 'features/onboarding/firebase_init.dart';
 import 'features/onboarding/notification_prompt.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/profile_repository.dart';
 import 'features/onboarding/onboarding_state.dart';
 import 'features/onboarding/permission_service.dart';
 import 'features/onboarding/profile_setup_screen.dart';
@@ -249,6 +250,29 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
   ProfileStore? _store;
   int _tabIndex = 0;
 
+  /// Remote student-profile store, behind the same `isConfigured`
+  /// gate as the shared-posts repository: null when Firebase is not
+  /// configured, so the gate never touches Firestore on unconfigured
+  /// builds (and widget tests pumping the app without a service keep
+  /// the legacy local-only behavior).
+  StudentProfileRepository? get _profileRepository =>
+      _authService.isConfigured ? FirestoreStudentProfileRepository() : null;
+
+  /// Restores the server-side student profile into the local store
+  /// (merge, backfill, or local-only fallback — never throws, never
+  /// blocks login) and refreshes [_profile] from the local store so
+  /// the dashboard and the setup screen both see restored data.
+  Future<void> _restoreProfileForUser(AuthUser user) async {
+    final store = _store ?? ProfileStore(await SharedPreferences.getInstance());
+    _store = store;
+    await restoreStudentProfile(
+      store: store,
+      repository: _profileRepository,
+      user: user,
+    );
+    _profile = store.loadProfile(user.uid);
+  }
+
   Future<void> _setThemeMode(ThemeMode mode) async {
     setState(() => _themeMode = mode);
     try {
@@ -265,15 +289,20 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
   }
 
   /// Runs while the splash shows: reads the stored flags and the
-  /// current Firebase session, then decides the next screen.
+  /// current Firebase session, restores the server-side profile
+  /// (the splash covers the fetch — never an empty setup screen
+  /// while a fetch is pending), then decides the next screen.
   Future<AppStartDestination> _resolveStart() async {
     final prefs = await SharedPreferences.getInstance();
     final store = ProfileStore(prefs);
     final user = _authService.currentUser;
-    final profileDone =
-        user == null ? false : store.isProfileSetupDone(user.uid);
     _store = store;
     _user = user;
+    if (user != null) {
+      await _restoreProfileForUser(user);
+    }
+    final profileDone =
+        user == null ? false : store.isProfileSetupDone(user.uid);
     _profile = user == null ? null : store.loadProfile(user.uid);
     return resolveStartDestination(
       firebaseConfigured: _authService.isConfigured,
@@ -320,6 +349,10 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
       setState(() => _destination = AppStartDestination.verifyEmail);
       return;
     }
+    // Restore first so the setup screen (when shown) is prefilled
+    // with saved fields, and a complete restored profile goes
+    // straight to the dashboard instead of setup.
+    await _restoreProfileForUser(user);
     if (!store.isProfileSetupDone(user.uid)) {
       setState(() => _destination = AppStartDestination.profileSetup);
       return;
@@ -332,6 +365,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
     _user = user;
     final store = _store ?? ProfileStore(await SharedPreferences.getInstance());
     _store = store;
+    await _restoreProfileForUser(user);
     if (!store.isProfileSetupDone(user.uid)) {
       setState(() => _destination = AppStartDestination.profileSetup);
       return;
@@ -350,6 +384,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
         builder: (_) => ProfileSetupScreen(
           user: user,
           store: store,
+          profileRepository: _profileRepository,
           initial: _profile,
           isEdit: isEdit,
           onSaved: (profile) {
@@ -490,6 +525,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
         return ProfileSetupScreen(
           user: user,
           store: store,
+          profileRepository: _profileRepository,
           initial: _profile,
           onSaved: (profile) {
             _profile = profile;
