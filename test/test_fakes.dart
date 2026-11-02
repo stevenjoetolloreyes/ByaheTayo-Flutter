@@ -251,11 +251,36 @@ class FakePostRepository implements PostRepository {
   @override
   Future<void> updatePostStatus(
     CommunityPost post,
-    PostStatus status,
-  ) async {
+    PostStatus status, {
+    String? rejectionReason,
+    bool clearRejectionReason = false,
+  }) async {
+    final error = postStatusUpdateError(
+      status: status,
+      rejectionReason: rejectionReason,
+      clearRejectionReason: clearRejectionReason,
+    );
+    if (error != null) throw ArgumentError(error);
     final index = stored.indexWhere((p) => p.id == post.id);
     if (index < 0) throw StateError('Post not found.');
-    stored[index] = stored[index].copyWith(status: status);
+    if (status == PostStatus.rejected) {
+      final reason = rejectionReason?.trim();
+      if (reason != null && reason.isNotEmpty) {
+        stored[index] = stored[index].copyWith(
+          status: status,
+          rejectionReason: reason,
+        );
+      } else if (clearRejectionReason || rejectionReason != null) {
+        stored[index] = stored[index].copyWith(
+          status: status,
+          clearRejectionReason: true,
+        );
+      } else {
+        stored[index] = stored[index].copyWith(status: status);
+      }
+    } else {
+      stored[index] = stored[index].copyWith(status: status);
+    }
   }
 
   @override

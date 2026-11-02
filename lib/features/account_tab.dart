@@ -16,6 +16,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'ad_service.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
 import 'credits_repository.dart';
@@ -39,6 +40,7 @@ class AccountTab extends StatefulWidget {
     required this.permissionService,
     this.walletController,
     this.creditsController,
+    this.adService,
     this.onViewStudent,
     this.onViewCommunities,
     this.onEditProfile,
@@ -73,6 +75,10 @@ class AccountTab extends StatefulWidget {
   /// a real backend, the wallet card shows the live credits
   /// balance; otherwise the credits row is hidden.
   final CreditsController? creditsController;
+
+  /// Shared AdMob state (null in bare widget tests, in which case
+  /// the Rewards screen keeps its honest no-ads notice).
+  final AdService? adService;
 
   /// Jump to the Student tab (7-Day Sign-in, the real earn path).
   final VoidCallback? onViewStudent;
@@ -339,6 +345,7 @@ class _AccountTabState extends State<AccountTab> {
           dailyAdLimit:
               widget.creditsController?.settings.dailyAdLimit ?? 5,
           onRedeem: _redeemCallback(),
+          adService: widget.adService,
         ),
       ),
     );
