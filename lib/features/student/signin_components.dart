@@ -77,7 +77,7 @@ class SigninDayTiles extends StatelessWidget {
       iconColor = Colors.white;
     } else if (day == 7) {
       tileColor = kSigninPaleGold;
-      icon = Icons.card_giftcard_rounded;
+      icon = Icons.redeem_rounded;
       iconColor = kSigninGold;
     } else {
       tileColor = kSigninGrayTile;
@@ -191,7 +191,7 @@ void showSigninRewardSchedule(BuildContext context) {
           const SizedBox(height: AppSpacing.s8),
           const Row(
             children: [
-              Icon(Icons.card_giftcard_rounded,
+              Icon(Icons.redeem_rounded,
                   color: kSigninGold, size: 20),
               SizedBox(width: 8),
               Expanded(

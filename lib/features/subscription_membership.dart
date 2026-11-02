@@ -100,7 +100,7 @@ const List<SubscriptionPlan> subscriptionPlans = [
       'Priority Support',
       'Publishing in Communities',
     ],
-    icon: Icons.workspace_premium_rounded,
+    icon: Icons.diamond_rounded,
     iconColor: Color(0xFFFFC107),
   ),
 ];
@@ -629,7 +629,7 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
                     ),
                     const Divider(height: 1),
                     _summaryRow(
-                      Icons.sell_rounded,
+                      Icons.payments_rounded,
                       'Price',
                       plan.priceLabel(billing),
                     ),
@@ -707,7 +707,7 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.verified_user_rounded,
+                    Icons.shield_rounded,
                     size: 20,
                     color: _brightGreen,
                   ),

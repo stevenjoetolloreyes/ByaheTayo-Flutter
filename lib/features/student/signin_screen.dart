@@ -564,7 +564,7 @@ class _SigninScreenState extends State<SigninScreen> {
                             color: kSigninLightGreen,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.toll_rounded,
+                          child: const Icon(Icons.monetization_on_rounded,
                               color: kStudentEmeraldAccent, size: 24),
                         ),
                         const SizedBox(width: 10),
