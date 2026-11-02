@@ -417,17 +417,25 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(find.text('Check in today · Day 1'), findsOneWidget);
+      await tester.tap(find.text('Check in today · Day 1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Already checked in today'), findsOneWidget);
+      expect(find.text('Check in today · Day 1'), findsNothing);
+      expect(find.text('10 pts'), findsOneWidget);
+      expect(controller.balance, 10);
+      // The redesigned page is taller, so the footer note sits
+      // below the fold until scrolled into view.
+      await tester.scrollUntilVisible(
+        find.text('Dates follow Asia/Manila time. Points are saved to '
+            'your account and show in your Account Points Wallet.'),
+        200,
+      );
+      await tester.pumpAndSettle();
       expect(
         find.text('Dates follow Asia/Manila time. Points are saved to '
             'your account and show in your Account Points Wallet.'),
         findsOneWidget,
       );
-      await tester.tap(find.text('Check in today · Day 1'));
-      await tester.pumpAndSettle();
-      expect(find.text('Checked in today'), findsOneWidget);
-      expect(find.text('Check in today · Day 1'), findsNothing);
-      expect(find.text('10 pts'), findsOneWidget);
-      expect(controller.balance, 10);
     });
 
     testWidgets('Account tab shows live balance, earned, and history',

@@ -18,11 +18,23 @@ void main() {
         const MaterialApp(home: Scaffold(body: SigninScreen())));
     await tester.pumpAndSettle();
     expect(find.text('Check in today · Day 1'), findsOneWidget);
+    // The redesigned page is taller, so the history section sits
+    // below the fold until scrolled into view; scroll back up
+    // before tapping the button.
+    await tester.scrollUntilVisible(
+        find.text('No check-in history yet.'), 200);
+    await tester.pumpAndSettle();
     expect(find.text('No check-in history yet.'), findsOneWidget);
+    await tester.scrollUntilVisible(
+        find.text('Check in today · Day 1'), -200);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Check in today · Day 1'));
     await tester.pumpAndSettle();
-    expect(find.text('Checked in today'), findsOneWidget);
+    expect(find.text('Already checked in today'), findsOneWidget);
     expect(find.text('Check in today · Day 1'), findsNothing);
+    await tester.scrollUntilVisible(
+        find.text(formatDate(DateTime.now())), 200);
+    await tester.pumpAndSettle();
     expect(find.text(formatDate(DateTime.now())), findsOneWidget);
   });
 
@@ -36,8 +48,10 @@ void main() {
         const MaterialApp(home: Scaffold(body: StudentTab())));
     await tester.pumpAndSettle();
     expect(find.text('7-Day Sign-in'), findsOneWidget);
-    expect(find.text('0 day streak'), findsOneWidget);
-    expect(find.text('Not checked in yet · Day 1'), findsOneWidget);
+    expect(find.text('Current Streak'), findsOneWidget);
+    expect(find.text('0 days'), findsOneWidget);
+    expect(find.text('Day 1 of 7'), findsOneWidget);
+    expect(find.text('0 / 7 Days'), findsOneWidget);
     await tester.tap(find.text('7-Day Sign-in'));
     await tester.pumpAndSettle();
     expect(find.text('Check in today · Day 1'), findsOneWidget);

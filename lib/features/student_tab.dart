@@ -37,6 +37,7 @@ import 'student/notes_screen.dart';
 import 'student/quotes_screen.dart';
 import 'student/share_card.dart';
 import 'student/signin_screen.dart';
+import 'student/signin_components.dart';
 import 'student/student_data.dart';
 import 'student/student_theme.dart';
 import 'fares_tab.dart' as fares;
@@ -412,10 +413,16 @@ class _StudentTabState extends State<StudentTab> {
 
   // ------------------------------------------------------------ sign-in
 
-  /// 7-Day Sign-in card. The WHOLE card is one tap target into the
-  /// dedicated sign-in page.
+  /// 7-Day Sign-in card — approved redesign (Nov 2 previews).
+  /// Premium minimalist white Material 3 card: calendar header +
+  /// "Day X of 7" badge, seven day tiles, animated progress bar,
+  /// and three live stats (wallet balance, streak, next reward).
+  /// Every value comes from the ledger-derived records (remote)
+  /// or the local record log (legacy) — nothing is hardcoded.
+  /// The WHOLE card is one tap target into the dedicated sign-in
+  /// page; only the Next Reward stat has its own tap (the reward
+  /// schedule sheet).
   Widget _signinWidget(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final records = _signinRecords;
     final today = _signinToday;
     final streak = checkinStreak(records, today);
@@ -426,11 +433,18 @@ class _StudentTabState extends State<StudentTab> {
             .firstWhere((r) => dateKey(r.date) == dateKey(today))
             .dayIndex
         : nextCycleDay(streak);
+    // Remote: the live wallet balance (repaired from the ledger on
+    // load). Legacy: the sum of the local record log.
+    final totalPoints = _signinRemote
+        ? widget.walletController!.balance
+        : totalCheckinPoints(records);
     return Card(
+      key: const ValueKey('signin-hub-card'),
       child: InkWell(
         onTap: () => _open(SigninScreen(
           userId: widget.user?.uid,
           walletController: widget.walletController,
+          onViewWallet: widget.onViewAccount,
         )),
         borderRadius: BorderRadius.circular(AppLayout.cardRadius),
         child: Padding(
@@ -440,12 +454,14 @@ class _StudentTabState extends State<StudentTab> {
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor:
-                        scheme.secondary.withValues(alpha: 0.15),
-                    child: Icon(Icons.local_fire_department,
-                        color: scheme.secondary, size: 20),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: kSigninLightGreen,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.calendar_month_rounded,
+                        color: kStudentEmeraldAccent, size: 26),
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
@@ -454,7 +470,7 @@ class _StudentTabState extends State<StudentTab> {
                       children: [
                         Text('7-Day Sign-in',
                             style: AppText.sectionTitle),
-                        Text('Build your study habit!',
+                        Text('Build your study habit and earn rewards!',
                             style: AppText.caption),
                       ],
                     ),
@@ -463,55 +479,125 @@ class _StudentTabState extends State<StudentTab> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: scheme.primary.withValues(alpha: 0.1),
+                      color: kSigninLightGreen,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text('Day $todayDay of 7',
-                        style: AppText.smallBold.copyWith(color: scheme.primary)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.local_fire_department_rounded,
+                            color: kStudentEmeraldAccent, size: 16),
+                        const SizedBox(width: 4),
+                        Text('Day $todayDay of 7',
+                            style: AppText.smallBold
+                                .copyWith(color: kStudentEmerald)),
+                      ],
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: AppLayout.cardGap),
+              SigninDayTiles(
+                checkedCells: checkedCells,
+                currentDay: todayDay,
+                checkedToday: checkedToday,
+              ),
+              const SizedBox(height: AppSpacing.s8),
+              Row(
+                children: [
+                  Expanded(
+                    child: AnimatedSigninProgressBar(
+                        value: checkedCells / 7),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('$checkedCells / 7 Days',
+                      style: AppText.smallBold
+                          .copyWith(color: kStudentEmerald)),
                 ],
               ),
               const SizedBox(height: AppLayout.cardGap),
               Row(
                 children: [
-                  for (var day = 1; day <= 7; day++)
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Icon(
-                            day <= checkedCells
-                                ? (day == 7
-                                    ? Icons.star
-                                    : Icons.check_circle)
-                                : (day == 7
-                                    ? Icons.star_outline
-                                    : Icons.circle_outlined),
-                            size: 24,
-                            color: day <= checkedCells
-                                ? scheme.secondary
-                                : scheme.onSurfaceVariant,
-                          ),
-                          Text('D$day',
-                              style: AppText.tiny),
-                        ],
+                  Expanded(
+                    child: _signinStat(
+                      icon: Icons.workspace_premium_rounded,
+                      iconBg: kSigninPaleGold,
+                      iconColor: kSigninGold,
+                      label: 'Total Points',
+                      value: '$totalPoints',
+                    ),
+                  ),
+                  Container(
+                      width: 1, height: 44, color: kStudentBorder),
+                  Expanded(
+                    child: _signinStat(
+                      icon: Icons.local_fire_department_rounded,
+                      iconBg: kSigninFlameTile,
+                      iconColor: kSigninFlame,
+                      label: 'Current Streak',
+                      value: streak == 1 ? '1 day' : '$streak days',
+                    ),
+                  ),
+                  Container(
+                      width: 1, height: 44, color: kStudentBorder),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => showSigninRewardSchedule(context),
+                      borderRadius: BorderRadius.circular(12),
+                      child: _signinStat(
+                        icon: Icons.card_giftcard_rounded,
+                        iconBg: kSigninLightGreen,
+                        iconColor: kStudentEmeraldAccent,
+                        label: 'Next Reward',
+                        value: '${pointsForDay(7)} Points',
+                        trailing: const Icon(Icons.chevron_right,
+                            size: 18, color: kStudentSubtext),
                       ),
                     ),
+                  ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.s8),
-              LinearProgressIndicator(value: checkedCells / 7),
-              const SizedBox(height: AppSpacing.s4),
-              Text(
-                  'Weekly progress: $checkedCells/7 · Total points: ${totalCheckinPoints(records)}'),
-              Text('$streak day streak',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(checkedToday
-                  ? 'Checked in today · Day $todayDay'
-                  : 'Not checked in yet · Day $todayDay'),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// One Hub-card stat: icon tile + label above value, as in the
+  /// approved preview.
+  Widget _signinStat({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String label,
+    required String value,
+    Widget? trailing,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: AppText.caption),
+              Text(value,
+                  style: AppText.smallBold
+                      .copyWith(color: kStudentEmerald)),
+            ],
+          ),
+        ),
+        if (trailing != null) trailing,
+      ],
     );
   }
 
