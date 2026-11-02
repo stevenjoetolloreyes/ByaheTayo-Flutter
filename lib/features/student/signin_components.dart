@@ -56,38 +56,60 @@ class SigninDayTiles extends StatelessWidget {
     return Row(
       children: [
         for (var day = 1; day <= 7; day++)
-          Expanded(child: _tile(day)),
+          Expanded(child: _tile(context, day)),
       ],
     );
   }
 
-  Widget _tile(int day) {
+  Widget _tile(BuildContext context, int day) {
     final completed = day <= checkedCells;
     final current = !checkedToday && day == currentDay;
+    // Dark Mode (Nov 2 polish): pastel tiles become dark tints of
+    // the same accent, and the deep-emerald current tile brightens
+    // to accent green so it still reads as "current" on a dark
+    // card. Light mode keeps the exact approved values. This widget
+    // is shared by the Hub card and the Details Page: the Details
+    // Page stays under the light StudentTheme, so it keeps the
+    // light palette there; only the Hub card (under the dark-aware
+    // hub theme) gets the dark palette.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final Color tileColor;
     final IconData icon;
     final Color iconColor;
     if (completed) {
-      tileColor = day == 7 ? kSigninPaleGold : kSigninLightGreen;
+      tileColor = day == 7
+          ? (isDark
+              ? kSigninGold.withValues(alpha: 0.18)
+              : kSigninPaleGold)
+          : (isDark
+              ? kStudentEmeraldAccent.withValues(alpha: 0.18)
+              : kSigninLightGreen);
       icon = Icons.check_circle_rounded;
-      iconColor = kStudentEmeraldAccent;
+      iconColor =
+          isDark ? kStudentDarkAccent : kStudentEmeraldAccent;
     } else if (current) {
-      tileColor = kStudentEmerald;
+      tileColor = isDark ? kStudentEmeraldAccent : kStudentEmerald;
       icon = Icons.radio_button_unchecked_rounded;
       iconColor = Colors.white;
     } else if (day == 7) {
-      tileColor = kSigninPaleGold;
+      tileColor = isDark
+          ? kSigninGold.withValues(alpha: 0.18)
+          : kSigninPaleGold;
       icon = Icons.redeem_rounded;
       iconColor = kSigninGold;
     } else {
-      tileColor = kSigninGrayTile;
+      tileColor = isDark ? kStudentDarkElevated : kSigninGrayTile;
       icon = Icons.radio_button_unchecked_rounded;
-      iconColor = kSigninGrayIcon;
+      iconColor = isDark ? kStudentDarkSubtext : kSigninGrayIcon;
     }
-    final labelColor =
-        current ? Colors.white : kStudentText;
-    final subColor =
-        current ? Colors.white70 : kStudentSubtext;
+    final labelColor = current
+        ? Colors.white
+        : (completed
+            ? (isDark ? Colors.white : kStudentText)
+            : (isDark ? kStudentDarkSubtext : kStudentText));
+    final subColor = current
+        ? Colors.white70
+        : (isDark ? kStudentDarkSubtext : kStudentSubtext);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
@@ -136,7 +158,10 @@ class AnimatedSigninProgressBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: animated,
             minHeight: 8,
-            backgroundColor: kSigninTrack,
+            backgroundColor:
+                Theme.of(context).brightness == Brightness.dark
+                    ? kStudentDarkBorder
+                    : kSigninTrack,
             valueColor: const AlwaysStoppedAnimation<Color>(
                 kStudentEmeraldAccent),
           ),
@@ -166,7 +191,9 @@ void showSigninRewardSchedule(BuildContext context) {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: kSigninLightGreen,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? kStudentEmeraldAccent.withValues(alpha: 0.18)
+                      : kSigninLightGreen,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.trending_up_rounded,

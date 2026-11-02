@@ -116,6 +116,12 @@ const Color _brightGreen = Color(0xFF16A34A);
 const Color _lightGreen = Color(0xFFDCFCE7);
 const Color _gold = Color(0xFFFFC107);
 
+// Dark-mode-readable emerald (same value as the app dark theme's
+// primary). Deep emerald #14532D as text on a dark card is
+// unreadable, so dark-mode price text uses this instead — light
+// mode keeps _deepEmerald exactly.
+const Color _lightEmerald = Color(0xFF34D399);
+
 /// Gold crown drawn with widgets (no image asset, no emoji).
 class CrownIcon extends StatelessWidget {
   const CrownIcon({super.key, this.size = 48, this.color = _gold});
@@ -425,8 +431,15 @@ class _SubscriptionMembershipScreenState
                         Text(plan.name, style: AppText.cardTitle),
                         Text(
                           plan.priceLabel(_billing),
-                          style: const TextStyle(
-                            color: _deepEmerald,
+                          style: TextStyle(
+                            // Dark Mode (Nov 2 polish): deep emerald
+                            // on a dark card was the reported
+                            // low-contrast bug — light emerald reads
+                            // clearly there. Light mode unchanged.
+                            color: Theme.of(context).brightness ==
+                                    Brightness.dark
+                                ? _lightEmerald
+                                : _deepEmerald,
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                           ),
@@ -719,10 +732,17 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Your transaction is safe and encrypted.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+                // Dark Mode (Nov 2 polish): secondary info uses the
+                // user's #B0B8B5 token instead of grey. Light mode
+                // keeps the exact grey it had.
+                style: TextStyle(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFFB0B8B5)
+                      : Colors.grey,
+                ),
               ),
             ],
           ),
@@ -850,10 +870,21 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
                   borderRadius:
                       BorderRadius.circular(AppLayout.cardRadius),
                 ),
-                child: const Text(
+                // Dark Mode (Nov 2 polish): this note sits on a
+                // light-green tile, so inherited dark-mode text
+                // (white) would be unreadable on it — pin it to
+                // deep emerald in dark mode. Light mode inherits
+                // exactly as before.
+                child: Text(
                   'Checkout and activation need a payment provider, '
                   'which isn\'t connected yet. No payment has been taken '
                   'and your plan hasn\'t changed.',
+                  style: TextStyle(
+                    color: Theme.of(sheetContext).brightness ==
+                            Brightness.dark
+                        ? _deepEmerald
+                        : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),

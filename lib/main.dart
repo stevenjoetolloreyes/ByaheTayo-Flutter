@@ -137,30 +137,39 @@ ThemeData _lightTheme() {
 }
 
 ThemeData _darkTheme() {
+  // Dark surfaces follow the user's Dark Mode color system (Nov 2
+  // polish): #121212 page, #1B1F20 secondary, #202729 cards,
+  // #252B2D elevated, white primary text, #B0B8B5 secondary text,
+  // #343B3D borders. The foreground accents stay light emerald
+  // (#34D399 / #6EE7B7): deep emerald #14532D as foreground on
+  // these surfaces would be unreadable, so it stays on brand
+  // surfaces (banners, selected pills) with white text instead.
   final scheme = const ColorScheme.dark(
     primary: Color(0xFF34D399),
     onPrimary: Color(0xFF052E16),
     secondary: Color(0xFF6EE7B7),
-    surface: Color(0xFF1E2126),
-    onSurface: Color(0xFFF1F5F9),
-    outline: Color(0xFF33373E),
+    surface: Color(0xFF202729),
+    onSurface: Color(0xFFFFFFFF),
+    surfaceContainerHighest: Color(0xFF252B2D),
+    onSurfaceVariant: Color(0xFFB0B8B5),
+    outline: Color(0xFF343B3D),
   );
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: const Color(0xFF17191D),
+    scaffoldBackgroundColor: const Color(0xFF121212),
     appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFF1E2126),
-      foregroundColor: Color(0xFFF1F5F9),
+      backgroundColor: Color(0xFF1B1F20),
+      foregroundColor: Color(0xFFFFFFFF),
       elevation: 0,
       titleTextStyle: TextStyle(
-        color: Color(0xFFF1F5F9),
+        color: Color(0xFFFFFFFF),
         fontSize: 20,
         fontWeight: FontWeight.w700,
       ),
     ),
     navigationBarTheme: const NavigationBarThemeData(
-      backgroundColor: Color(0xFF1E2126),
+      backgroundColor: Color(0xFF1B1F20),
       elevation: 0,
       indicatorColor: _indicatorDark,
       iconTheme: WidgetStatePropertyAll(IconThemeData(size: AppLayout.navIconSize)),
@@ -168,14 +177,14 @@ ThemeData _darkTheme() {
         AppText.smallSemiBold,
       ),
     ),
-    // Dark card language, matching the approved iPhone Map preview:
-    // #1E2126 surface, #33373E outline, 16dp corners, no shadow.
+    // Dark card language: #202729 surface, #343B3D outline, 16dp
+    // corners, no shadow.
     cardTheme: const CardThemeData(
-      color: Color(0xFF1E2126),
+      color: Color(0xFF202729),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
-        side: BorderSide(color: Color(0xFF33373E)),
+        side: BorderSide(color: Color(0xFF343B3D)),
       ),
     ),
   );
@@ -633,7 +642,7 @@ class _HomeShellState extends State<_HomeShell> {
       children: [
         const MapTab(),
         const FaresTab(),
-        StudentTheme(
+        StudentHubTheme(
           child: StudentTab(
             onViewOnMap: () => widget.onSelect(0),
             onViewAccount: () => widget.onSelect(5),

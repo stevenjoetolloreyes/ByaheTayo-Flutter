@@ -24,6 +24,21 @@ const kStudentText = Color(0xFF0F172A);
 const kStudentSubtext = Color(0xFF64748B);
 const kStudentBorder = Color(0xFFE2E8F0);
 
+// Dark Mode palette for the Student Hub (Nov 2 polish), from the
+// user's Dark Mode color system. Deep emerald #14532D is kept for
+// brand surfaces (the greeting banner gradient); it is never used
+// as foreground text on dark cards, where it would be unreadable —
+// [kStudentDarkAccent] is the readable emerald there (same value
+// as the app dark theme's primary).
+const kStudentDarkBg = Color(0xFF121212);
+const kStudentDarkSecondaryBg = Color(0xFF1B1F20);
+const kStudentDarkCard = Color(0xFF202729);
+const kStudentDarkElevated = Color(0xFF252B2D);
+const kStudentDarkText = Color(0xFFFFFFFF);
+const kStudentDarkSubtext = Color(0xFFB0B8B5);
+const kStudentDarkBorder = Color(0xFF343B3D);
+const kStudentDarkAccent = Color(0xFF34D399);
+
 ThemeData get studentTheme => ThemeData.light().copyWith(
       scaffoldBackgroundColor: kStudentBg,
       cardColor: kStudentCard,
@@ -48,6 +63,39 @@ ThemeData get studentTheme => ThemeData.light().copyWith(
       ),
     );
 
+/// Dark twin of [studentTheme]: same geometry, same Emerald Green
+/// identity, but the user's Dark Mode surfaces — #121212 page,
+/// #202729 cards, #252B2D elevated surfaces, white primary text,
+/// #B0B8B5 secondary text, #343B3D borders. The greeting banner
+/// gradient stays deep emerald → accent green in both modes.
+ThemeData get studentDarkTheme => ThemeData.dark().copyWith(
+      scaffoldBackgroundColor: kStudentDarkBg,
+      canvasColor: kStudentDarkCard,
+      cardColor: kStudentDarkCard,
+      colorScheme: const ColorScheme.dark(
+        primary: kStudentEmeraldAccent,
+        onPrimary: Colors.white,
+        secondary: kStudentDarkAccent,
+        onSecondary: Color(0xFF052E16),
+        surface: kStudentDarkCard,
+        onSurface: kStudentDarkText,
+        surfaceContainerHighest: kStudentDarkElevated,
+        onSurfaceVariant: kStudentDarkSubtext,
+        outline: kStudentDarkBorder,
+      ),
+      cardTheme: const CardThemeData(
+        color: kStudentDarkCard,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
+          side: BorderSide(color: kStudentDarkBorder),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: kStudentDarkElevated,
+      ),
+    );
+
 /// Applies the Student Hub theme to [child] (dashboard body or a
 /// module screen opened from it). The shell (nav bar, app bar) sits
 /// outside this wrapper and keeps the app theme.
@@ -59,6 +107,28 @@ class StudentTheme extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Theme(data: studentTheme, child: child);
+  }
+}
+
+/// Applies the Student Hub theme to the Hub tab page, following the
+/// app's Dark Mode setting: the dark twin above when the ambient
+/// theme is dark, the light theme otherwise. The Hub tab is the
+/// only Student surface that follows Dark Mode — module screens
+/// opened from it keep the light [StudentTheme] wrapper (their
+/// approved light design), so their hardcoded light colors stay
+/// correct and are never re-interpreted under a dark theme.
+class StudentHubTheme extends StatelessWidget {
+  const StudentHubTheme({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Theme(
+      data: isDark ? studentDarkTheme : studentTheme,
+      child: child,
+    );
   }
 }
 

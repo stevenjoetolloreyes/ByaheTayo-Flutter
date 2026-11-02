@@ -438,6 +438,23 @@ class _StudentTabState extends State<StudentTab> {
     final totalPoints = _signinRemote
         ? widget.walletController!.balance
         : totalCheckinPoints(records);
+    // Dark Mode (Nov 2 polish): the card itself follows the hub
+    // theme, but these inner accents are hardcoded light pastels —
+    // they get dark tints here so the card reads as one dark card.
+    // Light mode keeps the exact approved values below.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tileGreen = isDark
+        ? kStudentEmeraldAccent.withValues(alpha: 0.18)
+        : kSigninLightGreen;
+    final tileGold = isDark
+        ? kSigninGold.withValues(alpha: 0.18)
+        : kSigninPaleGold;
+    final tileFlame = isDark
+        ? kSigninFlame.withValues(alpha: 0.18)
+        : kSigninFlameTile;
+    final emphasis = isDark ? kStudentDarkAccent : kStudentEmerald;
+    final divider = isDark ? kStudentDarkBorder : kStudentBorder;
+    final muted = isDark ? kStudentDarkSubtext : kStudentSubtext;
     return Card(
       key: const ValueKey('signin-hub-card'),
       child: InkWell(
@@ -457,7 +474,7 @@ class _StudentTabState extends State<StudentTab> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: kSigninLightGreen,
+                      color: tileGreen,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Icon(Icons.calendar_month_rounded,
@@ -479,7 +496,7 @@ class _StudentTabState extends State<StudentTab> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: kSigninLightGreen,
+                      color: tileGreen,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -490,7 +507,7 @@ class _StudentTabState extends State<StudentTab> {
                         const SizedBox(width: 4),
                         Text('Day $todayDay of 7',
                             style: AppText.smallBold
-                                .copyWith(color: kStudentEmerald)),
+                                .copyWith(color: emphasis)),
                       ],
                     ),
                   ),
@@ -512,7 +529,7 @@ class _StudentTabState extends State<StudentTab> {
                   const SizedBox(width: 8),
                   Text('$checkedCells / 7 Days',
                       style: AppText.smallBold
-                          .copyWith(color: kStudentEmerald)),
+                          .copyWith(color: emphasis)),
                 ],
               ),
               const SizedBox(height: AppLayout.cardGap),
@@ -521,37 +538,40 @@ class _StudentTabState extends State<StudentTab> {
                   Expanded(
                     child: _signinStat(
                       icon: Icons.workspace_premium_rounded,
-                      iconBg: kSigninPaleGold,
+                      iconBg: tileGold,
                       iconColor: kSigninGold,
                       label: 'Total Points',
                       value: '$totalPoints',
+                      valueColor: emphasis,
                     ),
                   ),
                   Container(
-                      width: 1, height: 44, color: kStudentBorder),
+                      width: 1, height: 44, color: divider),
                   Expanded(
                     child: _signinStat(
                       icon: Icons.local_fire_department_rounded,
-                      iconBg: kSigninFlameTile,
+                      iconBg: tileFlame,
                       iconColor: kSigninFlame,
                       label: 'Current Streak',
                       value: streak == 1 ? '1 day' : '$streak days',
+                      valueColor: emphasis,
                     ),
                   ),
                   Container(
-                      width: 1, height: 44, color: kStudentBorder),
+                      width: 1, height: 44, color: divider),
                   Expanded(
                     child: InkWell(
                       onTap: () => showSigninRewardSchedule(context),
                       borderRadius: BorderRadius.circular(12),
                       child: _signinStat(
                         icon: Icons.card_giftcard_rounded,
-                        iconBg: kSigninLightGreen,
+                        iconBg: tileGreen,
                         iconColor: kStudentEmeraldAccent,
                         label: 'Next Reward',
                         value: '${pointsForDay(7)} Points',
-                        trailing: const Icon(Icons.chevron_right,
-                            size: 18, color: kStudentSubtext),
+                        valueColor: emphasis,
+                        trailing: Icon(Icons.chevron_right,
+                            size: 18, color: muted),
                       ),
                     ),
                   ),
@@ -572,6 +592,7 @@ class _StudentTabState extends State<StudentTab> {
     required Color iconColor,
     required String label,
     required String value,
+    required Color valueColor,
     Widget? trailing,
   }) {
     return Row(
@@ -592,7 +613,7 @@ class _StudentTabState extends State<StudentTab> {
               Text(label, style: AppText.caption),
               Text(value,
                   style: AppText.smallBold
-                      .copyWith(color: kStudentEmerald)),
+                      .copyWith(color: valueColor)),
             ],
           ),
         ),

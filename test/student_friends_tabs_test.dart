@@ -4,6 +4,7 @@
 // (a zero balance is shown as ₱0, never an invented amount); module
 // cards open real screens.
 import 'package:estudyantego/features/friends_tab.dart';
+import 'package:estudyantego/features/student/student_theme.dart';
 import 'package:estudyantego/features/student_tab.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
@@ -147,8 +148,13 @@ void main() {
     expect(find.text('No friends yet'), findsOneWidget);
   });
 
-  testWidgets('Student Hub uses its own light emerald theme even when the app is dark',
+  testWidgets('Student Hub follows Dark Mode with charcoal cards when the app is dark',
       (tester) async {
+    // Nov 2 Dark Mode polish: the old rule ("Hub keeps its light
+    // emerald theme even when the app is dark") is superseded — the
+    // Hub tab now follows Dark Mode with the charcoal student
+    // theme. Module screens opened from it still keep the light
+    // StudentTheme wrapper (their approved light design).
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -162,10 +168,10 @@ void main() {
     expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
     final context = tester.element(find.byType(StudentTab));
     final theme = Theme.of(context);
-    expect(theme.scaffoldBackgroundColor, const Color(0xFFF8FAFC));
-    expect(theme.colorScheme.surface, const Color(0xFFFFFFFF));
-    expect(theme.colorScheme.primary, const Color(0xFF14532D));
-    expect(theme.colorScheme.outline, const Color(0xFFE2E8F0));
+    expect(theme.scaffoldBackgroundColor, kStudentDarkBg);
+    expect(theme.colorScheme.surface, kStudentDarkCard);
+    expect(theme.colorScheme.primary, kStudentEmeraldAccent);
+    expect(theme.colorScheme.outline, kStudentDarkBorder);
     expect(find.byType(NavigationBar), findsOneWidget);
   });
 }
