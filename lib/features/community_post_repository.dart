@@ -11,7 +11,9 @@
 // real enforcement; this only decides what the UI fetches/shows):
 //   approved  → any signed-in user
 //   pending   → only its author + allowlisted admins
-//   rejected  → nobody (hidden everywhere)
+//   rejected  → only its author (in their own post history/status
+//     view, with the rejection reason); admins review rejected posts
+//     in the Post approvals screen, not in the main list
 // Signed-out users see no shared posts (the rules deny unauthenticated
 // reads, so the repository returns [] without querying).
 //
@@ -43,10 +45,15 @@ typedef SharedPostCreation = ({CommunityPost post, bool photoDropped});
 
 /// Whether a SHARED post may be shown to [user]. Local posts use
 /// [showPostInCommunityList] instead; this rule is shared-only.
+/// Rejected posts are visible ONLY to their author — never to other
+/// users, and not in an admin's main list either (admins review
+/// rejected posts in the Post approvals screen).
 bool sharedPostVisibleTo(CommunityPost post, AuthUser? user) {
   if (!post.isShared) return false;
-  if (post.status == PostStatus.rejected) return false;
   if (user == null) return false;
+  if (post.status == PostStatus.rejected) {
+    return post.authorUid == user.uid;
+  }
   if (post.status == PostStatus.approved) return true;
   return post.authorUid == user.uid || isAdminUser(user);
 }
@@ -69,7 +76,15 @@ abstract class PostRepository {
 
   /// Admin-only status change (rules enforce; UI gates by allowlist).
   /// [post] must be a shared post (non-null id).
-  Future<void> updatePostStatus(CommunityPost post, PostStatus status);
+  /// [rejectionReason] may only accompany a rejection (validated by
+  /// [postStatusUpdateError]); an empty reason on a rejection clears
+  /// any previous reason, and [clearRejectionReason] does the same.
+  Future<void> updatePostStatus(
+    CommunityPost post,
+    PostStatus status, {
+    String? rejectionReason,
+    bool clearRejectionReason = false,
+  });
 
   /// Admin-only delete. [post] must be a shared post (non-null id).
   Future<void> deletePost(CommunityPost post);
@@ -88,17 +103,32 @@ class FirestorePostRepository implements PostRepository {
     final approvedSnap =
         await _collection.where('status', isEqualTo: 'approved').get();
     final Query<Map<String, dynamic>> pendingQuery;
+    final Query<Map<String, dynamic>>? rejectedQuery;
     if (isAdminUser(user)) {
       pendingQuery =
           _collection.where('status', isEqualTo: 'pending');
+      // Admins review rejected posts in the Post approvals screen;
+      // the main list fetch stays approved + pending for them.
+      rejectedQuery = null;
     } else {
       pendingQuery = _collection
           .where('authorUid', isEqualTo: user.uid)
           .where('status', isEqualTo: 'pending');
+      // The author's own rejected posts, so they see the status and
+      // the rejection reason. The authorUid scope keeps them out of
+      // every other user's view; the rules permit the author read.
+      rejectedQuery = _collection
+          .where('authorUid', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'rejected');
     }
     final pendingSnap = await pendingQuery.get();
+    final rejectedSnap = await rejectedQuery?.get();
     final byId = <String, CommunityPost>{};
-    for (final doc in [...approvedSnap.docs, ...pendingSnap.docs]) {
+    for (final doc in [
+      ...approvedSnap.docs,
+      ...pendingSnap.docs,
+      ...(rejectedSnap?.docs ?? const []),
+    ]) {
       byId[doc.id] = sharedPostFromDoc(doc.id, doc.data());
     }
     final posts = byId.values.toList();
@@ -148,13 +178,34 @@ class FirestorePostRepository implements PostRepository {
   @override
   Future<void> updatePostStatus(
     CommunityPost post,
-    PostStatus status,
-  ) async {
+    PostStatus status, {
+    String? rejectionReason,
+    bool clearRejectionReason = false,
+  }) async {
+    final error = postStatusUpdateError(
+      status: status,
+      rejectionReason: rejectionReason,
+      clearRejectionReason: clearRejectionReason,
+    );
+    if (error != null) throw ArgumentError(error);
     final id = post.id;
     if (id == null) {
       throw StateError('Cannot update a local post in Firestore.');
     }
-    await _collection.doc(id).update({'status': status.name});
+    final update = <String, Object>{'status': status.name};
+    if (status == PostStatus.rejected) {
+      final reason = rejectionReason?.trim();
+      if (reason != null && reason.isNotEmpty) {
+        update['rejectionReason'] = reason;
+      } else if (clearRejectionReason || rejectionReason != null) {
+        // Rejecting without a reason removes any stale reason from
+        // an earlier rejection cycle, so the author never sees an
+        // outdated reason. Approving leaves the field untouched —
+        // it is only ever displayed while the post is rejected.
+        update['rejectionReason'] = FieldValue.delete();
+      }
+    }
+    await _collection.doc(id).update(update);
   }
 
   @override
@@ -211,6 +262,7 @@ CommunityPost sharedPostFromDoc(
     }
   }
   final createdAt = data['createdAt'];
+  final reason = data['rejectionReason'];
   return CommunityPost(
     routeName: data['routeName'] is String ? data['routeName'] as String : '',
     vehicles: vehicles is List
@@ -230,6 +282,7 @@ CommunityPost sharedPostFromDoc(
     id: id,
     authorUid: data['authorUid'] is String ? data['authorUid'] as String : '',
     createdAt: createdAt is Timestamp ? createdAt.toDate() : null,
+    rejectionReason: reason is String ? reason : null,
   );
 }
 

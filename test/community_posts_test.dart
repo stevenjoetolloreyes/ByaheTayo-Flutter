@@ -317,7 +317,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Cabugao → Vigan City'), findsOneWidget);
     expect(find.text('Shared post'), findsOneWidget);
-    expect(find.text('Pending verification'), findsOneWidget);
+    expect(find.text('In Review'), findsOneWidget);
     expect(find.text('Traditional Jeepney: ₱60.00'), findsOneWidget);
     expect(find.text('View Route'), findsOneWidget);
     expect(find.text('View on map'), findsOneWidget);
@@ -377,7 +377,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Vigan City → Cabugao'), findsOneWidget);
-    expect(find.text('Pending verification'), findsOneWidget);
+    expect(find.text('In Review'), findsOneWidget);
     expect(find.text('Operator: CTransco'), findsOneWidget);
     expect(find.text('Modern Jeepney: ₱60.00'), findsOneWidget);
   });

@@ -13,7 +13,7 @@
 // itself.
 //
 // APPROVAL (admin-only, see admin_access.dart): every new submission
-// starts Pending and is badged "Pending verification". The in-app Post
+// starts Pending and is badged "In Review". The in-app Post
 // approvals screen (opened from the Communities tab) lets allowlisted
 // admins approve or reject submissions; only approved items are badged
 // "Published" and shown to all users. Rejected items are hidden from
@@ -101,6 +101,7 @@ class CommunityPost {
     this.id,
     this.authorUid = '',
     this.createdAt,
+    this.rejectionReason,
   });
 
   final String routeName;
@@ -146,15 +147,26 @@ class CommunityPost {
   /// local posts.
   final DateTime? createdAt;
 
+  /// Optional admin-supplied reason for a rejection, shown only to
+  /// the post's author on their own rejected post — never publicly.
+  /// Null means no reason was given (or the post was never rejected).
+  /// Shared posts only; local posts never carry one.
+  final String? rejectionReason;
+
   /// True for Firestore-backed posts, false for device-only posts.
   bool get isShared => id != null;
 
   /// Copy with a new approval status (used by the admin screen).
+  /// [rejectionReason] replaces the reason; [clearRejectionReason]
+  /// drops it (a plain null keeps the existing reason, since null
+  /// cannot otherwise express "remove").
   CommunityPost copyWith({
     PostStatus? status,
     String? id,
     String? authorUid,
     DateTime? createdAt,
+    String? rejectionReason,
+    bool clearRejectionReason = false,
   }) =>
       CommunityPost(
         routeName: routeName,
@@ -171,6 +183,9 @@ class CommunityPost {
         id: id ?? this.id,
         authorUid: authorUid ?? this.authorUid,
         createdAt: createdAt ?? this.createdAt,
+        rejectionReason: clearRejectionReason
+            ? null
+            : (rejectionReason ?? this.rejectionReason),
       );
 
   /// Card title: the route itself when From/To exist, otherwise the
@@ -227,6 +242,7 @@ class CommunityPost {
           ),
         if (operatorName.isNotEmpty) 'operatorName': operatorName,
         'status': status.name,
+        if (rejectionReason != null) 'rejectionReason': rejectionReason,
       };
 
   factory CommunityPost.fromJson(Map<String, dynamic> json) {
@@ -243,6 +259,7 @@ class CommunityPost {
     }
     final operator = json['operatorName'];
     final status = json['status'];
+    final reason = json['rejectionReason'];
     return CommunityPost(
       routeName: json['routeName'] is String ? json['routeName'] as String : '',
       vehicles: vehicles is List
@@ -257,8 +274,36 @@ class CommunityPost {
       faresByVehicle: faresMap,
       operatorName: operator is String ? operator : '',
       status: postStatusFromString(status is String ? status : null),
+      rejectionReason: reason is String ? reason : null,
     );
   }
+}
+
+/// Maximum length of an admin rejection reason, in characters.
+/// Enforced by [postStatusUpdateError] and by the Firestore rules.
+const kMaxRejectionReasonLength = 300;
+
+/// Validation for an admin status change (see
+/// [PostRepository.updatePostStatus]). A rejection reason may only
+/// accompany a rejection, and a reason longer than
+/// [kMaxRejectionReasonLength] characters is refused. Returns the
+/// error message, or null when the change is valid. An empty reason
+/// on a rejection is valid — it clears any previous reason.
+String? postStatusUpdateError({
+  required PostStatus status,
+  String? rejectionReason,
+  bool clearRejectionReason = false,
+}) {
+  if ((rejectionReason != null || clearRejectionReason) &&
+      status != PostStatus.rejected) {
+    return 'A rejection reason can only be set when rejecting a post.';
+  }
+  final reason = rejectionReason?.trim();
+  if (reason != null && reason.length > kMaxRejectionReasonLength) {
+    return 'Rejection reason must be $kMaxRejectionReasonLength '
+        'characters or fewer.';
+  }
+  return null;
 }
 
 /// Whether a post belongs in the main community list: pending and
@@ -331,7 +376,7 @@ Future<void> saveCommunityPosts(
 
 /// The user-provided sample submission: Operator CTransco,
 /// Vigan City → Cabugao, Modern Jeepney, ₱60.00. It is seeded as a
-/// PENDING submission (badged "Pending verification"), never as a
+/// PENDING submission (badged "In Review"), never as a
 /// verified fare and never as published fact. Seeding runs at most
 /// once per device: after the first seed the flag is set, so deleting
 /// the sample is respected and it never comes back.

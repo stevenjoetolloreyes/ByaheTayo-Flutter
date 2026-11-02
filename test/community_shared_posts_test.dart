@@ -74,13 +74,23 @@ void main() {
       );
     });
 
-    test('rejected shared posts are hidden from everyone, even admins', () {
+    test('rejected shared posts are visible only to their author', () {
+      expect(
+        sharedPostVisibleTo(_shared(id: '1', authorUid: 'author-1', status: PostStatus.rejected), _author),
+        isTrue,
+      );
+      expect(
+        sharedPostVisibleTo(_shared(id: '1', authorUid: 'author-1', status: PostStatus.rejected), _other),
+        isFalse,
+      );
+      // Admins review rejected posts in the Post approvals screen,
+      // not in the main list, so main-list visibility is author-only.
       expect(
         sharedPostVisibleTo(_shared(id: '1', authorUid: 'author-1', status: PostStatus.rejected), _admin),
         isFalse,
       );
       expect(
-        sharedPostVisibleTo(_shared(id: '1', authorUid: 'author-1', status: PostStatus.rejected), _author),
+        sharedPostVisibleTo(_shared(id: '1', authorUid: 'author-1', status: PostStatus.rejected), null),
         isFalse,
       );
     });
@@ -146,10 +156,20 @@ void main() {
         _shared(id: 'r', authorUid: 'author-1', status: PostStatus.rejected),
       ]);
       final visible = await repo.loadVisiblePosts(_author);
-      expect(visible.map((p) => p.id), containsAll(['a', 'p']));
+      // The author's own rejected post is visible to the author (gap
+      // 1); someone else's pending post stays hidden.
+      expect(visible.map((p) => p.id), containsAll(['a', 'p', 'r']));
       expect(visible.map((p) => p.id), isNot(contains('q')));
-      expect(visible.map((p) => p.id), isNot(contains('r')));
       expect(await repo.loadVisiblePosts(null), isEmpty);
+    });
+
+    test('load hides someone else\'s rejected post', () async {
+      final repo = FakePostRepository();
+      repo.stored.addAll([
+        _shared(id: 'r', authorUid: 'author-1', status: PostStatus.rejected),
+      ]);
+      expect(await repo.loadVisiblePosts(_other), isEmpty);
+      expect(await repo.loadVisiblePosts(_admin), isEmpty);
     });
 
     test('admin sees all pending posts', () async {
@@ -353,7 +373,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.text('Shared posts — Pending verification'),
+        find.text('Shared posts — Waiting Approval'),
         findsOneWidget,
       );
       await tester.tap(find.text('Approve'));

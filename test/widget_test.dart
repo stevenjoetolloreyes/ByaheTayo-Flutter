@@ -54,7 +54,7 @@ void main() {
     // First launch seeds the pending CTransco sample, so the tab
     // shows it instead of the empty state.
     expect(find.text('Vigan City → Cabugao'), findsOneWidget);
-    expect(find.text('Pending verification'), findsOneWidget);
+    expect(find.text('In Review'), findsOneWidget);
 
     // Switch to Account; the AppBar title and the dashboard follow.
     // No Firebase in tests, so the account shows the honest

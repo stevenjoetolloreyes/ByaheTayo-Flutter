@@ -5,16 +5,20 @@
 // Document fields: routeName, vehicles, hours, fare, hubName, from,
 //   to, photoBase64 (optional), faresByVehicle, operatorName,
 //   status ('pending' | 'approved' | 'rejected'), authorUid,
-//   createdAt (server timestamp).
+//   createdAt (server timestamp), rejectionReason (optional,
+//   admin-set on a rejection, max 300 characters, shown only to the
+//   post's author).
 //
 // Visibility (mirrored client-side in
 // lib/features/community_post_repository.dart — these rules are the
 // real enforcement):
 //   approved posts  → any signed-in user may read
 //   pending posts   → only the author (authorUid == uid) or an admin
-//   rejected posts  → nobody may read them
+//   rejected posts  → only the author or an admin may read; they
+//     never appear in any other user's view
 // Creates must stamp the caller's own UID and start pending. Status
-// changes and deletes are admin-only (allowlisted emails below).
+// changes and deletes are admin-only (allowlisted emails below). A
+// rejection reason may only be set alongside a rejection.
 // LGU complaints stay local-only and never touch Firestore.
 //
 // Collection: student_profiles
@@ -56,14 +60,34 @@ service cloud.firestore {
           || resource.data.authorUid == request.auth.uid
           || isAdmin());
 
+      // Creates never carry a rejection reason — a reason is only
+      // ever set by an admin on a rejection (see update below).
       allow create: if isSignedIn()
         && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && !('rejectionReason' in request.resource.data);
 
-      // Admins may change ONLY the status field (approve/reject).
+      // Admins may change ONLY the status field (approve/reject)
+      // and, on a rejection, the optional rejectionReason (max 300
+      // characters). A reason may only be touched alongside a
+      // rejection: touching it while approving is denied, so an
+      // approved post can never gain a reason. Rejecting without a
+      // reason deletes the field (clearing any stale reason from an
+      // earlier rejection cycle); approving leaves the field
+      // untouched, and the app only ever displays a reason while
+      // the post is rejected. Status is bound to the two admin
+      // decisions — it can never be set back to pending or to an
+      // arbitrary value.
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status']);
+          .hasOnly(['status', 'rejectionReason'])
+        && request.resource.data.status in ['approved', 'rejected']
+        && (!('rejectionReason'
+              in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.status == 'rejected')
+        && (!('rejectionReason' in request.resource.data)
+            || (request.resource.data.rejectionReason is string
+              && request.resource.data.rejectionReason.size() <= 300));
 
       allow delete: if isAdmin();
     }

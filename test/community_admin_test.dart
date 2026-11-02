@@ -50,7 +50,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('visible to all users once approved'), findsOneWidget);
-    expect(find.text('Local posts — Pending verification'), findsOneWidget);
+    expect(find.text('Local posts — Waiting Approval'), findsOneWidget);
     expect(find.text('Vigan City → Cabugao'), findsOneWidget);
     expect(find.text('Operator: CTransco'), findsOneWidget);
   });

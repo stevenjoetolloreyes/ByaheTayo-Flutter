@@ -86,7 +86,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
           ] else ...[
             _section(
               context,
-              'Shared posts — Pending verification',
+              'Shared posts — Waiting Approval',
               sharedPending,
               'No shared submissions waiting for review.',
               actions: (post) => [
@@ -96,8 +96,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
                   child: const Text('Approve'),
                 ),
                 OutlinedButton(
-                  onPressed: () =>
-                      _setSharedStatus(post, PostStatus.rejected),
+                  onPressed: () => _rejectShared(context, post),
                   child: const Text('Reject'),
                 ),
               ],
@@ -110,8 +109,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
               'No published shared posts yet.',
               actions: (post) => [
                 OutlinedButton(
-                  onPressed: () =>
-                      _setSharedStatus(post, PostStatus.rejected),
+                  onPressed: () => _rejectShared(context, post),
                   child: const Text('Reject'),
                 ),
               ],
@@ -138,7 +136,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
           ],
           _section(
             context,
-            'Local posts — Pending verification',
+            'Local posts — Waiting Approval',
             localPending,
             'No local submissions waiting for review.',
             actions: (post) => [
@@ -208,16 +206,29 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
 
   Future<void> _setSharedStatus(
     CommunityPost post,
-    PostStatus status,
-  ) async {
+    PostStatus status, {
+    String? rejectionReason,
+    bool clearRejectionReason = false,
+  }) async {
     final repository = widget.postRepository;
     if (repository == null) return;
     try {
-      await repository.updatePostStatus(post, status);
+      await repository.updatePostStatus(
+        post,
+        status,
+        rejectionReason: rejectionReason,
+        clearRejectionReason: clearRejectionReason,
+      );
       if (!mounted) return;
       setState(() {
         _shared = _shared
-            .map((p) => identical(p, post) ? p.copyWith(status: status) : p)
+            .map((p) => identical(p, post)
+                ? p.copyWith(
+                    status: status,
+                    rejectionReason: rejectionReason,
+                    clearRejectionReason: clearRejectionReason,
+                  )
+                : p)
             .toList();
       });
       widget.onSharedChanged?.call();
@@ -227,6 +238,54 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
         SnackBar(content: Text(sharedPostsErrorMessage(e))),
       );
     }
+  }
+
+  /// Shared reject flow: asks for an optional reason, shown only to
+  /// the post's author on their rejected post. An empty reason clears
+  /// any stale reason from an earlier rejection cycle. Local rejects
+  /// keep their old direct behavior — no reason, no dialog.
+  /// No TextEditingController here: the dialog's exit transition
+  /// still builds the field after pop, so disposing a controller on
+  /// pop would use it after disposal — the text is captured with
+  /// onChanged instead.
+  Future<void> _rejectShared(
+    BuildContext context,
+    CommunityPost post,
+  ) async {
+    var reasonText = '';
+    final reason = await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reject this post?'),
+        content: TextField(
+          onChanged: (value) => reasonText = value,
+          maxLength: kMaxRejectionReasonLength,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Reason (optional)',
+            helperText: 'Shown only to the author of this post.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(reasonText.trim()),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+    await _setSharedStatus(
+      post,
+      PostStatus.rejected,
+      rejectionReason: reason.isEmpty ? null : reason,
+      clearRejectionReason: reason.isEmpty,
+    );
   }
 
   Future<void> _deleteShared(

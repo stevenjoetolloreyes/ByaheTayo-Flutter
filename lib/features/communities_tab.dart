@@ -9,7 +9,7 @@
 // approved shared posts (Firestore) and device-locally on local posts
 // (see community_interactions.dart). Approval is
 // admin-only (see admin_access.dart): new shared posts start Pending
-// ("Pending verification" badge) and only approved posts are Published
+// ("In Review" badge) and only approved posts are Published
 // to all users; the Post approvals screen and the LGU directory editor
 // are shown only to allowlisted admin accounts.
 //
@@ -458,13 +458,25 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
             label: Text(
               post.status == PostStatus.approved
                   ? 'Published'
-                  : 'Pending verification',
+                  : post.status == PostStatus.rejected
+                      ? 'Rejected'
+                      : 'In Review',
             ),
             backgroundColor: post.status == PostStatus.approved
                 ? const Color(0xFFDCFCE7)
-                : const Color(0xFFFEF9C3),
+                : post.status == PostStatus.rejected
+                    ? const Color(0xFFFEE2E2)
+                    : const Color(0xFFFEF9C3),
             visualDensity: VisualDensity.compact,
           ),
+          // Rejected shared posts reach this card only for their
+          // author (see sharedPostVisibleTo), so showing the reason
+          // here never exposes it to other users.
+          if (post.status == PostStatus.rejected &&
+              (post.rejectionReason ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.s4),
+            Text('Rejection reason: ${post.rejectionReason!.trim()}'),
+          ],
           const SizedBox(height: AppSpacing.s4),
           Text(post.hubName),
           if (post.vehicles.isNotEmpty) ...[
@@ -666,9 +678,19 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                 subtitle: Text(
                   post.status == PostStatus.approved
                       ? 'Published'
-                      : 'Pending verification',
+                      : post.status == PostStatus.rejected
+                          ? 'Rejected'
+                          : 'In Review',
                 ),
               ),
+              if (post.status == PostStatus.rejected &&
+                  (post.rejectionReason ?? '').trim().isNotEmpty)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.feedback_outlined),
+                  title: const Text('Rejection reason'),
+                  subtitle: Text(post.rejectionReason!.trim()),
+                ),
               if (post.hours.trim().isNotEmpty)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -748,9 +770,11 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
       SnackBar(
         content: Text(
           created.photoDropped
-              ? 'Post shared — pending verification. Shared without '
-                  'its photo (too large).'
-              : 'Post shared — pending verification.',
+              ? 'Post shared — In Review. Your post is being '
+                  'reviewed by the admin. Shared without its photo '
+                  '(too large).'
+              : 'Post shared — In Review. Your post is being '
+                  'reviewed by the admin.',
         ),
       ),
     );
