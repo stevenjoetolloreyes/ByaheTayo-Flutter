@@ -33,11 +33,11 @@ const _kPlaceholderSegment = '0000000000';
 
 // --- Real-ID placeholders: replace via ONE GitHub web edit. ---
 const String kAdMobAppIdAndroidPlaceholder =
-    'ca-app-pub-0000000000000000~0000000000';
+    'ca-app-pub-1876880154950897/6899090347';
 const String kAdMobAppIdIosPlaceholder =
     'ca-app-pub-0000000000000000~0000000000';
 const String kAdMobRewardedAndroidPlaceholder =
-    'ca-app-pub-0000000000000000/0000000000';
+    'ca-app-pub-1876880154950897/3586531296';
 const String kAdMobRewardedIosPlaceholder =
     'ca-app-pub-0000000000000000/0000000000';
 const String kAdMobInterstitialAndroidPlaceholder =
