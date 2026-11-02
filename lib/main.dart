@@ -33,6 +33,7 @@ import 'features/communities_tab.dart';
 import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/fares_tab.dart';
+import 'features/floating_nav.dart';
 import 'features/friend_cloud_repository.dart';
 import 'features/ios_glass.dart';
 import 'features/friends_tab.dart';
@@ -739,7 +740,8 @@ class _HomeShellState extends State<_HomeShell> {
 
     // iPhone only: same 6 tabs, same order, same destinations —
     // only the bar's appearance turns to glass, and the AppBar
-    // matches the emerald page. Android keeps NavigationBar.
+    // matches the emerald page. Android uses the floating dark-glass
+    // capsule below (same 6 tabs, same order, same destinations).
     // Tablets (wide branch above) are untouched on every platform.
     final glass = iosGlassEnabled;
     return Scaffold(
@@ -759,16 +761,12 @@ class _HomeShellState extends State<_HomeShell> {
                   GlassNavDestination(d.label, d.icon, d.selectedIcon),
               ],
             )
-          : NavigationBar(
+          : FloatingGlassNav(
               selectedIndex: widget.selectedIndex,
-              onDestinationSelected: widget.onSelect,
+              onSelect: widget.onSelect,
               destinations: [
                 for (final d in _destinations)
-                  NavigationDestination(
-                    icon: Icon(d.icon),
-                    selectedIcon: Icon(d.selectedIcon),
-                    label: d.label,
-                  ),
+                  FloatingNavDestination(d.label, d.icon, d.selectedIcon),
               ],
             ),
     );
