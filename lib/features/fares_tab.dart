@@ -16,6 +16,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'app_layout.dart';
 import 'operator_fares.dart';
 
 /// One vehicle rate from the web calculator's fareRates table.
@@ -403,24 +404,24 @@ class _FaresTabState extends State<FaresTab> {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               'Know your fare before you go',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              style: AppText.pageTitle,
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: AppSpacing.s2),
             Text(
               'LTFRB fare calculator — same rates and formula as the web app.',
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppLayout.cardPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -430,7 +431,7 @@ class _FaresTabState extends State<FaresTab> {
                       isExpanded: true,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
                         ),
                       ),
                       items: [
@@ -447,7 +448,7 @@ class _FaresTabState extends State<FaresTab> {
                         }
                       },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppLayout.cardGap),
                     SegmentedButton<bool>(
                       segments: const [
                         ButtonSegment(value: false, label: Text('Regular')),
@@ -462,7 +463,7 @@ class _FaresTabState extends State<FaresTab> {
                       },
                     ),
                     if (rate != null && rate.minimum != null) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.s8),
                       Text(
                         '${peso(rate.minimum!)} minimum',
                         style: Theme.of(context).textTheme.bodySmall
@@ -473,10 +474,10 @@ class _FaresTabState extends State<FaresTab> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppLayout.cardPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -497,7 +498,7 @@ class _FaresTabState extends State<FaresTab> {
                         setState(() => _originMode = selection.first);
                       },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppLayout.cardGap),
                     if (_originMode == _OriginMode.location) ...[
                       Row(
                         children: [
@@ -509,7 +510,7 @@ class _FaresTabState extends State<FaresTab> {
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: AppSpacing.s8),
                           FilledButton(
                             onPressed: _locating ? null : _useLocation,
                             child: _locating
@@ -535,7 +536,7 @@ class _FaresTabState extends State<FaresTab> {
                         decoration: InputDecoration(
                           labelText: 'From',
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
                           ),
                         ),
                         items: [
@@ -554,14 +555,14 @@ class _FaresTabState extends State<FaresTab> {
                         },
                       ),
                     ],
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppLayout.cardGap),
                     DropdownButtonFormField<int>(
                       value: _destHub,
                       isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'To',
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
                         ),
                       ),
                       items: [
@@ -577,7 +578,7 @@ class _FaresTabState extends State<FaresTab> {
                         }
                       },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppLayout.cardGap),
 
                     if (roadKm != null) ...[
                       Text(
@@ -585,7 +586,7 @@ class _FaresTabState extends State<FaresTab> {
                         style: Theme.of(context).textTheme.titleLarge
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.s4),
                       Text(
                         'Calculated: ${directKm!.toStringAsFixed(1)} km straight-line distance + 22% road allowance. May differ from the actual route.',
                         style: Theme.of(context).textTheme.bodySmall
@@ -601,11 +602,11 @@ class _FaresTabState extends State<FaresTab> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             Card(
               color: scheme.primaryContainer,
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppLayout.cardPadding,
                 child: rate == null
                     ? const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,7 +615,7 @@ class _FaresTabState extends State<FaresTab> {
                             'No nationwide tricycle rate',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          SizedBox(height: 4),
+                          SizedBox(height: AppSpacing.s4),
                           Text(
                             'Check the LGU fare matrix. Tricycle fares are set by local ordinance, so EstudyanteGO does not provide a national estimate.',
                           ),
@@ -628,7 +629,7 @@ class _FaresTabState extends State<FaresTab> {
                             'Starting location needed',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          SizedBox(height: 4),
+                          SizedBox(height: AppSpacing.s4),
                           Text(
                             'Use your location or choose a starting hub to compute the distance and fare.',
                           ),
@@ -641,23 +642,23 @@ class _FaresTabState extends State<FaresTab> {
                       ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             Text(
               'Estimate only. Distance is approximated from coordinates and may differ from the actual route. The official fare matrix of the operator governs what is charged. The ₱20 ordinary city-bus minimum and ₱100 provincial-bus minimum are applied before the discount. Rates follow the temporary national fare guide, effective Sept. 28–Dec. 31, 2026. Tricycle fares are set by each LGU, not by a national formula.',
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.s24),
             sectionTitle('Posted operator fares'),
             Text(
               'Fares published by the operators themselves — this is a reference list only. It was not computed by the calculator above, and posted fares are not mixed with formula fares.',
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             for (final group in groupOperatorFares())
               _OperatorFareGroupCard(group: group),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             Text(
               'This list covers only fares officially published by operators. Fares that were not officially published are not estimated or included.',
               style: Theme.of(context).textTheme.bodySmall
@@ -737,13 +738,13 @@ class _FareAmount extends StatelessWidget {
           '${rate.label} · ${roadKm.toStringAsFixed(1)} km',
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         Text(
           '≈ ${peso(result.collected)}',
           style: Theme.of(context).textTheme.displaySmall
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         Text(
           '${discounted ? '20% discount applied; nearest ₱0.25 shown.' : 'Regular fare.'} $baseCopy$minimumCopy${rate.local ? ' Dagupan local ordinance example.' : ' Estimate from the temporary national guide.'}',
           style: Theme.of(context).textTheme.bodyMedium,

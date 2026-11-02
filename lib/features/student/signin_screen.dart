@@ -17,6 +17,7 @@
 // behavior: device dates, local records, local points.
 import 'package:flutter/material.dart';
 
+import '../app_layout.dart';
 import '../points_wallet_repository.dart';
 import 'student_data.dart';
 
@@ -178,11 +179,11 @@ class _SigninScreenState extends State<SigninScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('7-Day Sign-in')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.cardPadding,
               child: Row(
                 children: [
                   Expanded(
@@ -213,10 +214,10 @@ class _SigninScreenState extends State<SigninScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           const Text('This cycle',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           Row(
             children: [
               for (var day = 1; day <= 7; day++)
@@ -247,7 +248,7 @@ class _SigninScreenState extends State<SigninScreen> {
                               : scheme.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.s2),
                       Text('Day $day',
                           style: const TextStyle(fontSize: 11)),
                     ],
@@ -255,11 +256,11 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           LinearProgressIndicator(value: checkedCells / 7),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.s2),
           Text('Weekly progress: $checkedCells/7 days'),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           if (checkedToday)
             Card(
               child: ListTile(
@@ -278,16 +279,16 @@ class _SigninScreenState extends State<SigninScreen> {
                   ? 'Check in — Day 7 reward!'
                   : 'Check in today · Day $todayDay'),
             ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           const Text('Daily rewards',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s4),
           const Text('Day 1–6: 10 points each · Day 7: 50 points '
               '(completion reward).'),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           const Text('Check-in history',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           if (_records.isEmpty)
             const Card(
                 child: ListTile(title: Text('No check-in history yet.')))
@@ -304,7 +305,7 @@ class _SigninScreenState extends State<SigninScreen> {
                           const TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           Text(
             _remote
                 ? 'Dates follow Asia/Manila time. Points are saved to your account and show in your Account Points Wallet.'

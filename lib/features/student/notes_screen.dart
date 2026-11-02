@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../app_layout.dart';
 import 'student_data.dart';
 
 class NotesScreen extends StatefulWidget {
@@ -213,7 +214,7 @@ class _NotesScreenState extends State<NotesScreen> {
                           borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   Row(
                     children: [
                       FilterChip(
@@ -221,7 +222,7 @@ class _NotesScreenState extends State<NotesScreen> {
                         selected: _favsOnly,
                         onSelected: (v) => setState(() => _favsOnly = v),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.s8),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _subjectFilter,
@@ -247,7 +248,7 @@ class _NotesScreenState extends State<NotesScreen> {
             ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePaddingTab,
               children: [
                 if (_tab == 'notes') ...[
                   if (filteredNotes.isEmpty)
@@ -320,7 +321,7 @@ class _NotesScreenState extends State<NotesScreen> {
                       icon: const Icon(Icons.play_arrow),
                       label: const Text('Study all cards'),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.s8),
                     for (final c in _cards)
                       Card(
                         child: ListTile(
@@ -378,11 +379,10 @@ class _NotesScreenState extends State<NotesScreen> {
                         ),
                       ),
                   if (_attempts.isNotEmpty) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppLayout.headerGap),
                     const Text('Quiz history',
-                        style: TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
+                        style: AppText.sectionTitle),
+                    const SizedBox(height: AppSpacing.s8),
                     for (final a in _attempts)
                       Card(
                         child: ListTile(
@@ -457,16 +457,16 @@ class _NoteFormState extends State<_NoteForm> {
             widget.existing == null ? 'Add note' : 'Edit note',
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           TextField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'Title')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
               controller: _subject,
               decoration:
                   const InputDecoration(labelText: 'Subject (optional)')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             controller: _body,
             decoration: const InputDecoration(
@@ -475,7 +475,7 @@ class _NoteFormState extends State<_NoteForm> {
             ),
             maxLines: 8,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           FilledButton(
             onPressed: () {
               if (_title.text.trim().isEmpty) {
@@ -538,20 +538,20 @@ class _CardFormState extends State<_CardForm> {
         children: [
           const Text('Add flashcard',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           TextField(
               controller: _front,
               decoration: const InputDecoration(labelText: 'Front (question)')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
               controller: _back,
               decoration: const InputDecoration(labelText: 'Back (answer)')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
               controller: _subject,
               decoration:
                   const InputDecoration(labelText: 'Subject (optional)')),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           FilledButton(
             onPressed: () {
               if (_front.text.trim().isEmpty ||
@@ -604,7 +604,7 @@ class _StudyModeState extends State<_StudyMode> {
     return Scaffold(
       appBar: AppBar(title: Text('Study · ${_index + 1}/${_deck.length}')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         child: Column(
           children: [
             Expanded(
@@ -622,13 +622,13 @@ class _StudyModeState extends State<_StudyMode> {
                             style: const TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: AppLayout.cardGap),
                           Text(
                             _flipped ? card.back : card.front,
                             textAlign: TextAlign.center,
                             style: const TextStyle(fontSize: 22),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AppLayout.headerGap),
                           const Text('Tap the card to flip',
                               style: TextStyle(fontSize: 12)),
                         ],
@@ -638,7 +638,7 @@ class _StudyModeState extends State<_StudyMode> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             Row(
               children: [
                 Expanded(
@@ -652,7 +652,7 @@ class _StudyModeState extends State<_StudyMode> {
                     child: const Text('Previous'),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.s8),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => setState(() {
@@ -663,7 +663,7 @@ class _StudyModeState extends State<_StudyMode> {
                     child: const Text('Shuffle'),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.s8),
                 Expanded(
                   child: FilledButton(
                     onPressed: _index == _deck.length - 1
@@ -744,30 +744,29 @@ class _QuizEditorState extends State<_QuizEditor> {
       appBar: AppBar(
           title: Text(widget.existing == null ? 'New quiz' : 'Edit quiz')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           TextField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'Quiz title')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
               controller: _subject,
               decoration:
                   const InputDecoration(labelText: 'Subject (optional)')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             controller: _minutes,
             decoration: const InputDecoration(
                 labelText: 'Time limit in minutes (0 = no limit)'),
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           Row(
             children: [
               Expanded(
                 child: Text('Questions (${_questions.length})',
-                    style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700)),
+                    style: AppText.sectionTitle),
               ),
               TextButton.icon(
                 onPressed: () => _editQuestion(),
@@ -803,7 +802,7 @@ class _QuizEditorState extends State<_QuizEditor> {
                 ),
               ),
             ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           FilledButton(
             onPressed: () {
               if (_title.text.trim().isEmpty) {
@@ -897,7 +896,7 @@ class _QuestionFormState extends State<_QuestionForm> {
           children: [
             const Text('Question',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(value: 'mcq', label: Text('Multiple')),
@@ -907,11 +906,11 @@ class _QuestionFormState extends State<_QuestionForm> {
               selected: {_type},
               onSelectionChanged: (s) => setState(() => _type = s.first),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             TextField(
                 controller: _question,
                 decoration: const InputDecoration(labelText: 'Question')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             if (_type == 'mcq') ...[
               for (var i = 0; i < 4; i++)
                 Padding(
@@ -950,12 +949,12 @@ class _QuestionFormState extends State<_QuestionForm> {
                   decoration: const InputDecoration(
                       labelText: 'Correct answer (exact text)')),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             TextField(
                 controller: _explanation,
                 decoration: const InputDecoration(
                     labelText: 'Explanation (shown after answering)')),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             FilledButton(
               onPressed: () {
                 if (_question.text.trim().isEmpty) {
@@ -1063,11 +1062,11 @@ class _QuizRunnerState extends State<_QuizRunner> {
       return Scaffold(
         appBar: AppBar(title: Text('Result · ${quiz.title}')),
         body: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: AppLayout.pagePaddingTab,
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppLayout.cardPadding,
                 child: Column(
                   children: [
                     Text('$_score/${quiz.questions.length}',
@@ -1078,7 +1077,7 @@ class _QuizRunnerState extends State<_QuizRunner> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             for (var i = 0; i < quiz.questions.length; i++)
               Builder(builder: (_) {
                 final q = quiz.questions[i];
@@ -1097,7 +1096,7 @@ class _QuizRunnerState extends State<_QuizRunner> {
                     : q.options[q.correctIndex];
                 return Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: AppLayout.cardPadding,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1109,7 +1108,7 @@ class _QuizRunnerState extends State<_QuizRunner> {
                                   : Icons.cancel,
                               color: correct ? Colors.green : Colors.red,
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: AppSpacing.s8),
                             Expanded(
                               child: Text(q.question,
                                   style: const TextStyle(
@@ -1123,14 +1122,14 @@ class _QuizRunnerState extends State<_QuizRunner> {
                         if (q.explanation.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Text('Why: ${q.explanation}',
-                              style: const TextStyle(fontSize: 13)),
+                              style: AppText.caption),
                         ],
                       ],
                     ),
                   ),
                 );
               }),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             FilledButton(
               onPressed: () => Navigator.pop(
                 context,
@@ -1165,12 +1164,12 @@ class _QuizRunnerState extends State<_QuizRunner> {
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(q.question, style: const TextStyle(fontSize: 20)),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             if (q.type == 'id')
               TextFormField(
                 key: ValueKey('typed-$_index'),
@@ -1201,7 +1200,7 @@ class _QuizRunnerState extends State<_QuizRunner> {
                     child: const Text('Back'),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.s8),
                 Expanded(
                   child: FilledButton(
                     onPressed: _index == quiz.questions.length - 1

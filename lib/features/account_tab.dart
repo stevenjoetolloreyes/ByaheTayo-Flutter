@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'admin_access.dart';
+import 'app_layout.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/permission_service.dart';
@@ -215,7 +216,7 @@ class _AccountTabState extends State<AccountTab> {
     await showModalBottomSheet<void>(
       context: context,
       builder: (context) => Padding(
-        padding: const EdgeInsets.all(24),
+        padding: AppLayout.pagePaddingLarge,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -223,9 +224,9 @@ class _AccountTabState extends State<AccountTab> {
             children: [
               const Text(
                 'Transaction History',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: AppText.heading,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               if (entries.isEmpty)
                 const Text('No transactions yet.')
               else
@@ -587,17 +588,17 @@ class _AccountTabState extends State<AccountTab> {
 
         final sections = <Widget>[
           header,
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.cardGap),
           wallet,
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.cardGap),
           quickActions,
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.cardGap),
           if (admin != null) ...[
             admin,
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
           ],
           history,
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.cardGap),
           if (twoColumns) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,7 +608,7 @@ class _AccountTabState extends State<AccountTab> {
                 Expanded(child: preferences),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -618,11 +619,11 @@ class _AccountTabState extends State<AccountTab> {
             ),
           ] else ...[
             info,
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
             preferences,
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
             security,
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
             actions,
           ],
         ];
@@ -633,7 +634,7 @@ class _AccountTabState extends State<AccountTab> {
         return SingleChildScrollView(
           key: const Key('account-scroll-view'),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: AppLayout.pagePaddingTab,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: sections,
@@ -678,15 +679,15 @@ class _AccountTabState extends State<AccountTab> {
       // explains that.
       return Card(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: AppLayout.cardPadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'No account signed in',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                style: AppText.titleSmall,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               Text(
                 widget.authService.isConfigured
                     ? 'Sign in to see your profile, points, and settings.'
@@ -714,7 +715,7 @@ class _AccountTabState extends State<AccountTab> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -750,18 +751,14 @@ class _AccountTabState extends State<AccountTab> {
                         profile?.displayName ??
                             user.displayName ??
                             user.email,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: AppText.titleSmall.copyWith(color: Colors.white),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         user.email,
                         style: const TextStyle(color: Colors.white70),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.s8),
                       if (user.emailVerified)
                         const Row(
                           children: [
@@ -825,28 +822,24 @@ class _AccountTabState extends State<AccountTab> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
                 Text(
                   'Points Wallet',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppText.heading.copyWith(color: Colors.white),
                 ),
                 Spacer(),
                 Icon(Icons.account_balance_wallet, color: Colors.white),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             Text(
               '$_balance points',
               key: const ValueKey('points-balance'),
@@ -860,7 +853,7 @@ class _AccountTabState extends State<AccountTab> {
               const SizedBox(height: 4),
               Text(
                 'Total earned: $_totalEarned points',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                style: AppText.label.copyWith(color: Colors.white70),
               ),
             ],
             const SizedBox(height: 4),
@@ -870,7 +863,7 @@ class _AccountTabState extends State<AccountTab> {
                       'account. They follow you across devices.'
                   : 'This is your account wallet. Student Hub sign-in points '
                       'are tracked separately in the Student tab.',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: AppText.label.copyWith(color: Colors.white70),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
@@ -944,11 +937,11 @@ class _AccountTabState extends State<AccountTab> {
             ),
             child: Icon(icon, color: Theme.of(context).colorScheme.primary),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: AppText.smallSemiBold,
           ),
         ],
       ),
@@ -983,7 +976,7 @@ class _AccountTabState extends State<AccountTab> {
   Widget _sectionCard({required String title, required List<Widget> tiles}) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -991,10 +984,7 @@ class _AccountTabState extends State<AccountTab> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppText.cardTitle,
               ),
             ),
             const Divider(height: 8),

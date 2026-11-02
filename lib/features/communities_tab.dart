@@ -23,6 +23,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'admin_access.dart';
+import 'app_layout.dart';
 import 'community_admin.dart';
 import 'community_post_repository.dart';
 import 'community_posts.dart';
@@ -168,27 +169,27 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: AppLayout.pagePaddingTab,
       children: [
         Text(
           'Local routes shared by commuters',
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: AppSpacing.s2),
         const Text(
           'Communities',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          style: AppText.pageTitle,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppLayout.headerGap),
         _shareInfoCard(scheme),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppLayout.cardGap),
         _communitySection(),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppLayout.headerGap),
         Text(
           'New posts are shared with the community and become visible '
           'to everyone once approved. Older posts saved on this device '
           'stay local.',
-          style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+          style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
     );
@@ -200,35 +201,29 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   Widget _shareInfoCard(ColorScheme scheme) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.cardPadding,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(Icons.edit_outlined, color: scheme.primary),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppLayout.cardGap),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Know something that can help commuters?',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppText.cardTitle,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.s4),
                   Text(
                     'Share local transport coverage or terminal details so other commuters can plan with better context.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppLayout.cardGap),
             OutlinedButton(
               onPressed: _openCreateSheet,
               child: const Text('Share info'),
@@ -252,62 +247,53 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
         _sharedError == null;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.cardPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(Icons.groups_outlined, color: scheme.primary),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppLayout.cardGap),
                 const Expanded(
                   child: Text(
                     'Community',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppText.sectionTitle,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             Text(
               'Shared posts are visible to everyone once approved. '
               'Posts marked Local stay on this device.',
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             const Text(
               'Shared posts',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              style: AppText.labelStrong,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             if (widget.currentUser == null)
               Text(
                 'Sign in to see posts shared by the community.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
               )
             else if (widget.postRepository == null)
               Text(
                 "Community sharing isn't available yet — the shared "
                 'database hasn\'t been set up.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
               )
             else if (_sharedLoading)
               const Center(child: CircularProgressIndicator())
             else if (_sharedError != null) ...[
               Text(
                 'Couldn\'t load shared posts. $_sharedError',
-                style: TextStyle(fontSize: 13, color: scheme.error),
+                style: AppText.caption.copyWith(color: scheme.error),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               OutlinedButton(
                 onPressed: _loadSharedPosts,
                 child: const Text('Retry'),
@@ -315,66 +301,57 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
             ] else if (_sharedPosts.isEmpty)
               Text(
                 'No shared posts yet.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
               )
             else
               for (final post in _sharedPosts) ...[
                 _postCard(post, scheme),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
               ],
             if (visibleLocal.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               const Text(
                 'Your local posts',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                style: AppText.labelStrong,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.s4),
               Text(
                 'Saved on this device only — never uploaded.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               for (final post in visibleLocal) ...[
                 _postCard(post, scheme),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
               ],
             ],
             if (nothingToShow) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               const Text('No announcements or posts yet.'),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.s4),
               Text(
                 'There is no community feed yet — no posts are shown, and none are invented here.',
-                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
             if (_complaints.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               const Text(
                 'My fare complaints',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                style: AppText.labelStrong,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.s4),
               Text(
                 'Copies saved on this device only — never sent by the app.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               for (final complaint in _complaints) ...[
                 _complaintCard(complaint, scheme),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
               ],
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             // Admin-only actions: Post approvals and the LGU directory
             // editor are shown only to allowlisted admin accounts
             // (admin_access.dart). Regular users never see them, so
@@ -432,9 +409,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outline),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
       ),
-      padding: const EdgeInsets.all(12),
+      padding: AppLayout.cardPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -449,17 +426,14 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
           ],
           Row(
             children: [
               Expanded(
                 child: Text(
                   post.displayTitle,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppText.cardTitle,
                 ),
               ),
               Chip(
@@ -469,7 +443,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.s4),
           Chip(
             label: Text(
               post.status == PostStatus.approved
@@ -481,10 +455,10 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                 : const Color(0xFFFEF9C3),
             visualDensity: VisualDensity.compact,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.s4),
           Text(post.hubName),
           if (post.vehicles.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.s4),
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -499,18 +473,18 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
             ),
           ],
           if (post.fareLines.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.s4),
             for (final line in post.fareLines) Text(line),
           ],
           if (post.operatorName.trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.s4),
             Text('Operator: ${post.operatorName}'),
           ],
           if (post.hours.trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.s4),
             Text('Hours: ${post.hours}'),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           Row(
             children: [
               Expanded(
@@ -519,7 +493,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                   child: const Text('View Route'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.s8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
@@ -532,7 +506,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -554,7 +528,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outline),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
       ),
       child: ListTile(
         title: Text(complaint.reference),
@@ -604,18 +578,15 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.s4),
               Text(
                 post.isShared
                     ? 'Shared post — visible to all users once approved.'
                     : 'Local post — saved on this device, not shared.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
               ),
               if (post.photoBase64 != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppLayout.cardGap),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.memory(
@@ -626,7 +597,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               if (post.from.trim().isNotEmpty)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -849,12 +820,12 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               'Share a route',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.s4),
             Text(
               'Shared with the community once approved by an admin.',
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             TextField(
               controller: _fromController,
               decoration: const InputDecoration(
@@ -862,7 +833,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 hintText: 'e.g. Cabugao',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             TextField(
               controller: _toController,
               decoration: const InputDecoration(
@@ -870,9 +841,9 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 hintText: 'e.g. Vigan City',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             const Text('Vehicle *'),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             Wrap(
               spacing: 8,
               children: [
@@ -896,7 +867,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               ],
             ),
             for (final vehicle in _selectedVehicles) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               TextField(
                 controller: _fareControllers.putIfAbsent(
                   vehicle,
@@ -910,7 +881,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             TextField(
               controller: _hoursController,
               decoration: const InputDecoration(
@@ -918,7 +889,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 hintText: 'e.g. 6:00 AM – 9:00 PM',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             TextField(
               controller: _operatorController,
               decoration: const InputDecoration(
@@ -926,7 +897,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 hintText: 'e.g. bus or cooperative name',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             if (_photoBase64 != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -938,7 +909,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               OutlinedButton.icon(
                 onPressed: () => setState(() => _photoBase64 = null),
                 icon: const Icon(Icons.delete_outlined),
@@ -950,7 +921,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 icon: const Icon(Icons.photo_outlined),
                 label: const Text('Add photo (optional)'),
               ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             DropdownButtonFormField<String>(
               value: _selectedHub,
               decoration: const InputDecoration(labelText: 'Location'),
@@ -963,10 +934,10 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               },
             ),
             if (_error.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               Text(_error, style: TextStyle(color: scheme.error)),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             FilledButton(
               onPressed: _save,
               child: const Text('Share post'),

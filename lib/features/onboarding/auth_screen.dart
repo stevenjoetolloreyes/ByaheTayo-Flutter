@@ -27,6 +27,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_layout.dart';
 import 'auth_service.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
@@ -270,7 +271,7 @@ class _AuthScreenState extends State<AuthScreen> {
             const Text(
               'Enter your email and we will send you a password reset link.',
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.s16),
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
@@ -361,7 +362,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         const SizedBox(width: 48),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   // Branding.
                   Center(
                     child: Image.asset(
@@ -370,17 +371,13 @@ class _AuthScreenState extends State<AuthScreen> {
                       height: 96,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.s12),
                   Center(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text.rich(
                         TextSpan(
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: colors.primaryText,
-                          ),
+                          style: AppText.displayMedium.copyWith(color: colors.primaryText),
                           children: [
                             const TextSpan(text: 'Estudyante'),
                             TextSpan(
@@ -392,39 +389,29 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.s4),
                   Center(
                     child: Text(
                       'Your Student Companion',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: colors.secondaryText,
-                      ),
+                      style: AppText.label.copyWith(color: colors.secondaryText),
                     ),
                   ),
                   const SizedBox(height: 28),
                   Text(
                     isCreate ? 'Create Your Account' : 'Welcome Back',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: colors.primaryText,
-                    ),
+                    style: AppText.displaySmall.copyWith(color: colors.primaryText),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.s4),
                   Text(
                     isCreate
                         ? 'Join EstudyanteGO and get started.'
                         : 'Sign in to continue to EstudyanteGO.',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: colors.secondaryText,
-                    ),
+                    style: AppText.bodySmall.copyWith(color: colors.secondaryText),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.s24),
                   if (!_configured) ...[
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: AppLayout.cardPadding,
                       decoration: BoxDecoration(
                         color: colors.error.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
@@ -444,7 +431,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.s16),
                   ],
                   if (isCreate) ...[
                     TextField(
@@ -457,7 +444,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         icon: Icons.person_outline,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.s16),
                   ],
                   TextField(
                     controller: _emailController,
@@ -469,7 +456,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       icon: Icons.email_outlined,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.s16),
                   TextField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
@@ -492,7 +479,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   if (!isCreate) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.s8),
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
@@ -502,20 +489,20 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ],
                   if (_error != null) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.s12),
                     Text(
                       _error!,
                       style: TextStyle(color: colors.error),
                     ),
                   ],
                   if (_noAccount) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.s12),
                     OutlinedButton(
                       onPressed: () => _switchMode(AuthMode.createAccount),
                       child: const Text('Create Account'),
                     ),
                   ],
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.s16),
                   FilledButton(
                     onPressed: (_busy || !_configured) ? null : _submit,
                     child: _loading
@@ -547,25 +534,21 @@ class _AuthScreenState extends State<AuthScreen> {
                             ],
                           ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpacing.s20),
                   Row(
                     children: [
                       const Expanded(child: Divider()),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12),
                         child: Text(
                           'OR',
-                          style: TextStyle(
-                            color: colors.secondaryText,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: AppText.captionSemiBold.copyWith(color: colors.secondaryText),
                         ),
                       ),
                       const Expanded(child: Divider()),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpacing.s20),
                   ElevatedButton(
                     onPressed: (_busy || !_configured)
                         ? null
@@ -604,10 +587,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               const Flexible(
                                 child: Text(
                                   'Continue with Google',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: AppText.button,
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
                                 ),
@@ -615,7 +595,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             ],
                           ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.s16),
                   TextButton(
                     onPressed: _busy
                         ? null
@@ -626,10 +606,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                     child: Text.rich(
                       TextSpan(
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: colors.secondaryText,
-                        ),
+                        style: AppText.bodySmall.copyWith(color: colors.secondaryText),
                         children: [
                           TextSpan(
                             text: isCreate

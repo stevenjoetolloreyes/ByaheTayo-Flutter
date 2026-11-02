@@ -3,6 +3,7 @@
 // no school, and no photo are ever invented: when no student info was
 // provided (it is optional), the card shows an honest empty state that
 // leads to Profile Setup.
+import 'app_layout.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class StudentIdCardScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('My Student ID')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: AppLayout.pagePaddingLarge,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -120,7 +121,7 @@ class StudentIdCardScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.s16),
               if (!profile.hasStudentInfo)
                 Card(
                   child: Padding(

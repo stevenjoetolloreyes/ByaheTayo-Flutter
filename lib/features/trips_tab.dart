@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_layout.dart';
 import 'community_posts.dart';
 import 'fares_tab.dart';
 import 'map_tab.dart';
@@ -179,18 +180,18 @@ class _TripsTabState extends State<TripsTab> {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: AppLayout.pagePaddingTab,
       children: [
         Text(
           'Browse commute options',
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: AppSpacing.s2),
         const Text(
           'Find a Route',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          style: AppText.pageTitle,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppLayout.cardGap),
         Card(
           child: ListTile(
             leading: Icon(Icons.my_location, color: scheme.primary),
@@ -211,7 +212,7 @@ class _TripsTabState extends State<TripsTab> {
                   ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppLayout.cardGap),
         TextField(
           controller: _searchController,
           onChanged: (v) => setState(() => _searchQuery = v),
@@ -230,12 +231,12 @@ class _TripsTabState extends State<TripsTab> {
                     },
                   ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppLayout.cardRadius),
               borderSide: BorderSide(color: scheme.outline),
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppLayout.cardGap),
         Wrap(
           spacing: 8,
           children: [
@@ -251,12 +252,12 @@ class _TripsTabState extends State<TripsTab> {
               ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppLayout.headerGap),
         Text(
           'Nearby Routes (${routes.length})',
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          style: AppText.sectionTitle,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         if (routes.isEmpty)
           Card(
             child: ListTile(
@@ -274,9 +275,9 @@ class _TripsTabState extends State<TripsTab> {
           const SizedBox(height: 20),
           Text(
             'Routes Directory · From ${origin.name}',
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            style: AppText.sectionTitle,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           for (final dir in const [
             Direction.northbound,
             Direction.southbound,
@@ -288,10 +289,10 @@ class _TripsTabState extends State<TripsTab> {
                     : '↓ SOUTHBOUND (${groupRoutesByDirection(routes)[dir]!.length})',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.s4),
               for (final route in groupRoutesByDirection(routes)[dir]!)
                 _directoryRow(route),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
             ],
         ],
         if (_recents.isNotEmpty) ...[
@@ -302,7 +303,7 @@ class _TripsTabState extends State<TripsTab> {
             children: [
               const Text(
                 'Recent trips',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                style: AppText.sectionTitle,
               ),
               Chip(
                 label: const Text('Current session only'),
@@ -311,16 +312,16 @@ class _TripsTabState extends State<TripsTab> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           for (final route in _recents) _summaryCard(route),
         ],
         if (_savedRoutes.isNotEmpty) ...[
           const SizedBox(height: 20),
           const Text(
             'Saved routes',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            style: AppText.sectionTitle,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           for (final key in _savedRoutes)
             Builder(
               builder: (context) {
@@ -519,16 +520,16 @@ class _TripsTabState extends State<TripsTab> {
               '${route.originName} → ${route.dest.name}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.s4),
             const Text(
               'No verified timetable yet — AM/PM cannot filter '
               'departures yet.',
               style: TextStyle(fontSize: 12),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             const Text(
               'Stops',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: AppText.cardTitle,
             ),
             ListTile(
               leading: const Icon(Icons.radio_button_checked, size: 18),
@@ -548,7 +549,7 @@ class _TripsTabState extends State<TripsTab> {
               'Direct route — no intermediate stops.',
               style: TextStyle(fontSize: 12),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             _detailRow('Distance', '${route.roadKm.toStringAsFixed(1)} km'),
             _detailRow(
               'Estimated time',
@@ -564,7 +565,7 @@ class _TripsTabState extends State<TripsTab> {
                   style: const TextStyle(fontSize: 12),
                 ),
               ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -580,7 +581,7 @@ class _TripsTabState extends State<TripsTab> {
                 label: const Text('View on map'),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -649,7 +650,7 @@ class _TripsTabState extends State<TripsTab> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppLayout.cardGap),
           Flexible(
             child: Text(
               value,

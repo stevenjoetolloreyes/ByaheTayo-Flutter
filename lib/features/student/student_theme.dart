@@ -10,6 +10,7 @@
 // reference the user sent later that day specifies this light theme,
 // so the Hub follows the reference now.)
 import 'package:flutter/material.dart';
+import '../app_layout.dart';
 
 const kStudentEmerald = Color(0xFF14532D);
 const kStudentEmeraldDark = Color(0xFF0A2E1A);
@@ -38,7 +39,7 @@ ThemeData get studentTheme => ThemeData.light().copyWith(
         elevation: 1,
         shadowColor: Color(0x1A0F172A),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
           side: BorderSide(color: kStudentBorder),
         ),
       ),
@@ -100,19 +101,11 @@ Widget studentHeader({
             children: [
               Text(
                 '$greetingName, Steven!',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
+                style: AppText.titleStrong.copyWith(color: Colors.white),
               ),
-              const Text(
+              Text(
                 'Student Hub',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+                style: AppText.sectionTitle.copyWith(color: Colors.white),
               ),
               const Text(
                 'Your school commute, in one place.',

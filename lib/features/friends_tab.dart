@@ -43,6 +43,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_layout.dart';
 import 'friend_cloud_repository.dart';
 import 'friend_sharing.dart';
 import 'friend_store.dart';
@@ -297,15 +298,15 @@ class _FriendsTabState extends State<FriendsTab> {
               children: [
                 const Text(
                   'Add Friend',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  style: AppText.titleStrong,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
                 const Text(
                   'Share your friend code with someone you travel with.',
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.s20),
                 _friendCodeDisplay(),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.s20),
                 if (_cloudEnabled) ...[
                   TextField(
                     controller: _codeController,
@@ -313,7 +314,7 @@ class _FriendsTabState extends State<FriendsTab> {
                       hintText: 'Enter a friend code',
                       prefixIcon: Icon(Icons.person_add_outlined),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                        borderRadius: BorderRadius.all(Radius.circular(AppLayout.inputRadiusTab)),
                       ),
                     ),
                     onChanged: (_) {
@@ -323,7 +324,7 @@ class _FriendsTabState extends State<FriendsTab> {
                     },
                   ),
                   if (_codeError != null) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.s8),
                     Text(
                       _codeError!,
                       style: TextStyle(
@@ -331,7 +332,7 @@ class _FriendsTabState extends State<FriendsTab> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppLayout.cardGap),
                   FilledButton(
                     onPressed: _sending
                         ? null
@@ -382,7 +383,7 @@ class _FriendsTabState extends State<FriendsTab> {
     return SafeArea(
       top: false,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           // ---- Header: title + Add Friend action ----
           Row(
@@ -394,12 +395,9 @@ class _FriendsTabState extends State<FriendsTab> {
                   children: [
                     const Text(
                       'Friends',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: AppText.pageTitle,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpacing.s2),
                     Text(
                       'People you travel with',
                       style: TextStyle(color: muted),
@@ -414,7 +412,7 @@ class _FriendsTabState extends State<FriendsTab> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           // ---- Search: real local friends only ----
           TextField(
             onChanged: (value) => setState(() => _query = value),
@@ -422,13 +420,13 @@ class _FriendsTabState extends State<FriendsTab> {
               hintText: 'Search friends',
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
               ),
               filled: true,
               fillColor: scheme.surface,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           // ---- 1. My Friends ----
           _sectionCard(
             icon: Icons.people_outlined,
@@ -460,14 +458,14 @@ class _FriendsTabState extends State<FriendsTab> {
                     ],
                   ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           // ---- 2. My Friend Code ----
           _sectionCard(
             icon: Icons.badge_outlined,
             title: 'My Friend Code',
             child: _friendCodeDisplay(),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           // ---- 3. Friend Requests ----
           _sectionCard(
             icon: Icons.person_add_outlined,
@@ -484,23 +482,23 @@ class _FriendsTabState extends State<FriendsTab> {
                         size: 20,
                         color: Theme.of(context).colorScheme.error,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.s8),
                       const Expanded(
                         child: Text(
                           'Could not sync friend requests. Showing '
                           'on-device data.',
-                          style: TextStyle(fontSize: 13),
+                          style: AppText.caption,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppLayout.cardGap),
                 ],
                 const Text(
                   'Incoming',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  style: AppText.labelStrong,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
                 if (!_cloudEnabled)
                   _emptyState(
                     icon: Icons.inbox_outlined,
@@ -521,12 +519,12 @@ class _FriendsTabState extends State<FriendsTab> {
                         _incomingRequestRow(request),
                     ],
                   ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppLayout.headerGap),
                 const Text(
                   'Outgoing',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  style: AppText.labelStrong,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
                 if (!_cloudEnabled)
                   _emptyState(
                     icon: Icons.outbox_outlined,
@@ -553,7 +551,7 @@ class _FriendsTabState extends State<FriendsTab> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           // ---- 4. Chats ----
           _sectionCard(
             icon: Icons.chat_bubble_outline,
@@ -565,14 +563,14 @@ class _FriendsTabState extends State<FriendsTab> {
                   'no conversations are shown here.',
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           Text(
             _cloudEnabled
                 ? 'Friend codes and requests sync across your devices. '
                     'Chats are not available yet.'
                 : 'Friend data is stored only on this device. Cross-device '
                     'sync needs cloud sync, which is not enabled yet.',
-            style: TextStyle(fontSize: 13, color: muted),
+            style: AppText.caption.copyWith(color: muted),
           ),
         ],
       ),
@@ -584,7 +582,7 @@ class _FriendsTabState extends State<FriendsTab> {
   /// messaging is not available yet.
   Widget _friendRow(FriendEntry friend) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
       child: Row(
         children: [
           CircleAvatar(
@@ -599,14 +597,11 @@ class _FriendsTabState extends State<FriendsTab> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppLayout.cardGap),
           Expanded(
             child: Text(
               friend.name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppText.name,
             ),
           ),
           IconButton(
@@ -624,7 +619,7 @@ class _FriendsTabState extends State<FriendsTab> {
   /// that actually exist.
   Widget _incomingRequestRow(FriendRequest request) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -644,32 +639,25 @@ class _FriendsTabState extends State<FriendsTab> {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppLayout.cardGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       request.nameFor(true),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppText.name,
                     ),
                     Text(
                       request.fromCode,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color:
-                            Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                      style: AppText.caption.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           _requestActions(request),
         ],
       ),
@@ -696,7 +684,7 @@ class _FriendsTabState extends State<FriendsTab> {
           return Row(
             children: [
               Expanded(child: acceptButton),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppLayout.cardGap),
               Expanded(child: declineButton),
             ],
           );
@@ -705,7 +693,7 @@ class _FriendsTabState extends State<FriendsTab> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             acceptButton,
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             declineButton,
           ],
         );
@@ -721,7 +709,7 @@ class _FriendsTabState extends State<FriendsTab> {
             ? 'Declined'
             : 'Pending';
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
       child: Row(
         children: [
           CircleAvatar(
@@ -738,35 +726,25 @@ class _FriendsTabState extends State<FriendsTab> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppLayout.cardGap),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   request.nameFor(false),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppText.name,
                 ),
                 Text(
                   request.toCode,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  style: AppText.caption.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
           ),
           Text(
             status,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            style: AppText.captionStrong.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -784,7 +762,7 @@ class _FriendsTabState extends State<FriendsTab> {
     final code = _code;
     if (code == null) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.s24),
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -794,21 +772,21 @@ class _FriendsTabState extends State<FriendsTab> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: AppLayout.cardPadding,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppLayout.cardRadius),
               border: Border.all(
                 color: Theme.of(context).colorScheme.outline,
               ),
             ),
             child: QrImageView(
               data: code,
-              size: 180,
+              size: AppLayout.qrSize,
               backgroundColor: Colors.white,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           SelectableText(
             code,
             textAlign: TextAlign.center,
@@ -818,14 +796,14 @@ class _FriendsTabState extends State<FriendsTab> {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.s4),
           const Text(
             'This is your code on this device. Share it with someone '
             'you travel with.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13),
+            style: AppText.caption,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           _codeActionButtons(),
         ],
       ),
@@ -852,7 +830,7 @@ class _FriendsTabState extends State<FriendsTab> {
           return Row(
             children: [
               Expanded(child: copyButton),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppLayout.cardGap),
               Expanded(child: shareButton),
             ],
           );
@@ -861,7 +839,7 @@ class _FriendsTabState extends State<FriendsTab> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             copyButton,
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             shareButton,
           ],
         );
@@ -877,26 +855,23 @@ class _FriendsTabState extends State<FriendsTab> {
     final scheme = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.cardPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(icon, color: scheme.primary),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppLayout.cardGap),
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppText.sectionTitle,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             child,
           ],
         ),
@@ -920,32 +895,32 @@ class _FriendsTabState extends State<FriendsTab> {
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
       child: SizedBox(
         width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: AppLayout.emptyIllustrationSize,
+              height: AppLayout.emptyIllustrationSize,
               decoration: BoxDecoration(
                 color: scheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppLayout.emptyIllustrationRadius),
               ),
               child: Icon(icon, size: 36, color: scheme.primary),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: AppText.emptyTitle,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.s4),
             Text(
               note,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -965,23 +940,23 @@ class _SyncNoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: AppLayout.cardPadding,
       decoration: BoxDecoration(
         color: scheme.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppLayout.noteRadius),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.info_outlined, color: scheme.primary, size: 20),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppLayout.cardGap),
           const Expanded(
             child: Text(
               'Adding a friend across devices needs cloud sync, which '
               'is not enabled yet. A typed code cannot confirm a '
               'friend yet, so no code entry is offered here — share '
               'your code above instead.',
-              style: TextStyle(fontSize: 13),
+              style: AppText.caption,
             ),
           ),
         ],

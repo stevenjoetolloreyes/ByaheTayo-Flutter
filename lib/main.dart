@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'features/account_tab.dart';
+import 'features/app_layout.dart';
 import 'features/communities_tab.dart';
 import 'features/community_post_repository.dart';
 import 'features/fares_tab.dart';
@@ -116,9 +117,9 @@ ThemeData _lightTheme() {
       backgroundColor: Colors.white,
       elevation: 0,
       indicatorColor: _indicatorLight,
-      iconTheme: const WidgetStatePropertyAll(IconThemeData(size: 24)),
+      iconTheme: const WidgetStatePropertyAll(IconThemeData(size: AppLayout.navIconSize)),
       labelTextStyle: const WidgetStatePropertyAll(
-        TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        AppText.smallSemiBold,
       ),
     ),
     // Premium Dark Minimalist card language (shared by every tab, and
@@ -128,7 +129,7 @@ ThemeData _lightTheme() {
       color: Colors.white,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
         side: BorderSide(color: Color(0xFFE2E8F0)),
       ),
     ),
@@ -162,9 +163,9 @@ ThemeData _darkTheme() {
       backgroundColor: Color(0xFF1E2126),
       elevation: 0,
       indicatorColor: _indicatorDark,
-      iconTheme: WidgetStatePropertyAll(IconThemeData(size: 24)),
+      iconTheme: WidgetStatePropertyAll(IconThemeData(size: AppLayout.navIconSize)),
       labelTextStyle: WidgetStatePropertyAll(
-        TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        AppText.smallSemiBold,
       ),
     ),
     // Dark card language, matching the approved iPhone Map preview:
@@ -173,7 +174,7 @@ ThemeData _darkTheme() {
       color: Color(0xFF1E2126),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
         side: BorderSide(color: Color(0xFF33373E)),
       ),
     ),

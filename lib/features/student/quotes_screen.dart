@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app_layout.dart';
 import 'share_card.dart';
 import 'student_data.dart';
 
@@ -154,7 +155,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
           children: [
             Text('"${q.text}"',
                 style: const TextStyle(fontSize: 17)),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             Text('— ${q.author}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
           ],
@@ -214,11 +215,11 @@ class _QuotesScreenState extends State<QuotesScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Daily Quotes')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           const Text('Quote of the Day',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           RepaintBoundary(
             key: _dailyKey,
             child: shareCardContent(
@@ -227,7 +228,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
               footer: 'EstudyanteGO · Daily Quotes',
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           Row(
             children: [
               Expanded(
@@ -241,7 +242,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   label: const Text('Copy'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.s8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => shareBoundaryAsImage(
@@ -253,7 +254,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   label: const Text('Share image'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.s8),
               IconButton(
                 icon: Icon(
                   _favs.contains(daily.id)
@@ -275,7 +276,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   borderRadius: BorderRadius.circular(16)),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -298,7 +299,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           if (filtered.isEmpty)
             const Card(child: ListTile(title: Text('No quotes found.')))
           else
@@ -324,8 +325,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
           if (_collections.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Text('My collections',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
+                style: AppText.sectionTitle),
+            const SizedBox(height: AppSpacing.s8),
             for (final c in _collections)
               Card(
                 child: ExpansionTile(
@@ -356,8 +357,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
           if (historyQuotes.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Text('Recently viewed',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
+                style: AppText.sectionTitle),
+            const SizedBox(height: AppSpacing.s8),
             for (final q in historyQuotes)
               Card(
                 child: ListTile(
@@ -367,7 +368,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                 ),
               ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
         ],
       ),
     );

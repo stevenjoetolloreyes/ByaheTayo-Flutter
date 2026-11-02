@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app_layout.dart';
 import 'student_data.dart';
 
 const _expenseCategories = [
@@ -312,20 +313,20 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
         label: const Text('Add'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.cardPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Available balance',
-                      style: TextStyle(fontSize: 13)),
+                      style: AppText.caption),
                   Text(peso(balance),
                       style: const TextStyle(
                           fontSize: 28, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   Row(
                     children: [
                       Expanded(
@@ -340,11 +341,11 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
             ),
           ),
           if (overBudgets.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             Card(
               color: scheme.errorContainer,
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppLayout.cardPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -360,11 +361,11 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
           ],
           const SizedBox(height: 20),
           const Text('Spending · last 6 months',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.cardPadding,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -374,7 +375,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
                         children: [
                           Text(peso(b.amount),
                               style: const TextStyle(fontSize: 10)),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpacing.s4),
                           Container(
                             height: maxBar > 0
                                 ? 80 * (b.amount / maxBar)
@@ -385,7 +386,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpacing.s4),
                           Text(b.label,
                               style: const TextStyle(fontSize: 11)),
                         ],
@@ -401,7 +402,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
               const Expanded(
                 child: Text('Savings goals',
                     style:
-                        TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        AppText.sectionTitle),
               ),
               TextButton(
                   onPressed: _openGoalForm, child: const Text('New goal')),
@@ -423,7 +424,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
                             ? (g.saved / g.target).clamp(0, 1).toDouble()
                             : 0,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.s4),
                       Text('${peso(g.saved)} of ${peso(g.target)}'),
                     ],
                   ),
@@ -438,7 +439,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
               const Expanded(
                 child: Text('Monthly budgets',
                     style:
-                        TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        AppText.sectionTitle),
               ),
               TextButton(
                   onPressed: _openBudgetForm, child: const Text('Set limit')),
@@ -475,8 +476,8 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
               }),
           const SizedBox(height: 20),
           const Text('Transactions',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             onChanged: (v) => setState(() => _query = v),
             decoration: InputDecoration(
@@ -486,7 +487,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
                   borderRadius: BorderRadius.circular(16)),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           Wrap(
             spacing: 8,
             children: [
@@ -522,7 +523,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           if (filtered.isEmpty)
             const Card(
                 child: ListTile(title: Text('No transactions found.')))
@@ -629,7 +630,7 @@ class _TxnFormState extends State<_TxnForm> {
             widget.existing == null ? 'Add transaction' : 'Edit transaction',
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'expense', label: Text('Expense')),
@@ -641,7 +642,7 @@ class _TxnFormState extends State<_TxnForm> {
               _fixCategory();
             }),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           TextField(
             controller: _amount,
             decoration: const InputDecoration(labelText: 'Amount (₱)'),
@@ -651,7 +652,7 @@ class _TxnFormState extends State<_TxnForm> {
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           DropdownButtonFormField<String>(
             value: _category,
             decoration: const InputDecoration(labelText: 'Category'),
@@ -662,13 +663,13 @@ class _TxnFormState extends State<_TxnForm> {
               if (v != null) setState(() => _category = v);
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             controller: _note,
             decoration:
                 const InputDecoration(labelText: 'Note (optional)'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text('Date: ${formatDate(_date)}'),
@@ -683,7 +684,7 @@ class _TxnFormState extends State<_TxnForm> {
               if (picked != null) setState(() => _date = picked);
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           FilledButton(
             onPressed: () {
               final amount = double.tryParse(_amount.text) ?? 0;

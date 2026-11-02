@@ -20,6 +20,7 @@
 // system typeface (Roboto on Android) — no font dependency is added.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../app_layout.dart';
 
 /// Exact spec tokens for one brightness.
 class EntryColors {
@@ -126,25 +127,25 @@ ThemeData entryThemeData(Brightness brightness) {
       hintStyle: TextStyle(color: colors.secondaryText),
       prefixIconColor: colors.secondaryText,
       suffixIconColor: colors.secondaryText,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppLayout.inputRadiusEntry),
         borderSide: BorderSide(color: colors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppLayout.inputRadiusEntry),
         borderSide: BorderSide(color: colors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppLayout.inputRadiusEntry),
         borderSide: BorderSide(color: colors.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppLayout.inputRadiusEntry),
         borderSide: BorderSide(color: colors.error),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppLayout.inputRadiusEntry),
         borderSide: BorderSide(color: colors.error, width: 1.5),
       ),
     ),
@@ -156,8 +157,8 @@ ThemeData entryThemeData(Brightness brightness) {
         foregroundColor: colors.onPrimary,
         disabledBackgroundColor: colors.primary.withValues(alpha: 0.4),
         minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppLayout.buttonRadius)),
+        textStyle: AppText.button,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -165,14 +166,14 @@ ThemeData entryThemeData(Brightness brightness) {
         foregroundColor: colors.primary,
         side: BorderSide(color: colors.primary, width: 1.5),
         minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppLayout.buttonRadius)),
+        textStyle: AppText.button,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: colors.primary,
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        textStyle: AppText.buttonSmall,
       ),
     ),
     dividerTheme: DividerThemeData(color: colors.border, thickness: 1),
@@ -181,13 +182,13 @@ ThemeData entryThemeData(Brightness brightness) {
       color: colors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppLayout.cardRadiusEntry),
         side: BorderSide(color: colors.border),
       ),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: colors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppLayout.dialogRadius)),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: colors.background,

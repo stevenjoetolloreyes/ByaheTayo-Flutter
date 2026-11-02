@@ -6,6 +6,7 @@
 // appear in-app, not as system notifications).
 import 'package:flutter/material.dart';
 
+import '../app_layout.dart';
 import 'student_data.dart';
 
 const _subjectColors = [
@@ -149,7 +150,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
         label: const Text('Add subject'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           if (next != null)
             Card(
@@ -168,7 +169,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
                 subtitle: Text('Add a subject to build your timetable.'),
               ),
             ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'today', label: Text('Today')),
@@ -177,7 +178,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
             selected: {_view},
             onSelectionChanged: (s) => setState(() => _view = s.first),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           if (_view == 'today') ...[
             if (todays.isEmpty)
               const Card(
@@ -189,10 +190,10 @@ class _ClassesScreenState extends State<ClassesScreen> {
               if (classesOnDay(_subjects, day).isNotEmpty) ...[
                 Text(weekdayName(day),
                     style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.s4),
                 for (final s in classesOnDay(_subjects, day))
                   _subjectTile(s),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppLayout.cardGap),
               ],
             if (_subjects.isEmpty)
               const Card(
@@ -204,7 +205,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
               const Expanded(
                 child: Text('Assignments & Exams',
                     style:
-                        TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        AppText.sectionTitle),
               ),
               TextButton(onPressed: _openItemForm, child: const Text('Add')),
             ],
@@ -215,7 +216,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
           else ...[
             for (final i in upcoming) _itemTile(i),
             if (done.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               const Text('Done',
                   style: TextStyle(fontWeight: FontWeight.w700)),
               for (final i in done) _itemTile(i),
@@ -389,25 +390,25 @@ class _SubjectFormState extends State<_SubjectForm> {
               style:
                   const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             TextField(
                 controller: _name,
                 decoration: const InputDecoration(labelText: 'Subject name')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             TextField(
                 controller: _code,
                 decoration:
                     const InputDecoration(labelText: 'Subject code')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             TextField(
                 controller: _teacher,
                 decoration: const InputDecoration(labelText: 'Teacher')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             TextField(
                 controller: _room,
                 decoration:
                     const InputDecoration(labelText: 'Classroom / location')),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             const Text('Days',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             Wrap(
@@ -427,7 +428,7 @@ class _SubjectFormState extends State<_SubjectForm> {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             Row(
               children: [
                 Expanded(
@@ -467,7 +468,7 @@ class _SubjectFormState extends State<_SubjectForm> {
                   ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.headerGap),
             FilledButton(
               onPressed: () {
                 if (_name.text.trim().isEmpty) {
@@ -557,7 +558,7 @@ class _ItemFormState extends State<_ItemForm> {
         children: [
           const Text('Add deadline',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           DropdownButtonFormField<String>(
             value: _subjectId,
             decoration: const InputDecoration(labelText: 'Subject'),
@@ -569,11 +570,11 @@ class _ItemFormState extends State<_ItemForm> {
               if (v != null) setState(() => _subjectId = v);
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'Title')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'assignment', label: Text('Assignment')),
@@ -596,7 +597,7 @@ class _ItemFormState extends State<_ItemForm> {
               if (picked != null) setState(() => _due = picked);
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           FilledButton(
             onPressed: () {
               if (_title.text.trim().isEmpty) {

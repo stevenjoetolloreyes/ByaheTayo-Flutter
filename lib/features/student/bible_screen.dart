@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app_layout.dart';
 import 'share_card.dart';
 import 'student_data.dart';
 
@@ -107,9 +108,9 @@ class _BibleScreenState extends State<BibleScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(v.text, style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             Text('Topics: ${v.topics.join(', ')}',
-                style: const TextStyle(fontSize: 13)),
+                style: AppText.caption),
           ],
         ),
         actions: [
@@ -203,13 +204,12 @@ class _BibleScreenState extends State<BibleScreen> {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePaddingTab,
               children: [
                 if (_tab == 'daily') ...[
                   const Text('Verse of the Day',
-                      style: TextStyle(
-                          fontSize: 17, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
+                      style: AppText.sectionTitle),
+                  const SizedBox(height: AppSpacing.s8),
                   RepaintBoundary(
                     key: _dailyKey,
                     child: shareCardContent(
@@ -218,7 +218,7 @@ class _BibleScreenState extends State<BibleScreen> {
                       footer: 'EstudyanteGO · Bible Verse',
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   Row(
                     children: [
                       Expanded(
@@ -233,7 +233,7 @@ class _BibleScreenState extends State<BibleScreen> {
                           label: const Text('Copy'),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.s8),
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () => shareBoundaryAsImage(
@@ -246,7 +246,7 @@ class _BibleScreenState extends State<BibleScreen> {
                           label: const Text('Share image'),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.s8),
                       IconButton(
                         icon: Icon(
                           _favs.contains(daily.id)
@@ -260,7 +260,7 @@ class _BibleScreenState extends State<BibleScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppLayout.headerGap),
                   const Card(
                     child: ListTile(
                       title: Text('Translation: King James Version '
@@ -279,7 +279,7 @@ class _BibleScreenState extends State<BibleScreen> {
                           borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
@@ -304,7 +304,7 @@ class _BibleScreenState extends State<BibleScreen> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   Row(
                     children: [
                       Expanded(
@@ -325,7 +325,7 @@ class _BibleScreenState extends State<BibleScreen> {
                           },
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.s8),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _topicFilter,
@@ -346,7 +346,7 @@ class _BibleScreenState extends State<BibleScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppLayout.cardGap),
                   if (filtered.isEmpty)
                     const Card(
                         child: ListTile(title: Text('No verses found.')))
@@ -376,9 +376,9 @@ class _BibleScreenState extends State<BibleScreen> {
                   const Text(
                     'Your own devotional reflections and prayers. '
                     'These are private to this device.',
-                    style: TextStyle(fontSize: 13),
+                    style: AppText.caption,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   if (_journal.isEmpty)
                     const Card(
                         child: ListTile(
@@ -433,10 +433,10 @@ class _BibleScreenState extends State<BibleScreen> {
                         ? 0
                         : _planDone.length / biblePlanDays.length,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.s4),
                   Text(
                       'Reading plan: ${_planDone.length}/${biblePlanDays.length} days done'),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppLayout.cardGap),
                   for (var i = 0; i < biblePlanDays.length; i++)
                     Card(
                       child: ExpansionTile(
@@ -526,7 +526,7 @@ class _JournalFormState extends State<_JournalForm> {
         children: [
           const Text('New journal entry',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'devotional', label: Text('Devotional')),
@@ -535,13 +535,13 @@ class _JournalFormState extends State<_JournalForm> {
             selected: {_kind},
             onSelectionChanged: (s) => setState(() => _kind = s.first),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             controller: _ref,
             decoration: const InputDecoration(
                 labelText: 'Verse reference (optional, e.g. John 3:16)'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             controller: _text,
             decoration: InputDecoration(
@@ -550,7 +550,7 @@ class _JournalFormState extends State<_JournalForm> {
                     : 'Your reflection'),
             maxLines: 5,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           FilledButton(
             onPressed: () {
               if (_text.text.trim().isEmpty) {

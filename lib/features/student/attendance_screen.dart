@@ -11,6 +11,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
+import '../app_layout.dart';
 import 'student_data.dart';
 
 const _statuses = ['present', 'absent', 'late', 'excused', 'half'];
@@ -303,17 +304,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         label: const Text('Add record'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           const Text(
             'Records are entered manually by you — not verified by '
             'the school.',
-            style: TextStyle(fontSize: 13),
+            style: AppText.caption,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.cardPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -335,10 +336,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   LinearProgressIndicator(
                     value: (stats.percent / 100).clamp(0, 1).toDouble(),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   Text(
                       'Present ${stats.present} · Absent ${stats.absent} · Late ${stats.late} · Excused ${stats.excused} · Half-day ${stats.half} · Total ${stats.total}'),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.s4),
                   const Text(
                     'Present% = full presents + lates + half of half-days, over all records except excused ones.',
                     style: TextStyle(fontSize: 12),
@@ -347,7 +348,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           Row(
             children: [
               Expanded(
@@ -366,7 +367,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   },
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.s8),
               Expanded(
                 child: DropdownButtonFormField<String>(
                   value: _statusFilter,
@@ -441,8 +442,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           if (weeklyKeys.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Text('Weekly summaries',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
+                style: AppText.sectionTitle),
+            const SizedBox(height: AppSpacing.s8),
             for (final k in weeklyKeys.take(8))
               Card(
                 child: ListTile(
@@ -455,8 +456,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           if (monthlyKeys.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Text('Monthly summaries',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
+                style: AppText.sectionTitle),
+            const SizedBox(height: AppSpacing.s8),
             for (final k in monthlyKeys)
               Card(
                 child: ListTile(
@@ -549,7 +550,7 @@ class _AttendanceFormState extends State<_AttendanceForm> {
               style:
                   const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             DropdownButtonFormField<String>(
               value: _subjectPick,
               decoration: const InputDecoration(labelText: 'Subject'),
@@ -564,7 +565,7 @@ class _AttendanceFormState extends State<_AttendanceForm> {
               },
             ),
             if (_subjectPick == 'custom') ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               TextField(
                 controller: _customSubject,
                 decoration:
@@ -598,21 +599,21 @@ class _AttendanceFormState extends State<_AttendanceForm> {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
             TextField(
               controller: _note,
               decoration:
                   const InputDecoration(labelText: 'Note (optional)'),
             ),
             if (_status == 'absent' || _status == 'excused') ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               TextField(
                 controller: _reason,
                 decoration:
                     const InputDecoration(labelText: 'Absence reason'),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             FilledButton(
               onPressed: () {
                 if (_subjectName.isEmpty) {

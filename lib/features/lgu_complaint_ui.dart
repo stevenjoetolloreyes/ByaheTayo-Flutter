@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_layout.dart';
 import 'community_posts.dart';
 import 'lgu_complaints.dart';
 import 'vehicle_categories.dart';
@@ -253,7 +254,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                 'LGU yourself.',
                 style: TextStyle(color: Colors.grey),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               if (!_loadingDirectory) ...[
                 if (lgu != null && lgu.hasVerifiedPage)
                   ListTile(
@@ -272,7 +273,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppLayout.noteRadius),
                     ),
                     child: Text(
                       'No verified LGU Facebook page found for '
@@ -281,18 +282,18 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                       'message to send through another channel.',
                     ),
                   ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppLayout.cardGap),
               ],
               TextField(
                 controller: _from,
                 decoration: const InputDecoration(labelText: 'From *'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               TextField(
                 controller: _to,
                 decoration: const InputDecoration(labelText: 'To *'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               if (widget.post.vehicles.isNotEmpty)
                 DropdownButtonFormField<String>(
                   value: _selectedVehicle,
@@ -313,7 +314,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                   decoration:
                       const InputDecoration(labelText: 'Vehicle type *'),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               TextField(
                 controller: _reportedFare,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -323,7 +324,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                   labelText: 'Reported fare (₱) *',
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               TextField(
                 controller: _expectedFare,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -333,7 +334,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                   labelText: 'Expected fare (₱) (optional)',
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Date & time'),
@@ -346,7 +347,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                 decoration:
                     const InputDecoration(labelText: 'Location'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               TextField(
                 controller: _description,
                 maxLines: 4,
@@ -355,12 +356,12 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                   hintText: 'What happened? e.g. fare charged vs. usual fare.',
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               const Text(
                 'Photo evidence (optional)',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               if (_photoBase64 != null) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
@@ -400,27 +401,27 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                   decoration:
                       const InputDecoration(labelText: 'Your name'),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
                 TextField(
                   controller: _contact,
                   decoration: const InputDecoration(
                     labelText: 'Contact (phone or email)',
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
               ],
               if (_error != null) ...[
                 Text(
                   _error!,
                   style: const TextStyle(color: Colors.red),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
               ],
               FilledButton(
                 onPressed: _save,
                 child: const Text('Save complaint'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
             ],
           ),
         ),
@@ -523,7 +524,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
     final submitted = _complaint.status == ComplaintStatus.submitted;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.cardPadding,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -562,12 +563,12 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                   '${formatComplaintDateTime(_complaint.submittedAt!)}.',
                   style: const TextStyle(color: Colors.grey),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               SelectableText(
                 formatComplaintMessage(_complaint, lgu: lgu),
               ),
               if (_complaint.photoBase64 != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppLayout.cardGap),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.memory(
@@ -578,7 +579,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               if (lgu != null && lgu.hasVerifiedPage)
                 FilledButton.icon(
                   onPressed: () => _openPage(lgu.facebookUrl),
@@ -591,14 +592,14 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                   'Copy the message and send it through another channel.',
                   style: TextStyle(color: Colors.grey),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               OutlinedButton.icon(
                 onPressed: _copyMessage,
                 icon: const Icon(Icons.copy),
                 label: const Text('Copy Complaint'),
               ),
               if (!submitted) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.s8),
                 OutlinedButton.icon(
                   onPressed: _confirmSent,
                   icon: const Icon(Icons.check_circle_outline),
@@ -610,7 +611,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                   style: TextStyle(color: Colors.grey),
                 ),
               ],
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
             ],
           ),
         ),
@@ -805,7 +806,7 @@ class _LguAdminScreenState extends State<LguAdminScreen> {
           : _entries.isEmpty
               ? const Center(
                   child: Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: AppLayout.pagePaddingLarge,
                     child: Text(
                       'No LGU entries yet. Add one with the button below.',
                       textAlign: TextAlign.center,

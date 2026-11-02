@@ -31,6 +31,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app_layout.dart';
 import 'entry_theme.dart';
 
 class _OnboardingPage {
@@ -223,9 +224,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 minHeight: constraints.maxHeight,
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24),
                                 child: TweenAnimationBuilder<double>(
                                   tween: Tween(begin: 0.0, end: 1.0),
                                   duration:
@@ -284,26 +283,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                                     page.title,
                                                     textAlign:
                                                         TextAlign.center,
-                                                    style: TextStyle(
-                                                      fontSize: 26,
-                                                      height: 1.2,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: colors
-                                                          .primaryText,
-                                                    ),
+                                                    style: AppText.titleLarge.copyWith(color: colors.primaryText),
                                                   ),
-                                                  const SizedBox(height: 12),
+                                                  const SizedBox(height: AppSpacing.s12),
                                                   Text(
                                                     page.description,
                                                     textAlign:
                                                         TextAlign.center,
-                                                    style: TextStyle(
-                                                      fontSize: 16,
-                                                      height: 1.5,
-                                                      color: colors
-                                                          .secondaryText,
-                                                    ),
+                                                    style: AppText.bodyRelaxed.copyWith(color: colors.secondaryText),
                                                   ),
                                                 ],
                                               ),
@@ -344,9 +331,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.s20),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24),
                   child: _isLast
                       ? Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -355,7 +342,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               onPressed: widget.onGetStarted,
                               child: const Text('Get Started'),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: AppSpacing.s12),
                             OutlinedButton(
                               onPressed: widget.onSignIn,
                               child: const Text('Sign In'),

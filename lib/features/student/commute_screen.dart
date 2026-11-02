@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_layout.dart';
 import '../community_posts.dart';
 import '../fares_tab.dart' as fares;
 import '../map_tab.dart' as maps;
@@ -124,14 +125,14 @@ class _CommuteScreenState extends State<CommuteScreen> {
         label: const Text('Log expense'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           const Text(
             'Saved routes are shared with the Map tab — save or remove '
             'them there.',
-            style: TextStyle(fontSize: 13),
+            style: AppText.caption,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           Wrap(
             spacing: 8,
             children: [
@@ -148,10 +149,10 @@ class _CommuteScreenState extends State<CommuteScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           const Text('Saved routes',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           if (_savedKeys.isEmpty)
             const Card(
               child: ListTile(
@@ -164,8 +165,8 @@ class _CommuteScreenState extends State<CommuteScreen> {
             for (final key in _savedKeys) _savedRouteCard(key, rate),
           const SizedBox(height: 20),
           const Text('Favorite destinations',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           Row(
             children: [
               Expanded(
@@ -182,7 +183,7 @@ class _CommuteScreenState extends State<CommuteScreen> {
                   },
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.s8),
               FilledButton(
                 onPressed: () async {
                   if (_favs.contains(_favPick)) {
@@ -196,7 +197,7 @@ class _CommuteScreenState extends State<CommuteScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           if (_favs.isEmpty)
             const Card(
                 child: ListTile(title: Text('No favorite destinations.')))
@@ -226,11 +227,11 @@ class _CommuteScreenState extends State<CommuteScreen> {
               ),
           const SizedBox(height: 20),
           const Text('Commute expenses',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+              style: AppText.sectionTitle),
+          const SizedBox(height: AppSpacing.s8),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.cardPadding,
               child: Row(
                 children: [
                   Expanded(
@@ -240,7 +241,7 @@ class _CommuteScreenState extends State<CommuteScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           if (_expenses.isEmpty)
             const Card(
               child: ListTile(
@@ -367,7 +368,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
         children: [
           const Text('Log commute expense',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppLayout.cardGap),
           DropdownButtonFormField<String>(
             value: _route,
             decoration: const InputDecoration(labelText: 'Route'),
@@ -379,7 +380,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
               if (v != null) setState(() => _route = v);
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             controller: _amount,
             decoration: const InputDecoration(labelText: 'Amount paid (₱)'),
@@ -389,7 +390,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           TextField(
             controller: _note,
             decoration:
@@ -409,7 +410,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
               if (picked != null) setState(() => _date = picked);
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           FilledButton(
             onPressed: () {
               final amount = double.tryParse(_amount.text) ?? 0;

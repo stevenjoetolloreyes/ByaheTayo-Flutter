@@ -6,6 +6,7 @@
 // different account" signs out and returns to sign-in.
 import 'package:flutter/material.dart';
 
+import '../app_layout.dart';
 import 'auth_service.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -92,20 +93,20 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       appBar: AppBar(title: const Text('Verify your email')),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: AppLayout.pagePaddingLarge,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.s16),
               Container(
-                width: 72,
-                height: 72,
+                width: AppLayout.emptyIllustrationSize,
+                height: AppLayout.emptyIllustrationSize,
                 decoration: BoxDecoration(
                   color: Theme.of(context)
                       .colorScheme
                       .primary
                       .withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppLayout.emptyIllustrationRadius),
                 ),
                 child: Icon(
                   Icons.mark_email_unread_outlined,
@@ -113,22 +114,16 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.s16),
               const Text(
                 'Check your email',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                style: AppText.titleMedium,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               Text(
                 'We sent a verification link to ${widget.user.email}. '
                 'Open it, then come back here and check again.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.7),
-                ),
+                style: AppText.label.copyWith(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 32),
               FilledButton(

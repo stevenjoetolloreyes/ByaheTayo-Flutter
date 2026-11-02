@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_layout.dart';
 import 'onboarding/auth_service.dart';
 import 'ph_holidays.dart';
 import 'points_wallet_repository.dart';
@@ -204,19 +205,19 @@ class _StudentTabState extends State<StudentTab> {
     showModalBottomSheet<void>(
       context: context,
       builder: (_) => const Padding(
-        padding: EdgeInsets.all(24),
+        padding: AppLayout.pagePaddingLarge,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Notifications',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            SizedBox(height: 8),
+                style: AppText.headingStrong),
+            SizedBox(height: AppSpacing.s8),
             Text('No notifications yet.'),
-            SizedBox(height: 4),
+            SizedBox(height: AppSpacing.s4),
             Text(
               'This app does not have a notification system yet, so there is nothing to show here.',
-              style: TextStyle(fontSize: 13),
+              style: AppText.caption,
             ),
           ],
         ),
@@ -251,19 +252,19 @@ class _StudentTabState extends State<StudentTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           studentHeader(
             greetingName: greetingFor(DateTime.now()),
             onBell: _showNotifications,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
           _quickAccess(context, wide),
           for (final s in sections) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             s,
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.headerGap),
         ],
       ),
     );
@@ -293,12 +294,10 @@ class _StudentTabState extends State<StudentTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700)),
+                  style: AppText.sectionTitle),
               if (subtitle != null)
                 Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 13, color: scheme.onSurfaceVariant)),
+                    style: AppText.caption.copyWith(color: scheme.onSurfaceVariant)),
             ],
           ),
         ),
@@ -307,7 +306,7 @@ class _StudentTabState extends State<StudentTab> {
     );
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.cardPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -319,7 +318,7 @@ class _StudentTabState extends State<StudentTab> {
                 borderRadius: BorderRadius.circular(12),
                 child: header,
               ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppLayout.cardGap),
             ...children,
           ],
         ),
@@ -365,7 +364,7 @@ class _StudentTabState extends State<StudentTab> {
         .map((item) => Card(
               child: InkWell(
                 onTap: item.$3,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppLayout.cardRadius),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Column(
@@ -375,8 +374,7 @@ class _StudentTabState extends State<StudentTab> {
                           color: Theme.of(context).colorScheme.primary),
                       const SizedBox(height: 6),
                       Text(item.$1,
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w600)),
+                          style: AppText.captionSemiBold),
                     ],
                   ),
                 ),
@@ -425,9 +423,9 @@ class _StudentTabState extends State<StudentTab> {
           userId: widget.user?.uid,
           walletController: widget.walletController,
         )),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: AppLayout.cardPadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -446,11 +444,9 @@ class _StudentTabState extends State<StudentTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('7-Day Sign-in',
-                            style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700)),
+                            style: AppText.sectionTitle),
                         Text('Build your study habit!',
-                            style: TextStyle(fontSize: 13)),
+                            style: AppText.caption),
                       ],
                     ),
                   ),
@@ -462,14 +458,11 @@ class _StudentTabState extends State<StudentTab> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text('Day $todayDay of 7',
-                        style: TextStyle(
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12)),
+                        style: AppText.smallBold.copyWith(color: scheme.primary)),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppLayout.cardGap),
               Row(
                 children: [
                   for (var day = 1; day <= 7; day++)
@@ -490,15 +483,15 @@ class _StudentTabState extends State<StudentTab> {
                                 : scheme.onSurfaceVariant,
                           ),
                           Text('D$day',
-                              style: const TextStyle(fontSize: 11)),
+                              style: AppText.tiny),
                         ],
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               LinearProgressIndicator(value: checkedCells / 7),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.s4),
               Text(
                   'Weekly progress: $checkedCells/7 · Total points: ${totalCheckinPoints(records)}'),
               Text('$streak day streak',
@@ -520,40 +513,34 @@ class _StudentTabState extends State<StudentTab> {
     return Card(
       child: InkWell(
         onTap: () => _open(const BibleScreen()),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: AppLayout.cardPadding,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [kStudentEmerald, kStudentEmeraldAccent],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.all(Radius.circular(16)),
+            borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Icon(Icons.menu_book_outlined, color: Colors.white),
                   SizedBox(width: 8),
                   Text('Bible Verse',
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
+                      style: AppText.sectionTitle.copyWith(color: Colors.white)),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               Text(
                 '"${daily.text}"',
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontStyle: FontStyle.italic,
-                    color: Colors.white),
+                style: AppText.body.copyWith(fontStyle: FontStyle.italic, color: Colors.white),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s8),
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
@@ -562,10 +549,7 @@ class _StudentTabState extends State<StudentTab> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text('${daily.ref} (KJV)',
-                    style: const TextStyle(
-                        color: kStudentEmerald,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12)),
+                    style: AppText.smallBold.copyWith(color: kStudentEmerald)),
               ),
             ],
           ),
@@ -618,7 +602,7 @@ class _StudentTabState extends State<StudentTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 12)),
+              Text(label, style: AppText.small),
               Text(value,
                   style: TextStyle(
                       fontWeight: FontWeight.w700, color: color)),
@@ -636,7 +620,7 @@ class _StudentTabState extends State<StudentTab> {
       onOpen: () => _open(const AllowanceScreen()),
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: AppLayout.cardPadding,
           decoration: const BoxDecoration(
             color: kStudentEmerald,
             borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -651,10 +635,7 @@ class _StudentTabState extends State<StudentTab> {
                         style: TextStyle(color: Colors.white70)),
                     Text(
                       _hideBalance ? '₱••••' : peso(balance),
-                      style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white),
+                      style: AppText.displaySmall.copyWith(color: Colors.white),
                     ),
                   ],
                 ),
@@ -671,13 +652,13 @@ class _StudentTabState extends State<StudentTab> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppLayout.cardGap),
         Row(
           children: [
             miniBox('Income', peso(totalIncome), scheme.secondary),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.s8),
             miniBox('Expenses', peso(totalExpense), Colors.red),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.s8),
             miniBox(
                 'Remaining',
                 _budgets.isEmpty
@@ -686,10 +667,10 @@ class _StudentTabState extends State<StudentTab> {
                 scheme.primary),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppLayout.cardGap),
         const Text('Monthly Spending (Last 6 Months)',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -705,14 +686,14 @@ class _StudentTabState extends State<StudentTab> {
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(b.label, style: const TextStyle(fontSize: 10)),
+                    const SizedBox(height: AppSpacing.s2),
+                    Text(b.label, style: AppText.micro),
                   ],
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Budget Utilization',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (_budgets.isEmpty)
@@ -733,7 +714,7 @@ class _StudentTabState extends State<StudentTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('${b.category}: ${peso(spent)} of ${peso(b.limit)}'),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpacing.s2),
                     LinearProgressIndicator(
                       value: b.limit > 0
                           ? (spent / b.limit).clamp(0, 1).toDouble()
@@ -743,7 +724,7 @@ class _StudentTabState extends State<StudentTab> {
                 ),
               );
             }),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Savings Progress',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (_goals.isEmpty)
@@ -756,7 +737,7 @@ class _StudentTabState extends State<StudentTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${g.name}: ${peso(g.saved)} of ${peso(g.target)}'),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.s2),
                   LinearProgressIndicator(
                     value: g.target > 0
                         ? (g.saved / g.target).clamp(0, 1).toDouble()
@@ -765,7 +746,7 @@ class _StudentTabState extends State<StudentTab> {
                 ],
               ),
             ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Recent Transactions',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (recent.isEmpty)
@@ -863,7 +844,7 @@ class _StudentTabState extends State<StudentTab> {
       onOpen: () => _open(const ClassesScreen()),
       children: [
         _row('Total Subjects', '${_subjects.length}'),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'today', label: Text('Today')),
@@ -873,9 +854,9 @@ class _StudentTabState extends State<StudentTab> {
           selected: {_classesTab},
           onSelectionChanged: (s) => setState(() => _classesTab = s.first),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         tabBody,
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Upcoming Exams',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (upcomingExams.isEmpty)
@@ -883,7 +864,7 @@ class _StudentTabState extends State<StudentTab> {
         else
           for (final e in upcomingExams.take(2))
             _row(subjectName(e.subjectId), '${e.title} · ${formatDate(e.due)}'),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         const Text('Assignment Deadlines',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (upcomingAssignments.isEmpty)
@@ -892,7 +873,7 @@ class _StudentTabState extends State<StudentTab> {
           for (final a in upcomingAssignments.take(2))
             _row(subjectName(a.subjectId),
                 '${a.title} · ${formatDate(a.due)}'),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         OutlinedButton.icon(
           onPressed: () => _open(const ClassesScreen()),
           icon: const Icon(Icons.calendar_month_outlined, size: 18),
@@ -936,15 +917,14 @@ class _StudentTabState extends State<StudentTab> {
           child: Row(
             children: [
               Icon(icon, color: scheme.primary, size: 20),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.s8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(value,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800, fontSize: 16)),
-                    Text(label, style: const TextStyle(fontSize: 12)),
+                        style: AppText.bodyStrong),
+                    Text(label, style: AppText.small),
                   ],
                 ),
               ),
@@ -964,22 +944,22 @@ class _StudentTabState extends State<StudentTab> {
         Row(
           children: [
             statBox(Icons.note_outlined, '${_notes.length}', 'Saved Notes'),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.s8),
             statBox(Icons.quiz_outlined, '${_quizzes.length}', 'Quizzes'),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         Row(
           children: [
             statBox(Icons.check_circle_outlined, '${_attempts.length}',
                 'Completed'),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.s8),
             statBox(Icons.bar_chart_outlined,
                 _attempts.isEmpty ? '—' : '${avg.toStringAsFixed(1)}%',
                 'Avg. Score'),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Learning Progress',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (_attempts.isEmpty)
@@ -987,7 +967,7 @@ class _StudentTabState extends State<StudentTab> {
         else
           LinearProgressIndicator(
               value: (avg / 100).clamp(0, 1).toDouble()),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Recent Study Activity',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (notes.isEmpty && attempts.isEmpty)
@@ -999,13 +979,13 @@ class _StudentTabState extends State<StudentTab> {
                 '${attempts.first.quizTitle} · ${attempts.first.score}/${attempts.first.total}'),
         ],
         if (notAttempted.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.s4),
           const Text('Upcoming Study Tasks',
               style: TextStyle(fontWeight: FontWeight.w700)),
           for (final q in notAttempted.take(2))
             _row('Quiz to take', q.title),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         FilledButton.icon(
           onPressed: () => _open(const NotesScreen(initialTab: 'quizzes')),
           icon: const Icon(Icons.play_arrow, size: 18),
@@ -1047,7 +1027,7 @@ class _StudentTabState extends State<StudentTab> {
         else
           for (final e in upcomingExams.take(2))
             _row(subjectName(e.subjectId), '${e.title} · ${formatDate(e.due)}'),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Assignments',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (upcomingAssignments.isEmpty)
@@ -1056,7 +1036,7 @@ class _StudentTabState extends State<StudentTab> {
           for (final a in upcomingAssignments.take(2))
             _row(subjectName(a.subjectId),
                 '${a.title} · ${formatDate(a.due)}'),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Events', style: TextStyle(fontWeight: FontWeight.w700)),
         const Text('No upcoming events.'),
       ],
@@ -1137,7 +1117,7 @@ class _StudentTabState extends State<StudentTab> {
           'Fares shown for traditional jeepney. Saved routes are shared with the Map tab.',
           style: TextStyle(fontSize: 12),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Recent trips',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (sortedExpenses.isEmpty)
@@ -1145,7 +1125,7 @@ class _StudentTabState extends State<StudentTab> {
         else
           for (final e in sortedExpenses.take(3))
             _row('${e.routeKey} · ${formatDate(e.date)}', peso(e.amount)),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         const Text('Frequently visited',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (frequent.isEmpty && _commuteFavs.isEmpty)
@@ -1156,7 +1136,7 @@ class _StudentTabState extends State<StudentTab> {
           if (_commuteFavs.isNotEmpty)
             Text('Favorites: ${_commuteFavs.join(', ')}'),
         ],
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         const Text('Recent commute history',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (sortedExpenses.isEmpty)
@@ -1198,10 +1178,10 @@ class _StudentTabState extends State<StudentTab> {
             footer: 'EstudyanteGO · Daily Quotes',
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         Text('${daily.category} · Quote of the Day',
             style: const TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         Row(
           children: [
             Expanded(
@@ -1216,7 +1196,7 @@ class _StudentTabState extends State<StudentTab> {
                 label: const Text('Copy'),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.s8),
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => shareBoundaryAsImage(
@@ -1239,7 +1219,7 @@ class _StudentTabState extends State<StudentTab> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Quote history',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (history.isEmpty)
@@ -1283,7 +1263,7 @@ class _StudentTabState extends State<StudentTab> {
       children: [
         Text('${monthName(now.month)} ${now.year}',
             style: const TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         Row(
           children: [
             for (final d in ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
@@ -1348,17 +1328,17 @@ class _StudentTabState extends State<StudentTab> {
           },
         ),
         if (monthHolidays.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           const Text('Holidays this month',
               style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.s4),
           for (final h in monthHolidays)
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Row(
                 children: [
                   Icon(Icons.circle, size: 8, color: scheme.error),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.s8),
                   Expanded(
                     child: Text(
                         '${monthShortName(now.month)} ${h.day} · ${h.name}'),
@@ -1368,21 +1348,21 @@ class _StudentTabState extends State<StudentTab> {
             ),
         ],
         if (schoolLabel == null || schoolLabel.isEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           const Text(
               'No school saved — add your school in Account → Student Information to show school events here.'),
         ] else if (monthEvents.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.s8),
           const Text('Events this month',
               style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.s4),
           for (final e in monthEvents)
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Row(
                 children: [
                   const Icon(Icons.circle, size: 8, color: Colors.blue),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.s8),
                   Expanded(
                     child: Text(
                         '${formatEventRange(e)} · ${e.name} · ${e.noClasses ? 'No classes' : 'Has classes'}'),
@@ -1391,7 +1371,7 @@ class _StudentTabState extends State<StudentTab> {
               ),
             ),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         const Text('Subject breakdown',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (bySubject.isEmpty)
@@ -1400,7 +1380,7 @@ class _StudentTabState extends State<StudentTab> {
           for (final e in bySubject.entries)
             _row(e.key,
                 '${attendanceStats(e.value).percent.toStringAsFixed(1)}% · ${e.value.length} records'),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.s4),
         const Text('Monthly report',
             style: TextStyle(fontWeight: FontWeight.w700)),
         Text(

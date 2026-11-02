@@ -8,6 +8,7 @@
 // Rejected posts stay visible here until approved again or deleted.
 import 'package:flutter/material.dart';
 
+import 'app_layout.dart';
 import 'community_post_repository.dart';
 import 'community_posts.dart';
 import 'vehicle_categories.dart';
@@ -66,22 +67,22 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Post approvals')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppLayout.pagePaddingTab,
         children: [
           Text(
             'Shared posts are reviewed by admin accounts and become '
             'visible to all users once approved. Local posts stay on '
             'this device only.',
-            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+            style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.cardGap),
           if (widget.postRepository == null) ...[
             Text(
               "Shared-post review isn't available — the shared "
               'database hasn\'t been set up.',
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
           ] else ...[
             _section(
               context,
@@ -101,7 +102,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
             _section(
               context,
               'Shared posts — Published',
@@ -115,7 +116,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
             _section(
               context,
               'Shared posts — Rejected',
@@ -133,7 +134,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppLayout.cardGap),
           ],
           _section(
             context,
@@ -151,7 +152,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.cardGap),
           _section(
             context,
             'Local posts — Published',
@@ -164,7 +165,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppLayout.cardGap),
           _section(
             context,
             'Local posts — Rejected',
@@ -297,9 +298,9 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          style: AppText.sectionTitle,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.s8),
         if (sectionPosts.isEmpty)
           Text(emptyText, style: TextStyle(color: scheme.onSurfaceVariant))
         else
@@ -307,21 +308,18 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
             Container(
               decoration: BoxDecoration(
                 border: Border.all(color: scheme.outline),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppLayout.cardRadius),
               ),
-              padding: const EdgeInsets.all(12),
+              padding: AppLayout.cardPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     post.displayTitle,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppText.cardTitle,
                   ),
                   if (post.vehicles.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.s4),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -336,14 +334,14 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
                     ),
                   ],
                   if (post.fareLines.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.s4),
                     for (final line in post.fareLines) Text(line),
                   ],
                   if (post.operatorName.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.s4),
                     Text('Operator: ${post.operatorName}'),
                   ],
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -352,7 +350,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s8),
           ],
       ],
     );

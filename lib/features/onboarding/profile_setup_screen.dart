@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../app_layout.dart';
 import 'auth_service.dart';
 import 'onboarding_state.dart';
 import 'student_info_fields.dart';
@@ -272,7 +273,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: AppLayout.pagePaddingLarge,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -290,11 +291,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     child: photo == null && photoUrl == null
                         ? Text(
                             _initials(_nameController.text),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.w800,
-                            ),
+                            style: AppText.displayLarge.copyWith(color: Colors.white),
                           )
                         : null,
                   ),
@@ -330,7 +327,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               const SizedBox(height: 24),
               const Text(
                 'Student information (optional)',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                style: AppText.cardTitle,
               ),
               const SizedBox(height: 12),
               SearchableDropdownField(
@@ -459,7 +456,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               const SizedBox(height: 24),
               const Text(
                 'Employment information (optional)',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                style: AppText.cardTitle,
               ),
               const SizedBox(height: 12),
               TextField(
@@ -482,7 +479,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               const SizedBox(height: 8),
               if (_error != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: AppSpacing.s8),
                   child: Text(
                     _error!,
                     style: TextStyle(color: scheme.error),
