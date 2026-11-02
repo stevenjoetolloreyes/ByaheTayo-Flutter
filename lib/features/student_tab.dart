@@ -24,10 +24,13 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_layout.dart';
+import 'credits_repository.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'ph_holidays.dart';
 import 'points_wallet_repository.dart';
+import 'rewards_center.dart';
+import 'rewards_screen.dart';
 import 'school_events.dart';
 import 'student/allowance_screen.dart';
 import 'student/attendance_screen.dart';
@@ -55,6 +58,7 @@ class StudentTab extends StatefulWidget {
     this.user,
     this.profile,
     this.walletController,
+    this.creditsController,
     this.walkingController,
   });
 
@@ -77,6 +81,11 @@ class StudentTab extends StatefulWidget {
   /// real backend, the sign-in card reads ledger-derived progress
   /// instead of the local cache.
   final PointsWalletController? walletController;
+
+  /// Shared credits state (null in bare widget tests). When it has
+  /// a real backend, the Rewards Center card reads live credits
+  /// data; otherwise it shows the signed-out state.
+  final CreditsController? creditsController;
 
   /// Shared walking state (null in bare widget tests, in which case
   /// the tab owns a controller backed by the platform sensor — which
@@ -131,6 +140,8 @@ class _StudentTabState extends State<StudentTab> {
   void initState() {
     super.initState();
     widget.walletController?.addListener(_onWalletChanged);
+    widget.creditsController?.addListener(_onWalletChanged);
+    _loadCredits();
     _walking = widget.walkingController ?? WalkingController();
     _walkingOwned = widget.walkingController == null;
     _walking.addListener(_onWalkingChanged);
@@ -141,6 +152,7 @@ class _StudentTabState extends State<StudentTab> {
   @override
   void dispose() {
     widget.walletController?.removeListener(_onWalletChanged);
+    widget.creditsController?.removeListener(_onWalletChanged);
     _walking.removeListener(_onWalkingChanged);
     if (_walkingOwned) _walking.dispose();
     super.dispose();
@@ -148,6 +160,74 @@ class _StudentTabState extends State<StudentTab> {
 
   void _onWalletChanged() {
     if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(StudentTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.creditsController != widget.creditsController ||
+        oldWidget.user?.uid != widget.user?.uid) {
+      oldWidget.creditsController?.removeListener(_onWalletChanged);
+      widget.creditsController?.addListener(_onWalletChanged);
+      _loadCredits();
+    }
+  }
+
+  void _loadCredits() {
+    final uid = widget.user?.uid;
+    final controller = widget.creditsController;
+    if (uid != null && controller != null) {
+      controller.loadForUser(uid);
+    }
+  }
+
+  /// One-button redeem-all for the Rewards Center card: after a
+  /// successful redemption the points controller reloads too, so
+  /// the points balance drops by the redeemed amount immediately.
+  Future<RedeemOutcome> Function()? _redeemCallback() {
+    final credits = widget.creditsController;
+    final points = widget.walletController;
+    final uid = widget.user?.uid;
+    if (credits == null || !credits.remote || uid == null) return null;
+    return () async {
+      final outcome = await credits.redeemAll();
+      if (outcome.status == RedeemStatus.redeemed) {
+        await points?.loadForUser(uid);
+      }
+      return outcome;
+    };
+  }
+
+  /// Rewards Center hub card (Queue #2): points + credits summary,
+  /// redeem-all, free-scan allowance, and the honest ads-blocked
+  /// notice. The full center is a pushed route; no new tab.
+  Widget _rewardsCenterWidget(BuildContext context) {
+    final credits = widget.creditsController;
+    final signedIn = widget.user != null && credits != null;
+    return RewardsCenterCard(
+      key: const ValueKey('rewards-center'),
+      pointsBalance: widget.walletController?.balance ?? 0,
+      creditsBalanceUnits: credits?.balanceUnits ?? 0,
+      scanFreeRemaining: credits?.scanCounter.freeRemaining ?? freeScansPerDay,
+      signedIn: signedIn,
+      onRedeem: _redeemCallback(),
+      onOpenFullCenter: () => _open(
+        RewardsScreen(
+          pointsBalance: widget.walletController?.balance ?? 0,
+          onOpenStudentHub: () => Navigator.of(context).pop(),
+          creditsBalanceUnits: credits?.balanceUnits ?? 0,
+          creditsTotalEarnedUnits: credits?.totalEarnedUnits ?? 0,
+          creditsTotalSpentUnits: credits?.totalSpentUnits ?? 0,
+          creditsEntries: credits?.entries ?? const [],
+          adRewardEntries: credits?.adRewards ?? const [],
+          scanFreeRemaining:
+              credits?.scanCounter.freeRemaining ?? freeScansPerDay,
+          dailyAdLimit: credits?.settings.dailyAdLimit ?? 5,
+          onRedeem: _redeemCallback(),
+        ),
+        darkAware: true,
+      ),
+    );
   }
 
   void _onWalkingChanged() {
@@ -285,6 +365,7 @@ class _StudentTabState extends State<StudentTab> {
       _signinWidget(context),
       _bibleWidget(context),
       _quickAccess(context, wide),
+      _rewardsCenterWidget(context),
       _allowanceWidget(context),
       _classesWidget(context),
       _notesWidget(context),

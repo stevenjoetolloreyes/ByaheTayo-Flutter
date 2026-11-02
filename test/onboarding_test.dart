@@ -890,11 +890,14 @@ void main() {
       expect(find.text('Rewards'), findsWidgets);
       expect(find.text('Your points'), findsOneWidget);
       expect(find.text('0 points'), findsWidgets);
-      expect(find.text('How to earn'), findsOneWidget);
+      // Queue #2: the old 'How to earn' explainer now lives under
+      // 'Daily Rewards', and 'Redemptions' became the full
+      // 'Redemption History' section — same content, new titles.
+      expect(find.text('Daily Rewards'), findsOneWidget);
       expect(find.textContaining('Day 1–6 earn 10 points'), findsOneWidget);
       expect(find.text('Open Student Hub'), findsOneWidget);
-      expect(find.text('Redemptions'), findsOneWidget);
-      expect(find.textContaining('No redemptions available yet'),
+      expect(find.text('Redemption History'), findsOneWidget);
+      expect(find.textContaining('No redemptions yet'),
           findsOneWidget);
     });
 

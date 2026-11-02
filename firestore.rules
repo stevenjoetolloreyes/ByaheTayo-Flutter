@@ -38,6 +38,19 @@
 //   friend_requests/{id}    — participant-only; created pending by
 //     the sender, answered (accept/decline) by the recipient only,
 //     never deleted.
+//
+// Queue #2 (Credits, Scanner gating, Ads — see
+// lib/features/credits_repository.dart):
+//   credits_wallets/{uid}     — credits cache, owner-only
+//   credits_transactions/{id} — append-only credits ledger
+//   credit_redemptions/{id}   — one redemption per user per day
+//   scan_counters/{id}        — per-user per-day scan counters
+//   ad_rewards/{id}           — SERVER-ONLY writes (SSV), app reads
+//   admin_settings/global     — admin-only writes, app reads
+//   points_transactions       — also accepts negative 'redemption'
+//     debits (same ledger, no duplicate wallet).
+// Rules enforce the SHAPE of each write, not the TRUTH of the
+// event: see the credits file header for the honest limits.
 
 rules_version = '2';
 
@@ -228,12 +241,17 @@ service cloud.firestore {
     }
 
     // Points ledger — APPEND-ONLY. A signed-in user may read only
-    // their own entries and may create only their own sign-in
-    // credits: the document ID must equal the entry's referenceId
-    // (the `signin_<uid>_<date>` idempotency reference), points
-    // must be a reward-table value (10, or 50 on Day 7), and the
-    // cycle day must be 1..7. Updates and deletes are denied, so
-    // history can never be rewritten or erased.
+    // their own entries and may create only their own entries: the
+    // document ID must equal the entry's referenceId. Sign-in
+    // credits use the `signin_<uid>_<date>` idempotency reference,
+    // points must be a reward-table value (10, or 50 on Day 7), and
+    // the cycle day must be 1..7. Queue #2 redeem-all writes a
+    // NEGATIVE 'redemption' debit into this same ledger (no
+    // duplicate wallet): a redemption has no cycle day, and its
+    // points must be negative. Updates and deletes are denied, so
+    // history can never be rewritten or erased. HONEST LIMIT:
+    // rules cannot prove a redemption debit equals the user's real
+    // balance — only a server could.
     match /points_transactions/{txnId} {
       // The claim transaction first reads the claim doc to check it
       // does not exist yet. A rule that only checks resource.data
@@ -247,13 +265,18 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.referenceId == txnId
-        && request.resource.data.type == 'signin'
         && request.resource.data.status == 'completed'
         && request.resource.data.points is int
-        && request.resource.data.points in [10, 50]
-        && request.resource.data.dayIndex is int
-        && request.resource.data.dayIndex >= 1
-        && request.resource.data.dayIndex <= 7;
+        && (
+          (request.resource.data.type == 'signin'
+            && request.resource.data.points in [10, 50]
+            && request.resource.data.dayIndex is int
+            && request.resource.data.dayIndex >= 1
+            && request.resource.data.dayIndex <= 7)
+          || (request.resource.data.type == 'redemption'
+            && request.resource.data.source == 'redemption'
+            && request.resource.data.points < 0)
+        );
       allow update, delete: if false;
     }
 
@@ -297,6 +320,123 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'updatedAt']);
       allow delete: if false;
+
+    // Credits wallet cache (Queue #2 — see
+    // lib/features/credits_repository.dart). Same pattern as the
+    // points wallet: owner-only access; the balance is repaired
+    // from the credits ledger on load, so the doc itself only
+    // needs ownership, not value checks.
+    match /credits_wallets/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Credits ledger — APPEND-ONLY. Owner-only reads (with the null
+    // arm: transactions read docs that may not exist yet) and
+    // owner-only creates: the document ID must equal the entry's
+    // referenceId, units must be a non-zero integer, redemption
+    // credits are positive, scan charges are negative, and the
+    // source must match the type. There is deliberately NO
+    // 'ad_reward' client type: verified ad credits are written by
+    // a future trusted backend only (see ad_rewards below).
+    // Updates and deletes are denied.
+    match /credits_transactions/{txnId} {
+      allow read: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.referenceId == txnId
+        && request.resource.data.status == 'completed'
+        && request.resource.data.units is int
+        && request.resource.data.units != 0
+        && (
+          (request.resource.data.type == 'redemption'
+            && request.resource.data.source == 'redemption'
+            && request.resource.data.units > 0)
+          || (request.resource.data.type == 'scan_charge'
+            && request.resource.data.source == 'scan'
+            && request.resource.data.units < 0)
+        );
+      allow update, delete: if false;
+    }
+
+    // Redemption records — one per user per day (Queue #2
+    // redeem-all). The document ID is the deterministic
+    // `redeem_<uid>_<date>` reference, so a second redemption the
+    // same day is impossible by construction. Units credited must
+    // equal points redeemed (1 point = 1 minor unit). HONEST
+    // LIMIT: rules cannot prove the redeemed amount equals the
+    // user's real points balance.
+    match /credit_redemptions/{redemptionId} {
+      allow read: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.pointsRedeemed is int
+        && request.resource.data.pointsRedeemed > 0
+        && request.resource.data.unitsCredited
+          == request.resource.data.pointsRedeemed
+        && request.resource.data.status == 'completed';
+      allow update, delete: if false;
+    }
+
+    // AI Scanner counters — one per user per day. Free scans are
+    // capped at 3/day; every counter step is exactly +1 on one
+    // field at a time (same step-bound pattern as post stats).
+    // HONEST LIMIT: rules bound each counter write, but cannot
+    // prove a scan actually happened — that proof needs a server.
+    match /scan_counters/{counterId} {
+      allow read: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.freeUsed is int
+        && request.resource.data.freeUsed >= 0
+        && request.resource.data.freeUsed <= 3
+        && request.resource.data.paidUsed is int
+        && request.resource.data.paidUsed >= 0;
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['freeUsed', 'paidUsed', 'updatedAt'])
+        && (request.resource.data.freeUsed == resource.data.freeUsed
+          || request.resource.data.freeUsed == resource.data.freeUsed + 1)
+        && (request.resource.data.paidUsed == resource.data.paidUsed
+          || request.resource.data.paidUsed == resource.data.paidUsed + 1)
+        && (request.resource.data.freeUsed != resource.data.freeUsed
+          || request.resource.data.paidUsed != resource.data.paidUsed);
+      allow delete: if false;
+    }
+
+    // Ad-reward entries — SERVER-ONLY. Client creates are denied
+    // outright: a verified ad credit may only be written by a
+    // trusted backend (Admin SDK bypasses rules) after AdMob SSV
+    // verification. The app reads this collection for history only.
+    // Until the SSV server exists this collection stays empty —
+    // never faked, never client-granted.
+    match /ad_rewards/{rewardId} {
+      allow read: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    // Admin settings — one 'global' document. Reads are open to
+    // signed-in users (the app needs the daily limit + toggles);
+    // writes are admin-only via the existing allowlist. The daily
+    // ad limit is admin-configurable; the rewarded amount is fixed
+    // at 0.50 credits (50 minor units). HONEST LIMIT: the app
+    // self-enforces the limit in normal use — enforcement against
+    // bypassing clients needs a server.
+    match /admin_settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin()
+        && request.resource.data.dailyAdLimit is int
+        && request.resource.data.dailyAdLimit >= 0
+        && request.resource.data.rewardedAdsEnabled is bool
+        && request.resource.data.popupAdsEnabled is bool
+        && request.resource.data.rewardedAmountUnits == 50;
+      allow delete: if false;
+    }
     }
   }
 }

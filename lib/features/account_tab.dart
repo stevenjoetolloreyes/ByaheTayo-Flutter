@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 
 import 'admin_access.dart';
 import 'app_layout.dart';
+import 'credits_repository.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/permission_service.dart';
@@ -36,6 +37,7 @@ class AccountTab extends StatefulWidget {
     this.profile,
     required this.permissionService,
     this.walletController,
+    this.creditsController,
     this.onViewStudent,
     this.onViewCommunities,
     this.onEditProfile,
@@ -65,6 +67,11 @@ class AccountTab extends StatefulWidget {
   /// real backend, the wallet card and transaction history show live
   /// ledger data; otherwise the legacy 0-balance display is kept.
   final PointsWalletController? walletController;
+
+  /// Shared credits state (null in bare widget tests). When it has
+  /// a real backend, the wallet card shows the live credits
+  /// balance; otherwise the credits row is hidden.
+  final CreditsController? creditsController;
 
   /// Jump to the Student tab (7-Day Sign-in, the real earn path).
   final VoidCallback? onViewStudent;
@@ -113,12 +120,21 @@ class _AccountTabState extends State<AccountTab> {
   List<PointsTransaction> get _entries =>
       _walletRemote ? widget.walletController!.entries : const [];
 
+  /// Credits remote mode: the credits controller has a real backend.
+  bool get _creditsRemote => widget.creditsController?.remote ?? false;
+
+  /// Live credits balance in minor units in remote mode, 0 otherwise.
+  int get _creditsBalanceUnits =>
+      widget.creditsController?.balanceUnits ?? 0;
+
   @override
   void initState() {
     super.initState();
     widget.walletController?.addListener(_onWalletChanged);
+    widget.creditsController?.addListener(_onWalletChanged);
     _loadNotificationStatus();
     _loadWallet();
+    _loadCredits();
   }
 
   @override
@@ -128,14 +144,20 @@ class _AccountTabState extends State<AccountTab> {
       oldWidget.walletController?.removeListener(_onWalletChanged);
       widget.walletController?.addListener(_onWalletChanged);
     }
+    if (oldWidget.creditsController != widget.creditsController) {
+      oldWidget.creditsController?.removeListener(_onWalletChanged);
+      widget.creditsController?.addListener(_onWalletChanged);
+    }
     if (oldWidget.user?.uid != widget.user?.uid) {
       _loadWallet();
+      _loadCredits();
     }
   }
 
   @override
   void dispose() {
     widget.walletController?.removeListener(_onWalletChanged);
+    widget.creditsController?.removeListener(_onWalletChanged);
     super.dispose();
   }
 
@@ -146,6 +168,14 @@ class _AccountTabState extends State<AccountTab> {
   void _loadWallet() {
     final uid = _user?.uid;
     final controller = widget.walletController;
+    if (uid != null && controller != null) {
+      controller.loadForUser(uid);
+    }
+  }
+
+  void _loadCredits() {
+    final uid = _user?.uid;
+    final controller = widget.creditsController;
     if (uid != null && controller != null) {
       controller.loadForUser(uid);
     }
@@ -294,9 +324,40 @@ class _AccountTabState extends State<AccountTab> {
             Navigator.of(context).pop();
             widget.onViewStudent?.call();
           },
+          creditsBalanceUnits: _creditsBalanceUnits,
+          creditsTotalEarnedUnits:
+              widget.creditsController?.totalEarnedUnits ?? 0,
+          creditsTotalSpentUnits:
+              widget.creditsController?.totalSpentUnits ?? 0,
+          creditsEntries: widget.creditsController?.entries ?? const [],
+          adRewardEntries:
+              widget.creditsController?.adRewards ?? const [],
+          scanFreeRemaining:
+              widget.creditsController?.scanCounter.freeRemaining ??
+                  freeScansPerDay,
+          dailyAdLimit:
+              widget.creditsController?.settings.dailyAdLimit ?? 5,
+          onRedeem: _redeemCallback(),
         ),
       ),
     );
+  }
+
+  /// Redeem-all for the Rewards screen opened from the Account tab:
+  /// after a successful redemption the points controller reloads
+  /// so the wallet card drops by the redeemed amount immediately.
+  Future<RedeemOutcome> Function()? _redeemCallback() {
+    final credits = widget.creditsController;
+    final points = widget.walletController;
+    final uid = _user?.uid;
+    if (credits == null || !credits.remote || uid == null) return null;
+    return () async {
+      final outcome = await credits.redeemAll();
+      if (outcome.status == RedeemStatus.redeemed) {
+        await points?.loadForUser(uid);
+      }
+      return outcome;
+    };
   }
 
   String _notificationStatusLabel() {
@@ -868,6 +929,13 @@ class _AccountTabState extends State<AccountTab> {
               const SizedBox(height: 4),
               Text(
                 'Total earned: $_totalEarned points',
+                style: AppText.label.copyWith(color: Colors.white70),
+              ),
+            ],
+            if (_creditsRemote) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${formatMinorUnits(_creditsBalanceUnits)} credits',
                 style: AppText.label.copyWith(color: Colors.white70),
               ),
             ],

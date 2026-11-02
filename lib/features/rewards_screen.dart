@@ -1,13 +1,41 @@
-// Rewards: the real account points balance, how points are actually
-// earned, and an honest empty state for redemptions (there is no
-// redemption catalog — nothing is invented or faked here).
+// Rewards Center (full screen) — points, credits, redeem-all,
+// daily rewards, learning activities, achievements, referral
+// rewards, watch-ads, redemption history, and rewarded-ads history.
+//
+// HONEST STATES — nothing here is invented:
+//   - Points come from the real ledger-derived wallet; credits
+//     from the real credits ledger (integer minor units).
+//   - Learning Activities, Achievements, and Referral Rewards have
+//     no reward wiring yet: their sections are empty states, not
+//     sample rewards.
+//   - The AI Scanner does not exist yet: its section shows the
+//     free-scan allowance and the paid-scan price, but no scan can
+//     be started from here.
+//   - Watch Ads & Earn Credits is BLOCKED on a missing AdMob SDK,
+//     missing ad units, and a missing SSV server: no ad is shown
+//     or simulated and no credits are granted for ads. A verified
+//     ad will pay 0.50 credits once that setup exists.
+//   - History rows show the spec's Source + ad fields (network,
+//     reward reference, verification status); ad rows only ever
+//     appear once a trusted server writes them.
 import 'package:flutter/material.dart';
+
+import 'credits_repository.dart';
+import 'rewards_center.dart';
 
 class RewardsScreen extends StatelessWidget {
   const RewardsScreen({
     super.key,
     required this.pointsBalance,
     required this.onOpenStudentHub,
+    this.creditsBalanceUnits = 0,
+    this.creditsTotalEarnedUnits = 0,
+    this.creditsTotalSpentUnits = 0,
+    this.creditsEntries = const [],
+    this.adRewardEntries = const [],
+    this.scanFreeRemaining = freeScansPerDay,
+    this.dailyAdLimit = 5,
+    this.onRedeem,
   });
 
   /// The existing account wallet balance (not a new currency).
@@ -16,8 +44,34 @@ class RewardsScreen extends StatelessWidget {
   /// Opens the Student tab, where the 7-Day Sign-in lives.
   final VoidCallback onOpenStudentHub;
 
+  /// Credits balances in minor units (1 credit = 100 units).
+  final int creditsBalanceUnits;
+  final int creditsTotalEarnedUnits;
+  final int creditsTotalSpentUnits;
+
+  /// Credits ledger entries (redemptions + scan charges).
+  final List<CreditsTransaction> creditsEntries;
+
+  /// Verified ad-reward entries (server-written only; empty until
+  /// the SSV server exists).
+  final List<CreditsTransaction> adRewardEntries;
+
+  /// Free AI Scanner scans left today.
+  final int scanFreeRemaining;
+
+  /// Admin-configured daily rewarded-ad limit (display only until
+  /// server enforcement exists).
+  final int dailyAdLimit;
+
+  /// One-button redeem-all (null in local-only mode).
+  final Future<RedeemOutcome> Function()? onRedeem;
+
   @override
   Widget build(BuildContext context) {
+    final redemptions =
+        creditsEntries.where((e) => e.type == 'redemption').toList();
+    final scanCharges =
+        creditsEntries.where((e) => e.type == 'scan_charge').toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Rewards')),
       body: SafeArea(
@@ -59,7 +113,55 @@ class RewardsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'How to earn',
+                        'Your credits',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${formatMinorUnits(creditsBalanceUnits)} credits',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Total earned: '
+                        '${formatMinorUnits(creditsTotalEarnedUnits)} '
+                        'credits · Total spent: '
+                        '${formatMinorUnits(creditsTotalSpentUnits)} '
+                        'credits',
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        '100 points = 1.00 credit. Credits pay for '
+                        'AI Scanner scans and upcoming features.',
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () => handleRedeem(
+                          context,
+                          pointsBalance: pointsBalance,
+                          onRedeem: onRedeem,
+                        ),
+                        child: const Text('Redeem all points'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Daily Rewards',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -88,7 +190,41 @@ class RewardsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Redemptions',
+                        'AI Scanner',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Free scans left today: '
+                        '$scanFreeRemaining/$freeScansPerDay',
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'After your free scans, each successful scan '
+                        'costs 1 credit. Failed or cancelled scans '
+                        'are never charged.',
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'The AI Scanner itself is not available yet, '
+                        'so no scan can be started from here.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Learning Activities',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -96,9 +232,185 @@ class RewardsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'No redemptions available yet. There is no '
-                        'redemption catalog in the app right now.',
+                        'No point rewards for learning activities '
+                        'yet. Quizzes and notes stay local-only '
+                        'until a reward path is built for them.',
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Achievements',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'No achievements yet. Achievements have not '
+                        'been built, so nothing is listed here.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Referral Rewards',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'No referral rewards yet. Friend codes exist, '
+                        'but no reward is wired to them.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Watch Ads & Earn Credits',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Not available yet. Rewarded ads need an '
+                        'AdMob setup (SDK, ad units, publisher '
+                        'account) and a server that verifies '
+                        'completed ads before any credits are '
+                        'granted. No ad is shown here and no '
+                        'credits are granted for ads today.',
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'When available, one verified ad earns '
+                        '${formatMinorUnits(rewardedAdCreditUnits)} '
+                        'credits. Daily limit set by admin: '
+                        '$dailyAdLimit ads.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Redemption History',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (redemptions.isEmpty && scanCharges.isEmpty)
+                        const Text('No redemptions yet.')
+                      else ...[
+                        for (final entry in redemptions)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(entry.description),
+                            subtitle: Text(
+                              'Source: ${entry.source} · ${entry.date}',
+                            ),
+                            trailing: Text(
+                              '+${formatMinorUnits(entry.units)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        for (final entry in scanCharges)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(entry.description),
+                            subtitle: Text(
+                              'Source: ${entry.source} · ${entry.date}',
+                            ),
+                            trailing: Text(
+                              formatMinorUnits(entry.units),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Rewarded Ads History',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (adRewardEntries.isEmpty)
+                        const Text(
+                          'No verified ad rewards yet. Ad rewards '
+                          'only appear once server verification '
+                          'exists.',
+                        )
+                      else
+                        for (final entry in adRewardEntries)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(entry.description),
+                            subtitle: Text(
+                              'Network: ${entry.adNetwork ?? '—'} · '
+                              'Ref: ${entry.adRewardReference ?? '—'} · '
+                              'Status: '
+                              '${entry.adVerificationStatus ?? '—'} · '
+                              '${entry.date}',
+                            ),
+                            trailing: Text(
+                              '+${formatMinorUnits(entry.units)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                     ],
                   ),
                 ),

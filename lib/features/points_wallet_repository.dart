@@ -123,7 +123,9 @@ class PointsTransaction {
 
   final String id;
   final String userId;
-  final String type; // 'signin' (the only credit type so far).
+  // 'signin' (positive credit) or 'redemption' (negative debit
+  // written by Queue #2 redeem-all into this same ledger).
+  final String type;
   final int points;
   final String description;
   final String source; // 'signin' (live claim) or 'migration'.
@@ -180,13 +182,14 @@ class PointsTransaction {
 class PointsWallet {
   const PointsWallet({required this.balance, required this.totalEarned});
 
-  /// Mirrors the `account_points_balance` wallet field.
+  /// Mirrors the `account_points_balance` wallet field: the sum of
+  /// ALL ledger entries, including negative 'redemption' debits
+  /// (Queue #2 redeem-all writes its debit into this same ledger).
   final int balance;
 
-  /// Sum of all positive ledger credits. Equals [balance] today:
-  /// there is no spend/redemption path yet, so nothing ever
-  /// subtracts. (If a spend type is ever added, this derivation
-  /// must be revisited — see the file header.)
+  /// Sum of positive ledger credits only. Redemption debits never
+  /// reduce this: total earned is lifetime earnings, balance is
+  /// what is left to spend.
   final int totalEarned;
 }
 
@@ -251,22 +254,25 @@ class FirestorePointsWalletRepository implements PointsWalletRepository {
   Future<PointsWallet> fetchWallet(String uid) async {
     final entries = await fetchTransactions(uid);
     var sum = 0;
+    var earned = 0;
     for (final e in entries) {
       sum += e.points;
+      if (e.points > 0) earned += e.points;
     }
     final snap = await _walletDoc(uid).get();
     final cached = snap.data()?['account_points_balance'];
-    if (!snap.exists || cached != sum) {
+    final cachedEarned = snap.data()?['totalEarned'];
+    if (!snap.exists || cached != sum || cachedEarned != earned) {
       await _walletDoc(uid).set(
         {
           'account_points_balance': sum,
-          'totalEarned': sum,
+          'totalEarned': earned,
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
     }
-    return PointsWallet(balance: sum, totalEarned: sum);
+    return PointsWallet(balance: sum, totalEarned: earned);
   }
 
   @override

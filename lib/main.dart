@@ -28,6 +28,7 @@ import 'features/account_tab.dart';
 import 'features/app_layout.dart';
 import 'features/communities_tab.dart';
 import 'features/community_post_repository.dart';
+import 'features/credits_repository.dart';
 import 'features/fares_tab.dart';
 import 'features/friend_cloud_repository.dart';
 import 'features/friends_tab.dart';
@@ -622,6 +623,15 @@ class _HomeShellState extends State<_HomeShell> {
         : null,
   );
 
+  /// Shared credits state (Queue #2), created once per shell with
+  /// the same configured/local-only split. Passed to the Student
+  /// and Account tabs so a redemption updates both immediately.
+  late final CreditsController _creditsController = CreditsController(
+    repository: widget.authService.isConfigured
+        ? FirestoreCreditsRepository()
+        : null,
+  );
+
   Future<void> _toggleSidebar() async {
     setState(() => _collapsed = !_collapsed);
     try {
@@ -649,6 +659,7 @@ class _HomeShellState extends State<_HomeShell> {
             user: widget.user,
             profile: widget.profile,
             walletController: _walletController,
+            creditsController: _creditsController,
           ),
         ),
         FriendsTab(
@@ -674,6 +685,7 @@ class _HomeShellState extends State<_HomeShell> {
           profile: widget.profile,
           permissionService: widget.permissionService,
           walletController: _walletController,
+          creditsController: _creditsController,
           onViewStudent: widget.onViewStudent,
           onViewCommunities: widget.onViewCommunities,
           onEditProfile: widget.onEditProfile,
