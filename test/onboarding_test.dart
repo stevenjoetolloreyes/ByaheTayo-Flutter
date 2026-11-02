@@ -10,6 +10,7 @@ import 'package:estudyantego/features/admin_access.dart';
 import 'package:estudyantego/features/communities_tab.dart';
 import 'package:estudyantego/features/onboarding/auth_screen.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/features/onboarding/entry_theme.dart';
 import 'package:estudyantego/features/onboarding/notification_prompt.dart';
 import 'package:estudyantego/features/onboarding/onboarding_screen.dart';
 import 'package:estudyantego/features/onboarding/onboarding_state.dart';
@@ -352,7 +353,7 @@ void main() {
         ),
       ));
       expect(find.text('EstudyanteGO'), findsOneWidget);
-      expect(find.text('Northern PH commute companion'), findsOneWidget);
+      expect(find.text('Your Student Companion'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
       await tester.pumpAndSettle();
       expect(handed, AppStartDestination.dashboard);
@@ -371,7 +372,7 @@ void main() {
           onSignIn: () => signedIn = true,
         ),
       ));
-      expect(find.text('Explore the map'), findsOneWidget);
+      expect(find.text('Explore the Map'), findsOneWidget);
       expect(find.text('Get Started'), findsNothing);
 
       await tester.tap(find.text('Skip'));
@@ -388,13 +389,13 @@ void main() {
       ));
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      expect(find.text('Plan your trip'), findsOneWidget);
+      expect(find.text('Plan Your Trip'), findsOneWidget);
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      expect(find.text('Know your fare'), findsOneWidget);
+      expect(find.text('Know Your Fare'), findsOneWidget);
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      expect(find.text('Community updates'), findsOneWidget);
+      expect(find.text('Community Updates'), findsOneWidget);
       expect(find.text('Get Started'), findsOneWidget);
       expect(find.text('Sign In'), findsOneWidget);
       // Skip stays visible on every screen, including the last one,
@@ -437,7 +438,7 @@ void main() {
         find.widgetWithText(TextField, 'Password'),
         'secret1',
       );
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
       await tester.pumpAndSettle();
       expect(signedIn?.email, 'a@b.com');
     });
@@ -467,10 +468,10 @@ void main() {
         find.widgetWithText(TextField, 'Password'),
         'wrong',
       );
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
       await tester.pumpAndSettle();
       expect(find.text('Incorrect email or password.'), findsOneWidget);
-      expect(find.text('Welcome back'), findsOneWidget);
+      expect(find.text('Welcome Back'), findsOneWidget);
     });
 
     testWidgets('create-account mode creates and calls onAccountCreated',
@@ -497,7 +498,7 @@ void main() {
         find.widgetWithText(TextField, 'Password'),
         'secret1',
       );
-      await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
       await tester.pumpAndSettle();
       expect(created?.email, 'ana@b.com');
       expect(created?.emailVerified, isFalse);
@@ -548,7 +549,7 @@ void main() {
       expect(find.textContaining('Firebase is not configured yet'),
           findsOneWidget);
       final button =
-          tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Sign in'));
+          tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Sign In'));
       expect(button.onPressed, isNull);
     });
   });
@@ -993,6 +994,186 @@ void main() {
       // The dashboard tile and the opened sheet both show these texts.
       expect(find.text('Transaction History'), findsWidgets);
       expect(find.text('No transactions yet.'), findsWidgets);
+    });
+  });
+
+  group('Entry theme (Modern Minimalist redesign)', () {
+    test('exact spec tokens, light and dark', () {
+      expect(EntryColors.light.primary, const Color(0xFF079B61));
+      expect(EntryColors.light.primaryDark, const Color(0xFF067A4D));
+      expect(EntryColors.light.background, const Color(0xFFF8FAFC));
+      expect(EntryColors.light.surface, const Color(0xFFFFFFFF));
+      expect(EntryColors.light.secondarySurface, const Color(0xFFF1F5F3));
+      expect(EntryColors.light.primaryText, const Color(0xFF17211D));
+      expect(EntryColors.light.secondaryText, const Color(0xFF64748B));
+      expect(EntryColors.light.border, const Color(0xFFE2E8F0));
+      expect(EntryColors.dark.primary, const Color(0xFF12C98A));
+      expect(EntryColors.dark.primaryDark, const Color(0xFF079B61));
+      expect(EntryColors.dark.background, const Color(0xFF101816));
+      expect(EntryColors.dark.surface, const Color(0xFF19231F));
+      expect(EntryColors.dark.secondarySurface, const Color(0xFF202D27));
+      expect(EntryColors.dark.primaryText, const Color(0xFFF5F7F6));
+      expect(EntryColors.dark.secondaryText, const Color(0xFFA0ADA6));
+      expect(EntryColors.dark.border, const Color(0xFF2D3B34));
+      expect(entryColorsFor(Brightness.light), EntryColors.light);
+      expect(entryColorsFor(Brightness.dark), EntryColors.dark);
+    });
+
+    testWidgets('auth screen follows light and dark themes',
+        (WidgetTester tester) async {
+      final auth = FakeAuthService();
+      await tester.pumpWidget(_wrap(
+        AuthScreen(
+          service: auth,
+          initialMode: AuthMode.signIn,
+          onSignedIn: (_) {},
+          onAccountCreated: (_) {},
+          themeMode: ThemeMode.light,
+        ),
+      ));
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        const Color(0xFFF8FAFC),
+      );
+
+      await tester.pumpWidget(_wrap(
+        AuthScreen(
+          service: auth,
+          initialMode: AuthMode.signIn,
+          onSignedIn: (_) {},
+          onAccountCreated: (_) {},
+          themeMode: ThemeMode.dark,
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        const Color(0xFF101816),
+      );
+    });
+
+    testWidgets('theme toggle flips light to dark and back',
+        (WidgetTester tester) async {
+      ThemeMode? changed;
+      await tester.pumpWidget(_wrap(
+        AuthScreen(
+          service: FakeAuthService(),
+          initialMode: AuthMode.signIn,
+          onSignedIn: (_) {},
+          onAccountCreated: (_) {},
+          themeMode: ThemeMode.light,
+          onThemeModeChanged: (mode) => changed = mode,
+        ),
+      ));
+      // Light mode shows the moon (tap for dark).
+      expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+      await tester.tap(find.byKey(const Key('theme-mode-toggle')));
+      expect(changed, ThemeMode.dark);
+
+      await tester.pumpWidget(_wrap(
+        AuthScreen(
+          service: FakeAuthService(),
+          initialMode: AuthMode.signIn,
+          onSignedIn: (_) {},
+          onAccountCreated: (_) {},
+          themeMode: ThemeMode.dark,
+          onThemeModeChanged: (mode) => changed = mode,
+        ),
+      ));
+      await tester.pumpAndSettle();
+      // Dark mode shows the sun (tap for light).
+      expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
+      await tester.tap(find.byKey(const Key('theme-mode-toggle')));
+      expect(changed, ThemeMode.light);
+    });
+
+    testWidgets('auth back button only exists when onBack is supplied',
+        (WidgetTester tester) async {
+      var backed = false;
+      await tester.pumpWidget(_wrap(
+        AuthScreen(
+          service: FakeAuthService(),
+          initialMode: AuthMode.signIn,
+          onSignedIn: (_) {},
+          onAccountCreated: (_) {},
+          onBack: () => backed = true,
+        ),
+      ));
+      expect(find.byKey(const Key('auth-back')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('auth-back')));
+      expect(backed, isTrue);
+
+      await tester.pumpWidget(_wrap(
+        AuthScreen(
+          service: FakeAuthService(),
+          initialMode: AuthMode.signIn,
+          onSignedIn: (_) {},
+          onAccountCreated: (_) {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('auth-back')), findsNothing);
+    });
+
+    testWidgets('onboarding welcome state shows toggle, earlier pages do not',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        OnboardingScreen(
+          onGetStarted: () {},
+          onSignIn: () {},
+          themeMode: ThemeMode.light,
+          onThemeModeChanged: (_) {},
+        ),
+      ));
+      expect(find.byKey(const Key('theme-mode-toggle')), findsNothing);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Community Updates'), findsOneWidget);
+      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.byKey(const Key('theme-mode-toggle')), findsOneWidget);
+    });
+
+    testWidgets('onboarding initialPage lands on the welcome state',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        OnboardingScreen(
+          onGetStarted: () {},
+          onSignIn: () {},
+          initialPage: 3,
+        ),
+      ));
+      expect(find.text('Community Updates'), findsOneWidget);
+      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.text('Sign In'), findsOneWidget);
+    });
+
+    testWidgets('auth titles and bottom links match the spec exactly',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        AuthScreen(
+          service: FakeAuthService(),
+          initialMode: AuthMode.createAccount,
+          onSignedIn: (_) {},
+          onAccountCreated: (_) {},
+        ),
+      ));
+      expect(find.text('Create Your Account'), findsOneWidget);
+      expect(find.text('Join EstudyanteGO and get started.'), findsOneWidget);
+      expect(find.text('Already have an account? Sign In'), findsOneWidget);
+      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(find.text('OR'), findsOneWidget);
+
+      // The link sits below the fold in the default viewport on the
+      // taller create-account layout; scroll it into view first.
+      await _tapVisible(tester, 'Already have an account? Sign In');
+      expect(find.text('Welcome Back'), findsOneWidget);
+      expect(find.text('Sign in to continue to EstudyanteGO.'), findsOneWidget);
+      expect(find.text("Don't have an account? Create Account"), findsOneWidget);
+      expect(find.text('Forgot password?'), findsOneWidget);
     });
   });
 }

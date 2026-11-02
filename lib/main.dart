@@ -236,6 +236,14 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
   // ---- First-time gate state ----
   AppStartDestination? _destination;
   AuthMode _authMode = AuthMode.signIn;
+
+  /// True when the sign-in screen was reached from onboarding (the
+  /// first-launch path). Only then does auth get a back button, and
+  /// it returns to the welcome state (onboarding page 4). Every other
+  /// path into sign-in (sign-out, verify escape hatch, fallbacks)
+  /// has no back target, so no back button is shown there.
+  bool _cameFromOnboarding = false;
+  int _onboardingInitialPage = 0;
   AuthUser? _user;
   UserProfile? _profile;
   ProfileStore? _store;
@@ -357,9 +365,19 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
     setState(() {
       _user = null;
       _profile = null;
+      _cameFromOnboarding = false;
       _destination = _authService.isConfigured
           ? AppStartDestination.signIn
           : AppStartDestination.dashboard;
+    });
+  }
+
+  /// Auth back button (first-launch path only): return to the welcome
+  /// state (onboarding page 4), not to the start of the tour.
+  void _backToOnboarding() {
+    setState(() {
+      _onboardingInitialPage = 3;
+      _destination = AppStartDestination.onboarding;
     });
   }
 
@@ -382,6 +400,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
       return SplashScreen(
         resolve: _resolveStart,
         onDestination: (next) => setState(() => _destination = next),
+        themeMode: _themeMode,
       );
     }
     switch (destination) {
@@ -392,6 +411,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
             if (!mounted) return;
             setState(() {
               _authMode = AuthMode.createAccount;
+              _cameFromOnboarding = true;
               _destination = AppStartDestination.signIn;
             });
           },
@@ -400,9 +420,13 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
             if (!mounted) return;
             setState(() {
               _authMode = AuthMode.signIn;
+              _cameFromOnboarding = true;
               _destination = AppStartDestination.signIn;
             });
           },
+          themeMode: _themeMode,
+          onThemeModeChanged: _setThemeMode,
+          initialPage: _onboardingInitialPage,
         );
       case AppStartDestination.signIn:
         return AuthScreen(
@@ -413,6 +437,9 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
             _user = user;
             setState(() => _destination = AppStartDestination.verifyEmail);
           },
+          themeMode: _themeMode,
+          onThemeModeChanged: _setThemeMode,
+          onBack: _cameFromOnboarding ? _backToOnboarding : null,
         );
       case AppStartDestination.verifyEmail:
         final user = _user;
@@ -427,6 +454,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
               _user = created;
               setState(() => _destination = AppStartDestination.verifyEmail);
             },
+            themeMode: _themeMode,
+            onThemeModeChanged: _setThemeMode,
           );
         }
         return VerifyEmailScreen(
@@ -437,6 +466,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
             setState(() {
               _user = null;
               _profile = null;
+              _cameFromOnboarding = false;
               _destination = AppStartDestination.signIn;
             });
           },
@@ -453,6 +483,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
               _user = created;
               setState(() => _destination = AppStartDestination.verifyEmail);
             },
+            themeMode: _themeMode,
+            onThemeModeChanged: _setThemeMode,
           );
         }
         return ProfileSetupScreen(

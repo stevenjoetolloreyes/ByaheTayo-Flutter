@@ -104,10 +104,10 @@ void main() {
     expect(signedInUser, isNull);
     expect(fake.signOutCount, 1);
     expect(find.text(noAccountFoundMessage), findsOneWidget);
-    expect(find.text('Create an account'), findsOneWidget);
-    await tester.tap(find.text('Create an account'));
+    expect(find.text('Create Account'), findsOneWidget);
+    await tester.tap(find.text('Create Account'));
     await tester.pumpAndSettle();
-    expect(find.text('Create your account'), findsOneWidget);
+    expect(find.text('Create Your Account'), findsOneWidget);
   });
 
   testWidgets('Google Sign In canceled shows honest message, no sign-out',
@@ -163,9 +163,9 @@ void main() {
       (tester) async {
     await pumpAuth(tester, AuthMode.signIn);
     expect(find.text('Continue with Google'), findsOneWidget);
-    await tester.tap(find.text("Don't have an account? Create one"));
+    await tester.tap(find.text("Don't have an account? Create Account"));
     await tester.pumpAndSettle();
-    expect(find.text('Create your account'), findsOneWidget);
+    expect(find.text('Create Your Account'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
   });
 }

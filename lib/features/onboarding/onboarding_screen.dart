@@ -1,29 +1,27 @@
-// Welcome / onboarding: four swipeable Material 3 pages introducing
-// the app, with Skip + Next controls. The last page offers Get Started
-// (create an account) and Sign In. Skipping goes to Sign In — there is
-// no guest path.
+// Welcome / onboarding: four swipeable Modern Minimalist pages
+// introducing the app, with Skip + Next controls. The last page IS
+// the welcome state: it offers Get Started (create an account) and
+// Sign In, plus the Light/Dark theme toggle (the spec's welcome
+// screen is not a separate route — onboarding-4 already is it, and a
+// duplicate welcome route would break the gate's first-launch flow).
+// Skipping goes to Sign In — there is no guest path.
 //
-// Visual system (dark emerald): background #071714, primary green
-// #00C987, accent #32D3A0, dark green #103B30, card #172923, primary
-// text white, secondary text #A1A1AA. Branding uses the EstudyanteGO
-// logo asset (the same transparent-corner E + boy artwork as the auth
-// screens) — never the old "Byahe Tayo" name. Illustrations are built
-// UI compositions (icons + shapes), never emoji. The fare illustration
+// Visual system: the shared entry theme (light #F8FAFC / dark
+// #101816 backgrounds, emerald primaries), solid colors, no gradients
+// or oversized decorative shapes. Branding uses the EstudyanteGO logo
+// asset — never the old "Byahe Tayo" name. Illustrations are built UI
+// compositions (icons + shapes), never emoji. The fare illustration
 // shows the peso SYMBOL only — never a specific amount, so no figure
 // here can be mistaken for an official price.
 //
 // Navigation targets are preserved exactly: Get Started opens the
-// existing registration flow, Sign In (and Skip, on every screen) opens
-// the existing sign-in flow. The first-launch-only flag
+// existing registration flow, Sign In (and Skip, on every screen)
+// opens the existing sign-in flow. The first-launch-only flag
 // (byahetayo_onboarding_done) is owned by the gate, not this screen.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-const _bg = Color(0xFF071714);
-const _green = Color(0xFF00C987);
-const _accent = Color(0xFF32D3A0);
-const _darkGreen = Color(0xFF103B30);
-const _card = Color(0xFF172923);
-const _secondary = Color(0xFFA1A1AA);
+import 'entry_theme.dart';
 
 class _OnboardingPage {
   const _OnboardingPage({
@@ -37,23 +35,23 @@ class _OnboardingPage {
 
 const _pages = <_OnboardingPage>[
   _OnboardingPage(
-    title: 'Explore the map',
+    title: 'Explore the Map',
     description:
         'See hubs, routes, and places across Northern Luzon on a live map.',
   ),
   _OnboardingPage(
-    title: 'Plan your trip',
+    title: 'Plan Your Trip',
     description:
         'Find jeepney and bus routes with directions, stops, and live tracking.',
   ),
   _OnboardingPage(
-    title: 'Know your fare',
+    title: 'Know Your Fare',
     description:
         'Compute LTFRB-based fares and check verified operator fares '
         'before you ride.',
   ),
   _OnboardingPage(
-    title: 'Community updates',
+    title: 'Community Updates',
     description:
         'Share local routes, report overpriced fares, and stay updated '
         'with fellow commuters.',
@@ -65,6 +63,9 @@ class OnboardingScreen extends StatefulWidget {
     super.key,
     required this.onGetStarted,
     required this.onSignIn,
+    this.themeMode = ThemeMode.system,
+    this.onThemeModeChanged,
+    this.initialPage = 0,
   });
 
   /// Get Started pressed: the gate marks onboarding done and opens
@@ -75,15 +76,35 @@ class OnboardingScreen extends StatefulWidget {
   /// done and opens sign-in.
   final VoidCallback onSignIn;
 
+  /// Selected theme, from the app shell.
+  final ThemeMode themeMode;
+
+  /// When non-null, the welcome state (last page) shows the
+  /// Light/Dark toggle. Null hides it (e.g. screens constructed
+  /// without a theme callback).
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
+
+  /// Page to start on. The gate passes the last page when the user
+  /// comes back from auth via the back button, so Back lands on the
+  /// welcome state instead of restarting the tour.
+  final int initialPage;
+
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _controller = PageController();
-  int _index = 0;
+  late final PageController _controller;
+  late int _index;
 
   bool get _isLast => _index == _pages.length - 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialPage.clamp(0, _pages.length - 1);
+    _controller = PageController(initialPage: _index);
+  }
 
   @override
   void dispose() {
@@ -104,275 +125,237 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: _bg,
-        colorScheme: const ColorScheme.dark(
-          primary: _green,
-          secondary: _accent,
-          surface: _card,
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: _bg,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(painter: _WavesPainter()),
-              ),
-            ),
-            SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header: brand left, Skip right, on every screen.
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
-                    child: Row(
-                      children: [
-                        Image.asset(
-                          'assets/images/estudyantego_logo.png',
-                          width: 36,
-                          height: 36,
-                        ),
-                        const SizedBox(width: 10),
-                        const Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text.rich(
-                              TextSpan(
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
-                                children: [
-                                  TextSpan(text: 'Estudyante'),
-                                  TextSpan(
-                                    text: 'GO',
-                                    style: TextStyle(color: _green),
-                                  ),
-                                ],
+    final brightness = entryEffectiveBrightness(widget.themeMode, context);
+    final colors = entryColorsFor(brightness);
+    final onThemeModeChanged = widget.onThemeModeChanged;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: entryOverlayStyle(brightness),
+      child: Theme(
+        data: entryThemeData(brightness),
+        child: Scaffold(
+          backgroundColor: colors.background,
+          body: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header: brand left, theme toggle (welcome state
+                // only) + Skip right, on every screen.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
+                  child: Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/estudyantego_logo.png',
+                        width: 36,
+                        height: 36,
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text.rich(
+                            TextSpan(
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: colors.primaryText,
                               ),
+                              children: [
+                                const TextSpan(text: 'Estudyante'),
+                                TextSpan(
+                                  text: 'GO',
+                                  style: TextStyle(color: colors.primary),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: widget.onSignIn,
-                          style: TextButton.styleFrom(
-                            foregroundColor: _secondary,
-                          ),
-                          child: const Text('Skip'),
+                      ),
+                      const Spacer(),
+                      if (_isLast && onThemeModeChanged != null)
+                        ThemeModeToggle(
+                          mode: widget.themeMode,
+                          onModeChanged: onThemeModeChanged,
                         ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _controller,
-                      itemCount: _pages.length,
-                      onPageChanged: (index) => setState(() => _index = index),
-                      itemBuilder: (context, index) {
-                        final page = _pages[index];
-                        return LayoutBuilder(
-                          builder: (context, constraints) {
-                            // Centered when the content fits, scrollable
-                            // on small phones — never an overflow.
-                            return SingleChildScrollView(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: constraints.maxHeight,
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 32,
-                                  ),
-                                  child: TweenAnimationBuilder<double>(
-                                    tween: Tween(begin: 0.0, end: 1.0),
-                                    duration:
-                                        const Duration(milliseconds: 400),
-                                    curve: Curves.easeOut,
-                                    builder: (context, value, _) {
-                                      return Opacity(
-                                        opacity: value,
-                                        child: Transform.translate(
-                                          offset: Offset(0, (1 - value) * 16),
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Transform.scale(
-                                                scale: 0.94 + 0.06 * value,
-                                                child:
-                                                    _illustrationFor(index),
-                                              ),
-                                              const SizedBox(height: 28),
-                                              Text(
-                                                page.title,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                  fontSize: 24,
-                                                  fontWeight:
-                                                      FontWeight.w800,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 12),
-                                              Text(
-                                                page.description,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                  fontSize: 15,
-                                                  color: _secondary,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                  // Pagination: active = expanded green pill, inactive =
-                  // small gray circles, smoothly animated.
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (int i = 0; i < _pages.length; i++)
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeInOut,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: i == _index ? 28 : 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: i == _index
-                                ? _green
-                                : _secondary.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+                      TextButton(
+                        onPressed: widget.onSignIn,
+                        style: TextButton.styleFrom(
+                          foregroundColor: colors.secondaryText,
                         ),
+                        child: const Text('Skip'),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: _isLast
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              FilledButton(
-                                onPressed: widget.onGetStarted,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: _green,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: const StadiumBorder(),
-                                  textStyle: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                child: const Text('Get Started'),
+                ),
+                Expanded(
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: _pages.length,
+                    onPageChanged: (index) => setState(() => _index = index),
+                    itemBuilder: (context, index) {
+                      final page = _pages[index];
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Centered when the content fits, scrollable
+                          // on small phones — never an overflow.
+                          return SingleChildScrollView(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
                               ),
-                              const SizedBox(height: 12),
-                              OutlinedButton(
-                                onPressed: widget.onSignIn,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: _green,
-                                  side: const BorderSide(
-                                    color: _green,
-                                    width: 1.5,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: const StadiumBorder(),
-                                  textStyle: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                child: const Text('Sign In'),
-                              ),
-                            ],
-                          )
-                        : SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: _next,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: _green,
-                                foregroundColor: Colors.white,
+                              child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
+                                  horizontal: 32,
                                 ),
-                                shape: const StadiumBorder(),
-                                textStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0.0, end: 1.0),
+                                  duration:
+                                      const Duration(milliseconds: 400),
+                                  curve: Curves.easeOut,
+                                  builder: (context, value, _) {
+                                    return Opacity(
+                                      opacity: value,
+                                      child: Transform.translate(
+                                        offset: Offset(0, (1 - value) * 16),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Transform.scale(
+                                              scale: 0.94 + 0.06 * value,
+                                              child: _illustrationFor(
+                                                index,
+                                                colors,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 28),
+                                            Text(
+                                              page.title,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 26,
+                                                fontWeight:
+                                                    FontWeight.w800,
+                                                color: colors.primaryText,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              page.description,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                color: colors.secondaryText,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
-                              child: const Text('Next'),
                             ),
-                          ),
+                          );
+                        },
+                      );
+                    },
                   ),
-                  const SizedBox(height: 24),
-                ],
-              ),
+                ),
+                // Pagination: active = expanded primary pill, inactive =
+                // small muted circles, smoothly animated.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (int i = 0; i < _pages.length; i++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: i == _index ? 28 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: i == _index
+                              ? colors.primary
+                              : colors.secondaryText
+                                  .withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _isLast
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            FilledButton(
+                              onPressed: widget.onGetStarted,
+                              child: const Text('Get Started'),
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                              onPressed: widget.onSignIn,
+                              child: const Text('Sign In'),
+                            ),
+                          ],
+                        )
+                      : SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: _next,
+                            child: const Text('Next'),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 24),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _illustrationFor(int index) {
+  Widget _illustrationFor(int index, EntryColors colors) {
     switch (index) {
       case 0:
-        return _mapIllustration();
+        return _mapIllustration(colors);
       case 1:
-        return _tripIllustration();
+        return _tripIllustration(colors);
       case 2:
-        return _fareIllustration();
+        return _fareIllustration(colors);
       default:
-        return _communityIllustration();
+        return _communityIllustration(colors);
     }
   }
 
-  /// Card shell shared by all four illustrations.
-  Widget _illustrationCard({required Widget child}) {
+  /// Card shell shared by all four illustrations: surface + border,
+  /// 20dp corners, no shadow.
+  Widget _illustrationCard(EntryColors colors, {required Widget child}) {
     return Container(
       height: 220,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.border),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
         child: child,
       ),
     );
   }
 
-  /// 1. Explore the map: folded-map motif, green location marker, bus
-  /// icon center, church landmark, mountain, terminal/hub.
-  Widget _mapIllustration() {
+  /// 1. Explore the Map: folded-map motif, primary location marker,
+  /// bus icon center, church landmark, mountain, terminal/hub.
+  Widget _mapIllustration(EntryColors colors) {
+    final faint = colors.primaryText.withValues(alpha: 0.1);
     return _illustrationCard(
+      colors,
       child: Stack(
         children: [
           // Fold lines.
@@ -380,78 +363,79 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Row(
               children: [
                 const Expanded(child: SizedBox()),
-                Container(width: 1, color: Colors.white.withValues(alpha: 0.1)),
+                Container(width: 1, color: faint),
                 const Expanded(child: SizedBox()),
-                Container(width: 1, color: Colors.white.withValues(alpha: 0.1)),
+                Container(width: 1, color: faint),
                 const Expanded(child: SizedBox()),
               ],
             ),
           ),
           // Dashed route across the lower half.
-          const Positioned(
+          Positioned(
             left: 16,
             right: 16,
             bottom: 52,
             height: 40,
-            child: CustomPaint(painter: _DashedLinePainter(_accent)),
+            child: CustomPaint(painter: _DashedLinePainter(colors.primary)),
           ),
-          const Positioned(
+          Positioned(
             left: 20,
             top: 18,
-            child: Icon(Icons.terrain, color: _accent, size: 30),
+            child: Icon(Icons.terrain, color: colors.primary, size: 30),
           ),
-          const Positioned(
+          Positioned(
             right: 20,
             top: 16,
-            child: Icon(Icons.location_on, color: _green, size: 38),
+            child: Icon(Icons.location_on, color: colors.primary, size: 38),
           ),
           Center(
             child: Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
-                color: _green,
+              decoration: BoxDecoration(
+                color: colors.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.directions_bus,
-                color: Colors.white,
+                color: colors.onPrimary,
                 size: 36,
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             left: 24,
             bottom: 20,
-            child: Icon(Icons.church, color: Colors.white70, size: 30),
+            child: Icon(Icons.church, color: colors.secondaryText, size: 30),
           ),
-          const Positioned(
+          Positioned(
             right: 24,
             bottom: 20,
-            child: Icon(Icons.store, color: Colors.white70, size: 30),
+            child: Icon(Icons.store, color: colors.secondaryText, size: 30),
           ),
         ],
       ),
     );
   }
 
-  /// 2. Plan your trip: bus, dashed route path, stop dots, destination
+  /// 2. Plan Your Trip: bus, dashed route path, stop dots, destination
   /// marker, navigation graphic.
-  Widget _tripIllustration() {
+  Widget _tripIllustration(EntryColors colors) {
     return _illustrationCard(
+      colors,
       child: Stack(
         children: [
-          const Positioned(
+          Positioned(
             left: 16,
             right: 16,
             top: 88,
             height: 44,
-            child: CustomPaint(painter: _DashedLinePainter(_accent)),
+            child: CustomPaint(painter: _DashedLinePainter(colors.primary)),
           ),
-          const Positioned(
+          Positioned(
             right: 24,
             top: 20,
-            child: Icon(Icons.near_me, color: _accent, size: 28),
+            child: Icon(Icons.near_me, color: colors.primary, size: 28),
           ),
           Positioned(
             left: 20,
@@ -459,13 +443,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               width: 56,
               height: 56,
-              decoration: const BoxDecoration(
-                color: _green,
+              decoration: BoxDecoration(
+                color: colors.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.directions_bus,
-                color: Colors.white,
+                color: colors.onPrimary,
                 size: 28,
               ),
             ),
@@ -477,8 +461,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               width: 10,
               height: 10,
-              decoration: const BoxDecoration(
-                color: Colors.white54,
+              decoration: BoxDecoration(
+                color: colors.secondaryText,
                 shape: BoxShape.circle,
               ),
             ),
@@ -489,16 +473,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               width: 10,
               height: 10,
-              decoration: const BoxDecoration(
-                color: Colors.white54,
+              decoration: BoxDecoration(
+                color: colors.secondaryText,
                 shape: BoxShape.circle,
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             right: 20,
             top: 76,
-            child: Icon(Icons.location_on, color: _green, size: 40),
+            child: Icon(Icons.location_on, color: colors.primary, size: 40),
           ),
           Positioned(
             left: 24,
@@ -506,10 +490,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _darkGreen,
+                color: colors.secondarySurface,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.route, color: _accent, size: 22),
+              child: Icon(Icons.route, color: colors.primary, size: 22),
             ),
           ),
         ],
@@ -517,12 +501,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  /// 3. Know your fare: fare-estimate card motif, peso symbol, coins,
-  /// calculator, green verification indicators. HARD RULE: no specific
-  /// peso amount anywhere — the estimate slot is a blank bar, and the
-  /// coins carry the peso symbol only, never a figure.
-  Widget _fareIllustration() {
+  /// 3. Know Your Fare: fare-estimate card motif, peso symbol, coins,
+  /// calculator, primary verification indicators. HARD RULE: no
+  /// specific peso amount anywhere — the estimate slot is a blank
+  /// bar, and the coins carry the peso symbol only, never a figure.
+  Widget _fareIllustration(EntryColors colors) {
     return _illustrationCard(
+      colors,
       child: Stack(
         children: [
           Center(
@@ -530,28 +515,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               width: 170,
               height: 132,
               decoration: BoxDecoration(
-                color: _darkGreen,
+                color: colors.secondarySurface,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _accent.withValues(alpha: 0.25)),
+                border: Border.all(
+                  color: colors.primary.withValues(alpha: 0.25),
+                ),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Row(
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.calculate, color: Colors.white70, size: 20),
-                      SizedBox(width: 8),
-                      Icon(Icons.verified, color: _green, size: 20),
+                      Icon(
+                        Icons.calculate,
+                        color: colors.secondaryText,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.verified, color: colors.primary, size: 20),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     '₱',
                     style: TextStyle(
                       fontSize: 40,
                       fontWeight: FontWeight.w800,
-                      color: _accent,
+                      color: colors.primary,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -560,7 +551,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     width: 84,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.24),
+                      color: colors.secondaryText.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -576,17 +567,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _darkGreen,
+                color: colors.secondarySurface,
                 shape: BoxShape.circle,
-                border: Border.all(color: _accent),
+                border: Border.all(color: colors.primary),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
                   '₱',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: _accent,
+                    color: colors.primary,
                   ),
                 ),
               ),
@@ -599,41 +590,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _darkGreen,
+                color: colors.secondarySurface,
                 shape: BoxShape.circle,
-                border: Border.all(color: _accent),
+                border: Border.all(color: colors.primary),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
                   '₱',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: _accent,
+                    color: colors.primary,
                   ),
                 ),
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             right: 24,
             top: 22,
-            child: Icon(Icons.check_circle, color: _green, size: 26),
+            child: Icon(Icons.check_circle, color: colors.primary, size: 26),
           ),
-          const Positioned(
+          Positioned(
             left: 24,
             bottom: 22,
-            child: Icon(Icons.verified, color: _accent, size: 26),
+            child: Icon(Icons.verified, color: colors.primary, size: 26),
           ),
         ],
       ),
     );
   }
 
-  /// 4. Community updates: smartphone with community posts, people
+  /// 4. Community Updates: smartphone with community posts, people
   /// icon, route update chip, fare-report notification.
-  Widget _communityIllustration() {
+  Widget _communityIllustration(EntryColors colors) {
     return _illustrationCard(
+      colors,
       child: Stack(
         children: [
           Center(
@@ -642,27 +634,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               height: 184,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _darkGreen,
+                color: colors.secondarySurface,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.24),
-                ),
+                border: Border.all(color: colors.border),
               ),
               child: Column(
                 children: [
-                  _postRow(),
+                  _postRow(colors),
                   const SizedBox(height: 14),
-                  _postRow(),
+                  _postRow(colors),
                   const SizedBox(height: 14),
-                  _postRow(),
+                  _postRow(colors),
                 ],
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             right: 22,
             top: 20,
-            child: Icon(Icons.groups, color: _accent, size: 32),
+            child: Icon(Icons.groups, color: colors.primary, size: 32),
           ),
           Positioned(
             left: 18,
@@ -670,10 +660,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _darkGreen,
+                color: colors.secondarySurface,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.route, color: _green, size: 22),
+              child: Icon(Icons.route, color: colors.primary, size: 22),
             ),
           ),
           Positioned(
@@ -685,13 +675,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _darkGreen,
+                    color: colors.secondarySurface,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
+                    border: Border.all(color: colors.border),
                   ),
-                  child: const Icon(Icons.flag, color: _accent, size: 18),
+                  child: Icon(Icons.flag, color: colors.primary, size: 18),
                 ),
                 Positioned(
                   right: -2,
@@ -700,19 +688,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: _accent,
+                      color: colors.primary,
                       shape: BoxShape.circle,
-                      border: Border.all(color: _bg, width: 1.5),
+                      border: Border.all(color: colors.surface, width: 1.5),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const Positioned(
+          Positioned(
             left: 20,
             bottom: 28,
-            child: Icon(Icons.notifications, color: Colors.white70, size: 24),
+            child: Icon(
+              Icons.notifications,
+              color: colors.secondaryText,
+              size: 24,
+            ),
           ),
         ],
       ),
@@ -720,14 +712,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   /// One community-post row inside the phone: avatar dot + two bars.
-  Widget _postRow() {
+  Widget _postRow(EntryColors colors) {
     return Row(
       children: [
         Container(
           width: 18,
           height: 18,
           decoration: BoxDecoration(
-            color: _green.withValues(alpha: 0.35),
+            color: colors.primary.withValues(alpha: 0.35),
             shape: BoxShape.circle,
           ),
         ),
@@ -740,7 +732,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 8,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.24),
+                  color: colors.secondaryText.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -749,7 +741,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 8,
                 width: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
+                  color: colors.secondaryText.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -759,47 +751,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ],
     );
   }
-}
-
-/// Subtle emerald waves along the top and bottom edges.
-class _WavesPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final top = Paint()
-      ..color = _green.withValues(alpha: 0.10)
-      ..style = PaintingStyle.fill;
-    final topPath = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height * 0.10)
-      ..quadraticBezierTo(
-        size.width * 0.6,
-        size.height * 0.18,
-        0,
-        size.height * 0.08,
-      )
-      ..close();
-    canvas.drawPath(topPath, top);
-
-    final bottom = Paint()
-      ..color = _green.withValues(alpha: 0.07)
-      ..style = PaintingStyle.fill;
-    final bottomPath = Path()
-      ..moveTo(0, size.height)
-      ..lineTo(size.width, size.height)
-      ..lineTo(size.width, size.height * 0.92)
-      ..quadraticBezierTo(
-        size.width * 0.4,
-        size.height * 0.84,
-        0,
-        size.height * 0.94,
-      )
-      ..close();
-    canvas.drawPath(bottomPath, bottom);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// A dashed curved line, used as the route path in the map and trip

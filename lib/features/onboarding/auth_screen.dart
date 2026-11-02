@@ -1,11 +1,15 @@
 // Sign-in / create-account screen, driven by [AuthService].
 //
-// REDESIGN (Nov 2): premium dark emerald Material 3, Android-first.
+// REDESIGN (Nov 2): Modern Minimalist entry theme, Android-first.
 // Both variants share one file and one design system; modes switch in
-// place (no separate routes). Neither variant has an AppBar: the
-// branding sits directly below the status bar and the Android system
-// status bar stays visible. Forgot password is a dialog that sends
-// the Firebase reset email. Email/Password logic is unchanged.
+// place (no separate routes). The header carries a back button (only
+// when the gate supplies [onBack] — the first-launch path, where Back
+// returns to the welcome state) and the Light/Dark theme toggle (only
+// when the gate supplies [onThemeModeChanged]). Forgot password is a
+// dialog that sends the Firebase reset email. Email/Password logic is
+// unchanged. The form is flat on the themed background (no card, no
+// gradient, no decorative shapes) with rounded inputs, per the spec's
+// mockups.
 //
 // STRICT GOOGLE RULE (never weaken it):
 // - Sign In Google is LOGIN ONLY: after Google authentication, the
@@ -20,9 +24,11 @@
 // a clear banner and all submit buttons stay disabled — the app never
 // crashes and never fakes a sign-in.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_service.dart';
+import 'entry_theme.dart';
 import 'onboarding_state.dart';
 
 /// Shown when Google Sign In succeeds but no EstudyanteGO profile
@@ -40,6 +46,9 @@ class AuthScreen extends StatefulWidget {
     this.initialMode = AuthMode.signIn,
     required this.onSignedIn,
     required this.onAccountCreated,
+    this.themeMode = ThemeMode.system,
+    this.onThemeModeChanged,
+    this.onBack,
   });
 
   final AuthService service;
@@ -47,20 +56,23 @@ class AuthScreen extends StatefulWidget {
   final ValueChanged<AuthUser> onSignedIn;
   final ValueChanged<AuthUser> onAccountCreated;
 
+  /// Selected theme, from the app shell.
+  final ThemeMode themeMode;
+
+  /// When non-null, the header shows the Light/Dark toggle.
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
+
+  /// When non-null, the header shows a back button that invokes it.
+  /// Null hides the button entirely (never a dead button): the gate
+  /// supplies it only on the first-launch path, where Back returns to
+  /// the welcome state.
+  final VoidCallback? onBack;
+
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  // Spec palette (design reference).
-  static const _bg = Color(0xFF121619);
-  static const _card = Color(0xFF1C2229);
-  static const _fieldFill = Color(0xFF252C34);
-  static const _emerald = Color(0xFF00A86B);
-  static const _mint = Color(0xFF20D69B);
-  static const _muted = Color(0xFF9AA7B4);
-  static const _errorRed = Color(0xFFFF8A80);
-
   late AuthMode _mode = widget.initialMode;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -262,9 +274,9 @@ class _AuthScreenState extends State<AuthScreen> {
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
               decoration: const InputDecoration(
                 labelText: 'Email',
-                border: OutlineInputBorder(),
               ),
             ),
           ],
@@ -307,462 +319,340 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  ThemeData get _darkTheme => ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: _bg,
-        colorScheme: const ColorScheme.dark(
-          primary: _emerald,
-          secondary: _mint,
-          surface: _card,
-          error: _errorRed,
-        ),
-      );
-
-  InputDecoration _fieldDecoration({
-    required String label,
-    required IconData icon,
-    Widget? suffixIcon,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: _muted),
-      prefixIcon: Icon(icon, color: _muted),
-      suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: _fieldFill,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.white24),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.white24),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _emerald, width: 1.5),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isCreate = _mode == AuthMode.createAccount;
-    return Theme(
-      data: _darkTheme,
-      child: Scaffold(
-        backgroundColor: _bg,
-        body: Stack(
-          children: [
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(painter: _WavesPainter()),
-              ),
-            ),
-            SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Branding, directly below the status bar.
-                    Center(
-                      child: Image.asset(
-                        'assets/images/estudyantego_logo.png',
-                        width: 128,
-                        height: 128,
-                      ),
+    final brightness = entryEffectiveBrightness(widget.themeMode, context);
+    final colors = entryColorsFor(brightness);
+    final onThemeModeChanged = widget.onThemeModeChanged;
+    final onBack = widget.onBack;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: entryOverlayStyle(brightness),
+      child: Theme(
+        data: entryThemeData(brightness),
+        child: Scaffold(
+          backgroundColor: colors.background,
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Header: back (first-launch path only) + theme
+                  // toggle. Either may be absent; never a dead button.
+                  Row(
+                    children: [
+                      if (onBack != null)
+                        IconButton(
+                          key: const Key('auth-back'),
+                          tooltip: 'Back',
+                          onPressed: onBack,
+                          icon: const Icon(Icons.arrow_back),
+                        )
+                      else
+                        const SizedBox(width: 48),
+                      const Spacer(),
+                      if (onThemeModeChanged != null)
+                        ThemeModeToggle(
+                          mode: widget.themeMode,
+                          onModeChanged: onThemeModeChanged,
+                        )
+                      else
+                        const SizedBox(width: 48),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Branding.
+                  Center(
+                    child: Image.asset(
+                      'assets/images/estudyantego_logo.png',
+                      width: 96,
+                      height: 96,
                     ),
-                    const SizedBox(height: 12),
-                    const Center(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text.rich(
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text.rich(
                         TextSpan(
                           style: TextStyle(
-                            fontSize: 30,
+                            fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                            color: colors.primaryText,
                           ),
                           children: [
-                            TextSpan(text: 'Estudyante'),
+                            const TextSpan(text: 'Estudyante'),
                             TextSpan(
                               text: 'GO',
-                              style: TextStyle(color: _emerald),
+                              style: TextStyle(color: colors.primary),
                             ),
                           ],
                         ),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Center(
+                    child: Text(
+                      'Your Student Companion',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: colors.secondaryText,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(width: 28, height: 2, color: _emerald),
-                        const Flexible(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                'Your Student Companion',
-                                style: TextStyle(fontSize: 14, color: _muted),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Container(width: 28, height: 2, color: _emerald),
-                      ],
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    isCreate ? 'Create Your Account' : 'Welcome Back',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: colors.primaryText,
                     ),
-                    const SizedBox(height: 28),
-                    // Form card.
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isCreate
+                        ? 'Join EstudyanteGO and get started.'
+                        : 'Sign in to continue to EstudyanteGO.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: colors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  if (!_configured) ...[
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: _card,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
+                        color: colors.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      child: Row(
                         children: [
-                          Text(
-                            isCreate ? 'Create your account' : 'Welcome back',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isCreate
-                                ? 'Join EstudyanteGO and get started.'
-                                : 'Sign in to continue to EstudyanteGO.',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: _muted,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          if (!_configured) ...[
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3D1A1A),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.info_outline, color: _errorRed),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'Firebase is not configured yet, so '
-                                      'sign-in is unavailable in this build. '
-                                      'Add google-services.json to enable it.',
-                                      style: TextStyle(color: Colors.white70),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                          if (isCreate) ...[
-                            TextField(
-                              controller: _nameController,
-                              textCapitalization: TextCapitalization.words,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: _fieldDecoration(
-                                label: 'Full name',
-                                icon: Icons.person_outline,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                          TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: _fieldDecoration(
-                              label: 'Email',
-                              icon: Icons.email_outlined,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: _fieldDecoration(
-                              label: 'Password',
-                              icon: Icons.lock_outline,
-                              suffixIcon: IconButton(
-                                onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
-                                ),
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                  color: _muted,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (!isCreate) ...[
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed:
-                                    _configured ? _forgotPassword : null,
-                                child: const Text(
-                                  'Forgot password?',
-                                  style: TextStyle(color: _mint),
-                                ),
-                              ),
-                            ),
-                          ],
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              _error!,
-                              style: const TextStyle(color: _errorRed),
-                            ),
-                          ],
-                          if (_noAccount) ...[
-                            const SizedBox(height: 12),
-                            OutlinedButton(
-                              onPressed: () =>
-                                  _switchMode(AuthMode.createAccount),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: _mint,
-                                side: const BorderSide(color: _mint),
-                                minimumSize: const Size.fromHeight(48),
-                                shape: const StadiumBorder(),
-                              ),
-                              child: const Text('Create an account'),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          FilledButton(
-                            onPressed:
-                                (_busy || !_configured) ? null : _submit,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: _mint,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  _mint.withValues(alpha: 0.4),
-                              minimumSize: const Size.fromHeight(52),
-                              shape: const StadiumBorder(),
-                            ),
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        isCreate
-                                            ? Icons.person_add_outlined
-                                            : Icons.login,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Flexible(
-                                        child: Text(
-                                          isCreate
-                                              ? 'Create account'
-                                              : 'Sign in',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                          const SizedBox(height: 20),
-                          const Row(
-                            children: [
-                              Expanded(
-                                child: Divider(color: Colors.white24),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  'OR',
-                                  style: TextStyle(
-                                    color: _muted,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Divider(color: Colors.white24),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: (_busy || !_configured)
-                                ? null
-                                : (isCreate
-                                    ? _handleGoogleSignUp
-                                    : _handleGoogleSignIn),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: _bg,
-                              disabledBackgroundColor:
-                                  Colors.white.withValues(alpha: 0.5),
-                              minimumSize: const Size.fromHeight(52),
-                              shape: const StadiumBorder(),
-                              elevation: 0,
-                            ),
-                            child: _googleLoading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: _bg,
-                                    ),
-                                  )
-                                : Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Image.asset(
-                                        'assets/images/google_g_logo.png',
-                                        width: 24,
-                                        height: 24,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Flexible(
-                                        child: Text(
-                                          'Continue with Google',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextButton(
-                            onPressed: _busy
-                                ? null
-                                : () => _switchMode(
-                                      isCreate
-                                          ? AuthMode.signIn
-                                          : AuthMode.createAccount,
-                                    ),
-                            child: Text.rich(
-                              TextSpan(
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: _muted,
-                                ),
-                                children: [
-                                  TextSpan(
-                                    text: isCreate
-                                        ? 'Already have an account? '
-                                        : "Don't have an account? ",
-                                  ),
-                                  TextSpan(
-                                    text: isCreate ? 'Sign in' : 'Create one',
-                                    style: const TextStyle(
-                                      color: _mint,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          Icon(Icons.info_outline, color: colors.error),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Firebase is not configured yet, so '
+                              'sign-in is unavailable in this build. '
+                              'Add google-services.json to enable it.',
+                              style: TextStyle(color: colors.primaryText),
                             ),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
                   ],
-                ),
+                  if (isCreate) ...[
+                    TextField(
+                      controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.name],
+                      decoration: entryInputDecoration(
+                        label: 'Full name',
+                        icon: Icons.person_outline,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
+                    decoration: entryInputDecoration(
+                      label: 'Email',
+                      icon: Icons.email_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onSubmitted: (_) => _submit(),
+                    decoration: entryInputDecoration(
+                      label: 'Password',
+                      icon: Icons.lock_outline,
+                      suffixIcon: IconButton(
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (!isCreate) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _configured ? _forgotPassword : null,
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      style: TextStyle(color: colors.error),
+                    ),
+                  ],
+                  if (_noAccount) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => _switchMode(AuthMode.createAccount),
+                      child: const Text('Create Account'),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: (_busy || !_configured) ? null : _submit,
+                    child: _loading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colors.onPrimary,
+                            ),
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isCreate
+                                    ? Icons.person_add_outlined
+                                    : Icons.login,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  isCreate ? 'Create Account' : 'Sign In',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR',
+                          style: TextStyle(
+                            color: colors.secondaryText,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: (_busy || !_configured)
+                        ? null
+                        : (isCreate
+                            ? _handleGoogleSignUp
+                            : _handleGoogleSignIn),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF17211D),
+                      disabledBackgroundColor:
+                          Colors.white.withValues(alpha: 0.5),
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _googleLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF17211D),
+                            ),
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/images/google_g_logo.png',
+                                width: 24,
+                                height: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              const Flexible(
+                                child: Text(
+                                  'Continue with Google',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _switchMode(
+                              isCreate
+                                  ? AuthMode.signIn
+                                  : AuthMode.createAccount,
+                            ),
+                    child: Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: colors.secondaryText,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: isCreate
+                                ? 'Already have an account? '
+                                : "Don't have an account? ",
+                          ),
+                          TextSpan(
+                            text: isCreate ? 'Sign In' : 'Create Account',
+                            style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
-}
-
-/// Subtle emerald decorative waves behind the sign-in content. Built
-/// shapes only — no images, no emoji. Static and deterministic so
-/// widget tests stay stable.
-class _WavesPainter extends CustomPainter {
-  const _WavesPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final topPath = Path()
-      ..moveTo(size.width * 0.55, -20)
-      ..quadraticBezierTo(
-        size.width * 0.95,
-        size.height * 0.08,
-        size.width + 20,
-        size.height * 0.02,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.9,
-        size.height * 0.16,
-        size.width * 0.6,
-        size.height * 0.14,
-      )
-      ..close();
-    canvas.drawPath(
-      topPath,
-      Paint()..color = _AuthScreenState._emerald.withValues(alpha: 0.12),
-    );
-
-    final bottomPath = Path()
-      ..moveTo(-20, size.height * 0.92)
-      ..quadraticBezierTo(
-        size.width * 0.3,
-        size.height * 0.86,
-        size.width * 0.6,
-        size.height * 0.93,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.85,
-        size.height * 0.99,
-        size.width + 20,
-        size.height * 0.92,
-      )
-      ..lineTo(size.width + 20, size.height + 20)
-      ..lineTo(-20, size.height + 20)
-      ..close();
-    canvas.drawPath(
-      bottomPath,
-      Paint()..color = _AuthScreenState._emerald.withValues(alpha: 0.08),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

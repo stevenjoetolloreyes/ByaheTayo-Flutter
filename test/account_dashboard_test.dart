@@ -192,8 +192,8 @@ void main() {
 
     await _tapVisible(tester, 'Sign Out');
     expect(auth.currentUser, isNull);
-    expect(find.text('Welcome back'), findsOneWidget);
-    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('Welcome Back'), findsOneWidget);
+    expect(find.text('Sign In'), findsWidgets);
   });
 
   testWidgets('notification setting shows real status + explanation',
