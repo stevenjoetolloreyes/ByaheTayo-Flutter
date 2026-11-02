@@ -246,4 +246,147 @@ void main() {
       expect(find.byIcon(Icons.circle), findsNothing);
     });
   });
+
+  group('Friends alignment (layout only)', () {
+    Future<void> pumpAligned(
+      WidgetTester tester, {
+      required Size size,
+      ThemeData? theme,
+    }) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(MaterialApp(
+        theme: theme,
+        home: Scaffold(
+          body: FriendsTab(
+            sharing: FakeFriendSharing(),
+            codeGenerator: () => _testCode,
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    double cardCenterX(WidgetTester tester, Finder f) {
+      final card = tester.widget<Card>(
+        find.ancestor(of: f, matching: find.byType(Card)).first,
+      );
+      return tester.getRect(find.byWidget(card)).center.dx;
+    }
+
+    double cardLeft(WidgetTester tester, Finder f) {
+      final card = tester.widget<Card>(
+        find.ancestor(of: f, matching: find.byType(Card)).first,
+      );
+      return tester.getRect(find.byWidget(card)).left;
+    }
+
+    const emptyTitles = [
+      'No friends yet',
+      'No incoming requests',
+      'No outgoing requests',
+      'No conversations yet',
+    ];
+
+    testWidgets('empty states and QR are centered at phone and tablet widths',
+        (WidgetTester tester) async {
+      for (final entry in [
+        (const Size(390, 3000), null),
+        (const Size(1000, 1400), null),
+        (const Size(390, 3000), ThemeData.dark()),
+      ]) {
+        await pumpAligned(tester, size: entry.$1, theme: entry.$2);
+        for (final title in emptyTitles) {
+          final finder = find.text(title);
+          expect(finder, findsOneWidget);
+          expect(
+            (tester.getCenter(finder).dx - cardCenterX(tester, finder)).abs(),
+            lessThan(1.0),
+            reason: '$title should be centered at ${entry.$1}',
+          );
+        }
+        final qr = find.byType(QrImageView).first;
+        expect(
+          (tester.getCenter(qr).dx - cardCenterX(tester, qr)).abs(),
+          lessThan(1.0),
+          reason: 'QR should be centered at ${entry.$1}',
+        );
+      }
+    });
+
+    testWidgets('section headings and descriptions stay left-aligned',
+        (WidgetTester tester) async {
+      await pumpAligned(tester, size: const Size(390, 3000));
+      // Page header sits at the ListView padding edge (16dp).
+      expect(tester.getTopLeft(find.text('Friends')).dx, closeTo(16, 1.0));
+      expect(
+        tester.getTopLeft(find.text('People you travel with')).dx,
+        closeTo(16, 1.0),
+      );
+      // Card content starts after card margin (4dp) + card padding
+      // (16dp); subsection headings sit exactly there, not centered.
+      final incoming = find.text('Incoming');
+      expect(
+        tester.getTopLeft(incoming).dx,
+        closeTo(cardLeft(tester, incoming) + 20, 1.0),
+      );
+      expect(
+        tester.getCenter(incoming).dx,
+        lessThan(cardCenterX(tester, incoming)),
+      );
+      // Section title sits after its leading icon (24dp) + gap (12dp).
+      final myFriends = find.text('My Friends');
+      expect(
+        tester.getTopLeft(myFriends).dx,
+        closeTo(cardLeft(tester, myFriends) + 56, 1.0),
+      );
+    });
+
+    testWidgets('Copy and Share share a row when wide, stack when narrow',
+        (WidgetTester tester) async {
+      // Phone + tablet widths: one row, Copy left of Share, same top.
+      for (final size in [const Size(390, 3000), const Size(1000, 1400)]) {
+        await pumpAligned(tester, size: size);
+        final copyTop = tester.getTopLeft(find.text('Copy')).dy;
+        final shareTop = tester.getTopLeft(find.text('Share')).dy;
+        expect((copyTop - shareTop).abs(), lessThan(1.0));
+        expect(
+          tester.getTopRight(find.text('Copy')).dx,
+          lessThan(tester.getTopLeft(find.text('Share')).dx),
+        );
+      }
+      // Narrow card (320dp phone): stacked full-width buttons.
+      await pumpAligned(tester, size: const Size(320, 3000));
+      expect(
+        tester.getTopLeft(find.text('Share')).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(find.text('Copy')).dy),
+      );
+    });
+
+    testWidgets('no overflow at realistic phone and tablet sizes',
+        (WidgetTester tester) async {
+      for (final entry in [
+        (const Size(390, 844), null),
+        (const Size(1000, 800), null),
+        (const Size(390, 844), ThemeData.dark()),
+      ]) {
+        await pumpAligned(tester, size: entry.$1, theme: entry.$2);
+        // Lazily built ListView: drag until the last section is built.
+        // (scrollUntilVisible cannot be used here: the search field
+        // and code text each own an internal Scrollable, so the
+        // default Scrollable finder is ambiguous.)
+        for (var i = 0;
+            i < 10 && find.text('No conversations yet').evaluate().isEmpty;
+            i++) {
+          await tester.drag(find.byType(ListView), const Offset(0, -600));
+          await tester.pumpAndSettle();
+        }
+        expect(find.text('No conversations yet'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    });
+  });
 }

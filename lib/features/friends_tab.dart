@@ -336,6 +336,11 @@ class _FriendsTabState extends State<FriendsTab> {
 
   /// The real code block, shared by the My Friend Code section and the
   /// Add Friend sheet: real QR + code text + real Copy/Share.
+  ///
+  /// ALIGNMENT: the block is always full card width with centered
+  /// content, so the QR and code stay centered at every width (the
+  /// buttons row alone used to force the width; centering is now
+  /// explicit, not incidental).
   Widget _friendCodeDisplay() {
     final code = _code;
     if (code == null) {
@@ -344,61 +349,84 @@ class _FriendsTabState extends State<FriendsTab> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline,
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            child: QrImageView(
+              data: code,
+              size: 180,
+              backgroundColor: Colors.white,
             ),
           ),
-          child: QrImageView(
-            data: code,
-            size: 180,
-            backgroundColor: Colors.white,
+          const SizedBox(height: 12),
+          SelectableText(
+            code,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        SelectableText(
-          code,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+          const SizedBox(height: 4),
+          const Text(
+            'This is your code on this device. Share it with someone '
+            'you travel with.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13),
           ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'This is your code on this device. Share it with someone '
-          'you travel with.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13),
-        ),
-        const SizedBox(height: 12),
-        Row(
+          const SizedBox(height: 12),
+          _codeActionButtons(),
+        ],
+      ),
+    );
+  }
+
+  /// Copy + Share stay in one row when the card is wide enough and
+  /// stack full-width on narrow cards — never cramped, never
+  /// overflowing. Same buttons, labels, icons, and actions either way.
+  Widget _codeActionButtons() {
+    final copyButton = OutlinedButton.icon(
+      onPressed: _copyCode,
+      icon: const Icon(Icons.copy, size: 18),
+      label: const Text('Copy'),
+    );
+    final shareButton = FilledButton.icon(
+      onPressed: _shareCode,
+      icon: const Icon(Icons.share, size: 18),
+      label: const Text('Share'),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 280) {
+          return Row(
+            children: [
+              Expanded(child: copyButton),
+              const SizedBox(width: 12),
+              Expanded(child: shareButton),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _copyCode,
-                icon: const Icon(Icons.copy, size: 18),
-                label: const Text('Copy'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: _shareCode,
-                icon: const Icon(Icons.share, size: 18),
-                label: const Text('Share'),
-              ),
-            ),
+            copyButton,
+            const SizedBox(height: 12),
+            shareButton,
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -439,6 +467,13 @@ class _FriendsTabState extends State<FriendsTab> {
 
   /// Attractive built-UI empty state: Material icon in a styled
   /// container (never emoji) + title + helpful message.
+  ///
+  /// ALIGNMENT: the block is always full card width with centered
+  /// content. A bare Column would shrink to its widest child and, on
+  /// wide screens where the note fits on one line, the whole block
+  /// would sit left (the section card's column is start-aligned).
+  /// The full-width box keeps illustration, title, and note centered
+  /// at every width, in both themes.
   Widget _emptyState({
     required IconData icon,
     required String title,
@@ -447,30 +482,34 @@ class _FriendsTabState extends State<FriendsTab> {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: scheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(icon, size: 36, color: scheme.primary),
             ),
-            child: Icon(icon, size: 36, color: scheme.primary),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            note,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              note,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }
