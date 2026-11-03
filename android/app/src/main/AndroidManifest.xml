@@ -1,9 +1,17 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:label="EstudyanteGO"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false">
+        <!-- DIAGNOSTIC ONLY: disable MobileAds auto-init provider to test
+             whether MobileAdsInitProvider kills launch before any app code.
+             Remove this entry (not a fix) once the test result is known. -->
+        <provider
+            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
+            android:authorities="${applicationId}.mobileadsinitprovider"
+            tools:node="remove" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
