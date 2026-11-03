@@ -60,14 +60,19 @@ const _sidebarCollapsedKey = 'byahetayo_sidebar_collapsed';
 /// SharedPreferences key for the theme mode ('system', 'light', 'dark').
 const _themeModeKey = 'byahetayo_theme_mode';
 
-// DIAGNOSTIC ONLY (canary): temporarily replace main() so NO first-frame
-// Dart work runs at all -- no SharedPreferences, no Firebase init, no splash,
-// no theme construction, no resolve(). MainActivity, manifest, engine and
-// plugin registrant are unchanged. Revert this once the test result is known.
-void main() {
-  runApp(const MaterialApp(
-    home: Scaffold(body: Center(child: Text('EstudyanteGO canary'))),
-  ));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  // Guarded: false when google-services.json is missing or Firebase
+  // fails to start. The app never crashes over Firebase setup.
+  final firebaseConfigured = await initializeFirebase();
+  runApp(
+    EstudyanteGOApp(
+      initialSidebarCollapsed: prefs.getBool(_sidebarCollapsedKey) ?? false,
+      initialThemeMode: _themeModeFromString(prefs.getString(_themeModeKey)),
+      authService: FirebaseAuthService(isConfigured: firebaseConfigured),
+    ),
+  );
 }
 
 ThemeMode _themeModeFromString(String? value) {
