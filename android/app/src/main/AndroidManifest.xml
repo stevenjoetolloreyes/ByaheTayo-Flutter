@@ -5,12 +5,14 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false">
-        <!-- DIAGNOSTIC ONLY: disable MobileAds auto-init provider to test
-             whether MobileAdsInitProvider kills launch before any app code.
+        <!-- DIAGNOSTIC ONLY: disable Firebase auto-init provider to test
+             whether FirebaseInitProvider kills launch before any app code.
+             MobileAds removal was reverted first so this build tests
+             Firebase alone (MobileAds already ruled out by the prior build).
              Remove this entry (not a fix) once the test result is known. -->
         <provider
-            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
-            android:authorities="${applicationId}.mobileadsinitprovider"
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
             tools:node="remove" />
         <activity
             android:name=".MainActivity"
