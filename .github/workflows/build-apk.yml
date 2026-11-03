@@ -8,8 +8,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free disk space (remove unused preinstalled tools)
+        run: |
+          echo "=== Disk space BEFORE cleanup ==="
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android/sdk/ndk  # old NDKs we don't use
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          sudo docker image prune -af || true
+          echo "=== Disk space AFTER cleanup ==="
+          df -h
 
       - uses: actions/setup-java@v4
         with:
@@ -67,10 +81,31 @@ jobs:
       - run: flutter test
         continue-on-error: true
 
+      - name: Disk space check (before NDK download)
+        run: |
+          echo "=== Disk space before NDK download/build ==="
+          df -h
+          echo "=== Memory ==="
+          free -h
+
       - name: Build APK
+        timeout-minutes: 25
         env:
           MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
-        run: flutter build apk --release --dart-define=MAPS_API_KEY="$MAPS_API_KEY"
+        run: |
+          flutter build apk --release --verbose --dart-define=MAPS_API_KEY="$MAPS_API_KEY"
+
+      - name: Disk space check (after build)
+        if: always()
+        run: |
+          echo "=== Disk space after build attempt ==="
+          df -h
+          echo "=== Memory ==="
+          free -h
+          echo "=== Largest directories under ~/.gradle and ~/.android ==="
+          du -sh ~/.gradle 2>/dev/null || true
+          du -sh ~/.android 2>/dev/null || true
+          du -sh /usr/local/lib/android/sdk/ndk 2>/dev/null || true
 
       - name: Print APK signing certificate SHA-256
         continue-on-error: true
