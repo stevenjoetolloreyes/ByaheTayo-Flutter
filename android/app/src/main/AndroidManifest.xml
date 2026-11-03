@@ -1,19 +1,9 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:label="EstudyanteGO"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false">
-        <!-- DIAGNOSTIC ONLY: disable Firebase auto-init provider to test
-             whether FirebaseInitProvider kills launch before any app code.
-             MobileAds removal was reverted first so this build tests
-             Firebase alone (MobileAds already ruled out by the prior build).
-             Remove this entry (not a fix) once the test result is known. -->
-        <provider
-            android:name="com.google.firebase.provider.FirebaseInitProvider"
-            android:authorities="${applicationId}.firebaseinitprovider"
-            tools:node="remove" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
