@@ -16,9 +16,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - uses: gradle/actions/setup-gradle@v4
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.7'
+          cache: true
+          pub-cache: true
 
       - name: Restore default launcher icons
         run: |
@@ -51,7 +55,13 @@ jobs:
       - name: Write local.properties
         env:
           MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
-        run: printf 'MAPS_API_KEY=%s\n' "$MAPS_API_KEY" > android/local.properties
+        run: |
+          FLUTTER_SDK="$(dirname "$(dirname "$(which flutter)")")"
+          {
+            echo "MAPS_API_KEY=$MAPS_API_KEY"
+            echo "flutter.sdk=$FLUTTER_SDK"
+            echo "debug.keystore=$HOME/.android/debug.keystore"
+          } > android/local.properties
 
       - run: flutter pub get
       - run: flutter test
