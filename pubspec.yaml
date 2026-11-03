@@ -50,7 +50,7 @@ dependencies:
   uuid: ^4.6.0
   google_sign_in: ^7.2.0
   cloud_firestore: ^6.10.2
-  google_mobile_ads: ^6.0.0
+  google_mobile_ads: ^9.2.0
   firebase_ai: ^4.0.0
   firebase_app_check: ^0.4.9
   file_picker: ^13.3.2
