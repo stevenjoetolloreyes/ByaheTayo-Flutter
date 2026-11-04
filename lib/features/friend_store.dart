@@ -1,10 +1,14 @@
 // On-device friend data for the Friends tab.
 //
 // HONESTY RULES:
-// - The friend code is REAL: a UUID v4 generated once on this device
-//   and persisted. When cloud sync is available, the same code is
-//   claimed once as the user's cloud code (see
-//   friend_cloud_repository.dart); an established cloud code is
+// - The friend code is REAL: a short invite code (ESK-XXXXXX,
+//   generated once on this device, see generateInviteCode) and
+//   persisted. Older devices may still hold a UUID v4 code from
+//   before the invite-code patch; that stored value is returned
+//   unchanged until cloud sync migrates it (see
+//   friend_cloud_repository.dart), and is never deleted here.
+//   When cloud sync is available, the invite code is claimed once
+//   as the user's cloud code; an established cloud code is
 //   never overwritten, and on a (near-impossible) collision the
 //   minted cloud code replaces the local one so the shown code is
 //   always the code other devices can look up.
@@ -19,11 +23,64 @@
 // ADDITIVE ONLY: the cloud-code key below is new. No existing
 // SharedPreferences key is read with a new meaning or overwritten.
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 
-/// This device's own friend code (a UUID v4 string).
+/// Invite-code prefix. Every invite code is ESK- followed by six
+/// uppercase alphanumeric characters, e.g. ESK-7K9P2X.
+const inviteCodePrefix = 'ESK-';
+
+/// Number of characters after the ESK- prefix.
+const inviteCodeBodyLength = 6;
+
+/// Alphabet for invite-code bodies: uppercase letters + digits.
+/// Full A-Z0-9 (36 symbols); 36^6 combinations, so random
+/// collisions are rare and the code-doc claim is the uniqueness
+/// enforcement (see friend_cloud_repository.dart).
+const _inviteCodeAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+/// Generates a fresh invite code, e.g. ESK-7K9P2X, using a
+/// cryptographically secure random source. [random] is injectable
+/// so tests can use a deterministic source.
+String generateInviteCode({Random? random}) {
+  final rng = random ?? Random.secure();
+  final body = String.fromCharCodes(
+    List.generate(
+      inviteCodeBodyLength,
+      (_) => _inviteCodeAlphabet.codeUnitAt(
+        rng.nextInt(_inviteCodeAlphabet.length),
+      ),
+    ),
+  );
+  return '$inviteCodePrefix$body';
+}
+
+/// True only for the exact invite-code format: ESK- plus six
+/// uppercase alphanumeric characters. UUIDs and any other stored
+/// code return false — they are legacy codes, not invite codes.
+bool isInviteCodeFormat(String code) {
+  return RegExp(r'^ESK-[A-Z0-9]{6}$').hasMatch(code);
+}
+
+/// Normalizes a code a user typed for Add Friend. ESK codes are
+/// uppercased, and a bare six-character body gains the ESK-
+/// prefix, so 'esk-7k9p2x' and '7k9p2x' both become 'ESK-7K9P2X'.
+/// Any other input (including legacy UUID codes, whose document
+/// IDs are case-sensitive) is returned trimmed but otherwise
+/// unchanged, so old codes keep working exactly as stored.
+String normalizeInviteCode(String raw) {
+  final cleaned = raw.trim().replaceAll(RegExp(r'\s+'), '');
+  final upper = cleaned.toUpperCase();
+  if (RegExp(r'^ESK-[A-Z0-9]{6}$').hasMatch(upper)) return upper;
+  if (RegExp(r'^[A-Z0-9]{6}$').hasMatch(upper)) {
+    return '$inviteCodePrefix$upper';
+  }
+  return cleaned;
+}
+
+/// This device's own friend code. New codes are invite codes;
+/// a stored legacy UUID code is returned unchanged (see above).
 const friendCodeKey = 'byahetayo_friend_code';
 
 /// JSON list of locally stored friends.
@@ -67,13 +124,13 @@ class FriendStore {
 
   final SharedPreferences _prefs;
 
-  /// Returns the stored code, generating and persisting a fresh UUID
-  /// v4 on first call. [generate] is injectable so tests can use a
-  /// deterministic code.
+  /// Returns the stored code, generating and persisting a fresh
+  /// invite code (ESK-XXXXXX) on first call. [generate] is
+  /// injectable so tests can use a deterministic code.
   Future<String> loadOrCreateFriendCode({String Function()? generate}) async {
     final existing = _prefs.getString(friendCodeKey);
     if (existing != null && existing.isNotEmpty) return existing;
-    final code = generate?.call() ?? const Uuid().v4();
+    final code = generate?.call() ?? generateInviteCode();
     await _prefs.setString(friendCodeKey, code);
     return code;
   }

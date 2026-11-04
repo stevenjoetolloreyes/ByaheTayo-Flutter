@@ -5,6 +5,14 @@
 //   the code, so lookup is a get-only read — codes can never be
 //   listed or enumerated. A code doc is created by its owner only,
 //   and only the owner may change or delete it.
+// - Invite codes are ESK-XXXXXX (see friend_store.dart). A user
+//   whose mapping still points at a legacy UUID code is migrated
+//   to an invite code by ensureInviteCode below: the mapping is
+//   updated to the new code and the OLD code document is KEPT as
+//   an alias (never deleted), so old QRs, shared codes, and
+//   pending requests still resolve to the same UID. Friendships
+//   are derived from friend_requests by UID, so they are intact
+//   through a migration.
 // - user_friend_codes/{uid}: {code, updatedAt}. Owner-only mapping
 //   so a user can find their own cloud code on any device without
 //   listing anyone else's code.
@@ -20,6 +28,8 @@
 // or presence are ever produced here.
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
+
+import 'friend_store.dart';
 
 /// Exact-code lookup collection: document ID == the friend code.
 const friendCodesCollection = 'friend_codes';
@@ -139,6 +149,21 @@ abstract class FriendCloudRepository {
     required String localCode,
   });
 
+  /// Returns this user's invite code (ESK-XXXXXX), claiming it
+  /// exactly once. If the user's mapping already points at an
+  /// invite code, that code is returned unchanged. If the mapping
+  /// points at a legacy UUID code, a fresh invite code is claimed,
+  /// the mapping is updated to it, and the old code document is
+  /// KEPT as an alias (never deleted). If no mapping exists, a
+  /// fresh invite code is claimed — or [localCode] is claimed when
+  /// it is already an invite code and unclaimed. A collision with
+  /// another user's code mints a new invite code; it NEVER falls
+  /// back to a UUID.
+  Future<String> ensureInviteCode({
+    required String uid,
+    String? localCode,
+  });
+
   /// Exact-code lookup (get-only, never a list). Null when no code
   /// document with that ID exists.
   Future<CloudCodeLookup?> lookupCode(String code);
@@ -235,6 +260,99 @@ class FirestoreFriendCloudRepository implements FriendCloudRepository {
       });
       return claimed;
     });
+  }
+
+  @override
+  Future<String> ensureInviteCode({
+    required String uid,
+    String? localCode,
+  }) async {
+    return _db.runTransaction<String>((tx) async {
+      final mappingRef = _mappingDoc(uid);
+      final mapping = await tx.get(mappingRef);
+      final mapped = mapping.data()?['code'] as String?;
+      if (mapped != null && mapped.isNotEmpty) {
+        if (isInviteCodeFormat(mapped)) {
+          final codeSnap = await tx.get(_codeDoc(mapped));
+          if (!codeSnap.exists) {
+            // Mapping without its code doc (deleted out of band):
+            // recreate it under the same code so the identity holds.
+            tx.set(_codeDoc(mapped), {
+              'uid': uid,
+              'code': mapped,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+            return mapped;
+          } else if (codeSnap.data()?['uid'] != uid) {
+            // Stale mapping pointing at someone else's invite code:
+            // fall through and claim anew below.
+          } else {
+            return mapped;
+          }
+        }
+        // Legacy (non-invite) mapping: claim a fresh invite code
+        // below and update the mapping. The old code document is
+        // deliberately NOT deleted or touched: it stays as an
+        // alias so old QRs and requests still resolve.
+        if (!isInviteCodeFormat(mapped)) {
+          final migrated = await _claimFreshInviteCode(tx, uid);
+          tx.set(mappingRef, {
+            'code': migrated,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          return migrated;
+        }
+      }
+      // No usable mapping: claim the local invite code when it is
+      // already an invite code and unclaimed, otherwise mint fresh.
+      if (localCode != null && isInviteCodeFormat(localCode)) {
+        final localSnap = await tx.get(_codeDoc(localCode));
+        if (!localSnap.exists || localSnap.data()?['uid'] == uid) {
+          tx.set(_codeDoc(localCode), {
+            'uid': uid,
+            'code': localCode,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          tx.set(mappingRef, {
+            'code': localCode,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          return localCode;
+        }
+      }
+      final claimed = await _claimFreshInviteCode(tx, uid);
+      tx.set(mappingRef, {
+        'code': claimed,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return claimed;
+    });
+  }
+
+  /// Claims a fresh, unclaimed invite code inside [tx]. Reads the
+  /// candidate document before any write in this transaction, so
+  /// Firestore's read-before-write transaction rule holds. Throws
+  /// [StateError] after repeated collisions instead of ever
+  /// falling back to a UUID.
+  Future<String> _claimFreshInviteCode(
+    Transaction tx,
+    String uid,
+  ) async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      final candidate = generateInviteCode();
+      final snap = await tx.get(_codeDoc(candidate));
+      if (!snap.exists || snap.data()?['uid'] == uid) {
+        tx.set(_codeDoc(candidate), {
+          'uid': uid,
+          'code': candidate,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        return candidate;
+      }
+    }
+    throw StateError(
+      'Could not claim a unique invite code. Please try again.',
+    );
   }
 
   @override

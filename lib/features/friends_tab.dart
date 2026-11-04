@@ -5,12 +5,14 @@
 // copy/share), Friend Requests (incoming + outgoing), Chats.
 //
 // HONESTY RULES:
-// - The friend code is genuinely generated on-device (UUID v4,
-//   persisted in SharedPreferences) and encoded in a real QR code.
-//   Copy uses the real clipboard; Share uses the real share sheet.
-//   When a cloud repository is provided, the same code is claimed
-//   once as the user's cloud code (never overwritten); without a
-//   repository the tab stays local-only.
+// - The friend code is genuinely generated on-device (invite
+//   code ESK-XXXXXX, persisted in SharedPreferences) and encoded
+//   in a real QR code. Copy uses the real clipboard; Share uses
+//   the real share sheet. When a cloud repository is provided,
+//   the invite code is claimed once as the user's cloud code
+//   (never overwritten); a legacy UUID cloud code is migrated
+//   to an invite code with the old code kept as an alias.
+//   Without a repository the tab stays local-only.
 // - Search filters ONLY actually-stored friends (local entries plus
 //   cloud friends from accepted requests, when synced). With none
 //   stored, the section shows its honest empty state.
@@ -51,6 +53,36 @@ import 'friend_store.dart';
 /// Shown when an action needs cloud sync (not enabled yet).
 const _syncNeededMessage =
     'Chats need cloud sync, which is not enabled yet.';
+
+/// Client-side guard against repeated failed code lookups.
+/// NOT server-side rate limiting: Firestore rules have no
+/// rate-limit primitive, so this only throttles this device's own
+/// Add Friend sheet. After 5 failed lookups within 5 minutes, the
+/// next attempts are blocked for 60 seconds. [now] is injectable
+/// so tests can control time.
+class FailedLookupRateGuard {
+  FailedLookupRateGuard({DateTime Function()? now})
+      : _now = now ?? DateTime.now;
+
+  final DateTime Function() _now;
+  final List<DateTime> _failures = [];
+  DateTime? _blockedUntil;
+
+  bool get isBlocked {
+    final until = _blockedUntil;
+    return until != null && _now().isBefore(until);
+  }
+
+  void recordFailure() {
+    final t = _now();
+    _failures.removeWhere((f) => t.difference(f) > const Duration(minutes: 5));
+    _failures.add(t);
+    if (_failures.length >= 5) {
+      _blockedUntil = t.add(const Duration(minutes: 1));
+      _failures.clear();
+    }
+  }
+}
 
 class FriendsTab extends StatefulWidget {
   const FriendsTab({
@@ -106,6 +138,9 @@ class _FriendsTabState extends State<FriendsTab> {
   String? _codeError;
   bool _sending = false;
 
+  /// Client-side failed-lookup guard (see FailedLookupRateGuard).
+  final FailedLookupRateGuard _lookupGuard = FailedLookupRateGuard();
+
   bool get _cloudEnabled =>
       widget.cloudRepository != null && widget.cloudUserId != null;
 
@@ -145,8 +180,10 @@ class _FriendsTabState extends State<FriendsTab> {
     final localCode = _code;
     if (repo == null || uid == null || localCode == null) return;
     try {
-      final cloudCode =
-          await repo.ensureCloudCode(uid: uid, localCode: localCode);
+      final cloudCode = await repo.ensureInviteCode(
+        uid: uid,
+        localCode: localCode,
+      );
       if (cloudCode != localCode) {
         // Collision minted a fresh code: adopt it locally so the
         // displayed code is the code other devices can look up.
@@ -261,11 +298,19 @@ class _FriendsTabState extends State<FriendsTab> {
     final repo = widget.cloudRepository;
     final uid = widget.cloudUserId;
     if (repo == null || uid == null) return 'Cloud sync is not available.';
-    final code = rawCode.trim();
+    // Client-side rate guard only (see FailedLookupRateGuard):
+    // Firestore rules cannot rate-limit lookups.
+    if (_lookupGuard.isBlocked) {
+      return 'Too many failed attempts. Please try again in a minute.';
+    }
+    final code = normalizeInviteCode(rawCode);
     if (code.isEmpty) return 'Enter a friend code first.';
     try {
       final found = await repo.lookupCode(code);
-      if (found == null) return 'No friend found with that code.';
+      if (found == null) {
+        _lookupGuard.recordFailure();
+        return 'No friend found with that code.';
+      }
       if (found.uid == uid) return 'That is your own code.';
       await repo.sendRequest(
         fromUid: uid,
@@ -792,8 +837,9 @@ class _FriendsTabState extends State<FriendsTab> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontFamily: 'monospace',
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
             ),
           ),
           const SizedBox(height: AppSpacing.s4),

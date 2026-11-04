@@ -7,8 +7,10 @@
 // a live database here; its contract is covered by the fake below
 // (same interface, same guard semantics) plus the rules-text test.
 import 'dart:io';
+import 'dart:math';
 
 import 'package:estudyantego/features/friend_cloud_repository.dart';
+import 'package:estudyantego/features/friend_store.dart';
 import 'package:estudyantego/features/friend_sharing.dart';
 import 'package:estudyantego/features/friends_tab.dart';
 import 'package:flutter/material.dart';
@@ -75,6 +77,38 @@ class FakeFriendCloudRepository implements FriendCloudRepository {
     codes[fresh] = uid;
     mappings[uid] = fresh;
     return fresh;
+  }
+
+  @override
+  Future<String> ensureInviteCode({
+    required String uid,
+    String? localCode,
+  }) async {
+    if (throwOnEnsure) throw Exception('boom');
+    final mapped = mappings[uid];
+    if (mapped != null && isInviteCodeFormat(mapped)) return mapped;
+    if (mapped != null) {
+      // Legacy UUID mapping: migrate to an invite code, keeping
+      // the old code document as an alias (never deleted).
+      final migrated = generateInviteCode();
+      codes[migrated] = uid;
+      mappings[uid] = migrated;
+      return migrated;
+    }
+    if (localCode != null &&
+        isInviteCodeFormat(localCode) &&
+        (!codes.containsKey(localCode) || codes[localCode] == uid)) {
+      codes[localCode] = uid;
+      mappings[uid] = localCode;
+      return localCode;
+    }
+    var claimed = generateInviteCode();
+    while (codes.containsKey(claimed) && codes[claimed] != uid) {
+      claimed = generateInviteCode();
+    }
+    codes[claimed] = uid;
+    mappings[uid] = claimed;
+    return claimed;
   }
 
   @override
@@ -412,39 +446,148 @@ void main() {
     });
   });
 
-  group('Friends tab cloud sync (widget)', () {
-    testWidgets('backfill claims the local code on first cloud open',
-        (WidgetTester tester) async {
-      final repo = FakeFriendCloudRepository();
-      await _pumpCloudFriends(tester, repo: repo);
-      expect(repo.mappings[_meUid], _meCode);
-      expect(repo.codes[_meCode], _meUid);
-      expect(_codeText(_meCode), findsOneWidget);
+  group('Invite codes (ensureInviteCode)', () {
+    test('generator produces ESK- plus six uppercase alphanumerics',
+        () async {
+      final code = generateInviteCode(random: Random(42));
+      expect(isInviteCodeFormat(code), isTrue);
+      expect(code, startsWith('ESK-'));
+      expect(code.length, 10);
+      expect(isInviteCodeFormat('ESK-123'), isFalse);
+      expect(isInviteCodeFormat('123e4567-e89b-12d3-a456-426614174000'),
+          isFalse);
     });
 
-    testWidgets('backfill never overwrites an established cloud code',
-        (WidgetTester tester) async {
-      final repo = FakeFriendCloudRepository();
-      repo.codes['existing-cloud-code'] = _meUid;
-      repo.mappings[_meUid] = 'existing-cloud-code';
-      await _pumpCloudFriends(tester, repo: repo);
-      expect(repo.mappings[_meUid], 'existing-cloud-code');
-      // The displayed code adopts the established cloud identity so
-      // the shown code is the one other devices can look up.
-      expect(_codeText('existing-cloud-code'), findsOneWidget);
-      final prefs = await SharedPreferences.getInstance();
+    test('normalization uppercases ESK codes and preserves UUIDs', () {
+      expect(normalizeInviteCode('esk-7k9p2x'), 'ESK-7K9P2X');
+      expect(normalizeInviteCode(' 7k9p2x '), 'ESK-7K9P2X');
       expect(
-        prefs.getString('byahetayo_friend_code'),
-        'existing-cloud-code',
+        normalizeInviteCode('123e4567-e89b-12d3-a456-426614174000'),
+        '123e4567-e89b-12d3-a456-426614174000',
       );
     });
 
-    testWidgets('backfill collision mints a fresh code',
+    test('rate guard blocks after 5 failures, unblocks after 60s', () {
+      var now = DateTime(2026, 1, 1);
+      final guard = FailedLookupRateGuard(now: () => now);
+      for (var i = 0; i < 4; i++) {
+        guard.recordFailure();
+        expect(guard.isBlocked, isFalse);
+      }
+      guard.recordFailure();
+      expect(guard.isBlocked, isTrue);
+      now = now.add(const Duration(seconds: 61));
+      expect(guard.isBlocked, isFalse);
+    });
+
+    test('new user with no mapping gets an invite code', () async {
+      final repo = FakeFriendCloudRepository();
+      final claimed = await repo.ensureInviteCode(uid: _meUid);
+      expect(isInviteCodeFormat(claimed), isTrue);
+      expect(repo.mappings[_meUid], claimed);
+      expect(repo.codes[claimed], _meUid);
+    });
+
+    test('new user with a free local invite code claims it', () async {
+      final repo = FakeFriendCloudRepository();
+      final claimed = await repo.ensureInviteCode(
+        uid: _meUid,
+        localCode: 'ESK-ABC123',
+      );
+      expect(claimed, 'ESK-ABC123');
+      expect(repo.codes['ESK-ABC123'], _meUid);
+    });
+
+    test('existing invite mapping is returned unchanged', () async {
+      final repo = FakeFriendCloudRepository();
+      repo.codes['ESK-ABC123'] = _meUid;
+      repo.mappings[_meUid] = 'ESK-ABC123';
+      expect(
+        await repo.ensureInviteCode(uid: _meUid),
+        'ESK-ABC123',
+      );
+    });
+
+    test('UUID mapping migrates to invite code, old code kept as alias',
+        () async {
+      final repo = FakeFriendCloudRepository();
+      repo.codes[_meCode] = _meUid;
+      repo.mappings[_meUid] = _meCode;
+      final migrated = await repo.ensureInviteCode(uid: _meUid);
+      expect(isInviteCodeFormat(migrated), isTrue);
+      expect(migrated, isNot(_meCode));
+      expect(repo.mappings[_meUid], migrated);
+      expect(repo.codes[migrated], _meUid);
+      // Old code document is never deleted.
+      expect(repo.codes[_meCode], _meUid);
+    });
+
+    test('taken local invite code mints a different invite code',
+        () async {
+      final repo = FakeFriendCloudRepository();
+      repo.codes['ESK-ABC123'] = 'other-uid';
+      final claimed = await repo.ensureInviteCode(
+        uid: _meUid,
+        localCode: 'ESK-ABC123',
+      );
+      expect(isInviteCodeFormat(claimed), isTrue);
+      expect(claimed, isNot('ESK-ABC123'));
+      expect(repo.codes[claimed], _meUid);
+    });
+  });
+
+  group('Friends tab cloud sync (widget)', () {
+    testWidgets('invite backfill claims an ESK code on first cloud open',
+        (WidgetTester tester) async {
+      final repo = FakeFriendCloudRepository();
+      await _pumpCloudFriends(tester, repo: repo);
+      final claimed = repo.mappings[_meUid]!;
+      expect(isInviteCodeFormat(claimed), isTrue);
+      expect(repo.codes[claimed], _meUid);
+      expect(_codeText(claimed), findsOneWidget);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('byahetayo_friend_code'), claimed);
+    });
+
+    testWidgets('backfill never overwrites an established invite code',
+        (WidgetTester tester) async {
+      final repo = FakeFriendCloudRepository();
+      repo.codes['ESK-ABC123'] = _meUid;
+      repo.mappings[_meUid] = 'ESK-ABC123';
+      await _pumpCloudFriends(tester, repo: repo);
+      expect(repo.mappings[_meUid], 'ESK-ABC123');
+      // The displayed code adopts the established cloud identity so
+      // the shown code is the one other devices can look up.
+      expect(_codeText('ESK-ABC123'), findsOneWidget);
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString('byahetayo_friend_code'),
+        'ESK-ABC123',
+      );
+    });
+
+    testWidgets('UUID cloud code migrates to invite, old code kept',
+        (WidgetTester tester) async {
+      final repo = FakeFriendCloudRepository();
+      repo.codes[_meCode] = _meUid;
+      repo.mappings[_meUid] = _meCode;
+      await _pumpCloudFriends(tester, repo: repo);
+      final migrated = repo.mappings[_meUid]!;
+      expect(isInviteCodeFormat(migrated), isTrue);
+      expect(migrated, isNot(_meCode));
+      expect(repo.codes[migrated], _meUid);
+      // Old code document is kept as an alias.
+      expect(repo.codes[_meCode], _meUid);
+      expect(_codeText(migrated), findsOneWidget);
+    });
+
+    testWidgets('backfill collision mints a fresh invite code',
         (WidgetTester tester) async {
       final repo = FakeFriendCloudRepository();
       repo.codes['taken-code'] = 'other-uid';
       await _pumpCloudFriends(tester, repo: repo, code: 'taken-code');
       final claimed = repo.mappings[_meUid]!;
+      expect(isInviteCodeFormat(claimed), isTrue);
       expect(claimed, isNot('taken-code'));
       expect(repo.codes[claimed], _meUid);
       expect(_codeText(claimed), findsOneWidget);
@@ -492,14 +635,89 @@ void main() {
         (WidgetTester tester) async {
       final repo = FakeFriendCloudRepository();
       await _pumpCloudFriends(tester, repo: repo);
+      // The user's current code after invite backfill is the ESK
+      // mapping, not the legacy local UUID.
+      final ownCode = repo.mappings[_meUid]!;
 
       await tester.tap(find.text('Add Friend'));
       await tester.pumpAndSettle();
-      await tester.enterText(_codeField(), _meCode);
+      await tester.enterText(_codeField(), ownCode);
       await tester.tap(find.text('Send request'));
       await tester.pumpAndSettle();
 
       expect(find.text('That is your own code.'), findsOneWidget);
+      expect(repo.requests, isEmpty);
+    });
+
+    testWidgets('send flow: lowercase ESK code is normalized and sent',
+        (WidgetTester tester) async {
+      final repo = FakeFriendCloudRepository();
+      repo.codes['ESK-7K9P2X'] = 'friend-uid';
+      await _pumpCloudFriends(tester, repo: repo);
+
+      await tester.tap(find.text('Add Friend'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_codeField(), 'esk-7k9p2x');
+      await tester.tap(find.text('Send request'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Friend request sent.'), findsOneWidget);
+      expect(repo.requests, isNotEmpty);
+    });
+
+    testWidgets('send flow: bare six-character body gains ESK- prefix',
+        (WidgetTester tester) async {
+      final repo = FakeFriendCloudRepository();
+      repo.codes['ESK-7K9P2X'] = 'friend-uid';
+      await _pumpCloudFriends(tester, repo: repo);
+
+      await tester.tap(find.text('Add Friend'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_codeField(), '7k9p2x');
+      await tester.tap(find.text('Send request'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Friend request sent.'), findsOneWidget);
+      expect(repo.requests, isNotEmpty);
+    });
+
+    testWidgets('send flow: legacy UUID code still works',
+        (WidgetTester tester) async {
+      final repo = FakeFriendCloudRepository();
+      const legacy = '123e4567-e89b-12d3-a456-426614174001';
+      repo.codes[legacy] = 'friend-uid';
+      await _pumpCloudFriends(tester, repo: repo);
+
+      await tester.tap(find.text('Add Friend'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_codeField(), legacy);
+      await tester.tap(find.text('Send request'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Friend request sent.'), findsOneWidget);
+      expect(repo.requests, isNotEmpty);
+    });
+
+    testWidgets('send flow: 5 failed lookups block the 6th attempt',
+        (WidgetTester tester) async {
+      final repo = FakeFriendCloudRepository();
+      await _pumpCloudFriends(tester, repo: repo);
+
+      await tester.tap(find.text('Add Friend'));
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 5; i++) {
+        await tester.enterText(_codeField(), 'missing-code');
+        await tester.tap(find.text('Send request'));
+        await tester.pumpAndSettle();
+        expect(find.text('No friend found with that code.'), findsOneWidget);
+      }
+      await tester.enterText(_codeField(), 'missing-code');
+      await tester.tap(find.text('Send request'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Too many failed attempts. Please try again in a minute.'),
+        findsOneWidget,
+      );
       expect(repo.requests, isEmpty);
     });
 
