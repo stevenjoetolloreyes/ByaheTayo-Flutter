@@ -16,6 +16,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../diagnostics/diagnostics.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
 
@@ -53,17 +54,57 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..forward();
+    // Splash stage start (recorded, never blocking, never throwing).
+    ErrorLogService.instance.record(
+      category: ErrorCategory.startup,
+      message: 'Splash init.',
+      startupStage: StartupStage.splash.name,
+      severity: ErrorSeverity.info,
+    );
     _go();
   }
 
   Future<void> _go() async {
-    final results = await Future.wait([
-      widget.resolve(),
-      Future<void>.delayed(const Duration(milliseconds: 1200)),
-    ]);
+    // Previously unguarded: a resolve() throw left the splash frozen
+    // forever (no handoff, no error shown). Now the failure is
+    // recorded and the app falls back to onboarding — the safe
+    // first-launch destination — instead of freezing. Onboarding
+    // progress in prefs is never cleared by this fallback.
+    AppStartDestination destination;
+    try {
+      final results = await Future.wait([
+        widget.resolve(),
+        Future<void>.delayed(const Duration(milliseconds: 1200)),
+      ]);
+      destination = results.first as AppStartDestination;
+    } catch (error, stack) {
+      try {
+        await ErrorLogService.instance.record(
+          category: ErrorCategory.startup,
+          message: 'Splash resolve failed, falling back to onboarding: $error',
+          stackTrace: stack.toString(),
+          startupStage: StartupStage.splash.name,
+          severity: ErrorSeverity.error,
+        );
+      } catch (_) {
+        // Diagnostics failure must never block the fallback.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      destination = AppStartDestination.onboarding;
+    }
     if (!mounted || _handedOff) return;
     _handedOff = true;
-    widget.onDestination(results.first as AppStartDestination);
+    try {
+      await ErrorLogService.instance.record(
+        category: ErrorCategory.startup,
+        message: 'Splash completed, destination: ${destination.name}.',
+        startupStage: StartupStage.splash.name,
+        severity: ErrorSeverity.info,
+      );
+    } catch (_) {
+      // Diagnostics failure must never block the handoff.
+    }
+    widget.onDestination(destination);
   }
 
   @override

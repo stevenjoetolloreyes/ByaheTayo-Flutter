@@ -22,9 +22,13 @@
 // google-services.json), auth gating is skipped and the dashboard
 // opens after onboarding, so the app stays usable before setup.
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'features/diagnostics/diagnostics.dart';
 
 import 'features/account_tab.dart';
 import 'features/ad_service.dart';
@@ -60,18 +64,150 @@ const _sidebarCollapsedKey = 'byahetayo_sidebar_collapsed';
 /// SharedPreferences key for the theme mode ('system', 'light', 'dark').
 const _themeModeKey = 'byahetayo_theme_mode';
 
+/// Production-safe startup with the ONE diagnostics system.
+///
+/// Stage order: binding -> prefs -> Firebase (+ App Check, reported
+/// separately via its callback) -> runApp (zone-guarded). Every
+/// recoverable stage failure is recorded and falls back instead of
+/// throwing: prefs failure falls back to default theme/sidebar,
+/// Firebase failure falls back to the existing unconfigured path
+/// (auth gate skipped, as before). Safe Mode skips only nonessential
+/// services (App Check activation); it never skips auth, profile,
+/// onboarding, prefs, or Firebase core init, and never clears state.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-  // Guarded: false when google-services.json is missing or Firebase
-  // fails to start. The app never crashes over Firebase setup.
-  final firebaseConfigured = await initializeFirebase();
-  runApp(
-    EstudyanteGOApp(
-      initialSidebarCollapsed: prefs.getBool(_sidebarCollapsedKey) ?? false,
-      initialThemeMode: _themeModeFromString(prefs.getString(_themeModeKey)),
-      authService: FirebaseAuthService(isConfigured: firebaseConfigured),
-    ),
+  final diagnosticsService = ErrorLogService.instance;
+  // Diagnostics store: primary JSON-lines file in documents, plus the
+  // external mirror file the File Manager can open (same JSON format,
+  // one system — this replaces the earlier plain-text file-logger).
+  // Every step is guarded: a diagnostics failure can never break
+  // startup.
+  try {
+    final docs = await getApplicationDocumentsDirectory();
+    final external = await getExternalStorageDirectory();
+    await diagnosticsService.init(
+      store: ErrorLogStore(
+        storage: FileErrorLogStorage(
+          File('${docs.path}/error_logs.jsonl'),
+        ),
+        externalMirrorFile: external == null
+            ? null
+            : File('${external.path}/estudyantego-crash.log'),
+      ),
+    );
+  } catch (_) {
+    // Diagnostics unavailable; startup continues without it.
+  }
+  diagnosticsService.installFlutterErrorHandler();
+  final diagnostics = diagnosticsService.diagnostics;
+  if (diagnostics != null) {
+    // Binding succeeded if execution reached here; record it as a
+    // completed stage (start + end) for a consistent stage timeline.
+    await diagnostics.startStage(StartupStage.flutterBinding);
+    await diagnostics.endStage(StartupStage.flutterBinding, success: true);
+  }
+
+  // Retry handler for the Diagnostics screen's Retry button: re-runs
+  // only the safe, re-runnable stages (prefs + Firebase). It never
+  // restarts the app, never clears session or onboarding progress,
+  // and never navigates.
+  diagnosticsService.onRetryRequested = () async {
+    final d = diagnosticsService.diagnostics;
+    if (d == null) return;
+    await d.runStage<SharedPreferences?>(
+      StartupStage.sharedPreferences,
+      SharedPreferences.getInstance,
+      fallback: null,
+      timeout: const Duration(seconds: 10),
+    );
+    await d.runStage<bool>(
+      StartupStage.firebase,
+      () => initializeFirebase(
+        skipAppCheck: d.safeMode,
+        onAppCheckResult: (succeeded) {
+          unawaited(diagnosticsService.record(
+            category: ErrorCategory.startup,
+            message: succeeded
+                ? 'App Check activation succeeded.'
+                : 'App Check activation did not complete '
+                    '(best-effort; launch continues).',
+            startupStage: StartupStage.appCheck.name,
+            severity:
+                succeeded ? ErrorSeverity.info : ErrorSeverity.warning,
+          ));
+        },
+      ),
+      fallback: false,
+      timeout: const Duration(seconds: 20),
+    );
+  };
+
+  // SharedPreferences stage: timeout + fallback to defaults.
+  // (The original code awaited getInstance() unguarded; a prefs
+  // failure previously left startup hanging. The fallback preserves
+  // the old defaults exactly: sidebar expanded, system theme.)
+  final SharedPreferences? prefs;
+  if (diagnostics != null) {
+    prefs = await diagnostics.runStage<SharedPreferences?>(
+      StartupStage.sharedPreferences,
+      SharedPreferences.getInstance,
+      fallback: null,
+      timeout: const Duration(seconds: 10),
+    );
+  } else {
+    prefs = await SharedPreferences.getInstance();
+  }
+
+  // Firebase stage: initializeFirebase() itself never throws (it
+  // returns false on any failure); the timeout wrapper adds the
+  // stage-timeout protection on top of that existing guard.
+  final bool firebaseConfigured;
+  if (diagnostics != null) {
+    firebaseConfigured = await diagnostics.runStage<bool>(
+      StartupStage.firebase,
+      () => initializeFirebase(
+        skipAppCheck: diagnostics.safeMode,
+        onAppCheckResult: (succeeded) {
+          unawaited(diagnosticsService.record(
+            category: ErrorCategory.startup,
+            message: succeeded
+                ? 'App Check activation succeeded.'
+                : 'App Check activation did not complete '
+                    '(best-effort; launch continues).',
+            startupStage: StartupStage.appCheck.name,
+            severity:
+                succeeded ? ErrorSeverity.info : ErrorSeverity.warning,
+          ));
+        },
+      ),
+      fallback: false,
+      timeout: const Duration(seconds: 20),
+    );
+  } else {
+    // Guarded: false when google-services.json is missing or Firebase
+    // fails to start. The app never crashes over Firebase setup.
+    firebaseConfigured = await initializeFirebase();
+  }
+
+  runZonedGuarded(
+    () {
+      runApp(
+        EstudyanteGOApp(
+          initialSidebarCollapsed:
+              prefs?.getBool(_sidebarCollapsedKey) ?? false,
+          initialThemeMode: _themeModeFromString(
+            prefs?.getString(_themeModeKey),
+          ),
+          authService: FirebaseAuthService(isConfigured: firebaseConfigured),
+        ),
+      );
+      unawaited(diagnosticsService.record(
+        category: ErrorCategory.startup,
+        message: 'runApp called.',
+        severity: ErrorSeverity.info,
+      ));
+    },
+    diagnosticsService.handleZoneError,
   );
 }
 
@@ -316,8 +452,39 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
     final user = _authService.currentUser;
     _store = store;
     _user = user;
+    // Auth session restore stage (the read itself is guarded inside
+    // FirebaseAuthService.currentUser and returns null on failure).
+    try {
+      await ErrorLogService.instance.record(
+        category: ErrorCategory.startup,
+        message: user == null
+            ? 'Auth session restore: no session.'
+            : 'Auth session restore: session present.',
+        startupStage: StartupStage.authSessionRestore.name,
+        severity: ErrorSeverity.info,
+      );
+    } catch (_) {
+      // Diagnostics failure must never break start resolution.
+    }
     if (user != null) {
-      await _restoreProfileForUser(user);
+      // Profile restore stage: timeout + fallback to the local
+      // profile. _restoreProfileForUser itself never throws by
+      // contract; the wrapper adds timeout protection and a log
+      // entry. It never clears session or onboarding progress.
+      final diagnostics = ErrorLogService.instance.diagnostics;
+      if (diagnostics != null) {
+        await diagnostics.runStage<bool>(
+          StartupStage.profileRestore,
+          () async {
+            await _restoreProfileForUser(user);
+            return true;
+          },
+          fallback: false,
+          timeout: const Duration(seconds: 15),
+        );
+      } else {
+        await _restoreProfileForUser(user);
+      }
     }
     final profileDone =
         user == null ? false : store.isProfileSetupDone(user.uid);
@@ -337,6 +504,12 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
   }
 
   void _goDashboard({bool promptForNotifications = false}) {
+    unawaited(ErrorLogService.instance.record(
+      category: ErrorCategory.startup,
+      message: 'Dashboard init: destination set to dashboard.',
+      startupStage: StartupStage.dashboardInit.name,
+      severity: ErrorSeverity.info,
+    ));
     setState(() => _destination = AppStartDestination.dashboard);
     if (promptForNotifications && _user != null && _store != null) {
       final store = _store!;
@@ -645,7 +818,18 @@ class _HomeShellState extends State<_HomeShell> {
   @override
   void initState() {
     super.initState();
-    unawaited(_adService.initialize());
+    // Safe Mode skips ads init (nonessential). Otherwise the
+    // existing fire-and-forget init is unchanged.
+    if (ErrorLogService.instance.safeMode) {
+      unawaited(ErrorLogService.instance.record(
+        category: ErrorCategory.startup,
+        message: 'Ads init skipped (Safe Mode).',
+        startupStage: 'adsInit',
+        severity: ErrorSeverity.warning,
+      ));
+    } else {
+      unawaited(_adService.initialize());
+    }
   }
 
   Future<void> _toggleSidebar() async {

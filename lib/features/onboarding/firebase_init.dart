@@ -19,21 +19,35 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+/// Added for the diagnostics system only (no logic change):
+/// [skipAppCheck] lets Safe Mode skip App Check activation (it is
+/// already best-effort), and [onAppCheckResult] reports whether
+/// activation succeeded so the startup stage can be recorded
+/// separately from Firebase core init. Both default to the old
+/// behaviour when omitted.
 Future<bool> initializeFirebase({
   Future<void> Function()? initializer,
   Future<void> Function()? appCheckActivator,
+  bool skipAppCheck = false,
+  void Function(bool succeeded)? onAppCheckResult,
 }) async {
   try {
     await (initializer ?? () => Firebase.initializeApp())();
-    try {
-      await (appCheckActivator ??
-          () => FirebaseAppCheck.instance.activate(
-                providerAndroid: kDebugMode
-                    ? const AndroidDebugProvider()
-                    : const AndroidPlayIntegrityProvider(),
-              ))();
-    } catch (_) {
-      // Best-effort: App Check must never break app launch.
+    if (skipAppCheck) {
+      onAppCheckResult?.call(false);
+    } else {
+      try {
+        await (appCheckActivator ??
+            () => FirebaseAppCheck.instance.activate(
+                  providerAndroid: kDebugMode
+                      ? const AndroidDebugProvider()
+                      : const AndroidPlayIntegrityProvider(),
+                ))();
+        onAppCheckResult?.call(true);
+      } catch (_) {
+        // Best-effort: App Check must never break app launch.
+        onAppCheckResult?.call(false);
+      }
     }
     return true;
   } catch (_) {
