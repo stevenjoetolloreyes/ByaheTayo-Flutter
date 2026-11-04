@@ -18,8 +18,10 @@
 // admins approve or reject submissions; only approved items are badged
 // "Published" and shown to all users. Rejected items are hidden from
 // the main list and stay visible in the admin screen until deleted.
-// Local posts keep their old device-only approval behavior; the sample
-// CTransco submission stays local-only and is never uploaded.
+// Local posts keep their old device-only approval behavior. The sample
+// CTransco submission now lives in Firestore only (see
+// ensureSampleSharedPost in community_post_repository.dart); any legacy
+// local copy is removed on load, never re-seeded.
 //
 // A route IS its From → To: the form asks for From and To, and the
 // stored routeName is derived from them ("From → To"). Older posts
@@ -375,11 +377,11 @@ Future<void> saveCommunityPosts(
 }
 
 /// The user-provided sample submission: Operator CTransco,
-/// Vigan City → Cabugao, Modern Jeepney, ₱60.00. It is seeded as a
+/// Vigan City → Cabugao, Modern Jeepney, ₱60.00. It is shared as a
 /// PENDING submission (badged "In Review"), never as a
-/// verified fare and never as published fact. Seeding runs at most
-/// once per device: after the first seed the flag is set, so deleting
-/// the sample is respected and it never comes back.
+/// verified fare and never as published fact. It lives in Firestore
+/// only, under a fixed document id (see sampleSharedPostId), so it
+/// is created exactly once in the database and never re-created.
 const sampleCommunityPost = CommunityPost(
   routeName: 'Vigan City → Cabugao',
   vehicles: ['modern-jeepney'],
@@ -398,21 +400,22 @@ bool _isSamplePost(CommunityPost post) =>
     post.from == 'Vigan City' &&
     post.to == 'Cabugao';
 
-/// Ensures the sample submission exists exactly once. Returns the
-/// list to display (sample prepended on first seed). Persists the
-/// change and the flag when seeding; otherwise returns [posts]
-/// unchanged.
-Future<List<CommunityPost>> ensureSampleCommunityPost(
+/// Removes any legacy local copy of the sample submission, so the
+/// sample lives in Firestore only and is never device-only again.
+/// Returns [posts] without the sample, persisting the change when a
+/// copy was removed. The flag is set so older flows that checked it
+/// keep working; removal itself does not depend on the flag, so a
+/// local copy can never reappear by clearing the flag alone.
+Future<List<CommunityPost>> removeLegacyLocalSample(
   SharedPreferences prefs,
   List<CommunityPost> posts,
 ) async {
-  if (prefs.getBool(samplePostSeededKey) == true) return posts;
-  if (posts.any(_isSamplePost)) {
+  if (!posts.any(_isSamplePost)) {
     await prefs.setBool(samplePostSeededKey, true);
     return posts;
   }
-  final seeded = [sampleCommunityPost, ...posts];
-  await saveCommunityPosts(prefs, seeded);
+  final filtered = posts.where((p) => !_isSamplePost(p)).toList();
+  await saveCommunityPosts(prefs, filtered);
   await prefs.setBool(samplePostSeededKey, true);
-  return seeded;
+  return filtered;
 }

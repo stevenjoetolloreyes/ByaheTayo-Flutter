@@ -22,8 +22,9 @@
 // photo (honest omission, flagged to the caller) — never failed over
 // its photo.
 //
-// NO AUTO-MIGRATION: this repository never reads or uploads local
-// posts. Old local posts stay local; the CTransco sample stays local.
+// NO AUTO-MIGRATION for old local posts: they stay local. The
+// CTransco sample is the one exception — it is created in Firestore
+// exactly once by ensureSampleSharedPost below, never locally.
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -96,6 +97,29 @@ class FirestorePostRepository implements PostRepository {
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _db.collection(communityPostsCollection);
+
+  /// Fixed Firestore document id for the CTransco sample post.
+  /// A fixed id (not an auto id) is what makes creation idempotent:
+  /// checking for this document first means it can never be created
+  /// twice, even after reinstall or clear data.
+  static const sampleSharedPostId = 'sample-ctransco-vigan-cabugao';
+
+  /// Ensures the CTransco sample exists exactly once in Firestore.
+  /// Returns true only when it was created now; false when it already
+  /// existed in any status. An existing document is never rewritten,
+  /// so once an admin approves it, it stays approved — approval is
+  /// never repeated and the sample is never re-pended.
+  Future<bool> ensureSampleSharedPost(AuthUser author) async {
+    final ref = _collection.doc(sampleSharedPostId);
+    final snap = await ref.get();
+    if (snap.exists) return false;
+    final doc = sharedPostToDoc(sampleCommunityPost, author.uid);
+    await ref.set({
+      ...doc,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return true;
+  }
 
   @override
   Future<List<CommunityPost>> loadVisiblePosts(AuthUser? user) async {

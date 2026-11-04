@@ -233,30 +233,40 @@ void main() {
     expect(await loadCommunityPosts(prefs), isEmpty);
   });
 
-  test('sample post seeds once as pending, never as verified', () async {
+  test('legacy local sample is removed, sample lives in Firestore only',
+      () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final seeded = await ensureSampleCommunityPost(prefs, []);
-    expect(seeded.length, 1);
-    expect(seeded.first.from, 'Vigan City');
-    expect(seeded.first.to, 'Cabugao');
-    expect(seeded.first.operatorName, 'CTransco');
-    expect(seeded.first.vehicles, ['modern-jeepney']);
-    expect(seeded.first.faresByVehicle['modern-jeepney'], 60);
-    expect(seeded.first.status, PostStatus.pending);
-    // Seeding persisted, and the flag is set.
+    final other = CommunityPost(
+      routeName: 'Vigan City → Santa',
+      vehicles: ['modern-jeepney'],
+      hours: '',
+      fare: 0,
+      hubName: 'Vigan City',
+      from: 'Vigan City',
+      to: 'Santa',
+      faresByVehicle: {'modern-jeepney': 30},
+    );
+    final result = await removeLegacyLocalSample(
+      prefs,
+      [sampleCommunityPost, other],
+    );
+    expect(result.length, 1);
+    expect(result.first.to, 'Santa');
     expect(prefs.getBool(samplePostSeededKey), isTrue);
-    final again = await ensureSampleCommunityPost(
+    // Removal persisted and never brings the sample back.
+    final again = await removeLegacyLocalSample(
       prefs,
       await loadCommunityPosts(prefs),
     );
     expect(again.length, 1);
+    expect(again.first.to, 'Santa');
   });
 
-  test('sample post never re-seeds after deletion', () async {
+  test('no local sample means nothing to remove', () async {
     SharedPreferences.setMockInitialValues({samplePostSeededKey: true});
     final prefs = await SharedPreferences.getInstance();
-    final result = await ensureSampleCommunityPost(prefs, []);
+    final result = await removeLegacyLocalSample(prefs, []);
     expect(result, isEmpty);
   });
 

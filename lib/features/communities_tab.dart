@@ -2,8 +2,9 @@
 // Friends tab (user's call: Communities is its own nav destination).
 //
 // HONEST STATE: shared posts live in Firestore and are visible to
-// other users once approved; local posts (older saves + the sample)
-// stay on this device only (SharedPreferences) and are never uploaded.
+// other users once approved; local posts (older saves only) stay
+// on this device only (SharedPreferences) and are never uploaded.
+// The CTransco sample lives in Firestore only, never locally.
 // Fare complaints and LGU directory entries are still saved on this
 // device only. No invented posts. Like / Dislike / Comment live on
 // approved shared posts (Firestore) and device-locally on local posts
@@ -64,7 +65,7 @@ class CommunitiesTab extends StatefulWidget {
 }
 
 class _CommunitiesTabState extends State<CommunitiesTab> {
-  /// Device-only posts (older saves + the sample). Never uploaded.
+  /// Device-only posts (older saves only). Never uploaded.
   List<CommunityPost> _localPosts = [];
 
   /// Firestore posts visible to the current user (approved, plus own
@@ -100,7 +101,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final loaded = await loadCommunityPosts(prefs);
-      final posts = await ensureSampleCommunityPost(prefs, loaded);
+      // Legacy local sample copies are removed here: the sample
+      // lives in Firestore only now, never device-only again.
+      final posts = await removeLegacyLocalSample(prefs, loaded);
       if (mounted) setState(() => _localPosts = posts);
     } catch (_) {
       // Local posts are a bonus; a failed load leaves the empty state.
@@ -138,7 +141,25 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
       });
     }
     try {
-      final posts = await repository.loadVisiblePosts(widget.currentUser);
+      var posts = await repository.loadVisiblePosts(widget.currentUser);
+      // Admin-only, database-only sample: the first admin to open
+      // this tab creates the sample in Firestore exactly once, as
+      // pending. Later opens find the document already there (in
+      // whatever status it was approved to) and create nothing, so
+      // approval is never repeated, even after reinstall or clear
+      // data. A creation failure never breaks the shared list.
+      final user = widget.currentUser;
+      if (repository is FirestorePostRepository &&
+          user != null &&
+          isAdminUser(user)) {
+        try {
+          final created =
+              await repository.ensureSampleSharedPost(user);
+          if (created) {
+            posts = await repository.loadVisiblePosts(user);
+          }
+        } catch (_) {}
+      }
       if (mounted) {
         setState(() {
           _sharedPosts = posts;

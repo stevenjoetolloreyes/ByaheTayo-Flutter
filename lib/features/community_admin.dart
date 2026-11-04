@@ -4,7 +4,9 @@
 // reviewed here by allowlisted admin accounts (see admin_access.dart)
 // and become visible to all users once approved; LOCAL posts stay on
 // this device and keep their old device-only approval behavior. The
-// sample CTransco submission is local-only and is never uploaded.
+// sample CTransco submission lives in Firestore only (created once
+// by an admin opening the Communities tab, approved once, never
+// re-created).
 // Rejected posts stay visible here until approved again or deleted.
 import 'package:flutter/material.dart';
 
