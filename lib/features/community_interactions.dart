@@ -24,8 +24,44 @@
 //     comment, so honest clients never drift from the source docs.
 //   community_comments/{commentId}
 //     Fields: postId, userId, displayName, photoUrl (optional), text,
-//     createdAt (server timestamp). No edits; only the author may
-//     delete.
+//     createdAt (server timestamp), parentCommentId (optional: null
+//     for a top-level comment, else the id of the comment replied
+//     to). No edits; only the author may delete.
+//   community_comment_reactions/{commentId_uid}
+//     One document per user per comment — the document ID binds the
+//     reaction to its comment and author, so a duplicate reaction
+//     is impossible by construction. Fields: commentId, postId,
+//     userId, value ('like' | 'dislike'), updatedAt. Toggle-off
+//     deletes the document; switching rewrites it. Mirrors the
+//     post-reaction pattern exactly.
+//   community_comment_stats/{commentId}
+//     Display counters (likeCount, dislikeCount), maintained by the
+//     SAME transaction that writes the comment reaction, mirroring
+//     community_post_stats. The sheet counts reactions from the
+//     reaction documents themselves, so a drifted stats document
+//     never misleads; the stats document is kept for parity with
+//     post stats and for the future rules.
+//   Replies are comments, not a second system: reply counts are
+//     derived from the comment list itself (direct children in the
+//     tree), so a reply needs no stats write and works on approved
+//     posts under the EXISTING community_comments create rule.
+//   RULES DEPENDENCY (honest, read before testing on a device):
+//     comment reactions touch two collections that have NO rules
+//     yet (comment_reactions, comment_stats). Until Steven
+//     publishes an updated firestore.rules in the Console, those
+//     reads/writes are denied by default deny on SHARED posts, and
+//     the sheet shows comments with zeroed reaction buttons that
+//     surface the error on tap. Replies and comment deletion work
+//     before that publish because they only touch
+//     community_comments / community_post_stats, which already have
+//     rules. Local posts are unaffected: their reactions and
+//     replies live in SharedPreferences on this device only.
+//   ORPHAN RULE: deleting a comment removes only that comment.
+//     Its replies are NOT cascade-deleted, because the rules allow
+//     deleting only your own comment — a cascade would try to
+//     delete other users' replies and the whole transaction would
+//     fail. The tree builder instead promotes replies whose parent
+//     is gone to top level, so no reply ever disappears silently.
 // HONEST LIMIT (same shape as the points ledger): there are no Cloud
 // Functions, so the counters are display values kept exact by app
 // transactions, with rules bounding every write to a single valid
@@ -95,6 +131,7 @@ class PostComment {
     this.photoUrl,
     required this.text,
     required this.createdAt,
+    this.parentCommentId,
   });
 
   final String id;
@@ -104,6 +141,14 @@ class PostComment {
   final String? photoUrl;
   final String text;
   final DateTime createdAt;
+
+  /// Id of the comment this comment replies to, or null for a
+  /// top-level comment. Depth is derived from the comment list
+  /// (see [commentDepth]), never stored as a second source of
+  /// truth — a stored depth could drift from the parent chain.
+  final String? parentCommentId;
+
+  bool get isReply => parentCommentId != null;
 
   /// Parses a Firestore comment document. Corrupt fields fall back
   /// safely (empty text is still shown, never crashed on).
@@ -117,6 +162,9 @@ class PostComment {
           data['displayName'] is String ? data['displayName'] as String : '',
       photoUrl: data['photoUrl'] is String ? data['photoUrl'] as String : null,
       text: data['text'] is String ? data['text'] as String : '',
+      parentCommentId: data['parentCommentId'] is String
+          ? data['parentCommentId'] as String
+          : null,
       createdAt: createdAt is Timestamp
           ? createdAt.toDate()
           : createdAt is DateTime
@@ -132,6 +180,7 @@ class PostComment {
         'displayName': displayName,
         if (photoUrl != null) 'photoUrl': photoUrl,
         'text': text,
+        if (parentCommentId != null) 'parentCommentId': parentCommentId,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -146,6 +195,9 @@ class PostComment {
       photoUrl:
           json['photoUrl'] is String ? json['photoUrl'] as String : null,
       text: json['text'] is String ? json['text'] as String : '',
+      parentCommentId: json['parentCommentId'] is String
+          ? json['parentCommentId'] as String
+          : null,
       createdAt: createdAt is String
           ? DateTime.tryParse(createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0)
           : DateTime.fromMillisecondsSinceEpoch(0),
@@ -177,6 +229,99 @@ const kMinCommentInterval = Duration(seconds: 10);
 PostReaction? resolveReaction(PostReaction? current, PostReaction tapped) {
   if (current == tapped) return null;
   return tapped;
+}
+
+/// Maximum nesting depth for comment replies: a top-level comment
+/// is depth 0, a reply is depth 1, a reply to a reply is depth 2,
+/// and depth-2 comments show NO Reply button.
+const kMaxCommentDepth = 2;
+
+/// Reaction document id for one user on one comment: comment +
+/// author, so one user can hold at most one reaction per comment.
+/// Pure — unit-tested.
+String commentReactionId(String commentId, String uid) =>
+    '${commentId}_$uid';
+
+/// Depth of [comment] in [all], by walking its parent chain.
+/// A comment with no parent (or a parent missing from the list,
+/// e.g. deleted) is depth 0 — this is what promotes orphan replies
+/// to top level instead of hiding them. Cycle-safe: a repeated id
+/// in the chain stops the walk. Pure — unit-tested.
+int commentDepth(List<PostComment> all, PostComment comment) {
+  final byId = {for (final c in all) c.id: c};
+  var depth = 0;
+  final seen = <String>{comment.id};
+  var parentId = comment.parentCommentId;
+  while (parentId != null && !seen.contains(parentId)) {
+    final parent = byId[parentId];
+    if (parent == null) break;
+    seen.add(parentId);
+    depth += 1;
+    parentId = parent.parentCommentId;
+  }
+  return depth;
+}
+
+/// True when [comment] may still be replied to (depth < max).
+bool canReplyTo(List<PostComment> all, PostComment comment) =>
+    commentDepth(all, comment) < kMaxCommentDepth;
+
+/// One node of a comment thread: a comment plus its direct
+/// replies, already sorted. Roots are newest first (the sheet's
+/// existing order); replies under a parent are oldest first, so a
+/// conversation reads top to bottom.
+class CommentNode {
+  const CommentNode({
+    required this.comment,
+    required this.children,
+    this.depth = 0,
+  });
+
+  final PostComment comment;
+  final List<CommentNode> children;
+  final int depth;
+}
+
+/// Builds the thread tree for [comments]. Replies whose parent is
+/// missing from the list become roots (see the orphan rule in the
+/// file header). Pure — unit-tested.
+List<CommentNode> buildCommentTree(List<PostComment> comments) {
+  final byId = {for (final c in comments) c.id: c};
+  final childrenOf = <String, List<PostComment>>{};
+  final roots = <PostComment>[];
+  for (final comment in comments) {
+    final parentId = comment.parentCommentId;
+    if (parentId != null && byId.containsKey(parentId)) {
+      childrenOf.putIfAbsent(parentId, () => []).add(comment);
+    } else {
+      roots.add(comment);
+    }
+  }
+  CommentNode build(PostComment comment, int depth) {
+    final kids = (childrenOf[comment.id] ?? [])
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return CommentNode(
+      comment: comment,
+      children: kids.map((k) => build(k, depth + 1)).toList(),
+      depth: depth,
+    );
+  }
+
+  roots.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return roots.map((r) => build(r, 0)).toList();
+}
+
+/// Counts plus the viewing user's own reaction for one comment.
+class CommentReactionState {
+  const CommentReactionState({
+    required this.likeCount,
+    required this.dislikeCount,
+    this.myReaction,
+  });
+
+  final int likeCount;
+  final int dislikeCount;
+  final PostReaction? myReaction;
 }
 
 /// Display name for a commenter, from real sources only: the auth
@@ -263,6 +408,36 @@ abstract class PostInteractionRepository {
   /// Comments for a post, newest first.
   Future<List<PostComment>> loadComments(String postId);
 
+  /// Reactions for every comment on a post, keyed by comment id.
+  /// Missing entries mean "no reactions". [uid] null means signed
+  /// out: counts still load, [CommentReactionState.myReaction] is
+  /// null.
+  Future<Map<String, CommentReactionState>> loadCommentReactions({
+    required String postId,
+    required String? uid,
+  });
+
+  /// Applies a comment-reaction tap: same-as-current removes it,
+  /// otherwise switches to [tapped]. One document per user per
+  /// comment.
+  Future<void> setCommentReaction({
+    required String postId,
+    required String commentId,
+    required AuthUser user,
+    required PostReaction tapped,
+  });
+
+  /// Stores a reply to [parentCommentId]. Throws when the parent
+  /// does not exist, belongs to another post, or is already at
+  /// [kMaxCommentDepth]. The reply counts as a comment for the
+  /// post (post comment count +1) and for the rate guard.
+  Future<void> addReply({
+    required String postId,
+    required String parentCommentId,
+    required AuthUser user,
+    required String text,
+  });
+
   /// Applies a reaction tap: same-as-current removes it, otherwise
   /// switches to [tapped]. One document per user per post.
   Future<void> setReaction({
@@ -348,8 +523,16 @@ class FirestorePostInteractionRepository
   CollectionReference<Map<String, dynamic>> get _comments =>
       _db.collection('community_comments');
 
+  CollectionReference<Map<String, dynamic>> get _commentReactions =>
+      _db.collection('comment_reactions');
+
   DocumentReference<Map<String, dynamic>> _statsRef(String postId) =>
       _db.collection('community_post_stats').doc(postId);
+
+  DocumentReference<Map<String, dynamic>> _commentStatsRef(
+    String commentId,
+  ) =>
+      _db.collection('comment_stats').doc(commentId);
 
   /// Reaction document id: post + author, so one user can hold at
   /// most one reaction per post.
@@ -395,6 +578,178 @@ class FirestorePostInteractionRepository
         .toList();
     comments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return comments;
+  }
+
+  @override
+  Future<Map<String, CommentReactionState>> loadCommentReactions({
+    required String postId,
+    required String? uid,
+  }) async {
+    // Reaction documents carry postId, so one query covers the
+    // whole sheet. Counts come from the reaction documents
+    // themselves (the auditable source), not from the stats doc.
+    final snap = await _commentReactions
+        .where('postId', isEqualTo: postId)
+        .get();
+    final byComment = <String, List<Map<String, dynamic>>>{};
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final commentId = data['commentId'] as String?;
+      if (commentId == null) continue;
+      byComment.putIfAbsent(commentId, () => []).add(data);
+    }
+    final result = <String, CommentReactionState>{};
+    for (final entry in byComment.entries) {
+      var likes = 0;
+      var dislikes = 0;
+      PostReaction? mine;
+      for (final data in entry.value) {
+        final value = data['value'];
+        if (value == 'like') likes += 1;
+        if (value == 'dislike') dislikes += 1;
+        if (uid != null && data['userId'] == uid) {
+          mine = value == 'like'
+              ? PostReaction.like
+              : value == 'dislike'
+                  ? PostReaction.dislike
+                  : null;
+        }
+      }
+      result[entry.key] = CommentReactionState(
+        likeCount: likes,
+        dislikeCount: dislikes,
+        myReaction: mine,
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<void> setCommentReaction({
+    required String postId,
+    required String commentId,
+    required AuthUser user,
+    required PostReaction tapped,
+  }) async {
+    await _db.runTransaction((tx) async {
+      final reactionRef =
+          _commentReactions.doc(commentReactionId(commentId, user.uid));
+      final statsRef = _commentStatsRef(commentId);
+      final existing = await tx.get(reactionRef);
+      final statsSnap = await tx.get(statsRef);
+      final stats = statsSnap.data();
+      var likes = (stats?['likeCount'] as num?)?.toInt() ?? 0;
+      var dislikes = (stats?['dislikeCount'] as num?)?.toInt() ?? 0;
+      final existingData = existing.data();
+      String? oldValue;
+      if (existing.exists && existingData != null) {
+        oldValue = existingData['value'] as String?;
+      }
+      final oldReaction = oldValue == 'like'
+          ? PostReaction.like
+          : oldValue == 'dislike'
+              ? PostReaction.dislike
+              : null;
+      final next = resolveReaction(oldReaction, tapped);
+      if (oldReaction == PostReaction.like) likes -= 1;
+      if (oldReaction == PostReaction.dislike) dislikes -= 1;
+      if (next == PostReaction.like) likes += 1;
+      if (next == PostReaction.dislike) dislikes += 1;
+      if (likes < 0) likes = 0;
+      if (dislikes < 0) dislikes = 0;
+      if (next == null) {
+        tx.delete(reactionRef);
+      } else {
+        tx.set(reactionRef, {
+          'commentId': commentId,
+          'postId': postId,
+          'userId': user.uid,
+          'value': next.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      // Same skip rule as post reactions: a removal with no stats
+      // document has nothing to decrement.
+      if (statsSnap.exists || likes + dislikes > 0) {
+        tx.set(statsRef, {
+          'likeCount': likes,
+          'dislikeCount': dislikes,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    });
+  }
+
+  @override
+  Future<void> addReply({
+    required String postId,
+    required String parentCommentId,
+    required AuthUser user,
+    required String text,
+  }) async {
+    final validation = commentValidationError(text);
+    if (validation != null) {
+      throw PostInteractionException(validation);
+    }
+    final now = DateTime.now();
+    if (!_rateGuard.canSubmit(postId: postId, uid: user.uid, now: now)) {
+      throw const PostInteractionException(
+        'You are commenting too quickly. Wait a few seconds and try again.',
+      );
+    }
+    final trimmed = text.trim();
+    final photoUrl = user.photoUrl?.trim();
+    // Depth is checked BEFORE the transaction: a query is not a
+    // transactional read, so it must not run inside runTransaction.
+    // The transaction below re-checks the parent document itself,
+    // so a parent deleted in between still aborts the write.
+    final all = await loadComments(postId);
+    PostComment? parent;
+    for (final c in all) {
+      if (c.id == parentCommentId) parent = c;
+    }
+    if (parent == null) {
+      throw const PostInteractionException(
+        'That comment no longer exists.',
+      );
+    }
+    if (!canReplyTo(all, parent)) {
+      throw const PostInteractionException(
+        'Replies cannot go deeper than 2 levels.',
+      );
+    }
+    await _db.runTransaction((tx) async {
+      final parentSnap = await tx.get(_comments.doc(parentCommentId));
+      if (!parentSnap.exists ||
+          (parentSnap.data() ?? {})['postId'] != postId) {
+        throw const PostInteractionException(
+          'That comment no longer exists.',
+        );
+      }
+      final statsRef = _statsRef(postId);
+      final statsSnap = await tx.get(statsRef);
+      final stats = statsSnap.data();
+      final likes = (stats?['likeCount'] as num?)?.toInt() ?? 0;
+      final dislikes = (stats?['dislikeCount'] as num?)?.toInt() ?? 0;
+      final comments = (stats?['commentCount'] as num?)?.toInt() ?? 0;
+      final commentRef = _comments.doc();
+      tx.set(commentRef, {
+        'postId': postId,
+        'userId': user.uid,
+        'displayName': commentDisplayName(user),
+        if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
+        'text': trimmed,
+        'parentCommentId': parentCommentId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      tx.set(statsRef, {
+        'likeCount': likes,
+        'dislikeCount': dislikes,
+        'commentCount': comments + 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+    _rateGuard.markSubmitted(postId: postId, uid: user.uid, now: now);
   }
 
   @override
@@ -544,6 +899,12 @@ class LocalPostInteractionRepository implements PostInteractionRepository {
   static const _reactionsKey = 'byahetayo_local_reactions';
   static const _commentsKey = 'byahetayo_local_comments';
 
+  /// Local comment reactions, keyed postId -> commentId -> uid.
+  /// A NEW key (never reused for post reactions): post reactions
+  /// live under [_reactionsKey] keyed postId -> uid, and the two
+  /// shapes must never be read as each other.
+  static const _commentReactionsKey = 'byahetayo_local_comment_reactions';
+
   Future<Map<String, dynamic>> _readMap(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(key);
@@ -608,6 +969,129 @@ class LocalPostInteractionRepository implements PostInteractionRepository {
         .toList();
     parsed.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return parsed;
+  }
+
+  @override
+  Future<Map<String, CommentReactionState>> loadCommentReactions({
+    required String postId,
+    required String? uid,
+  }) async {
+    final stored = await _readMap(_commentReactionsKey);
+    final postMap = stored[postId];
+    if (postMap is! Map) return {};
+    final result = <String, CommentReactionState>{};
+    for (final entry in postMap.entries) {
+      final commentMap = entry.value;
+      if (commentMap is! Map) continue;
+      var likes = 0;
+      var dislikes = 0;
+      PostReaction? mine;
+      for (final reaction in commentMap.entries) {
+        if (reaction.value == 'like') likes += 1;
+        if (reaction.value == 'dislike') dislikes += 1;
+        if (uid != null && reaction.key == uid) {
+          mine = reaction.value == 'like'
+              ? PostReaction.like
+              : reaction.value == 'dislike'
+                  ? PostReaction.dislike
+                  : null;
+        }
+      }
+      result[entry.key.toString()] = CommentReactionState(
+        likeCount: likes,
+        dislikeCount: dislikes,
+        myReaction: mine,
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<void> setCommentReaction({
+    required String postId,
+    required String commentId,
+    required AuthUser user,
+    required PostReaction tapped,
+  }) async {
+    final stored = await _readMap(_commentReactionsKey);
+    final postMapRaw = stored[postId];
+    final postMap = postMapRaw is Map<String, dynamic>
+        ? Map<String, dynamic>.of(postMapRaw)
+        : <String, dynamic>{};
+    final commentMapRaw = postMap[commentId];
+    final commentMap = commentMapRaw is Map<String, dynamic>
+        ? Map<String, dynamic>.of(commentMapRaw)
+        : <String, dynamic>{};
+    final currentValue = commentMap[user.uid];
+    final current = currentValue == 'like'
+        ? PostReaction.like
+        : currentValue == 'dislike'
+            ? PostReaction.dislike
+            : null;
+    final next = resolveReaction(current, tapped);
+    if (next == null) {
+      commentMap.remove(user.uid);
+    } else {
+      commentMap[user.uid] = next.name;
+    }
+    postMap[commentId] = commentMap;
+    stored[postId] = postMap;
+    await _writeMap(_commentReactionsKey, stored);
+  }
+
+  @override
+  Future<void> addReply({
+    required String postId,
+    required String parentCommentId,
+    required AuthUser user,
+    required String text,
+  }) async {
+    final validation = commentValidationError(text);
+    if (validation != null) {
+      throw PostInteractionException(validation);
+    }
+    final now = DateTime.now();
+    if (!_rateGuard.canSubmit(postId: postId, uid: user.uid, now: now)) {
+      throw const PostInteractionException(
+        'You are commenting too quickly. Wait a few seconds and try again.',
+      );
+    }
+    final comments = await _readMap(_commentsKey);
+    final raw = comments[postId];
+    final list = raw is List ? List<dynamic>.of(raw) : <dynamic>[];
+    final all = list
+        .whereType<Map<String, dynamic>>()
+        .map(PostComment.fromJson)
+        .toList();
+    PostComment? parent;
+    for (final c in all) {
+      if (c.id == parentCommentId) parent = c;
+    }
+    if (parent == null) {
+      throw const PostInteractionException(
+        'That comment no longer exists.',
+      );
+    }
+    if (!canReplyTo(all, parent)) {
+      throw const PostInteractionException(
+        'Replies cannot go deeper than 2 levels.',
+      );
+    }
+    final photoUrl = user.photoUrl?.trim();
+    final reply = PostComment(
+      id: '${now.microsecondsSinceEpoch}_${user.uid}',
+      postId: postId,
+      userId: user.uid,
+      displayName: commentDisplayName(user),
+      photoUrl: photoUrl != null && photoUrl.isNotEmpty ? photoUrl : null,
+      text: text.trim(),
+      createdAt: now,
+      parentCommentId: parentCommentId,
+    );
+    list.add(reply.toJson());
+    comments[postId] = list;
+    await _writeMap(_commentsKey, comments);
+    _rateGuard.markSubmitted(postId: postId, uid: user.uid, now: now);
   }
 
   @override
@@ -1016,11 +1500,19 @@ class _CommentSheet extends StatefulWidget {
 class _CommentSheetState extends State<_CommentSheet> {
   final _controller = TextEditingController();
   List<PostComment> _comments = [];
+  Map<String, CommentReactionState> _reactions = {};
   var _loading = true;
   String? _error;
   String? _fieldError;
   var _submitting = false;
   String? _deletingId;
+  String? _reactingCommentId;
+
+  /// Comment ids whose replies are currently expanded.
+  final Set<String> _expanded = {};
+
+  /// Comment being replied to, or null for a top-level comment.
+  PostComment? _replyingTo;
 
   @override
   void initState() {
@@ -1047,6 +1539,23 @@ class _CommentSheetState extends State<_CommentSheet> {
         _comments = comments;
         _loading = false;
       });
+      // Reactions load separately and never block the comments:
+      // on a shared post without published comment-reaction rules
+      // this fails with a permission error, and the sheet still
+      // shows every comment (reactions stay at zero and surface
+      // the error only when tapped).
+      try {
+        final reactions =
+            await widget.repository.loadCommentReactions(
+          postId: widget.postId,
+          uid: widget.user.uid,
+        );
+        if (!mounted) return;
+        setState(() => _reactions = reactions);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _reactions = {});
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1067,11 +1576,26 @@ class _CommentSheetState extends State<_CommentSheet> {
       _fieldError = null;
     });
     try {
-      await widget.repository.addComment(
-        postId: widget.postId,
-        user: widget.user,
-        text: _controller.text,
-      );
+      final replyingTo = _replyingTo;
+      if (replyingTo != null) {
+        await widget.repository.addReply(
+          postId: widget.postId,
+          parentCommentId: replyingTo.id,
+          user: widget.user,
+          text: _controller.text,
+        );
+        if (!mounted) return;
+        setState(() {
+          _replyingTo = null;
+          _expanded.add(replyingTo.id);
+        });
+      } else {
+        await widget.repository.addComment(
+          postId: widget.postId,
+          user: widget.user,
+          text: _controller.text,
+        );
+      }
       _controller.clear();
       await _reload();
     } catch (e) {
@@ -1079,6 +1603,30 @@ class _CommentSheetState extends State<_CommentSheet> {
       setState(() => _fieldError = interactionErrorMessage(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _onCommentReaction(
+    PostComment comment,
+    PostReaction tapped,
+  ) async {
+    if (_reactingCommentId != null) return;
+    setState(() => _reactingCommentId = comment.id);
+    try {
+      await widget.repository.setCommentReaction(
+        postId: widget.postId,
+        commentId: comment.id,
+        user: widget.user,
+        tapped: tapped,
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(interactionErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _reactingCommentId = null);
     }
   }
 
@@ -1101,9 +1649,160 @@ class _CommentSheetState extends State<_CommentSheet> {
     }
   }
 
+  /// One comment tile plus its action row and, when expanded, its
+  /// replies. [node] carries the tree depth: depth-2 comments get
+  /// no Reply button ([kMaxCommentDepth]).
+  Widget _commentTile(CommentNode node) {
+    final scheme = Theme.of(context).colorScheme;
+    final comment = node.comment;
+    final isOwn = comment.userId == widget.user.uid;
+    final reaction = _reactions[comment.id];
+    final likeCount = reaction?.likeCount ?? 0;
+    final dislikeCount = reaction?.dislikeCount ?? 0;
+    final myReaction = reaction?.myReaction;
+    final expanded = _expanded.contains(comment.id);
+    final children = node.children;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CommentAvatar(comment: comment),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          comment.displayName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        formatCommentTime(comment.createdAt),
+                        style: AppText.caption.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(comment.text),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ReactionButton(
+                          icon: myReaction == PostReaction.like
+                              ? Icons.thumb_up
+                              : Icons.thumb_up_outlined,
+                          label: 'Like',
+                          count: likeCount,
+                          selected: myReaction == PostReaction.like,
+                          selectedColor: scheme.primary,
+                          enabled: true,
+                          busy: _reactingCommentId == comment.id,
+                          onTap: () => _onCommentReaction(
+                            comment,
+                            PostReaction.like,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: _ReactionButton(
+                          icon: myReaction == PostReaction.dislike
+                              ? Icons.thumb_down
+                              : Icons.thumb_down_outlined,
+                          label: 'Dislike',
+                          count: dislikeCount,
+                          selected:
+                              myReaction == PostReaction.dislike,
+                          selectedColor: const Color(0xFFDC2626),
+                          enabled: true,
+                          busy: _reactingCommentId == comment.id,
+                          onTap: () => _onCommentReaction(
+                            comment,
+                            PostReaction.dislike,
+                          ),
+                        ),
+                      ),
+                      if (node.depth < kMaxCommentDepth)
+                        TextButton.icon(
+                          onPressed: () => setState(
+                            () => _replyingTo = comment,
+                          ),
+                          icon: const Icon(Icons.reply, size: 18),
+                          label: const Text('Reply'),
+                        ),
+                    ],
+                  ),
+                  if (children.isNotEmpty)
+                    TextButton(
+                      onPressed: () => setState(() {
+                        if (expanded) {
+                          _expanded.remove(comment.id);
+                        } else {
+                          _expanded.add(comment.id);
+                        }
+                      }),
+                      child: Text(
+                        expanded
+                            ? 'Hide replies'
+                            : 'View replies (${children.length})',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (isOwn)
+              _deletingId == comment.id
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                      ),
+                      tooltip: 'Delete comment',
+                      onPressed: () => _delete(comment),
+                    ),
+          ],
+        ),
+        if (expanded && children.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 28, top: 8),
+            child: Column(
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  _commentTile(children[i]),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final roots = buildCommentTree(_comments);
+    final replyingTo = _replyingTo;
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -1185,81 +1884,37 @@ class _CommentSheetState extends State<_CommentSheet> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                               ),
-                              itemCount: _comments.length,
+                              itemCount: roots.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 12),
-                              itemBuilder: (_, index) {
-                                final comment = _comments[index];
-                                final isOwn =
-                                    comment.userId == widget.user.uid;
-                                return Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    _CommentAvatar(comment: comment),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  comment.displayName,
-                                                  style: const TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.w700,
-                                                  ),
-                                                ),
-                                              ),
-                                              Text(
-                                                formatCommentTime(
-                                                  comment.createdAt,
-                                                ),
-                                                style: AppText.caption
-                                                    .copyWith(
-                                                  color: scheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(comment.text),
-                                        ],
-                                      ),
-                                    ),
-                                    if (isOwn)
-                                      _deletingId == comment.id
-                                          ? const Padding(
-                                              padding:
-                                                  EdgeInsets.all(12),
-                                              child: SizedBox(
-                                                width: 18,
-                                                height: 18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                ),
-                                              ),
-                                            )
-                                          : IconButton(
-                                              icon: const Icon(
-                                                Icons.delete_outline,
-                                                size: 20,
-                                              ),
-                                              tooltip: 'Delete comment',
-                                              onPressed: () =>
-                                                  _delete(comment),
-                                            ),
-                                  ],
-                                );
-                              },
+                              itemBuilder: (_, index) =>
+                                  _commentTile(roots[index]),
                             ),
             ),
             const Divider(height: 1),
+            if (replyingTo != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Replying to @${replyingTo.displayName}',
+                        style: AppText.caption.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      tooltip: 'Cancel reply',
+                      onPressed: () =>
+                          setState(() => _replyingTo = null),
+                    ),
+                  ],
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
               child: Row(
@@ -1277,7 +1932,9 @@ class _CommentSheetState extends State<_CommentSheet> {
                       minLines: 1,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
-                        hintText: 'Write a comment…',
+                        hintText: replyingTo != null
+                            ? 'Write a reply…'
+                            : 'Write a comment…',
                         errorText: _fieldError,
                         border: const OutlineInputBorder(),
                       ),

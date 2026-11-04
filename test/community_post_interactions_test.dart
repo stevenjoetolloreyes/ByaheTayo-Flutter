@@ -57,7 +57,12 @@ CommunityPost _localPost() => const CommunityPost(
 class FakeInteractions implements PostInteractionRepository {
   final Map<String, Map<String, PostReaction>> reactions = {};
   final Map<String, List<PostComment>> comments = {};
+
+  /// Comment reactions: postId -> commentId -> uid -> reaction.
+  final Map<String, Map<String, Map<String, PostReaction>>>
+      commentReactions = {};
   var throwOnReaction = false;
+  var throwOnCommentReaction = false;
   var _commentSeq = 0;
 
   @override
@@ -131,6 +136,98 @@ class FakeInteractions implements PostInteractionRepository {
     );
   }
 
+  @override
+  Future<Map<String, CommentReactionState>> loadCommentReactions({
+    required String postId,
+    required String? uid,
+  }) async {
+    final postMap = commentReactions[postId] ?? {};
+    final result = <String, CommentReactionState>{};
+    for (final entry in postMap.entries) {
+      var likes = 0;
+      var dislikes = 0;
+      PostReaction? mine;
+      for (final reaction in entry.value.entries) {
+        if (reaction.value == PostReaction.like) likes += 1;
+        if (reaction.value == PostReaction.dislike) dislikes += 1;
+        if (uid != null && reaction.key == uid) mine = reaction.value;
+      }
+      result[entry.key] = CommentReactionState(
+        likeCount: likes,
+        dislikeCount: dislikes,
+        myReaction: mine,
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<void> setCommentReaction({
+    required String postId,
+    required String commentId,
+    required AuthUser user,
+    required PostReaction tapped,
+  }) async {
+    if (throwOnCommentReaction) {
+      throw const PostInteractionException('Simulated network failure.');
+    }
+    final postMap =
+        commentReactions.putIfAbsent(postId, () => <String, Map<String, PostReaction>>{});
+    final commentMap =
+        postMap.putIfAbsent(commentId, () => <String, PostReaction>{});
+    final next = resolveReaction(commentMap[user.uid], tapped);
+    if (next == null) {
+      commentMap.remove(user.uid);
+    } else {
+      commentMap[user.uid] = next;
+    }
+  }
+
+  @override
+  Future<void> addReply({
+    required String postId,
+    required String parentCommentId,
+    required AuthUser user,
+    required String text,
+  }) async {
+    final validation = commentValidationError(text);
+    if (validation != null) {
+      throw PostInteractionException(validation);
+    }
+    final list = comments[postId] ?? [];
+    PostComment? parent;
+    for (final c in list) {
+      if (c.id == parentCommentId) parent = c;
+    }
+    if (parent == null) {
+      throw const PostInteractionException(
+        'That comment no longer exists.',
+      );
+    }
+    if (!canReplyTo(list, parent)) {
+      throw const PostInteractionException(
+        'Replies cannot go deeper than 2 levels.',
+      );
+    }
+    _commentSeq += 1;
+    comments.putIfAbsent(postId, () => <PostComment>[]).add(
+      PostComment(
+        id: 'c$_commentSeq',
+        postId: postId,
+        userId: user.uid,
+        displayName: commentDisplayName(user),
+        photoUrl: user.photoUrl,
+        text: text.trim(),
+        createdAt: DateTime(2026, 11, 2, 19, 41),
+        parentCommentId: parentCommentId,
+      ),
+    );
+  }
+
+  // Deletes only the target comment: replies whose parent is gone
+  // are promoted to top level by buildCommentTree (the Firestore
+  // rules allow deleting only your own comment, so a cascade over
+  // other users' replies would fail there too).
   @override
   Future<void> deleteComment({
     required String postId,
@@ -568,5 +665,327 @@ void main() {
       expect(divider.color, darkOutline);
       expect(find.text('Like'), findsOneWidget);
     });
+  group('comment reactions', () {
+    test('reaction id binds one user to one comment', () {
+      expect(commentReactionId('c1', 'user-a'), 'c1_user-a');
+      expect(
+        commentReactionId('c1', 'user-a'),
+        isNot(commentReactionId('c1', 'user-b')),
+      );
+      expect(
+        commentReactionId('c1', 'user-a'),
+        isNot(commentReactionId('c2', 'user-a')),
+      );
+    });
+
+    test('fake comment reaction toggles, switches, and stays single',
+        () async {
+      final fake = FakeInteractions();
+      await fake.setCommentReaction(
+        postId: 'p1',
+        commentId: 'c1',
+        user: _userA,
+        tapped: PostReaction.like,
+      );
+      var state = await fake.loadCommentReactions(postId: 'p1', uid: 'user-a');
+      expect(state['c1']?.likeCount, 1);
+      expect(state['c1']?.myReaction, PostReaction.like);
+
+      // Same tap again removes it (no duplicate).
+      await fake.setCommentReaction(
+        postId: 'p1',
+        commentId: 'c1',
+        user: _userA,
+        tapped: PostReaction.like,
+      );
+      state = await fake.loadCommentReactions(postId: 'p1', uid: 'user-a');
+      expect(state['c1']?.likeCount, 0);
+      expect(state['c1']?.myReaction, isNull);
+
+      // Switch: like -> dislike moves the count, never both.
+      await fake.setCommentReaction(
+        postId: 'p1',
+        commentId: 'c1',
+        user: _userA,
+        tapped: PostReaction.like,
+      );
+      await fake.setCommentReaction(
+        postId: 'p1',
+        commentId: 'c1',
+        user: _userA,
+        tapped: PostReaction.dislike,
+      );
+      state = await fake.loadCommentReactions(postId: 'p1', uid: 'user-a');
+      expect(state['c1']?.likeCount, 0);
+      expect(state['c1']?.dislikeCount, 1);
+      expect(state['c1']?.myReaction, PostReaction.dislike);
+      // One stored reaction per user per comment, by construction.
+      expect(fake.commentReactions['p1']?['c1']?.length, 1);
+    });
+
+    test('two users react to the same comment independently', () async {
+      final fake = FakeInteractions();
+      await fake.setCommentReaction(
+        postId: 'p1',
+        commentId: 'c1',
+        user: _userA,
+        tapped: PostReaction.like,
+      );
+      await fake.setCommentReaction(
+        postId: 'p1',
+        commentId: 'c1',
+        user: _userB,
+        tapped: PostReaction.like,
+      );
+      final state =
+          await fake.loadCommentReactions(postId: 'p1', uid: 'user-a');
+      expect(state['c1']?.likeCount, 2);
+      expect(state['c1']?.myReaction, PostReaction.like);
+    });
+  });
+
+  group('comment replies and tree', () {
+    PostComment commentFor(
+      String id, {
+      String? parent,
+      DateTime? at,
+    }) =>
+        PostComment(
+          id: id,
+          postId: 'p1',
+          userId: 'user-a',
+          displayName: 'Ana',
+          text: 'text $id',
+          createdAt: at ?? DateTime(2026, 11, 2, 19, 41),
+          parentCommentId: parent,
+        );
+
+    test('depth is 0 / 1 / 2 along the parent chain', () {
+      final all = [
+        commentFor('c0'),
+        commentFor('c1', parent: 'c0'),
+        commentFor('c2', parent: 'c1'),
+      ];
+      expect(commentDepth(all, all[0]), 0);
+      expect(commentDepth(all, all[1]), 1);
+      expect(commentDepth(all, all[2]), 2);
+      expect(canReplyTo(all, all[0]), isTrue);
+      expect(canReplyTo(all, all[1]), isTrue);
+      expect(canReplyTo(all, all[2]), isFalse);
+    });
+
+    test('tree nests replies and promotes orphans to top level', () {
+      final all = [
+        commentFor('c0', at: DateTime(2026, 11, 2, 19, 40)),
+        commentFor('c1', parent: 'c0', at: DateTime(2026, 11, 2, 19, 41)),
+        commentFor('orphan', parent: 'gone', at: DateTime(2026, 11, 2, 19, 42)),
+      ];
+      final roots = buildCommentTree(all);
+      expect(roots.map((r) => r.comment.id), ['orphan', 'c0']);
+      expect(roots.last.children.map((c) => c.comment.id), ['c1']);
+      expect(roots.last.children.single.depth, 1);
+    });
+
+    test('fake reply is stored under its parent, depth-2 is rejected',
+        () async {
+      final fake = FakeInteractions();
+      fake.comments['p1'] = [commentFor('c0')];
+      await fake.addReply(
+        postId: 'p1',
+        parentCommentId: 'c0',
+        user: _userB,
+        text: 'Reply one',
+      );
+      await fake.addReply(
+        postId: 'p1',
+        parentCommentId: 'c1',
+        user: _userA,
+        text: 'Reply two',
+      );
+      expect(
+        () => fake.addReply(
+          postId: 'p1',
+          parentCommentId: 'c2',
+          user: _userB,
+          text: 'Too deep',
+        ),
+        throwsA(isA<PostInteractionException>()),
+      );
+      expect(fake.comments['p1']?.length, 3);
+      final roots = buildCommentTree(fake.comments['p1']!);
+      expect(roots.length, 1);
+      expect(roots.single.children.length, 1);
+      expect(roots.single.children.single.children.length, 1);
+    });
+
+    test('deleting a parent keeps its replies visible (promoted)', () async {
+      final fake = FakeInteractions();
+      fake.comments['p1'] = [
+        commentFor('c0'),
+        commentFor('c1', parent: 'c0'),
+      ];
+      await fake.deleteComment(
+        postId: 'p1',
+        commentId: 'c0',
+        user: _userA,
+      );
+      final roots = buildCommentTree(fake.comments['p1']!);
+      expect(roots.map((r) => r.comment.id), ['c1']);
+    });
+
+    test('reply to a missing parent is rejected', () async {
+      final fake = FakeInteractions();
+      fake.comments['p1'] = [commentFor('c0')];
+      expect(
+        () => fake.addReply(
+          postId: 'p1',
+          parentCommentId: 'nope',
+          user: _userB,
+          text: 'Hello?',
+        ),
+        throwsA(isA<PostInteractionException>()),
+      );
+    });
+  });
+
+  group('comment sheet reactions and replies', () {
+    Future<void> openSheet(WidgetTester tester, FakeInteractions fake) async {
+      await _pumpWidget(
+        tester,
+        fake,
+        post: _sharedPost(id: 'p1', status: PostStatus.approved),
+        user: _userA,
+      );
+      await tester.tap(find.text('Comment'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('comment like toggles count in the sheet', (tester) async {
+      final fake = FakeInteractions();
+      fake.comments['p1'] = [
+        PostComment(
+          id: 'c-b',
+          postId: 'p1',
+          userId: _userB.uid,
+          displayName: 'Ben',
+          text: 'Comment from Ben',
+          createdAt: DateTime(2026, 11, 2, 19, 30),
+        ),
+      ];
+      await openSheet(tester, fake);
+      expect(find.text('Comment from Ben'), findsOneWidget);
+      expect(find.text('Reply'), findsOneWidget);
+      // The post row's Like sits behind the modal barrier, so the
+      // sheet's own Like button is the LAST 'Like' text in the tree.
+      await tester.tap(find.text('Like').last);
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.thumb_up), findsOneWidget);
+      var state =
+          await fake.loadCommentReactions(postId: 'p1', uid: 'user-a');
+      expect(state['c-b']?.likeCount, 1);
+      await tester.tap(find.text('Like').last);
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.thumb_up), findsNothing);
+      state = await fake.loadCommentReactions(postId: 'p1', uid: 'user-a');
+      expect(state['c-b']?.likeCount, 0);
+    });
+
+    testWidgets('reply flow shows Replying to, then the reply underneath',
+        (tester) async {
+      final fake = FakeInteractions();
+      fake.comments['p1'] = [
+        PostComment(
+          id: 'c-b',
+          postId: 'p1',
+          userId: _userB.uid,
+          displayName: 'Ben',
+          text: 'Comment from Ben',
+          createdAt: DateTime(2026, 11, 2, 19, 30),
+        ),
+      ];
+      await openSheet(tester, fake);
+      await tester.tap(find.text('Reply'));
+      await tester.pumpAndSettle();
+      expect(find.text('Replying to @Ben'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Hi! Welcome!');
+      await tester.tap(find.byTooltip('Send comment'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hi! Welcome!'), findsOneWidget);
+      expect(find.text('Comments (2)'), findsOneWidget);
+      // Submitting a reply auto-expands its parent, so the reply
+      // is visible immediately and the button already says Hide.
+      expect(find.text('Hide replies'), findsOneWidget);
+      await tester.tap(find.text('Hide replies'));
+      await tester.pumpAndSettle();
+      expect(find.text('View replies (1)'), findsOneWidget);
+      expect(find.text('Hi! Welcome!'), findsNothing);
+      await tester.tap(find.text('View replies (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hide replies'), findsOneWidget);
+      expect(find.text('Hi! Welcome!'), findsOneWidget);
+    });
+
+    testWidgets('depth-2 comment shows no Reply button', (tester) async {
+      final fake = FakeInteractions();
+      fake.comments['p1'] = [
+        PostComment(
+          id: 'c0',
+          postId: 'p1',
+          userId: _userB.uid,
+          displayName: 'Ben',
+          text: 'Top',
+          createdAt: DateTime(2026, 11, 2, 19, 30),
+        ),
+        PostComment(
+          id: 'c1',
+          postId: 'p1',
+          userId: _userA.uid,
+          displayName: 'Ana',
+          text: 'Reply one',
+          createdAt: DateTime(2026, 11, 2, 19, 31),
+          parentCommentId: 'c0',
+        ),
+        PostComment(
+          id: 'c2',
+          postId: 'p1',
+          userId: _userB.uid,
+          displayName: 'Ben',
+          text: 'Reply two',
+          createdAt: DateTime(2026, 11, 2, 19, 32),
+          parentCommentId: 'c1',
+        ),
+      ];
+      await openSheet(tester, fake);
+      // Expand both levels: only the top comment and its reply get
+      // a Reply button; the depth-2 comment does not.
+      await tester.tap(find.text('View replies (1)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View replies (1)').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Reply'), findsNWidgets(2));
+      expect(find.text('Reply two'), findsOneWidget);
+    });
+
+    testWidgets('failed comment reaction keeps old count and shows error',
+        (tester) async {
+      final fake = FakeInteractions()..throwOnCommentReaction = true;
+      fake.comments['p1'] = [
+        PostComment(
+          id: 'c-b',
+          postId: 'p1',
+          userId: _userB.uid,
+          displayName: 'Ben',
+          text: 'Comment from Ben',
+          createdAt: DateTime(2026, 11, 2, 19, 30),
+        ),
+      ];
+      await openSheet(tester, fake);
+      await tester.tap(find.text('Like').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Simulated network failure.'), findsOneWidget);
+      expect(find.byIcon(Icons.thumb_up), findsNothing);
+    });
+  });
+
   });
 }
