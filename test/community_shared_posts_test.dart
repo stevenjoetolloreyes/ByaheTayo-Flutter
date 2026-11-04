@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:estudyantego/features/communities_tab.dart';
 import 'package:estudyantego/features/community_admin.dart';
@@ -272,12 +274,34 @@ void main() {
       repo.stored.add(
         _shared(id: 's1', authorUid: 'x', status: PostStatus.approved),
       );
-      // No seed flag: the sample post seeds locally and stays local.
-      await pumpTab(tester, user: _other, repository: repo, prefs: {});
+      // The local chip is proved by an explicit local post stored in
+      // prefs — not by the old sample, which no longer seeds locally
+      // (it lives in Firestore only).
+      final local = CommunityPost(
+        routeName: 'Vigan City → Santa',
+        vehicles: const ['modern-jeepney'],
+        hours: '',
+        fare: 0,
+        hubName: 'Vigan City',
+        from: 'Vigan City',
+        to: 'Santa',
+        faresByVehicle: const {'modern-jeepney': 30},
+        status: PostStatus.approved,
+      );
+      await pumpTab(
+        tester,
+        user: _other,
+        repository: repo,
+        prefs: {
+          samplePostSeededKey: true,
+          communityPostsKey: jsonEncode([local.toJson()]),
+        },
+      );
       expect(find.text('Shared post'), findsOneWidget);
       expect(find.text('Local post'), findsOneWidget);
       expect(find.text('Cabugao → Vigan City'), findsOneWidget);
-      expect(find.text('Vigan City → Cabugao'), findsOneWidget);
+      expect(find.text('Vigan City → Santa'), findsOneWidget);
+      expect(find.text('Vigan City → Cabugao'), findsNothing);
     });
 
     testWidgets('signed-out tab explains sign-in for shared posts', (

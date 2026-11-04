@@ -374,7 +374,7 @@ void main() {
     expect(find.text('From'), findsNothing);
   });
 
-  testWidgets('sample post appears pending on first launch', (
+  testWidgets('sample post does not appear locally on first launch', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -386,9 +386,12 @@ void main() {
       const MaterialApp(home: Scaffold(body: CommunitiesTab())),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Vigan City → Cabugao'), findsOneWidget);
-    expect(find.text('In Review'), findsOneWidget);
-    expect(find.text('Operator: CTransco'), findsOneWidget);
-    expect(find.text('Modern Jeepney: ₱60.00'), findsOneWidget);
+    // Database-only sample: no local card on a signed-out first
+    // launch, and the honest empty state instead.
+    expect(find.text('Vigan City → Cabugao'), findsNothing);
+    expect(find.text('In Review'), findsNothing);
+    expect(find.text('Operator: CTransco'), findsNothing);
+    expect(find.text('Modern Jeepney: ₱60.00'), findsNothing);
+    expect(find.text('No announcements or posts yet.'), findsOneWidget);
   });
 }

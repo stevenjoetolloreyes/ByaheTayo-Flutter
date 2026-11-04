@@ -54,10 +54,11 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Community'), findsOneWidget);
-    // First launch seeds the pending CTransco sample, so the tab
-    // shows it instead of the empty state.
-    expect(find.text('Vigan City → Cabugao'), findsOneWidget);
-    expect(find.text('In Review'), findsOneWidget);
+    // The sample no longer seeds locally: it lives in Firestore
+    // only, so a signed-out first launch shows the honest empty
+    // state instead of a local sample card.
+    expect(find.text('Vigan City → Cabugao'), findsNothing);
+    expect(find.text('No announcements or posts yet.'), findsOneWidget);
 
     // Switch to Account; the AppBar title and the dashboard follow.
     // No Firebase in tests, so the account shows the honest
