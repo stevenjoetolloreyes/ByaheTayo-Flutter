@@ -29,6 +29,8 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
       widget.generator ?? FirebaseAiQuizGenerator();
   final _contextController = TextEditingController();
   int _count = 5;
+  String _difficulty = 'medium';
+  Set<String> _types = {'mcq'};
   AiQuizGeneration? _result;
   bool _loading = false;
   bool _saved = false;
@@ -86,16 +88,22 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
       result = await _generator.generateFromMedia(
         picked.attachments,
         questionCount: _count,
+        difficulty: _difficulty,
+        questionTypes: _types.toList(),
       );
     } else if (picked != null && picked.hasText) {
       result = await _generator.generateFromText(
         picked.text!,
         questionCount: _count,
+        difficulty: _difficulty,
+        questionTypes: _types.toList(),
       );
     } else {
       result = await _generator.generateFromText(
         _contextController.text,
         questionCount: _count,
+        difficulty: _difficulty,
+        questionTypes: _types.toList(),
       );
     }
     if (!mounted) return;
@@ -123,6 +131,7 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
       subject: 'AI Generated',
       timeLimitSec: 0,
       questions: result.questions.map((q) => q.toQuizQuestion()).toList(),
+      difficulty: _difficulty,
     );
     final existing =
         await StudentStorage.loadList(StudentStorage.quizzesKey);
@@ -212,6 +221,49 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
               ),
             ],
             const SizedBox(height: 12),
+            const Text('Difficulty'),
+            const SizedBox(height: 4),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'easy', label: Text('Easy')),
+                ButtonSegment(value: 'medium', label: Text('Medium')),
+                ButtonSegment(value: 'hard', label: Text('Hard')),
+              ],
+              selected: {_difficulty},
+              onSelectionChanged: (selected) =>
+                  setState(() => _difficulty = selected.first),
+            ),
+            const SizedBox(height: 12),
+            const Text('Question types'),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final t in [
+                  'mcq',
+                  'tf',
+                  'id',
+                  'enum',
+                  'match',
+                  'fill',
+                ])
+                  FilterChip(
+                    label: Text(t.toUpperCase()),
+                    selected: _types.contains(t),
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _types.add(t);
+                        } else if (_types.length > 1) {
+                          _types.remove(t);
+                        }
+                      });
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
             SegmentedButton<int>(
               segments: const [
                 ButtonSegment(value: 3, label: Text('3')),
@@ -262,30 +314,41 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Q${i + 1}. ${result.questions[i].question}',
+                          'Q${i + 1}. [${result.questions[i].type.toUpperCase()}] ${result.questions[i].question}',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 8),
-                        for (var o = 0;
-                            o < result.questions[i].options.length;
-                            o++)
-                          Row(
-                            children: [
-                              Icon(
-                                o == result.questions[i].correctIndex
-                                    ? Icons.check_circle
-                                    : Icons.circle_outlined,
-                                size: 18,
-                                color: o == result.questions[i].correctIndex
-                                    ? Colors.green
-                                    : null,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(result.questions[i].options[o]),
-                              ),
-                            ],
-                          ),
+                        if (result.questions[i].type == 'mcq')
+                          for (var o = 0;
+                              o < result.questions[i].options.length;
+                              o++)
+                            Row(
+                              children: [
+                                Icon(
+                                  o == result.questions[i].correctIndex
+                                      ? Icons.check_circle
+                                      : Icons.circle_outlined,
+                                  size: 18,
+                                  color: o == result.questions[i].correctIndex
+                                      ? Colors.green
+                                      : null,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child:
+                                      Text(result.questions[i].options[o]),
+                                ),
+                              ],
+                            )
+                        else if (result.questions[i].type == 'match')
+                          for (var pi = 0;
+                              pi < result.questions[i].lefts.length;
+                              pi++)
+                            Text(
+                                '${result.questions[i].lefts[pi]} → ${result.questions[i].rights[pi]}')
+                        else
+                          Text(
+                              'Answer: ${_aiPreviewAnswer(result.questions[i])}'),
                         if (result.questions[i].explanation.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(
@@ -321,5 +384,21 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Preview text for a generated question that is not MCQ/match:
+/// the single answer, or the per-line answers joined with commas.
+String _aiPreviewAnswer(AiQuizQuestion q) {
+  switch (q.type) {
+    case 'tf':
+      return q.correctIndex == 0 ? 'True' : 'False';
+    case 'id':
+      return q.answer;
+    case 'enum':
+    case 'fill':
+      return q.answers.join(', ');
+    default:
+      return q.answer;
   }
 }

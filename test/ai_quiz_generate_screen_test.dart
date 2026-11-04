@@ -27,6 +27,8 @@ void main() {
       find.byType(TextField),
       'Addition basics: 2 + 2 is 4.',
     );
+    await tester.ensureVisible(find.text('Generate quiz'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Generate quiz'));
     await tester.pumpAndSettle();
     expect(find.textContaining('What is 2 + 2?'), findsOneWidget);
@@ -85,6 +87,8 @@ void main() {
     await tester.tap(find.text('Camera'));
     await tester.pumpAndSettle();
     expect(find.text('notes.jpg'), findsOneWidget);
+    await tester.ensureVisible(find.text('Generate quiz'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Generate quiz'));
     await tester.pumpAndSettle();
     expect(find.textContaining('What is 2 + 2?'), findsOneWidget);
@@ -110,6 +114,8 @@ void main() {
     await tester.tap(find.text('Documents'));
     await tester.pumpAndSettle();
     expect(find.text('lesson.txt'), findsOneWidget);
+    await tester.ensureVisible(find.text('Generate quiz'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Generate quiz'));
     await tester.pumpAndSettle();
     expect(find.textContaining('What is 2 + 2?'), findsOneWidget);
@@ -175,6 +181,8 @@ void main() {
       ),
     );
     await tester.tap(find.text('Camera'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Generate quiz'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Generate quiz'));
     await tester.pumpAndSettle();

@@ -16,6 +16,8 @@ class FakeAiQuizGenerator implements AiQuizGenerator {
   /// Last call received, for wiring assertions in screen tests.
   String? lastText;
   List<AiQuizAttachment>? lastMedia;
+  String? lastDifficulty;
+  List<String>? lastTypes;
 
   static const canned = AiQuizGeneration(questions: [
     AiQuizQuestion(
@@ -30,8 +32,12 @@ class FakeAiQuizGenerator implements AiQuizGenerator {
   Future<AiQuizGeneration> generateFromText(
     String contextText, {
     int questionCount = 5,
+    String difficulty = 'medium',
+    List<String> questionTypes = const ['mcq'],
   }) async {
     lastText = contextText;
+    lastDifficulty = difficulty;
+    lastTypes = questionTypes;
     return result ?? canned;
   }
 
@@ -39,10 +45,22 @@ class FakeAiQuizGenerator implements AiQuizGenerator {
   Future<AiQuizGeneration> generateFromMedia(
     List<AiQuizAttachment> attachments, {
     int questionCount = 5,
+    String difficulty = 'medium',
+    List<String> questionTypes = const ['mcq'],
   }) async {
     lastMedia = attachments;
+    lastDifficulty = difficulty;
+    lastTypes = questionTypes;
     return result ?? canned;
   }
+
+  @override
+  Future<String> explainMore({
+    required String question,
+    required String correctAnswer,
+    String explanation = '',
+  }) async =>
+      'Canned AI explanation.';
 }
 
 void main() {
@@ -70,6 +88,36 @@ void main() {
           '"options":["a","b","c","d"],'
           '"correctIndex":2,"explanation":""}]}';
       expect(parseAiQuizJson(raw).first.correctIndex, 2);
+    });
+
+    test('parses tf, id, enum, match, and fill items', () {
+      const raw = '[{\"question\":\"True?\",\"type\":\"tf\",'
+          '\"correctIndex\":1,\"explanation\":\"\"},'
+          '{\"question\":\"Capital?\",\"type\":\"id\",'
+          '\"answer\":\"Vigan\",\"explanation\":\"\"},'
+          '{\"question\":\"Name two colors.\",\"type\":\"enum\",'
+          '\"answers\":[\"red\",\"blue\"],\"explanation\":\"\"},'
+          '{\"question\":\"Match.\",\"type\":\"match\",'
+          '\"pairs\":[{\"left\":\"a\",\"right\":\"1\"},'
+          '{\"left\":\"b\",\"right\":\"2\"}],\"explanation\":\"\"},'
+          '{\"question\":\"The ____ is red.\",\"type\":\"fill\",'
+          '\"answers\":[\"apple\"],\"explanation\":\"\"}]';
+      final questions = parseAiQuizJson(raw);
+      expect(questions.length, 5);
+      expect(questions.map((q) => q.type),
+          ['tf', 'id', 'enum', 'match', 'fill']);
+      expect(questions[0].toQuizQuestion().options, ['True', 'False']);
+      expect(questions[1].toQuizQuestion().answer, 'Vigan');
+      expect(questions[2].toQuizQuestion().answer, 'red\nblue');
+      expect(questions[3].toQuizQuestion().options, ['a', 'b']);
+      expect(questions[3].toQuizQuestion().answer, '1\n2');
+      expect(questions[4].toQuizQuestion().answer, 'apple');
+    });
+
+    test('skips fill items whose answer count mismatches blanks', () {
+      const raw = '[{\"question\":\"____ and ____.\",\"type\":\"fill\",'
+          '\"answers\":[\"only-one\"],\"explanation\":\"\"}]';
+      expect(parseAiQuizJson(raw), isEmpty);
     });
 
     test('malformed JSON yields an empty list, never a throw', () {
