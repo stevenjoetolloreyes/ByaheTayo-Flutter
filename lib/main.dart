@@ -898,12 +898,11 @@ class _HomeShellState extends State<_HomeShell> {
     );
 
     if (wide) {
+      // No top AppBar: the in-page titles are the only titles now
+      // (top bar removed per user request, Nov 4, 2026).
       return Scaffold(
-        appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
-        // Top inset is handled by the AppBar; left/right/bottom insets
-        // (gesture bar, cutouts) are respected here.
         body: SafeArea(
-          top: false,
+          top: true,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -929,13 +928,12 @@ class _HomeShellState extends State<_HomeShell> {
     // Tablets (wide branch above) are untouched on every platform.
     final glass = iosGlassEnabled;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_destinations[widget.selectedIndex].label),
-        backgroundColor:
-            glass ? IosGlassColors.backgroundTop : null,
-        foregroundColor: glass ? Colors.white : null,
+      // No top AppBar: the in-page titles are the only titles now
+      // (top bar removed per user request, Nov 4, 2026).
+      body: SafeArea(
+        top: true,
+        child: body,
       ),
-      body: body,
       bottomNavigationBar: glass
           ? GlassBottomNav(
               selectedIndex: widget.selectedIndex,

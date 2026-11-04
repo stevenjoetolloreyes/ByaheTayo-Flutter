@@ -85,9 +85,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
-    // Still on Fares: AppBar title + calculator content — the sidebar
-    // label is gone while collapsed.
-    expect(find.text('Fares'), findsOneWidget);
+    // Still on Fares: no top AppBar anymore, and the sidebar
+    // label is gone while collapsed, so 'Fares' appears nowhere.
+    expect(find.text('Fares'), findsNothing);
     expect(
       find.text(
         'LTFRB fare calculator — same rates and formula as the web app.',
@@ -97,8 +97,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
-    // Expanded again: AppBar + calculator content + sidebar label.
-    expect(find.text('Fares'), findsNWidgets(2));
+    // Expanded again: only the sidebar label now — no top AppBar.
+    expect(find.text('Fares'), findsOneWidget);
     expect(
       find.text(
         'LTFRB fare calculator — same rates and formula as the web app.',
