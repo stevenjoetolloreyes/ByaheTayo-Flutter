@@ -18,13 +18,21 @@ void main() {
   });
 
   testWidgets('generate shows questions, save confirms', (tester) async {
+    // The taller generate screen (custom count field) exceeds the
+    // default 600px test viewport; enlarge it so the buttons are
+    // hittable, as on a real phone screen.
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         home: AiQuizGenerateScreen(generator: FakeAiQuizGenerator()),
       ),
     );
+    // The paste field is the first TextField; the custom-count
+    // field added by the gaps patch is the second.
     await tester.enterText(
-      find.byType(TextField),
+      find.byType(TextField).at(0),
       'Addition basics: 2 + 2 is 4.',
     );
     await tester.ensureVisible(find.text('Generate quiz'));

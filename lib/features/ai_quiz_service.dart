@@ -193,14 +193,17 @@ Content buildMediaContent(
   String difficulty = 'medium',
   List<String> questionTypes = const ['mcq'],
 }) {
-  final count = questionCount.clamp(1, 10);
+  final count = clampQuizQuestionCount(questionCount);
   final types = questionTypes.isEmpty ? ['mcq'] : questionTypes;
+  final largeCountNote = count > 10
+      ? ' If you cannot produce that many distinct questions from the material, produce as many valid distinct questions as you can — never invent, repeat, or pad questions.'
+      : '';
   final prompt = 'You are a study assistant. Read the attached study '
       'material (photos of notes and/or documents — read by the '
       'model itself; there is no separate OCR step) and create '
       'exactly $count quiz questions from it, at '
       '${normalizeDifficulty(difficulty)} difficulty, using only '
-      'these question types: ${types.join(', ')}. '
+      'these question types: ${types.join(', ')}.$largeCountNote '
       'Reply with JSON ONLY — no explanation, no Markdown fences '
       'around anything except the JSON itself. The JSON must be an '
       'array of objects. ${aiQuizTypeSchema()}';
@@ -423,12 +426,15 @@ class FirebaseAiQuizGenerator implements AiQuizGenerator {
         error: 'Paste some study text first.',
       );
     }
-    final count = questionCount.clamp(1, 10);
+    final count = clampQuizQuestionCount(questionCount);
     final types = questionTypes.isEmpty ? ['mcq'] : questionTypes;
+    final largeCountNote = count > 10
+        ? ' If you cannot produce that many distinct questions from the material, produce as many valid distinct questions as you can — never invent, repeat, or pad questions.'
+        : '';
     final prompt = 'You are a study assistant. Create exactly $count '
         'quiz questions from the study text below, at '
         '${normalizeDifficulty(difficulty)} difficulty, using only '
-        'these question types: ${types.join(', ')}. '
+        'these question types: ${types.join(', ')}.$largeCountNote '
         'Reply with JSON ONLY — no explanation, no Markdown fences '
         'around anything except the JSON itself. The JSON must be an '
         'array of objects. ${aiQuizTypeSchema()}\n\n'

@@ -228,6 +228,7 @@ class Flashcard {
     required this.front,
     required this.back,
     required this.subject,
+    this.studyStatus = '',
   });
 
   final String id;
@@ -235,15 +236,42 @@ class Flashcard {
   final String back;
   final String subject;
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'front': front, 'back': back, 'subject': subject};
+  /// Session study mark from the study mode: '' (unmarked),
+  /// 'remembered', or 'needsReview'. Optional and backward
+  /// compatible: cards saved before this field existed load as ''.
+  final String studyStatus;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'front': front,
+        'back': back,
+        'subject': subject,
+        'studyStatus': studyStatus,
+      };
 
   static Flashcard fromJson(Map<String, dynamic> j) => Flashcard(
         id: j['id'] as String,
         front: j['front'] as String,
         back: j['back'] as String,
         subject: j['subject'] as String? ?? '',
+        studyStatus: j['studyStatus'] as String? ?? '',
       );
+}
+
+/// Clamp a requested AI question count to the supported range.
+/// Counts above 10 are accepted as requests, not guarantees: the
+/// model may return fewer valid questions, and the UI must show
+/// only the valid questions actually returned.
+int clampQuizQuestionCount(int count) => count.clamp(1, 50);
+
+/// One-line performance summary derived honestly from a percentage
+/// only — never a per-topic claim, since attempts carry no topic
+/// breakdown.
+String performanceSummaryForPct(int pct) {
+  if (pct >= 90) return 'Excellent';
+  if (pct >= 70) return 'Good';
+  if (pct >= 50) return 'Fair';
+  return 'Needs review';
 }
 
 /// Question types:

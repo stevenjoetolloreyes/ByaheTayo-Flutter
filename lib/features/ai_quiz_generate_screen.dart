@@ -28,7 +28,11 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   late final AiQuizGenerator _generator =
       widget.generator ?? FirebaseAiQuizGenerator();
   final _contextController = TextEditingController();
+  final _customCountController = TextEditingController();
+  final _previewKey = GlobalKey();
   int _count = 5;
+  bool _customCount = false;
+  String _stage = '';
   String _difficulty = 'medium';
   Set<String> _types = {'mcq'};
   AiQuizGeneration? _result;
@@ -44,7 +48,17 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   @override
   void dispose() {
     _contextController.dispose();
+    _customCountController.dispose();
     super.dispose();
+  }
+
+  void _setCustomCount(String value) {
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null) return;
+    setState(() {
+      _count = parsed.clamp(1, 50);
+      _customCount = true;
+    });
   }
 
   Future<void> _pick(AiQuizInputSource source) async {
@@ -77,10 +91,23 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   }
 
   Future<void> _generate() async {
+    // Stage text follows REAL phases only. File reading and, for
+    // txt/docx, text extraction already happened when the file was
+    // picked, and model-output parsing happens inside the generator
+    // call — so no separate 'Reading Document...', 'Extracting
+    // Text...', or 'Finalizing Quiz...' stage is shown here;
+    // showing one would be fake progress. During the call the
+    // stage is 'Sending to AI...' for media (the model reads
+    // PDF/image bytes itself; there is no separate OCR step) and
+    // 'Generating Questions...' for text.
+    final pickedStage = _picked;
     setState(() {
       _loading = true;
       _result = null;
       _saved = false;
+      _stage = pickedStage != null && pickedStage.hasMedia
+          ? 'Sending to AI...'
+          : 'Generating Questions...';
     });
     final picked = _picked;
     final AiQuizGeneration result;
@@ -110,6 +137,7 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
     setState(() {
       _result = result;
       _loading = false;
+      _stage = '';
     });
   }
 
@@ -264,16 +292,41 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            const Text('Number of questions'),
+            const SizedBox(height: 4),
             SegmentedButton<int>(
               segments: const [
-                ButtonSegment(value: 3, label: Text('3')),
                 ButtonSegment(value: 5, label: Text('5')),
                 ButtonSegment(value: 10, label: Text('10')),
+                ButtonSegment(value: 20, label: Text('20')),
+                ButtonSegment(value: 30, label: Text('30')),
+                ButtonSegment(value: 50, label: Text('50')),
               ],
-              selected: {_count},
-              onSelectionChanged: (selected) =>
-                  setState(() => _count = selected.first),
+              selected: _customCount ? <int>{} : {_count},
+              onSelectionChanged: (selected) => setState(() {
+                _count = selected.first;
+                _customCount = false;
+              }),
             ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _customCountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Custom number (1–50)',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: _setCustomCount,
+            ),
+            if (_count > 10) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Long generations may be truncated by model output '
+                'limits — a request for $_count questions is not a '
+                'guarantee; only valid returned questions are shown.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: _loading ? null : _generate,
@@ -282,18 +335,7 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
             ),
             if (_loading) ...[
               const SizedBox(height: 16),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 12),
-                  Text('Generating…'),
-                ],
-              ),
+              _NeonLoadingBar(stage: _stage),
             ],
             if (result != null && result.error != null) ...[
               const SizedBox(height: 16),
@@ -303,11 +345,51 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _generate,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
             ],
             if (result != null && result.succeeded) ...[
               const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Icon(Icons.check_circle,
+                      color: Colors.green, size: 28),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Quiz Generated Successfully!',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                        Text(
+                            '${result.questions.length} questions generated'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () {
+                  final context = _previewKey.currentContext;
+                  if (context != null) {
+                    Scrollable.ensureVisible(
+                      context,
+                      duration: const Duration(milliseconds: 300),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.visibility_outlined, size: 18),
+                label: const Text('Preview Quiz'),
+              ),
+              const SizedBox(height: 8),
               for (var i = 0; i < result.questions.length; i++) ...[
                 Card(
+                  key: i == 0 ? _previewKey : null,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -400,5 +482,115 @@ String _aiPreviewAnswer(AiQuizQuestion q) {
       return q.answers.join(', ');
     default:
       return q.answer;
+  }
+}
+
+/// Inline floating neon loading bar for AI generation. Inline
+/// only: it renders inside the Generate Quiz page, never as a
+/// full-screen page, modal, or large centered spinner. A small
+/// emerald bar with a glow and trail travels continuously from
+/// left to right while [stage] describes the real in-flight phase.
+class _NeonLoadingBar extends StatefulWidget {
+  const _NeonLoadingBar({required this.stage});
+
+  final String stage;
+
+  @override
+  State<_NeonLoadingBar> createState() => _NeonLoadingBarState();
+}
+
+class _NeonLoadingBarState extends State<_NeonLoadingBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Text('Generating...',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        const Text('Please wait while AI processes your file.'),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            const barWidth = 80.0;
+            return AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) {
+                final left =
+                    _controller.value * (width - barWidth).clamp(0, width);
+                return SizedBox(
+                  height: 6,
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      Positioned(
+                        left: (left - 60).clamp(0, width),
+                        child: Container(
+                          width: 60,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                const Color(0xFF16A34A)
+                                    .withValues(alpha: 0.6),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: left,
+                        child: Container(
+                          width: barWidth,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF16A34A),
+                            borderRadius: BorderRadius.circular(3),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0xFF4ADE80),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                              BoxShadow(
+                                color: Color(0xFF16A34A),
+                                blurRadius: 24,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+        if (widget.stage.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(widget.stage, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ],
+    );
   }
 }

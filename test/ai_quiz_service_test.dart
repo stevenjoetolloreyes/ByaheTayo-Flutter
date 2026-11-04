@@ -233,11 +233,16 @@ void main() {
   });
 
   group('mimeTypeForExtension', () {
-    test('maps supported types, rejects docx', () {
+    test('maps supported types, docx maps to its mime, doc rejected', () {
       expect(mimeTypeForExtension('jpg'), 'image/jpeg');
       expect(mimeTypeForExtension('PDF'), 'application/pdf');
       expect(mimeTypeForExtension('txt'), 'text/plain');
-      expect(mimeTypeForExtension('docx'), isNull);
+      expect(
+        mimeTypeForExtension('docx'),
+        'application/vnd.openxmlformats-officedocument.'
+        'wordprocessingml.document',
+      );
+      expect(mimeTypeForExtension('doc'), isNull);
       expect(mimeTypeForExtension('xlsx'), isNull);
     });
   });

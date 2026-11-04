@@ -339,7 +339,13 @@ class _NotesScreenState extends State<NotesScreen> {
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => _StudyMode(cards: _cards)),
+                            builder: (_) => _StudyMode(
+                        cards: _cards,
+                        onDeckChanged: (deck) async {
+                          setState(() => _cards = deck);
+                          await _saveCards();
+                        },
+                      )),
                       ),
                       icon: const Icon(Icons.play_arrow),
                       label: const Text('Study all cards'),
@@ -634,9 +640,13 @@ class _CardFormState extends State<_CardForm> {
 }
 
 class _StudyMode extends StatefulWidget {
-  const _StudyMode({required this.cards});
+  const _StudyMode({required this.cards, this.onDeckChanged});
 
   final List<Flashcard> cards;
+
+  /// Called with the updated deck whenever a card is marked, so
+  /// the parent can persist the mark. Null = session-only marks.
+  final Future<void> Function(List<Flashcard> deck)? onDeckChanged;
 
   @override
   State<_StudyMode> createState() => _StudyModeState();
@@ -646,11 +656,37 @@ class _StudyModeState extends State<_StudyMode> {
   late List<Flashcard> _deck;
   int _index = 0;
   bool _flipped = false;
+  final Map<String, String> _marks = {};
 
   @override
   void initState() {
     super.initState();
     _deck = List.of(widget.cards);
+    for (final card in _deck) {
+      if (card.studyStatus.isNotEmpty) _marks[card.id] = card.studyStatus;
+    }
+  }
+
+  int get _remembered =>
+      _marks.values.where((s) => s == 'remembered').length;
+  int get _needsReview =>
+      _marks.values.where((s) => s == 'needsReview').length;
+  int get _remaining => _deck.length - _remembered - _needsReview;
+
+  void _mark(String status) {
+    final card = _deck[_index];
+    final updated = Flashcard(
+      id: card.id,
+      front: card.front,
+      back: card.back,
+      subject: card.subject,
+      studyStatus: status,
+    );
+    setState(() {
+      _deck[_index] = updated;
+      _marks[card.id] = status;
+    });
+    widget.onDeckChanged?.call(List.of(_deck));
   }
 
   @override
@@ -662,36 +698,82 @@ class _StudyModeState extends State<_StudyMode> {
         padding: AppLayout.pagePaddingTab,
         child: Column(
           children: [
+            Text(
+              'Remembered $_remembered · Needs review $_needsReview · '
+              'Remaining $_remaining',
+              style: AppText.caption,
+            ),
+            const SizedBox(height: 4),
+            LinearProgressIndicator(
+              value: _deck.isEmpty
+                  ? 0
+                  : (_remembered + _needsReview) / _deck.length,
+            ),
+            const SizedBox(height: AppLayout.cardGap),
             Expanded(
               child: GestureDetector(
                 onTap: () => setState(() => _flipped = !_flipped),
-                child: Card(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _flipped ? 'Answer' : 'Question',
-                            style: const TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: AppLayout.cardGap),
-                          Text(
-                            _flipped ? card.back : card.front,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 22),
-                          ),
-                          const SizedBox(height: AppLayout.headerGap),
-                          const Text('Tap the card to flip',
-                              style: TextStyle(fontSize: 12)),
-                        ],
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) =>
+                      FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.95, end: 1.0)
+                          .animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: Card(
+                    key: ValueKey(_flipped),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _flipped ? 'Answer' : 'Question',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: AppLayout.cardGap),
+                            Text(
+                              _flipped ? card.back : card.front,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 22),
+                            ),
+                            const SizedBox(height: AppLayout.headerGap),
+                            const Text('Tap the card to flip',
+                                style: TextStyle(fontSize: 12)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
+            ),
+            const SizedBox(height: AppLayout.cardGap),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _mark('needsReview'),
+                    icon: const Icon(Icons.replay, size: 18),
+                    label: const Text('Needs review'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.s8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _mark('remembered'),
+                    icon: const Icon(Icons.check, size: 18),
+                    label: const Text('Remembered'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppLayout.cardGap),
             Row(
@@ -786,32 +868,13 @@ class _StudyModeState extends State<_StudyMode> {
             Text('Weekly performance (last 7 days)',
                 style: AppText.caption),
             const SizedBox(height: 4),
+            _WeeklyBarChart(days: analytics.weekly),
+            const SizedBox(height: 4),
             for (final day in analytics.weekly)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 88,
-                      child: Text(day.dateKey,
-                          style: AppText.caption),
-                    ),
-                    Expanded(
-                      child: LinearProgressIndicator(
-                        value: day.attempts == 0
-                            ? 0
-                            : day.averagePct / 100,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      day.attempts == 0
-                          ? '—'
-                          : '${day.attempts} · ${day.averagePct}%',
-                      style: AppText.caption,
-                    ),
-                  ],
-                ),
+              Text(
+                '${day.dateKey}: ${day.attempts} attempt(s)'
+                '${day.attempts == 0 ? '' : ' · ${day.averagePct}%'}',
+                style: AppText.caption,
               ),
             const SizedBox(height: AppSpacing.s8),
             Text('Study progress: $progressLabel',
@@ -833,6 +896,103 @@ class _StudyModeState extends State<_StudyMode> {
       );
 
 
+
+/// Weekly attempts bar chart, custom-painted with no new
+/// dependency. Bars show attempts per day over the last 7 days,
+/// computed only from real attempts: a day with no attempts draws
+/// no bar (zero), never a fabricated value. The numeric caption
+/// rows under the chart carry the per-day average.
+class _WeeklyBarChart extends StatelessWidget {
+  const _WeeklyBarChart({required this.days});
+
+  final List<QuizAnalyticsDay> days;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 110,
+      child: CustomPaint(
+        painter: _WeeklyBarPainter(days: days),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class _WeeklyBarPainter extends CustomPainter {
+  _WeeklyBarPainter({required this.days});
+
+  final List<QuizAnalyticsDay> days;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final maxAttempts =
+        days.fold<int>(0, (m, d) => d.attempts > m ? d.attempts : m);
+    const labelHeight = 18.0;
+    final chartHeight = size.height - labelHeight;
+    final slot = days.isEmpty ? size.width : size.width / days.length;
+    const barWidth = 22.0;
+    final barPaint = Paint()..color = const Color(0xFF16A34A);
+    final axisPaint = Paint()
+      ..color = const Color(0xFFB0B0B0)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(0, chartHeight),
+      Offset(size.width, chartHeight),
+      axisPaint,
+    );
+    for (var i = 0; i < days.length; i++) {
+      final day = days[i];
+      final center = slot * i + slot / 2;
+      if (day.attempts > 0 && maxAttempts > 0) {
+        final barHeight = (day.attempts / maxAttempts) * (chartHeight - 16);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+              center - barWidth / 2,
+              chartHeight - barHeight,
+              barWidth,
+              barHeight,
+            ),
+            const Radius.circular(4),
+          ),
+          barPaint,
+        );
+        final countPainter = TextPainter(
+          text: TextSpan(
+            text: '${day.attempts}',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF16A34A)),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        countPainter.paint(
+          canvas,
+          Offset(
+            center - countPainter.width / 2,
+            chartHeight - barHeight - 14,
+          ),
+        );
+      }
+      final label = day.dateKey.length >= 10
+          ? day.dateKey.substring(5)
+          : day.dateKey;
+      final labelPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(fontSize: 10, color: Color(0xFF808080)),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      labelPainter.paint(
+        canvas,
+        Offset(center - labelPainter.width / 2, chartHeight + 4),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WeeklyBarPainter old) => old.days != days;
+}
 
 /// Read-only review of one saved attempt. Shows the real answer
 /// given only when it was stored ([QuizAttempt.givenAnswers]);
@@ -1704,6 +1864,9 @@ class _QuizRunnerState extends State<_QuizRunner> {
                             fontSize: 32, fontWeight: FontWeight.w800)),
                     Text(
                         '$percentage% · $correctCount correct · $incorrectCount incorrect · ${_durationText()}'),
+                    Text(
+                        'Performance Summary: '
+                        '${performanceSummaryForPct(percentage)}'),
                     const Text('Your score'),
                   ],
                 ),
@@ -1901,6 +2064,12 @@ class _QuizRunnerState extends State<_QuizRunner> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            LinearProgressIndicator(
+              value: quiz.questions.isEmpty
+                  ? 0
+                  : (_index + 1) / quiz.questions.length,
+            ),
+            const SizedBox(height: AppLayout.cardGap),
             Text(q.question, style: const TextStyle(fontSize: 20)),
             const SizedBox(height: AppLayout.headerGap),
             if (q.type == 'id')
