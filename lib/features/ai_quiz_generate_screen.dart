@@ -39,6 +39,18 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   bool _loading = false;
   bool _saved = false;
 
+  /// Tipid: the last SUCCESSFUL generation and the request key that
+  /// produced it. A later Generate with the exact same key reuses
+  /// this result instead of spending another AI call, unless the
+  /// user explicitly chooses to generate again.
+  String? _lastSuccessfulKey;
+  AiQuizGeneration? _lastSuccessfulResult;
+
+  /// Whether that last successful result was already saved as a
+  /// quiz, so reusing it restores the saved state instead of
+  /// offering a second save of the same quiz.
+  bool _lastSuccessfulSaved = false;
+
   /// Attached study material (camera / picture / document). When set,
   /// Generate uses it instead of the pasted text; clearing it returns
   /// to the paste-text flow.
@@ -90,7 +102,151 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
     return 'Could not pick that file. Try again.';
   }
 
+  /// Key identifying one generation request exactly: the study
+  /// material (trimmed text, or media label + total bytes +
+  /// attachment count) plus count, difficulty and sorted types.
+  /// Same key + a successful result = a reuse candidate, never a
+  /// reason to spend another AI call on the same material.
+  String _generationKey() {
+    final picked = _picked;
+    final sortedTypes = _types.toList()..sort();
+    final settings = '$_count|$_difficulty|${sortedTypes.join(',')}';
+    if (picked != null && picked.hasMedia) {
+      final totalBytes = picked.attachments.fold<int>(
+        0,
+        (sum, a) => sum + a.bytes.length,
+      );
+      return 'media|${picked.label}|$totalBytes|'
+          '${picked.attachments.length}|$settings';
+    }
+    final text = picked != null && picked.hasText
+        ? picked.text!.trim()
+        : _contextController.text.trim();
+    return 'text|$text|$settings';
+  }
+
+  /// Effective input size for the large-request confirm: the text
+  /// that will actually be sent (picked file text or pasted text),
+  /// and the media bytes that will actually be sent. Pasted text
+  /// is ignored when media is attached, because the media branch
+  /// is the one the generator uses then.
+  int get _effectiveTextLength {
+    final picked = _picked;
+    if (picked != null && picked.hasMedia) return 0;
+    if (picked != null && picked.hasText) return picked.text!.length;
+    return _contextController.text.length;
+  }
+
+  int get _effectiveMediaBytes {
+    final picked = _picked;
+    if (picked == null || !picked.hasMedia) return 0;
+    return picked.attachments.fold<int>(
+      0,
+      (sum, a) => sum + a.bytes.length,
+    );
+  }
+
+  bool get _isLargeRequest =>
+      _count >= 20 ||
+      _effectiveTextLength > 8000 ||
+      _effectiveMediaBytes > 5 * 1024 * 1024;
+
+  /// Reuse dialog. Returns 'reuse', 'regenerate', or null when
+  /// dismissed. No model call happens for any outcome except an
+  /// explicit 'regenerate' tap (which still goes through the
+  /// large-request confirm below before any call).
+  Future<String?> _showReuseDialog() {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Walang bagong AI call — ginamit ulit yung huling quiz',
+        ),
+        content: const Text(
+          'Same material, same bilang, same difficulty at question '
+          'types na ito — ito na yung huling quiz na nagawa mo. '
+          'Gusto mo bang gamitin ulit yun nang walang bagong AI call?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'reuse'),
+            child: const Text('Gamitin yung dati'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'regenerate'),
+            child: const Text('Generate ulit (gagamit ng quota)'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Large-request confirm. Plain Taglish, honest about the free
+  /// tier: this is 1 AI call, and the free tier is only about 20
+  /// requests a day. Cancel (or dismiss) means zero model calls.
+  /// The app cannot know Google's server-side remaining quota, so
+  /// no remaining-calls number is shown here — that would be fake.
+  Future<bool> _showLargeConfirmDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Malaking request ito'),
+        content: const Text(
+          'Isa itong AI call, at malaki ang kakainin nitong tokens '
+          '— mas maraming questions o mas mahabang material, mas '
+          'mahaba ang output. Ang free tier ay mga 20 requests lang '
+          'kada araw, kaya sayang kung mauubos ito sa paulit-ulit '
+          'na pag-generate ng same material. Sigurado ka bang '
+          'ituloy mo ito?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Generate pa rin'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _generate() async {
+    // Double-call guard: rapid taps cannot burn two quota calls
+    // for one request. The Generate button is also disabled while
+    // loading, and the Retry button below is too.
+    if (_loading) return;
+    final key = _generationKey();
+    // Reuse guard: same successful request as last time — offer
+    // the existing result before spending another AI call.
+    if (_lastSuccessfulKey == key && _lastSuccessfulResult != null) {
+      final choice = await _showReuseDialog();
+      if (!mounted) return;
+      if (choice == 'reuse') {
+        setState(() {
+          _result = _lastSuccessfulResult;
+          _saved = _lastSuccessfulSaved;
+        });
+        return;
+      }
+      if (choice != 'regenerate') return; // Dismissed: no call.
+      if (_loading) return;
+    }
+    // Large-request confirm: normal 5/10 short requests get no
+    // dialog, so there is no extra friction on the common path.
+    if (_isLargeRequest) {
+      final confirmed = await _showLargeConfirmDialog();
+      if (!mounted) return;
+      if (!confirmed) return; // Cancel: zero model calls.
+      if (_loading) return;
+    }
+    await _performGenerate(key);
+  }
+
+  Future<void> _performGenerate(String key) async {
     // Stage text follows REAL phases only. File reading and, for
     // txt/docx, text extraction already happened when the file was
     // picked, and model-output parsing happens inside the generator
@@ -138,6 +294,11 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
       _result = result;
       _loading = false;
       _stage = '';
+      if (result.succeeded) {
+        _lastSuccessfulKey = key;
+        _lastSuccessfulResult = result;
+        _lastSuccessfulSaved = false;
+      }
     });
   }
 
@@ -169,7 +330,10 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
       quizzes.map((q) => q.toJson()).toList(),
     );
     if (!mounted) return;
-    setState(() => _saved = true);
+    setState(() {
+      _saved = true;
+      _lastSuccessfulSaved = true;
+    });
   }
 
   @override
@@ -190,6 +354,14 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
                 labelText: 'Paste study text',
                 hintText: 'Paste notes or a lesson summary here…',
                 border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 4),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _contextController,
+              builder: (context, value, _) => Text(
+                '${value.text.length} characters',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
             const SizedBox(height: 12),
@@ -323,7 +495,11 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
               Text(
                 'Long generations may be truncated by model output '
                 'limits — a request for $_count questions is not a '
-                'guarantee; only valid returned questions are shown.',
+                'guarantee; only valid returned questions are shown. '
+                'Mas malaki rin ang tokens kada call pag mas marami '
+                'ang questions, kaya mas tipid ang isang maayos na '
+                'generate na ni-save at ginamit ulit kaysa '
+                'paulit-ulit na pag-generate ng same material.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -347,7 +523,7 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: _generate,
+                onPressed: _loading ? null : _generate,
                 icon: const Icon(Icons.refresh, size: 18),
                 label: const Text('Retry'),
               ),
@@ -371,6 +547,11 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
                     ),
                   ),
                 ],
+              ),
+              Text(
+                'Tip: i-save mo para magamit ulit nang walang '
+                'bagong AI call.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
