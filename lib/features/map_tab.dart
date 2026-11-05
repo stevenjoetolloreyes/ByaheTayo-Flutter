@@ -50,6 +50,21 @@ import 'package:url_launcher/url_launcher.dart';
 import 'community_posts.dart';
 import 'fares_tab.dart';
 
+/// Map tab's OWN ChatGPT tokens (loose UI base, Nov 5): Premium Dark +
+/// Emerald Green with a matching Light Mode. Only the chrome around
+/// the map is retokened — the map tiles, markers, polylines, the
+/// draggable sheet's layout and the Google-style nav banner layout
+/// stay exactly as approved. The map is the approved reference, so
+/// the retoken is deliberately light: hardcoded off-system colors
+/// move to these tokens, nothing else changes shape or behavior.
+const kMapPrimary = Color(0xFF14532D);
+const kMapDarkCard = Color(0xFF202B25);
+const kMapLightText = Color(0xFF17231C);
+const kMapError = Color(0xFFEF4444);
+const kMapInfo = Color(0xFF3B82F6);
+const kMapSuccess = Color(0xFF22C55E);
+const kMapCardRadius = 20.0;
+
 /// Travel modes for the destination ETA, mirroring the web planner.
 enum TravelMode { transit, motorcycle, bicycle, walking }
 
@@ -1795,7 +1810,7 @@ class _MapTabState extends State<MapTab> {
     final saved = _savedRoutes.contains(savedKey);
     return Material(
       elevation: 4,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(kMapCardRadius),
       color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
@@ -1809,12 +1824,12 @@ class _MapTabState extends State<MapTab> {
                   width: 10,
                   height: 10,
                   decoration: const BoxDecoration(
-                    color: Colors.blue,
+                    color: kMapInfo,
                     shape: BoxShape.circle,
                   ),
                 ),
                 Container(width: 2, height: 20, color: Colors.black26),
-                const Icon(Icons.place, color: Colors.red, size: 20),
+                const Icon(Icons.place, color: kMapError, size: 20),
               ],
             ),
             const SizedBox(width: 8),
@@ -1825,7 +1840,7 @@ class _MapTabState extends State<MapTab> {
                   Text(
                     route.originName,
                     style: const TextStyle(
-                      color: Colors.black87,
+                      color: kMapLightText,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1833,7 +1848,7 @@ class _MapTabState extends State<MapTab> {
                   Text(
                     route.dest.name,
                     style: const TextStyle(
-                      color: Colors.black87,
+                      color: kMapLightText,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2265,7 +2280,7 @@ class _MapTabState extends State<MapTab> {
               height: 56,
               decoration: BoxDecoration(
                 color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(kMapCardRadius),
               ),
               child: Icon(Icons.church_outlined, color: scheme.primary),
             ),
@@ -2280,15 +2295,15 @@ class _MapTabState extends State<MapTab> {
                         child: Text(
                           church.name,
                           style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                       if (verified)
                         const Icon(
                           Icons.verified,
-                          color: Colors.green,
+                          color: kMapSuccess,
                           size: 20,
                         ),
                     ],
@@ -3227,7 +3242,7 @@ class _MapTabState extends State<MapTab> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: (v) => setState(() => _searchQuery = v),
-                      style: const TextStyle(color: Colors.black87),
+                      style: const TextStyle(color: kMapLightText),
                       decoration: InputDecoration(
                         hintText: 'Search places, landmarks, or streets',
                         hintStyle: const TextStyle(color: Colors.black54),
@@ -3266,13 +3281,13 @@ class _MapTabState extends State<MapTab> {
                     padding: const EdgeInsets.only(top: 8),
                     child: Material(
                       elevation: 4,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(kMapCardRadius),
                       color: Colors.white,
                       child: searchResults.isEmpty
                           ? const ListTile(
                               title: Text(
                                 'No hub found.',
-                                style: TextStyle(color: Colors.black87),
+                                style: TextStyle(color: kMapLightText),
                               ),
                               subtitle: Text(
                                 'Only hubs can be searched here for now.',
@@ -3291,7 +3306,7 @@ class _MapTabState extends State<MapTab> {
                                       title: Text(
                                         hub.name,
                                         style: const TextStyle(
-                                          color: Colors.black87,
+                                          color: kMapLightText,
                                         ),
                                       ),
                                       subtitle: Text(
@@ -3487,8 +3502,8 @@ class _MapTabState extends State<MapTab> {
             navigating: _navigating,
           ),
           child: Material(
-            color: const Color(0xFF1F2226),
-            borderRadius: BorderRadius.circular(24),
+            color: kMapDarkCard,
+            borderRadius: BorderRadius.circular(kMapCardRadius),
             elevation: 6,
             child: Padding(
               padding: const EdgeInsets.all(4),
@@ -3520,11 +3535,11 @@ class _MapTabState extends State<MapTab> {
             right: 16,
             bottom: 100,
             child: Material(
-              color: const Color(0xFF1F2226),
-              borderRadius: BorderRadius.circular(24),
+              color: kMapDarkCard,
+              borderRadius: BorderRadius.circular(kMapCardRadius),
               elevation: 6,
               child: InkWell(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kMapCardRadius),
                 onTap: _recenterNav,
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -3572,7 +3587,7 @@ class _MapTabState extends State<MapTab> {
                   elevation: 8,
                   child: ListView(
                     controller: scrollController,
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
                     children: [
                       Center(
                         child: Container(
@@ -3598,8 +3613,8 @@ class _MapTabState extends State<MapTab> {
                               child: Text(
                                 _sheetTitle(),
                                 style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -3694,7 +3709,7 @@ class _MapTabState extends State<MapTab> {
                     setState(() => _sheetSearchQuery = '');
                   },
                 ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
       const SizedBox(height: 12),
@@ -3967,13 +3982,13 @@ class _MapTabState extends State<MapTab> {
         const SizedBox(height: 16),
         const Text(
           'Saved routes',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         for (final key in _savedRoutes)
           Card(
             child: ListTile(
-              leading: const Icon(Icons.favorite, color: Colors.red),
+              leading: const Icon(Icons.favorite, color: kMapError),
               title: Text(key.replaceAll('>', ' → ')),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _openSavedRoute(key),
@@ -4016,13 +4031,13 @@ class _MapTabState extends State<MapTab> {
     final selected = _vehicle == v;
     return Card(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kMapCardRadius),
         side: selected
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none,
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kMapCardRadius),
         onTap: () => setState(() => _vehicle = v),
         child: Stack(
           children: [
@@ -4073,7 +4088,7 @@ class _MapTabState extends State<MapTab> {
       children: [
         const Text(
           'Select Vehicle Type',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -4168,7 +4183,7 @@ class _MapTabState extends State<MapTab> {
             IconButton(
               icon: Icon(
                 saved ? Icons.favorite : Icons.favorite_border,
-                color: saved ? Colors.red : null,
+                color: saved ? kMapError : null,
               ),
               tooltip: saved ? 'Remove from saved' : 'Save route',
               onPressed: () => _toggleSaved(route),
@@ -4190,8 +4205,8 @@ class _MapTabState extends State<MapTab> {
     if (dest == null || pts == null || pos == null) {
       return const Material(
         elevation: 4,
-        borderRadius: BorderRadius.all(Radius.circular(16)),
-        color: Color(0xFF0E7C66),
+        borderRadius: BorderRadius.all(Radius.circular(kMapCardRadius)),
+        color: kMapPrimary,
         child: Padding(
           padding: EdgeInsets.all(14),
           child: Text(
@@ -4208,8 +4223,8 @@ class _MapTabState extends State<MapTab> {
     if (steps == null || steps.isEmpty || _maneuverIdx.isEmpty) {
       return Material(
         elevation: 4,
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF0E7C66),
+        borderRadius: BorderRadius.circular(kMapCardRadius),
+        color: kMapPrimary,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Text(
@@ -4236,7 +4251,7 @@ class _MapTabState extends State<MapTab> {
       return Expanded(
         child: Material(
           color: bg,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(kMapCardRadius),
           elevation: 4,
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -4277,7 +4292,7 @@ class _MapTabState extends State<MapTab> {
     return Row(
       children: [
         turnCard(
-          bg: const Color(0xFF0E7C66),
+          bg: kMapPrimary,
           icon: navArrowIcon(step.instruction),
           distance: formatNavDistance(toTurn),
           action: shortAction(step.instruction),
@@ -4332,8 +4347,8 @@ class _MapTabState extends State<MapTab> {
         ? '${_navSpeedKmh.round()} km/h'
         : '-- km/h';
     return Material(
-      color: const Color(0xFF1F2226),
-      borderRadius: BorderRadius.circular(16),
+      color: kMapDarkCard,
+      borderRadius: BorderRadius.circular(kMapCardRadius),
       elevation: 6,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -4528,7 +4543,7 @@ class _MapTabState extends State<MapTab> {
         if (!sameHub) ...[
           const Text(
             'Best options',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           for (final mode in TravelMode.values)
@@ -4588,7 +4603,7 @@ class _MapTabState extends State<MapTab> {
                     '${origin.name} → ${dest.name}',
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -4746,10 +4761,10 @@ class _LogoToggleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFF16A34A),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(14),
       elevation: 4,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         onTap: onPressed,
         child: Tooltip(
           message: tooltip,

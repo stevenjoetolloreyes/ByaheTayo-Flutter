@@ -1366,7 +1366,7 @@ class _CommunityPostInteractionWidgetState
                 label: 'Dislike',
                 count: state.dislikeCount,
                 selected: state.myReaction == PostReaction.dislike,
-                selectedColor: const Color(0xFFDC2626),
+                selectedColor: const Color(0xFFEF4444),
                 enabled: signedIn,
                 busy: _reacting == PostReaction.dislike,
                 onTap: () => _onReactionTap(PostReaction.dislike),
@@ -1427,7 +1427,7 @@ class _ReactionButton extends StatelessWidget {
       onPressed: enabled && !busy ? onTap : null,
       style: TextButton.styleFrom(
         foregroundColor: color,
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 12),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1723,7 +1723,7 @@ class _CommentSheetState extends State<_CommentSheet> {
                           count: dislikeCount,
                           selected:
                               myReaction == PostReaction.dislike,
-                          selectedColor: const Color(0xFFDC2626),
+                          selectedColor: const Color(0xFFEF4444),
                           enabled: true,
                           busy: _reactingCommentId == comment.id,
                           onTap: () => _onCommentReaction(

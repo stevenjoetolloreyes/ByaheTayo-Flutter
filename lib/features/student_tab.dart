@@ -503,7 +503,13 @@ class _StudentTabState extends State<StudentTab> {
                 borderRadius:
                     BorderRadius.circular(kStudentCardRadius),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  // Vertical 10 (not 14): the tile content needs real
+                  // slack inside the fixed-aspect grid cell — on the
+                  // GitHub runner the label measured 0.14px taller
+                  // than the cell allowed (font rounding), failing
+                  // walking_goal_test's hub-order test. 10px padding
+                  // buys ~8px of margin; look is unchanged.
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

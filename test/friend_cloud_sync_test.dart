@@ -921,9 +921,9 @@ void main() {
         (tester.getCenter(chatsEmpty).dx - cardCenterX(chatsEmpty)).abs(),
         lessThan(1.0),
       );
-      // Headings stay left: page header at the 16dp padding edge,
+      // Headings stay left: page header at the 20dp padding edge,
       // Incoming label at card-content left, left of card center.
-      expect(tester.getTopLeft(find.text('Friends')).dx, closeTo(16, 1.0));
+      expect(tester.getTopLeft(find.text('Friends')).dx, closeTo(20, 1.0));
       final incoming = find.text('Incoming');
       expect(
         tester.getTopLeft(incoming).dx,

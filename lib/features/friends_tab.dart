@@ -50,6 +50,34 @@ import 'friend_cloud_repository.dart';
 import 'friend_sharing.dart';
 import 'friend_store.dart';
 
+// Friends-local ChatGPT design tokens (Premium Dark + Emerald Green,
+// adopted Nov 5 as a LOOSE UI base). Tab-local on purpose: the shared
+// AppLayout/AppText scale is used by other tabs and stays untouched.
+// Only the tokens this tab actually uses are defined here.
+const kFriendsDarkCard = Color(0xFF202B25);
+const kFriendsError = Color(0xFFEF4444);
+const kFriendsCardRadius = 20.0;
+const kFriendsInputRadius = 14.0;
+const kFriendsPageTitle =
+    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
+const kFriendsCardHeading =
+    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+
+/// ChatGPT card geometry for Friends cards: 20dp corners, theme outline.
+ShapeBorder _friendsCardShape(BuildContext context) {
+  return RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(kFriendsCardRadius),
+    side: BorderSide(color: Theme.of(context).colorScheme.outline),
+  );
+}
+
+/// ChatGPT dark card surface (#202B25); light cards stay white.
+Color _friendsCardColor(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? kFriendsDarkCard
+      : Colors.white;
+}
+
 /// Shown when an action needs cloud sync (not enabled yet).
 const _syncNeededMessage =
     'Chats need cloud sync, which is not enabled yet.';
@@ -359,7 +387,8 @@ class _FriendsTabState extends State<FriendsTab> {
                       hintText: 'Enter a friend code',
                       prefixIcon: Icon(Icons.person_add_outlined),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(AppLayout.inputRadiusTab)),
+                        borderRadius: BorderRadius.all(
+                            Radius.circular(kFriendsInputRadius)),
                       ),
                     ),
                     onChanged: (_) {
@@ -372,8 +401,8 @@ class _FriendsTabState extends State<FriendsTab> {
                     const SizedBox(height: AppSpacing.s8),
                     Text(
                       _codeError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                      style: const TextStyle(
+                        color: kFriendsError,
                       ),
                     ),
                   ],
@@ -428,7 +457,7 @@ class _FriendsTabState extends State<FriendsTab> {
     return SafeArea(
       top: false,
       child: ListView(
-        padding: AppLayout.pagePaddingTab,
+        padding: const EdgeInsets.all(20),
         children: [
           // ---- Header: title + Add Friend action ----
           Row(
@@ -440,7 +469,7 @@ class _FriendsTabState extends State<FriendsTab> {
                   children: [
                     const Text(
                       'Friends',
-                      style: AppText.pageTitle,
+                      style: kFriendsPageTitle,
                     ),
                     const SizedBox(height: AppSpacing.s2),
                     Text(
@@ -457,7 +486,7 @@ class _FriendsTabState extends State<FriendsTab> {
               ),
             ],
           ),
-          const SizedBox(height: AppLayout.headerGap),
+          const SizedBox(height: 24),
           // ---- Search: real local friends only ----
           TextField(
             onChanged: (value) => setState(() => _query = value),
@@ -465,13 +494,13 @@ class _FriendsTabState extends State<FriendsTab> {
               hintText: 'Search friends',
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
+                borderRadius: BorderRadius.circular(kFriendsInputRadius),
               ),
               filled: true,
               fillColor: scheme.surface,
             ),
           ),
-          const SizedBox(height: AppLayout.headerGap),
+          const SizedBox(height: 24),
           // ---- 1. My Friends ----
           _sectionCard(
             icon: Icons.people_outlined,
@@ -503,14 +532,14 @@ class _FriendsTabState extends State<FriendsTab> {
                     ],
                   ),
           ),
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           // ---- 2. My Friend Code ----
           _sectionCard(
             icon: Icons.badge_outlined,
             title: 'My Friend Code',
             child: _friendCodeDisplay(),
           ),
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           // ---- 3. Friend Requests ----
           _sectionCard(
             icon: Icons.person_add_outlined,
@@ -525,7 +554,7 @@ class _FriendsTabState extends State<FriendsTab> {
                       Icon(
                         Icons.info_outlined,
                         size: 20,
-                        color: Theme.of(context).colorScheme.error,
+                        color: kFriendsError,
                       ),
                       const SizedBox(width: AppSpacing.s8),
                       const Expanded(
@@ -541,7 +570,7 @@ class _FriendsTabState extends State<FriendsTab> {
                 ],
                 const Text(
                   'Incoming',
-                  style: AppText.labelStrong,
+                  style: kFriendsCardHeading,
                 ),
                 const SizedBox(height: AppSpacing.s8),
                 if (!_cloudEnabled)
@@ -567,7 +596,7 @@ class _FriendsTabState extends State<FriendsTab> {
                 const SizedBox(height: AppLayout.headerGap),
                 const Text(
                   'Outgoing',
-                  style: AppText.labelStrong,
+                  style: kFriendsCardHeading,
                 ),
                 const SizedBox(height: AppSpacing.s8),
                 if (!_cloudEnabled)
@@ -596,7 +625,7 @@ class _FriendsTabState extends State<FriendsTab> {
               ],
             ),
           ),
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           // ---- 4. Chats ----
           _sectionCard(
             icon: Icons.chat_bubble_outline,
@@ -608,7 +637,7 @@ class _FriendsTabState extends State<FriendsTab> {
                   'no conversations are shown here.',
             ),
           ),
-          const SizedBox(height: AppLayout.headerGap),
+          const SizedBox(height: 24),
           Text(
             _cloudEnabled
                 ? 'Friend codes and requests sync across your devices. '
@@ -820,7 +849,7 @@ class _FriendsTabState extends State<FriendsTab> {
             padding: AppLayout.cardPadding,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+              borderRadius: BorderRadius.circular(kFriendsCardRadius),
               border: Border.all(
                 color: Theme.of(context).colorScheme.outline,
               ),
@@ -900,6 +929,8 @@ class _FriendsTabState extends State<FriendsTab> {
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
+      shape: _friendsCardShape(context),
+      color: _friendsCardColor(context),
       child: Padding(
         padding: AppLayout.cardPadding,
         child: Column(
@@ -912,7 +943,7 @@ class _FriendsTabState extends State<FriendsTab> {
                 Expanded(
                   child: Text(
                     title,
-                    style: AppText.sectionTitle,
+                    style: kFriendsCardHeading,
                   ),
                 ),
               ],

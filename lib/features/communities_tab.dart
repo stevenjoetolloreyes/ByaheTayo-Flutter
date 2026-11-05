@@ -37,6 +37,31 @@ import 'vehicle_categories.dart';
 import 'lgu_complaint_ui.dart';
 import 'lgu_complaints.dart';
 
+// Communities' OWN design tokens — Premium Dark + Emerald Green.
+//
+// Tokens follow the ChatGPT design system Steven adopted Nov 5 as a
+// LOOSE UI base ("wag mo seryusuhin"). Tab-local so the shared
+// AppLayout/AppText scale — used by other tabs — stays untouched.
+// Only the tokens this tab actually uses are defined here; the rest
+// of the tab resolves colors from the app theme (primary stays Deep
+// Emerald Green #14532D, dark accent #34D399, light accent #059669).
+// Status badge tints: pale in light mode, deep semantic tints in
+// dark mode so badges stay readable on a dark card.
+const kCommunityEmerald = Color(0xFF14532D);
+
+// Card corner radius (ChatGPT: 18–22px).
+const kCommunityCardRadius = 20.0;
+
+// Communities typography (ChatGPT scale, tab-local).
+// Page title 26 Bold, section heading 20 Semibold, card heading
+// 16 Semibold. Body text keeps the app's established sizes.
+const kCommunityPageTitle =
+    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
+const kCommunitySectionHeading =
+    TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
+const kCommunityCardHeading =
+    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+
 class CommunitiesTab extends StatefulWidget {
   const CommunitiesTab({
     super.key,
@@ -160,6 +185,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
           }
         } catch (_) {}
       }
+
       if (mounted) {
         setState(() {
           _sharedPosts = posts;
@@ -200,7 +226,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: AppLayout.pagePaddingTab,
+      // ChatGPT spacing: 20px horizontal screen padding,
+      // 24px between sections.
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       children: [
         Text(
           'Local routes shared by commuters',
@@ -209,13 +237,13 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
         const SizedBox(height: AppSpacing.s2),
         const Text(
           'Communities',
-          style: AppText.pageTitle,
+          style: kCommunityPageTitle,
         ),
-        const SizedBox(height: AppLayout.headerGap),
+        const SizedBox(height: 24),
         _shareInfoCard(scheme),
-        const SizedBox(height: AppLayout.cardGap),
+        const SizedBox(height: 24),
         _communitySection(),
-        const SizedBox(height: AppLayout.headerGap),
+        const SizedBox(height: 24),
         Text(
           'New posts are shared with the community and become visible '
           'to everyone once approved. Older posts saved on this device '
@@ -244,7 +272,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                 children: [
                   const Text(
                     'Know something that can help commuters?',
-                    style: AppText.cardTitle,
+                    style: kCommunityCardHeading,
                   ),
                   const SizedBox(height: AppSpacing.s4),
                   Text(
@@ -289,7 +317,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                 const Expanded(
                   child: Text(
                     'Community',
-                    style: AppText.sectionTitle,
+                    style: kCommunitySectionHeading,
                   ),
                 ),
               ],
@@ -337,7 +365,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
             else
               for (final post in _sharedPosts) ...[
                 _postCard(post, scheme),
-                const SizedBox(height: AppSpacing.s8),
+                const SizedBox(height: 12),
               ],
             if (visibleLocal.isNotEmpty) ...[
               const SizedBox(height: AppLayout.cardGap),
@@ -353,7 +381,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               const SizedBox(height: AppSpacing.s8),
               for (final post in visibleLocal) ...[
                 _postCard(post, scheme),
-                const SizedBox(height: AppSpacing.s8),
+                const SizedBox(height: 12),
               ],
             ],
             if (nothingToShow) ...[
@@ -379,7 +407,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               const SizedBox(height: AppSpacing.s8),
               for (final complaint in _complaints) ...[
                 _complaintCard(complaint, scheme),
-                const SizedBox(height: AppSpacing.s8),
+                const SizedBox(height: 12),
               ],
             ],
             const SizedBox(height: AppSpacing.s8),
@@ -390,8 +418,8 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
             // without an admin sign-in.
             if (isAdminUser(widget.currentUser))
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: 12,
+                runSpacing: 12,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
@@ -437,10 +465,14 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   /// "View on map" jump, and "Report Overpriced Fare". No votes, no
   /// comments, no review badges.
   Widget _postCard(CommunityPost post, ColorScheme scheme) {
+    // Status badge backgrounds are brightness-aware: the pale
+    // tints are light-mode only; dark mode uses deep semantic
+    // tints so the badge stays readable on a dark card.
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outline),
-        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+        borderRadius: BorderRadius.circular(kCommunityCardRadius),
       ),
       padding: AppLayout.cardPadding,
       child: Column(
@@ -464,7 +496,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               Expanded(
                 child: Text(
                   post.displayTitle,
-                  style: AppText.cardTitle,
+                  style: kCommunityCardHeading,
                 ),
               ),
               Chip(
@@ -484,10 +516,16 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                       : 'In Review',
             ),
             backgroundColor: post.status == PostStatus.approved
-                ? const Color(0xFFDCFCE7)
+                ? (dark
+                    ? kCommunityEmerald
+                    : const Color(0xFFDCFCE7))
                 : post.status == PostStatus.rejected
-                    ? const Color(0xFFFEE2E2)
-                    : const Color(0xFFFEF9C3),
+                    ? (dark
+                        ? const Color(0xFF7F1D1D)
+                        : const Color(0xFFFEE2E2))
+                    : (dark
+                        ? const Color(0xFF78350F)
+                        : const Color(0xFFFEF9C3)),
             visualDensity: VisualDensity.compact,
           ),
           // Rejected shared posts reach this card only for their
@@ -582,10 +620,12 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   /// complainant info is ever shown on a community card.
   Widget _complaintCard(FareComplaint complaint, ColorScheme scheme) {
     final submitted = complaint.status == ComplaintStatus.submitted;
+    // Same brightness-aware badge tints as the post status chip.
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outline),
-        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+        borderRadius: BorderRadius.circular(kCommunityCardRadius),
       ),
       child: ListTile(
         title: Text(complaint.reference),
@@ -593,8 +633,12 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
         trailing: Chip(
           label: Text(submitted ? 'Submitted' : 'Prepared'),
           backgroundColor: submitted
-              ? const Color(0xFFDCFCE7)
-              : const Color(0xFFFEF9C3),
+              ? (dark
+                  ? kCommunityEmerald
+                  : const Color(0xFFDCFCE7))
+              : (dark
+                  ? const Color(0xFF78350F)
+                  : const Color(0xFFFEF9C3)),
           visualDensity: VisualDensity.compact,
         ),
         onTap: () => _openComplaintDetail(complaint),
@@ -894,7 +938,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               'Shared with the community once approved by an admin.',
               style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: AppLayout.headerGap),
+            const SizedBox(height: 24),
             TextField(
               controller: _fromController,
               decoration: const InputDecoration(
@@ -1006,7 +1050,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               const SizedBox(height: AppSpacing.s8),
               Text(_error, style: TextStyle(color: scheme.error)),
             ],
-            const SizedBox(height: AppLayout.headerGap),
+            const SizedBox(height: 24),
             FilledButton(
               onPressed: _save,
               child: const Text('Share post'),

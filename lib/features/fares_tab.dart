@@ -19,6 +19,35 @@ import 'package:geolocator/geolocator.dart';
 import 'app_layout.dart';
 import 'operator_fares.dart';
 
+// Fares-local ChatGPT design tokens (Premium Dark + Emerald Green,
+// adopted Nov 5 as a LOOSE UI base). Tab-local on purpose: the shared
+// AppLayout/AppText scale is used by other tabs and stays untouched.
+// Only the tokens this tab actually uses are defined here.
+const kFaresDarkCard = Color(0xFF202B25);
+const kFaresCardRadius = 20.0;
+const kFaresInputRadius = 14.0;
+const kFaresPageTitle =
+    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
+const kFaresCardHeading =
+    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+const kFaresFareAmount =
+    TextStyle(fontSize: 30, fontWeight: FontWeight.w800);
+
+/// ChatGPT card geometry for Fares cards: 20dp corners, theme outline.
+ShapeBorder _faresCardShape(BuildContext context) {
+  return RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(kFaresCardRadius),
+    side: BorderSide(color: Theme.of(context).colorScheme.outline),
+  );
+}
+
+/// ChatGPT dark card surface (#202B25); light cards stay white.
+Color _faresCardColor(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? kFaresDarkCard
+      : Colors.white;
+}
+
 /// One vehicle rate from the web calculator's fareRates table.
 class FareRate {
   const FareRate({
@@ -397,20 +426,19 @@ class _FaresTabState extends State<FaresTab> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.titleMedium
-            ?.copyWith(fontWeight: FontWeight.bold),
+        style: kFaresCardHeading,
       ),
     );
 
     return SingleChildScrollView(
       child: Padding(
-        padding: AppLayout.pagePaddingTab,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               'Know your fare before you go',
-              style: AppText.pageTitle,
+              style: kFaresPageTitle,
             ),
             const SizedBox(height: AppSpacing.s2),
             Text(
@@ -418,8 +446,10 @@ class _FaresTabState extends State<FaresTab> {
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: AppLayout.headerGap),
+            const SizedBox(height: 24),
             Card(
+              color: _faresCardColor(context),
+              shape: _faresCardShape(context),
               child: Padding(
                 padding: AppLayout.cardPadding,
                 child: Column(
@@ -431,7 +461,7 @@ class _FaresTabState extends State<FaresTab> {
                       isExpanded: true,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
+                          borderRadius: BorderRadius.circular(kFaresInputRadius),
                         ),
                       ),
                       items: [
@@ -474,8 +504,10 @@ class _FaresTabState extends State<FaresTab> {
                 ),
               ),
             ),
-            const SizedBox(height: AppLayout.headerGap),
+            const SizedBox(height: 24),
             Card(
+              color: _faresCardColor(context),
+              shape: _faresCardShape(context),
               child: Padding(
                 padding: AppLayout.cardPadding,
                 child: Column(
@@ -536,7 +568,7 @@ class _FaresTabState extends State<FaresTab> {
                         decoration: InputDecoration(
                           labelText: 'From',
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
+                            borderRadius: BorderRadius.circular(kFaresInputRadius),
                           ),
                         ),
                         items: [
@@ -562,7 +594,7 @@ class _FaresTabState extends State<FaresTab> {
                       decoration: InputDecoration(
                         labelText: 'To',
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppLayout.inputRadiusTab),
+                          borderRadius: BorderRadius.circular(kFaresInputRadius),
                         ),
                       ),
                       items: [
@@ -602,9 +634,10 @@ class _FaresTabState extends State<FaresTab> {
                 ),
               ),
             ),
-            const SizedBox(height: AppLayout.headerGap),
+            const SizedBox(height: 24),
             Card(
               color: scheme.primaryContainer,
+              shape: _faresCardShape(context),
               child: Padding(
                 padding: AppLayout.cardPadding,
                 child: rate == null
@@ -642,7 +675,7 @@ class _FaresTabState extends State<FaresTab> {
                       ),
               ),
             ),
-            const SizedBox(height: AppLayout.headerGap),
+            const SizedBox(height: 24),
             Text(
               'Estimate only. Distance is approximated from coordinates and may differ from the actual route. The official fare matrix of the operator governs what is charged. The ₱20 ordinary city-bus minimum and ₱100 provincial-bus minimum are applied before the discount. Rates follow the temporary national fare guide, effective Sept. 28–Dec. 31, 2026. Tricycle fares are set by each LGU, not by a national formula.',
               style: Theme.of(context).textTheme.bodySmall
@@ -685,10 +718,12 @@ class _OperatorFareGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
+      color: _faresCardColor(context),
+      shape: _faresCardShape(context),
       child: ExpansionTile(
         title: Text(
           '${group.company} · ${group.fares.length} fares',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: kFaresCardHeading,
         ),
         subtitle: Text(
           group.sourceNote,
@@ -741,8 +776,7 @@ class _FareAmount extends StatelessWidget {
         const SizedBox(height: AppSpacing.s4),
         Text(
           '≈ ${peso(result.collected)}',
-          style: Theme.of(context).textTheme.displaySmall
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: kFaresFareAmount,
         ),
         const SizedBox(height: AppSpacing.s8),
         Text(

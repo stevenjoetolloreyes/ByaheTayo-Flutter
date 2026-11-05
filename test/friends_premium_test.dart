@@ -320,11 +320,11 @@ void main() {
     testWidgets('section headings and descriptions stay left-aligned',
         (WidgetTester tester) async {
       await pumpAligned(tester, size: const Size(390, 3000));
-      // Page header sits at the ListView padding edge (16dp).
-      expect(tester.getTopLeft(find.text('Friends')).dx, closeTo(16, 1.0));
+      // Page header sits at the ListView padding edge (20dp).
+      expect(tester.getTopLeft(find.text('Friends')).dx, closeTo(20, 1.0));
       expect(
         tester.getTopLeft(find.text('People you travel with')).dx,
-        closeTo(16, 1.0),
+        closeTo(20, 1.0),
       );
       // Card content starts after card margin (4dp) + card padding
       // (16dp); subsection headings sit exactly there, not centered.
