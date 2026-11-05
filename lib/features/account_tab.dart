@@ -12,7 +12,6 @@
 // notification permission status, theme switching, and sign-out all
 // do what they say. There is no account deletion (omitted: it needs
 // Firebase re-authentication to be safe).
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -25,6 +24,7 @@ import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/permission_service.dart';
 import 'points_wallet_repository.dart';
+import 'profile_avatar.dart';
 import 'rewards_screen.dart';
 import 'student_id_card.dart';
 import 'subscription_membership.dart';
@@ -1033,8 +1033,12 @@ class _AccountTabState extends State<AccountTab> {
       return _previewCard(glass, content);
     }
     final profile = _profile;
-    final photoPath = profile?.photoPath;
-    final hasPhoto = photoPath != null && File(photoPath).existsSync();
+    // One shared rule (see profile_avatar.dart): local file →
+    // uploaded URL → Google avatar → initials. Both this screen and
+    // the Student Hub read the same profile, so they show the same
+    // photo.
+    final photoImage = resolveProfilePhotoImage(profile);
+    final hasPhoto = photoImage != null;
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1043,7 +1047,7 @@ class _AccountTabState extends State<AccountTab> {
             CircleAvatar(
               radius: 28,
               backgroundColor: const Color(0xFFD9F0E1),
-              backgroundImage: hasPhoto ? FileImage(File(photoPath)) : null,
+              backgroundImage: photoImage,
               child: hasPhoto
                   ? null
                   : Text(

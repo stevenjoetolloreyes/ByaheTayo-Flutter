@@ -10,10 +10,10 @@
 // sign-in card values) and the tokens below are the Hub's own.
 // Primary stays Deep Emerald Green #14532D in both modes; the
 // readable dark accent is #34D399 and the light accent is #059669.
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import '../onboarding/onboarding_state.dart';
+import '../profile_avatar.dart';
 
 const kStudentEmerald = Color(0xFF14532D);
 const kStudentEmeraldDark = Color(0xFF0A2E1A);
@@ -173,19 +173,18 @@ String greetingFor(DateTime now) {
 /// system, so there is never a fake unread dot).
 ///
 /// The profile circle shows the EXACT SAME photo the Account Profile
-/// shows: [profile]'s `photoPath` (the local file picked in profile
-/// setup / Edit Profile), read fresh on every build from the same
-/// [UserProfile] object the shell passes to the Account tab — so an
-/// Account-side photo change reflects here automatically, with no
-/// second copy of the image anywhere. When there is no stored photo
-/// (or its file is gone), the default person icon shows instead.
+/// shows: one shared rule (see profile_avatar.dart) — local file →
+/// uploaded remote URL → Google avatar → person icon — read fresh on
+/// every build from the same [UserProfile] object the shell passes to
+/// the Account tab, so an Account-side photo change reflects here
+/// automatically, with no second copy of the image anywhere.
 Widget studentHeader({
   required String greetingName,
   required VoidCallback onBell,
   UserProfile? profile,
 }) {
-  final photoPath = profile?.photoPath;
-  final hasPhoto = photoPath != null && File(photoPath).existsSync();
+  final photoImage = resolveProfilePhotoImage(profile);
+  final hasPhoto = photoImage != null;
   return Container(
     padding: const EdgeInsets.all(20),
     decoration: const BoxDecoration(
@@ -202,7 +201,7 @@ Widget studentHeader({
         CircleAvatar(
           radius: 26,
           backgroundColor: Colors.white24,
-          backgroundImage: hasPhoto ? FileImage(File(photoPath)) : null,
+          backgroundImage: photoImage,
           child: hasPhoto
               ? null
               : const Icon(Icons.person, color: Colors.white, size: 30),

@@ -16,8 +16,13 @@
 //     user — this is what guarantees no duplicates: every save for a
 //     UID overwrites that UID's document, never creates a second one).
 //   Fields: school, program, yearLevel (all nullable strings),
-//     updatedAt (server timestamp).
-//   Never stored here: passwords, tokens, secrets, photos.
+//     profilePhotoUrl (nullable string — the Firebase Storage
+//     download URL of the user's own uploaded photo), updatedAt
+//     (server timestamp).
+//   Never stored here: passwords, tokens, secrets, photo BYTES.
+//     The photo itself lives in Firebase Storage
+//     (`profile_photos/<uid>.jpg`, see profile_photo_storage.dart);
+//     only its download URL is stored here.
 //
 // LOCAL STORE ROLE CHANGE: ProfileStore stays, but only as an offline
 // cache. Every explicit save writes local AND remote; every
@@ -46,23 +51,39 @@
 // restore goes through ProfileStore.saveProfile, which writes the
 // flat key `byahetayo_profile_school` on every call (empty writes
 // ''). The School Calendar reads exactly that key.
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
+import 'profile_photo_storage.dart';
 
 /// Firestore collection for student profiles.
 const studentProfilesCollection = 'student_profiles';
 
-/// The student-information half of a [UserProfile]: the three fields
-/// that used to be local-only. Display name / email live in Firebase
-/// Auth and are intentionally NOT duplicated here.
+/// The student-information half of a [UserProfile]: the fields that
+/// used to be local-only, plus the uploaded photo URL. Display name /
+/// email live in Firebase Auth and are intentionally NOT duplicated
+/// here. The local photo FILE ([UserProfile.photoPath]) and the
+/// pending-upload flag are local-only and are never sent here.
 class StudentProfile {
-  const StudentProfile({this.school, this.program, this.yearLevel});
+  const StudentProfile({
+    this.school,
+    this.program,
+    this.yearLevel,
+    this.profilePhotoUrl,
+  });
 
   final String? school;
   final String? program;
   final String? yearLevel;
+
+  /// Download URL of the user's uploaded photo (Firebase Storage
+  /// `profile_photos/<uid>.jpg`). Null until the first successful
+  /// upload. The Google avatar ([UserProfile.photoUrl]) is a
+  /// different field and is never stored here.
+  final String? profilePhotoUrl;
 
   bool get hasStudentInfo =>
       (school ?? '').trim().isNotEmpty ||
@@ -76,6 +97,7 @@ class StudentProfile {
       school: profile.school,
       program: profile.program,
       yearLevel: profile.year,
+      profilePhotoUrl: profile.profilePhotoUrl,
     );
   }
 
@@ -84,6 +106,7 @@ class StudentProfile {
       'school': school,
       'program': program,
       'yearLevel': yearLevel,
+      'profilePhotoUrl': profilePhotoUrl,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -96,6 +119,7 @@ class StudentProfile {
       school: stringOrNull(data['school']),
       program: stringOrNull(data['program']),
       yearLevel: stringOrNull(data['yearLevel']),
+      profilePhotoUrl: stringOrNull(data['profilePhotoUrl']),
     );
   }
 }
@@ -136,8 +160,15 @@ class FirestoreStudentProfileRepository implements StudentProfileRepository {
 
 /// Per-field merge of a remote profile into a local [UserProfile]:
 /// only non-empty remote values overwrite; empty or missing remote
-/// fields keep the local value. Display name, email, photo, and
-/// employment info are untouched (they are not remote fields).
+/// fields keep the local value. Display name, email, employment
+/// info, the local photo file, and the pending-upload flag are
+/// untouched (they are not remote fields). The uploaded photo URL
+/// merges like the other remote fields: a non-empty remote URL wins
+/// (it is always the newest successful upload); the local FILE still
+/// wins at display time (see profile_avatar.dart), and a pending
+/// local pick is re-uploaded by [_syncPhotoOnRestore] right after
+/// this merge, so an older remote URL can never permanently shadow a
+/// newer local photo.
 UserProfile mergeStudentInfo(UserProfile local, StudentProfile remote) {
   String? pick(String? remoteValue, String? localValue) {
     final trimmed = (remoteValue ?? '').trim();
@@ -148,6 +179,7 @@ UserProfile mergeStudentInfo(UserProfile local, StudentProfile remote) {
     school: pick(remote.school, local.school),
     program: pick(remote.program, local.program),
     year: pick(remote.yearLevel, local.year),
+    profilePhotoUrl: pick(remote.profilePhotoUrl, local.profilePhotoUrl),
   );
 }
 
@@ -177,46 +209,151 @@ enum ProfileRestoreOutcome {
 /// Order:
 /// 1. Fetch the remote document for [user.uid].
 /// 2. If it exists: per-field merge into the local profile (or a
-///    fresh profile built from Firebase Auth when local is empty),
-///    save locally (which writes the flat `byahetayo_profile_school`
-///    key too), and mark profile setup done.
+///    fresh profile built from Firebase Auth when local is empty).
 /// 3. If it does not exist but local student info does: upload the
 ///    local student info once (backfill for pre-fix, local-only
-///    users) so the next install restores it. Local data is
-///    unchanged and the setup flag is left as-is.
-/// 4. Otherwise: do nothing.
+///    users) so the next install restores it.
+/// 4. Photo sync ([_syncPhotoOnRestore]): a local photo that never
+///    uploaded (or an old local photo that predates this feature)
+///    is uploaded now; a missing local file with a remote URL is
+///    cached for offline use. A photo failure never changes the
+///    outcome of steps 1–3 and never wipes local data.
+/// 5. Save the merged profile locally (which writes the flat
+///    `byahetayo_profile_school` key too). A successful restore
+///    marks profile setup done; a backfill leaves the flag as-is.
 Future<ProfileRestoreOutcome> restoreStudentProfile({
   required ProfileStore store,
   required StudentProfileRepository? repository,
   required AuthUser user,
+  ProfilePhotoStorage photoStorage = const FirebaseProfilePhotoStorage(),
 }) async {
   if (repository == null) return ProfileRestoreOutcome.localOnly;
   try {
     final remote = await repository.fetchProfile(user.uid);
+    final local = store.loadProfile(user.uid);
+    UserProfile? working;
+    var outcome = ProfileRestoreOutcome.localOnly;
     if (remote != null) {
-      final local = store.loadProfile(user.uid);
       final base = local ??
           UserProfile(
             displayName: user.displayName ?? user.email.split('@').first,
             email: user.email,
           );
-      final merged = mergeStudentInfo(base, remote);
-      await store.saveProfile(user.uid, merged);
-      await store.markProfileSetupDone(user.uid);
-      return ProfileRestoreOutcome.restored;
-    }
-    final local = store.loadProfile(user.uid);
-    if (local != null && local.hasStudentInfo) {
+      working = mergeStudentInfo(base, remote);
+      outcome = ProfileRestoreOutcome.restored;
+    } else if (local != null && local.hasStudentInfo) {
       await repository.saveProfile(
         user.uid,
         StudentProfile.fromUserProfile(local),
       );
-      return ProfileRestoreOutcome.backfilled;
+      working = local;
+      outcome = ProfileRestoreOutcome.backfilled;
+    } else {
+      working = local;
     }
-    return ProfileRestoreOutcome.localOnly;
+    if (working != null) {
+      final synced = await _syncPhotoOnRestore(
+        repository: repository,
+        user: user,
+        profile: working,
+        photoStorage: photoStorage,
+      );
+      working = synced.profile;
+      // A photo upload that created the remote document upgrades a
+      // would-be `localOnly` to `backfilled` (local data reached the
+      // server). It never downgrades `restored` / `backfilled`.
+      if (synced.uploadedToRemote &&
+          outcome == ProfileRestoreOutcome.localOnly) {
+        outcome = ProfileRestoreOutcome.backfilled;
+      }
+      await store.saveProfile(user.uid, working);
+      if (remote != null) {
+        await store.markProfileSetupDone(user.uid);
+      }
+    }
+    return outcome;
   } catch (_) {
     return ProfileRestoreOutcome.localOnly;
   }
+}
+
+/// Result of the photo half of a restore: the (possibly updated)
+/// profile, plus whether a photo upload created/updated the remote
+/// document.
+class _PhotoSyncResult {
+  const _PhotoSyncResult(this.profile, {this.uploadedToRemote = false});
+
+  final UserProfile profile;
+  final bool uploadedToRemote;
+}
+
+/// Photo half of [restoreStudentProfile]. Never throws and never
+/// wipes local data — every step is guarded, and a failure just
+/// leaves the photo exactly as it was (the next sign-in retries).
+///
+/// Local-vs-remote rule: the local FILE always wins at display time
+/// (see profile_avatar.dart), so the only question here is whether
+/// the server has the matching URL yet. An upload is attempted when
+/// a local photo file exists and EITHER the upload is still pending
+/// (picked while offline, or an earlier upload failed) OR no remote
+/// URL is stored yet (an old local photo that predates this
+/// feature — the migration case). A successful upload writes the
+/// fresh URL to the remote document immediately.
+Future<_PhotoSyncResult> _syncPhotoOnRestore({
+  required StudentProfileRepository repository,
+  required AuthUser user,
+  required UserProfile profile,
+  required ProfilePhotoStorage photoStorage,
+}) async {
+  var working = profile;
+  var uploaded = false;
+  try {
+    final photoPath = working.photoPath;
+    final hasLocalFile =
+        photoPath != null && File(photoPath).existsSync();
+    final remoteUrl = (working.profilePhotoUrl ?? '').trim();
+    if (hasLocalFile &&
+        (working.photoUploadPending || remoteUrl.isEmpty)) {
+      try {
+        final url =
+            await photoStorage.uploadPhoto(user.uid, File(photoPath));
+        // Only clear the pending flag AFTER the remote document
+        // confirms the new URL: if this save throws, the local
+        // profile keeps pending=true and the next sign-in retries
+        // (otherwise the URL would live only locally, marked synced,
+        // and never reach the server).
+        final uploadedProfile = working.copyWith(
+          profilePhotoUrl: url,
+          photoUploadPending: false,
+        );
+        await repository.saveProfile(
+          user.uid,
+          StudentProfile.fromUserProfile(uploadedProfile),
+        );
+        working = uploadedProfile;
+        uploaded = true;
+      } catch (_) {
+        // Still pending — local photo stays, next sign-in retries.
+        // (The flag stays true, so the next save / sign-in retries.)
+      }
+    } else if (!hasLocalFile && remoteUrl.isNotEmpty) {
+      // No local file, but the server has a photo: show it from the
+      // network (the display falls back to the URL) and
+      // opportunistically cache it for offline use.
+      try {
+        final cached =
+            await photoStorage.cacheRemotePhoto(user.uid, remoteUrl);
+        if (cached != null) {
+          working = working.copyWith(photoPath: cached);
+        }
+      } catch (_) {
+        // Cache is best-effort; the network image still shows.
+      }
+    }
+  } catch (_) {
+    // Photo sync never blocks login or wipes local data.
+  }
+  return _PhotoSyncResult(working, uploadedToRemote: uploaded);
 }
 
 /// User-facing message for a student-profile sync failure. Firestore

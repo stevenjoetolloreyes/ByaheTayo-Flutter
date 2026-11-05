@@ -25,10 +25,15 @@
 // Document ID: the authenticated Firebase UID (one document per
 //   user — see lib/features/profile_repository.dart).
 // Document fields: school, program, yearLevel (nullable strings),
-//   updatedAt (server timestamp).
+//   profilePhotoUrl (nullable string — the Firebase Storage
+//   download URL of the user's own uploaded photo; the photo bytes
+//   themselves live in Storage, never here), updatedAt (server
+//   timestamp).
 // Owner-only: a signed-in user may read or write ONLY the document
 // whose ID equals their own UID. No admin override — a student's
-// school/program/year is theirs alone.
+// school/program/year/photo is theirs alone. The rule is
+// document-level, so the new profilePhotoUrl field needs no
+// separate rule.
 //
 // Friend codes + requests (see
 // lib/features/friend_cloud_repository.dart):

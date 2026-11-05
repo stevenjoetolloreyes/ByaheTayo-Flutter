@@ -1,21 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Bible Verse widget, light variant. Colors follow the ChatGPT
      tokens: primary emerald #14532D, accent #16A34A, text #17231C.
-     The verse TextView is flexible (weight 1, max 4 lines) so long
-     verses ellipsize instead of overflowing the widget. -->
+     The verse + reference + footer are centered as one group
+     (root gravity center_vertical, verse wraps its content) so a
+     short verse does not leave a big empty void in the middle.
+     The verse TextView keeps maxLines 4 + ellipsize so long verses
+     never overflow the widget. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bible_verse_widget_background"
+    android:gravity="center_vertical"
     android:orientation="vertical"
     android:padding="16dp">
 
     <TextView
         android:id="@+id/widget_verse"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
         android:ellipsize="end"
         android:maxLines="4"
         android:textColor="#17231C"

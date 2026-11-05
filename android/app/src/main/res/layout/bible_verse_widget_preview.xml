@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static preview for the widget picker ONLY. The picker never runs
+     the provider, so the live layout would render empty here; this
+     layout hardcodes a sample verse (Matthew 11:28, the same verse
+     the user saw on his phone) styled like the light variant, so
+     the picker shows what the widget really looks like. Never used
+     at runtime — the provider fills the live layouts instead. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bible_verse_widget_background"
+    android:gravity="center_vertical"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/widget_verse"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="4"
+        android:text="Come unto me, all ye that labour and are heavy laden, and I will give you rest."
+        android:textColor="#17231C"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/widget_ref"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Matthew 11:28 (KJV)"
+        android:textColor="#14532D"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_footer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="EstudyanteGO · Bible Verse"
+        android:textColor="#6B7280"
+        android:textSize="11sp" />
+
+</LinearLayout>

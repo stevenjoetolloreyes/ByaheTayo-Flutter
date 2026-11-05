@@ -12,10 +12,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../app_layout.dart';
+import '../profile_avatar.dart';
+import '../profile_photo_storage.dart';
+import '../profile_repository.dart';
 import 'auth_service.dart';
 import 'onboarding_state.dart';
 import 'student_info_fields.dart';
-import '../profile_repository.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({
@@ -23,6 +25,7 @@ class ProfileSetupScreen extends StatefulWidget {
     required this.user,
     required this.store,
     this.profileRepository,
+    this.photoStorage = const FirebaseProfilePhotoStorage(),
     this.initial,
     this.isEdit = false,
     required this.onSaved,
@@ -36,6 +39,13 @@ class ProfileSetupScreen extends StatefulWidget {
   /// before. When provided, every save also writes the remote
   /// document — see [_save].
   final StudentProfileRepository? profileRepository;
+
+  /// Remote photo upload. Defaults to the real Firebase Storage
+  /// implementation; tests pass a fake, and passing null disables
+  /// uploads (local-only mode). Only used when [profileRepository]
+  /// is non-null — without a remote document there is nowhere to
+  /// record the download URL, so an upload would orphan the file.
+  final ProfilePhotoStorage? photoStorage;
 
   /// Existing profile for edit mode; null for first-time setup.
   final UserProfile? initial;
@@ -81,6 +91,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   String? _photoPath;
   String? _photoUrl;
+
+  /// Download URL of the uploaded photo (Firestore). Carried as
+  /// screen state so an edit that changes nothing else never drops
+  /// the URL from the remote document.
+  String? _profilePhotoUrl;
+
+  /// True when the local photo still needs uploading: the user
+  /// picked a new photo in this session, or a previous upload is
+  /// still pending. Cleared only after the upload AND the remote
+  /// document save both succeed.
+  bool _photoPending = false;
+
   bool _saving = false;
   String? _error;
 
@@ -101,6 +123,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         TextEditingController(text: initial?.company ?? '');
     _photoPath = initial?.photoPath;
     _photoUrl = initial?.photoUrl;
+    _profilePhotoUrl = initial?.profilePhotoUrl;
+    _photoPending = initial?.photoUploadPending ?? false;
 
     // Prefill student fields from the existing profile. A saved value
     // that matches a listed entry lands on the option; any other
@@ -181,7 +205,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       );
       await File(picked.path).copy(target.path);
       if (!mounted) return;
-      setState(() => _photoPath = target.path);
+      setState(() {
+        _photoPath = target.path;
+        // A new pick always needs uploading, even when an older
+        // remote URL exists (the local file is now newer than it).
+        _photoPending = true;
+      });
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -201,11 +230,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       _error = null;
     });
     try {
-      final profile = UserProfile(
+      var profile = UserProfile(
         displayName: name,
         email: widget.user.email,
         photoPath: _photoPath,
         photoUrl: _photoUrl,
+        profilePhotoUrl: _profilePhotoUrl,
+        photoUploadPending: _photoPending,
         school: _effectiveSchool(),
         program: _effectiveProgram(),
         year: _year ?? _legacyYear,
@@ -224,11 +255,52 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       // from the intact local data.
       final repo = widget.profileRepository;
       if (repo != null) {
+        // Photo upload first, so the remote document carries the
+        // fresh URL. Attempted when a local photo file exists and
+        // EITHER it was picked in this session / is still pending
+        // OR no remote URL is stored yet (an old local photo that
+        // predates this feature — the migration case). Uploading
+        // again when the URL is already stored would be pure waste.
+        String? photoError;
+        String? uploadedUrl;
+        final photoFile = _photoPath;
+        final needsUpload = (_photoPending ||
+                (_profilePhotoUrl ?? '').trim().isEmpty) &&
+            photoFile != null &&
+            File(photoFile).existsSync() &&
+            widget.photoStorage != null;
+        if (needsUpload) {
+          try {
+            uploadedUrl = await widget.photoStorage!
+                .uploadPhoto(widget.user.uid, File(photoFile));
+          } catch (e) {
+            photoError = profilePhotoUploadErrorMessage(e);
+          }
+        }
+        // The profile that actually reaches the server: with the new
+        // URL only when the upload succeeded. The pending flag clears
+        // only after the remote document save below confirms the URL
+        // — if that save fails, the local profile keeps pending=true
+        // and the next sign-in retries the upload.
+        var savedProfile = profile;
+        if (uploadedUrl != null) {
+          savedProfile = profile.copyWith(
+            profilePhotoUrl: uploadedUrl,
+            photoUploadPending: false,
+          );
+        }
         try {
           await repo.saveProfile(
             widget.user.uid,
-            StudentProfile.fromUserProfile(profile),
+            StudentProfile.fromUserProfile(savedProfile),
           );
+          if (uploadedUrl != null) {
+            // Remote confirmed: persist the URL locally too.
+            await widget.store.saveProfile(widget.user.uid, savedProfile);
+            profile = savedProfile;
+            _profilePhotoUrl = uploadedUrl;
+            _photoPending = false;
+          }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -241,6 +313,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               ),
             );
           }
+        }
+        if (photoError != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Photo saved on this device, but could not upload it '
+                '($photoError). It will upload on your next sign-in.',
+              ),
+            ),
+          );
         }
       }
       if (!widget.isEdit) {
@@ -265,8 +347,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final photo = _photoPath;
-    final photoUrl = _photoUrl;
+    final photoImage = resolveProfilePhoto(
+      photoPath: _photoPath,
+      profilePhotoUrl: _profilePhotoUrl,
+      photoUrl: _photoUrl,
+    );
+    final hasPhoto = photoImage != null;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEdit ? 'Edit profile' : 'Set up your profile'),
@@ -283,17 +369,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   child: CircleAvatar(
                     radius: 48,
                     backgroundColor: scheme.primary,
-                    backgroundImage: photo != null
-                        ? FileImage(File(photo))
-                        : photoUrl != null
-                            ? NetworkImage(photoUrl)
-                            : null,
-                    child: photo == null && photoUrl == null
-                        ? Text(
+                    backgroundImage: photoImage,
+                    child: hasPhoto
+                        ? null
+                        : Text(
                             _initials(_nameController.text),
                             style: AppText.displayLarge.copyWith(color: Colors.white),
-                          )
-                        : null,
+                          ),
                   ),
                 ),
               ),

@@ -57,6 +57,8 @@ class UserProfile {
     required this.email,
     this.photoPath,
     this.photoUrl,
+    this.profilePhotoUrl,
+    this.photoUploadPending = false,
     this.school,
     this.program,
     this.year,
@@ -70,6 +72,23 @@ class UserProfile {
 
   /// Google profile photo URL (null unless set by Google sign-up).
   final String? photoUrl;
+
+  /// Download URL of the user's own uploaded photo (Firebase
+  /// Storage `profile_photos/<uid>.jpg`, stored in Firestore
+  /// `student_profiles/<uid>.profilePhotoUrl`). Null until the user
+  /// picks a photo and it uploads successfully. This is SEPARATE
+  /// from [photoUrl] on purpose: a Google re-sign-in must never
+  /// overwrite the custom photo, and a custom photo must override
+  /// the Google avatar (see profile_avatar.dart).
+  final String? profilePhotoUrl;
+
+  /// True when a local photo exists that has NOT been uploaded yet
+  /// (picked while offline, or an earlier upload failed). Local-only
+  /// bookkeeping — never sent to Firestore. The save path and the
+  /// restore path retry the upload while this is true; a successful
+  /// upload clears it. Without this flag, a photo picked offline
+  /// with an older remote URL would never be retried.
+  final bool photoUploadPending;
   final String? school;
   final String? program;
   final String? year;
@@ -102,6 +121,8 @@ class UserProfile {
     String? email,
     String? photoPath,
     String? photoUrl,
+    String? profilePhotoUrl,
+    bool? photoUploadPending,
     String? school,
     String? program,
     String? year,
@@ -113,6 +134,8 @@ class UserProfile {
       email: email ?? this.email,
       photoPath: photoPath ?? this.photoPath,
       photoUrl: photoUrl ?? this.photoUrl,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
+      photoUploadPending: photoUploadPending ?? this.photoUploadPending,
       school: school ?? this.school,
       program: program ?? this.program,
       year: year ?? this.year,
@@ -127,6 +150,8 @@ class UserProfile {
       'email': email,
       'photoPath': photoPath,
       'photoUrl': photoUrl,
+      'profilePhotoUrl': profilePhotoUrl,
+      'photoUploadPending': photoUploadPending,
       'school': school,
       'program': program,
       'year': year,
@@ -145,6 +170,8 @@ class UserProfile {
       email: email,
       photoPath: json['photoPath'] as String?,
       photoUrl: json['photoUrl'] as String?,
+      profilePhotoUrl: json['profilePhotoUrl'] as String?,
+      photoUploadPending: json['photoUploadPending'] as bool? ?? false,
       school: json['school'] as String?,
       program: json['program'] as String?,
       year: json['year'] as String?,
@@ -191,6 +218,8 @@ class ProfileStore {
         email: profile.email,
         photoPath: profile.photoPath,
         photoUrl: profile.photoUrl,
+        profilePhotoUrl: profile.profilePhotoUrl,
+        photoUploadPending: profile.photoUploadPending,
         school: flatSchool.isEmpty ? null : flatSchool,
         program: profile.program,
         year: profile.year,

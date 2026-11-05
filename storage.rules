@@ -1,0 +1,36 @@
+# EstudyanteGO Firebase Storage rules — profile photos only.
+#
+# Object: profile_photos/<uid>.jpg (one file per user, written by
+# the app on profile save; the download URL is stored in Firestore
+# `student_profiles/<uid>.profilePhotoUrl` — see
+# lib/features/profile_repository.dart).
+#
+# Owner-only: a signed-in user may read or write ONLY their own
+# photo. NO public read — no other user can list or fetch it, and
+# the photo is never shown on any shared screen (friends,
+# communities). The download URL itself is an unguessable bearer
+# token: it must never be published to a shared collection — it is
+# only ever read back by its owner, from their own profile
+# document.
+#
+# Writes are size- and type-guarded (the app uploads a JPEG
+# at most 1200px wide, a few hundred KB at most).
+#
+# THESE RULES ARE NOT LIVE until published in the Firebase Console
+# (Storage → Rules → Publish). Until then every upload fails with
+# permission-denied and the app keeps the photo local-only, with an
+# honest message — nothing is lost.
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /profile_photos/{userId}.jpg {
+      allow read: if request.auth != null
+        && request.auth.uid == userId;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
