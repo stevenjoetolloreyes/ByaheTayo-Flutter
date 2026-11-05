@@ -29,6 +29,35 @@ import 'rewards_screen.dart';
 import 'student_id_card.dart';
 import 'subscription_membership.dart';
 
+// Account tab's OWN design tokens — ChatGPT design system Steven
+// adopted Nov 5 as a LOOSE UI base ("wag mo seryusuhin"): Premium
+// Dark + Emerald Green with a matching Light Mode. Adapted, not
+// forced — the approved Gemini layout (profile card, wallet,
+// subscription, quick actions, grouped sections, admin card) is
+// unchanged; only the colors, radii, typography and spacing below
+// are the tab's own. Primary stays Deep Emerald Green #14532D in
+// both modes; the readable dark accent is #34D399 and the light
+// accent is #059669. The glass (iPhone) variant keeps its
+// translucent-white surfaces; only its green tints are retokened.
+const kAccountEmerald = Color(0xFF14532D);
+const kAccountEmeraldAccent = Color(0xFF16A34A);
+const kAccountLightAccent = Color(0xFF059669);
+const kAccountDarkAccent = Color(0xFF34D399);
+const kAccountDarkSurface = Color(0xFF18221D);
+const kAccountDarkCard = Color(0xFF202B25);
+const kAccountWarning = Color(0xFFF59E0B);
+// Card corner radius (ChatGPT: 18–22px) and button radius (14px).
+const kAccountCardRadius = 20.0;
+const kAccountButtonRadius = 14.0;
+// Account typography (ChatGPT scale, tab-local so the shared
+// AppText scale — used by other tabs — stays untouched).
+// Page title 26 Bold, card heading 16 Semibold. Body and secondary
+// text keep the app's established sizes.
+const kAccountPageTitle =
+    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
+const kAccountCardHeading =
+    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+
 class AccountTab extends StatefulWidget {
   const AccountTab({
     super.key,
@@ -266,7 +295,7 @@ class _AccountTabState extends State<AccountTab> {
                 'Transaction History',
                 style: AppText.heading,
               ),
-              const SizedBox(height: AppLayout.cardGap),
+              const SizedBox(height: 24),
               if (entries.isEmpty)
                 const Text('No transactions yet.')
               else
@@ -695,19 +724,20 @@ class _AccountTabState extends State<AccountTab> {
           ),
         );
 
+        // ChatGPT spacing: 24px between sections.
         final sections = <Widget>[
           brand,
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           profile,
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           wallet,
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           _subscriptionCard(glass),
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           quickActions,
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           history,
-          const SizedBox(height: AppLayout.cardGap),
+          const SizedBox(height: 24),
           if (twoColumns) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,7 +747,7 @@ class _AccountTabState extends State<AccountTab> {
                 Expanded(child: preferences),
               ],
             ),
-            const SizedBox(height: AppLayout.cardGap),
+            const SizedBox(height: 24),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -728,15 +758,15 @@ class _AccountTabState extends State<AccountTab> {
             ),
           ] else ...[
             info,
-            const SizedBox(height: AppLayout.cardGap),
+            const SizedBox(height: 24),
             preferences,
-            const SizedBox(height: AppLayout.cardGap),
+            const SizedBox(height: 24),
             security,
-            const SizedBox(height: AppLayout.cardGap),
+            const SizedBox(height: 24),
             actions,
           ],
           if (admin != null) ...[
-            const SizedBox(height: AppLayout.cardGap),
+            const SizedBox(height: 24),
             admin,
           ],
           footer,
@@ -748,7 +778,8 @@ class _AccountTabState extends State<AccountTab> {
         final scrollView = SingleChildScrollView(
           key: const Key('account-scroll-view'),
           child: Padding(
-            padding: AppLayout.pagePaddingTab,
+            // ChatGPT spacing: 20px horizontal screen padding.
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: sections,
@@ -791,8 +822,8 @@ class _AccountTabState extends State<AccountTab> {
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
   /// Soft green tile behind a list-item icon (approved Account
-  /// preview). Theme-aware: pale green on light, deep green on dark,
-  /// translucent white on the iPhone glass path.
+  /// preview). Theme-aware: pale green on light, ChatGPT dark
+  /// surface on dark, translucent white on the iPhone glass path.
   Widget _tileIcon(
     IconData icon, {
     Color? color,
@@ -808,7 +839,7 @@ class _AccountTabState extends State<AccountTab> {
             (glass
                 ? Colors.white.withValues(alpha: 0.12)
                 : dark
-                    ? const Color(0xFF243B2C)
+                    ? kAccountDarkSurface
                     : const Color(0xFFEAF4ED)),
         borderRadius: BorderRadius.circular(11),
       ),
@@ -819,7 +850,7 @@ class _AccountTabState extends State<AccountTab> {
             (glass
                 ? Colors.white
                 : dark
-                    ? const Color(0xFF86EFAC)
+                    ? kAccountDarkAccent
                     : Theme.of(context).colorScheme.primary),
       ),
     );
@@ -841,7 +872,7 @@ class _AccountTabState extends State<AccountTab> {
     bool glass = false,
   }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: _tileIcon(
         icon,
         color: iconColor,
@@ -879,10 +910,11 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
-  /// Header (approved Account preview): light green gradient with
-  /// the "My Account" headline and subtitle only. The brand row
-  /// (E tile, EstudyanteGO wordmark, bell) was removed at the user's
-  /// request; Notification Settings stays reachable from Preferences.
+  /// Header (approved Account preview): ChatGPT-token gradient
+  /// with the "My Account" headline and subtitle only. The brand
+  /// row (E tile, EstudyanteGO wordmark, bell) was removed at the
+  /// user's request; Notification Settings stays reachable from
+  /// Preferences.
   Widget _brandHeader(bool glass) {
     final dark = _isDark;
     final onHeader =
@@ -895,9 +927,7 @@ class _AccountTabState extends State<AccountTab> {
       children: [
         Text(
           'My Account',
-          style: TextStyle(
-            fontSize: 29,
-            fontWeight: FontWeight.w800,
+          style: kAccountPageTitle.copyWith(
             letterSpacing: -1.1,
             color: onHeader,
           ),
@@ -919,16 +949,16 @@ class _AccountTabState extends State<AccountTab> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: dark
-              ? const [Color(0xFF1C3023), Color(0xFF1C3B29)]
+              ? const [kAccountDarkSurface, kAccountDarkCard]
               : const [
-                  Color(0xFFFAFFFB),
+                  Colors.white,
+                  Color(0xFFF5F8F6),
                   Color(0xFFE9F5ED),
-                  Color(0xFFD8EDDF),
                 ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(kAccountCardRadius),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 17),
@@ -971,7 +1001,7 @@ class _AccountTabState extends State<AccountTab> {
             child: const Icon(
               Icons.person_outline,
               size: 28,
-              color: Color(0xFF14532D),
+              color: kAccountEmerald,
             ),
           ),
           const SizedBox(width: 12),
@@ -981,11 +1011,7 @@ class _AccountTabState extends State<AccountTab> {
               children: [
                 Text(
                   'No account signed in',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: onCard,
-                  ),
+                  style: kAccountCardHeading.copyWith(color: onCard),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -1024,7 +1050,7 @@ class _AccountTabState extends State<AccountTab> {
                       profile?.initials ??
                           _initialsOf(user.displayName ?? user.email),
                       style: const TextStyle(
-                        color: Color(0xFF14532D),
+                        color: kAccountEmerald,
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                       ),
@@ -1037,11 +1063,7 @@ class _AccountTabState extends State<AccountTab> {
                 children: [
                   Text(
                     profile?.displayName ?? user.displayName ?? user.email,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: onCard,
-                    ),
+                    style: kAccountCardHeading.copyWith(color: onCard),
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -1107,25 +1129,25 @@ class _AccountTabState extends State<AccountTab> {
   }
 
   /// Shared card wrapper for the preview-styled cards: frosted
-  /// glass on iPhone, theme surface with a soft border + 21dp
+  /// glass on iPhone, theme surface with a soft border + 20dp
   /// corners on Material (light and dark).
   Widget _previewCard(bool glass, Widget child, {bool listTheme = false}) {
     if (glass) {
       final content = listTheme ? GlassListTheme(child: child) : child;
       return GlassCard(
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.all(16),
         child: content,
       );
     }
     return Card(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(21),
+        borderRadius: BorderRadius.circular(kAccountCardRadius),
         side: BorderSide(
           color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.all(16),
         child: child,
       ),
     );
@@ -1172,7 +1194,7 @@ class _AccountTabState extends State<AccountTab> {
           key: const ValueKey('points-balance'),
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 34,
+            fontSize: 30,
             fontWeight: FontWeight.w800,
             letterSpacing: -1,
           ),
@@ -1208,10 +1230,10 @@ class _AccountTabState extends State<AccountTab> {
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF14532D),
+              foregroundColor: kAccountEmerald,
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(kAccountButtonRadius),
               ),
             ),
             onPressed: () => widget.onViewStudent?.call(),
@@ -1226,29 +1248,29 @@ class _AccountTabState extends State<AccountTab> {
     );
     if (glass) {
       return GlassCard(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: content,
       );
     }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF14532D), Color(0xFF087D48), Color(0xFF15965A)],
+          colors: [kAccountEmerald, kAccountLightAccent, kAccountEmeraldAccent],
           stops: [0, 0.65, 1],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.all(Radius.circular(22)),
+        borderRadius: BorderRadius.all(Radius.circular(kAccountCardRadius)),
         boxShadow: [
           BoxShadow(
-            color: Color(0xFF14532D).withValues(alpha: 0.17),
+            color: kAccountEmerald.withValues(alpha: 0.17),
             blurRadius: 22,
             offset: Offset(0, 10),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: content,
       ),
     );
@@ -1312,7 +1334,7 @@ class _AccountTabState extends State<AccountTab> {
     final crownColor = glass
         ? Colors.white
         : dark
-            ? const Color(0xFFFBBF24)
+            ? kAccountWarning
             : const Color(0xFFB45309);
     final titleColor = glass ? Colors.white : null;
     final subtitleColor = glass
@@ -1322,19 +1344,19 @@ class _AccountTabState extends State<AccountTab> {
     final tagBackground = glass
         ? Colors.white.withValues(alpha: 0.15)
         : dark
-            ? const Color(0xFF1E3A28)
+            ? kAccountDarkSurface
             : const Color(0xFFE0F4E6);
     final tagColor = glass
         ? Colors.white
         : dark
-            ? const Color(0xFF86EFAC)
+            ? kAccountDarkAccent
             : const Color(0xFF176238);
     final inkWell = InkWell(
       key: const Key('subscription-member-card'),
-      borderRadius: BorderRadius.circular(19),
+      borderRadius: BorderRadius.circular(kAccountCardRadius),
       onTap: () => setState(() => _showingMembership = true),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             Container(
@@ -1396,7 +1418,7 @@ class _AccountTabState extends State<AccountTab> {
     }
     return Card(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(kAccountCardRadius),
         side: BorderSide(
           color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
         ),
@@ -1420,9 +1442,7 @@ class _AccountTabState extends State<AccountTab> {
               Expanded(
                 child: Text(
                   'Quick Actions',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                  style: kAccountCardHeading.copyWith(
                     color: glass ? Colors.white : null,
                   ),
                 ),
@@ -1443,8 +1463,8 @@ class _AccountTabState extends State<AccountTab> {
           crossAxisCount: 4,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
           childAspectRatio: 0.85,
           children: [
             _quickTile(
@@ -1485,7 +1505,7 @@ class _AccountTabState extends State<AccountTab> {
           : Theme.of(context).cardColor,
       elevation: glass ? 0 : 1,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(kAccountCardRadius),
         side: BorderSide(
           color: glass
               ? Colors.white.withValues(alpha: 0.35)
@@ -1547,7 +1567,7 @@ class _AccountTabState extends State<AccountTab> {
           color: glass
               ? Colors.white.withValues(alpha: 0.15)
               : dark
-                  ? const Color(0xFF1E3A28)
+                  ? kAccountDarkSurface
                   : const Color(0xFFDFF5E6),
           borderRadius: BorderRadius.circular(20),
         ),
@@ -1560,7 +1580,7 @@ class _AccountTabState extends State<AccountTab> {
               color: glass
                   ? Colors.white
                   : dark
-                      ? const Color(0xFF86EFAC)
+                      ? kAccountDarkAccent
                       : const Color(0xFF176238),
             ),
             const SizedBox(width: 4),
@@ -1572,7 +1592,7 @@ class _AccountTabState extends State<AccountTab> {
                 color: glass
                     ? Colors.white
                     : dark
-                        ? const Color(0xFF86EFAC)
+                        ? kAccountDarkAccent
                         : const Color(0xFF176238),
               ),
             ),
@@ -1582,7 +1602,7 @@ class _AccountTabState extends State<AccountTab> {
       surfaceColor: glass
           ? null
           : dark
-              ? const Color(0xFF192C20)
+              ? kAccountDarkCard
               : const Color(0xFFF0FAF3),
       tiles: [
         _infoTile(
@@ -1615,7 +1635,7 @@ class _AccountTabState extends State<AccountTab> {
     bool glass = false,
   }) {
     final header = Padding(
-      padding: const EdgeInsets.fromLTRB(14, 13, 14, 5),
+      padding: const EdgeInsets.fromLTRB(16, 13, 16, 5),
       child: Row(
         children: [
           Icon(
@@ -1629,10 +1649,7 @@ class _AccountTabState extends State<AccountTab> {
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
+              style: kAccountCardHeading,
             ),
           ),
           titleTrailing,
@@ -1661,7 +1678,7 @@ class _AccountTabState extends State<AccountTab> {
     return Card(
       color: surfaceColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(kAccountCardRadius),
         side: BorderSide(
           color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
         ),
