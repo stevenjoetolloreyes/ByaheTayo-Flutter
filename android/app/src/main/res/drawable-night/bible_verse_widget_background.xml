@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bible Verse widget card background, dark: ChatGPT dark card
+     #202B25, radius 20 to match the app's ChatGPT card radius. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#202B25" />
+    <corners android:radius="20dp" />
+</shape>

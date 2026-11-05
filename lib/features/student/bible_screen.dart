@@ -9,11 +9,14 @@
 // "translation selection" with a single dead option.
 // Daily reading reminders surface in-app (Verse of the Day on the
 // dashboard and here); this app has no push-notification plugin.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_layout.dart';
+import 'bible_widget_service.dart';
 import 'share_card.dart';
 import 'student_data.dart';
 
@@ -53,6 +56,10 @@ class _BibleScreenState extends State<BibleScreen> {
     super.initState();
     _tab = widget.initialTab;
     _load();
+    // Push the full verse list to the home screen widget (best
+    // effort, fire-and-forget) so the widget can show today's
+    // verse even on days the app is never opened.
+    unawaited(BibleWidgetService.syncVerses());
   }
 
   Future<void> _load() async {

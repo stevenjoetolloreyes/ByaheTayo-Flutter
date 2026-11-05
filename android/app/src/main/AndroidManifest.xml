@@ -44,6 +44,21 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713" />
+        <!-- Bible Verse home screen widget (Android only). The
+             provider reads the pushed verse list from the
+             home_widget SharedPreferences and picks today's verse
+             by day-of-year; tapping the widget opens the app. -->
+        <receiver
+            android:name=".BibleVerseWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Bible Verse">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bible_verse_widget_info" />
+        </receiver>
         <!-- DIAGNOSTIC ONLY (Nov 4, 2026): disable androidx.startup initializers to test whether one of them crashes launch before MainActivity. Revert after the test result. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

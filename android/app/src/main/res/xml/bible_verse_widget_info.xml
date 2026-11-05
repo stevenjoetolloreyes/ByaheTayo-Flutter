@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bible Verse home screen widget (Android only), medium 4x2.
+     The provider re-picks today's verse on every update; the
+     system calls onUpdate at most every 30 minutes, so the verse
+     rolls over within half an hour after midnight. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/bible_verse_widget"
+    android:previewLayout="@layout/bible_verse_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
