@@ -879,10 +879,10 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
-  /// Brand hero (approved Account preview): light green gradient,
-  /// white "E" tile + EstudyanteGO wordmark, bell (no dot), and the
-  /// "My Account" headline. Appearance only — the bell reuses the
-  /// existing notification-settings behavior.
+  /// Header (approved Account preview): light green gradient with
+  /// the "My Account" headline and subtitle only. The brand row
+  /// (E tile, EstudyanteGO wordmark, bell) was removed at the user's
+  /// request; Notification Settings stays reachable from Preferences.
   Widget _brandHeader(bool glass) {
     final dark = _isDark;
     final onHeader =
@@ -890,107 +890,9 @@ class _AccountTabState extends State<AccountTab> {
     final muted = glass
         ? Colors.white70
         : Theme.of(context).colorScheme.onSurfaceVariant;
-    final goColor = glass || dark
-        ? const Color(0xFF4ADE80)
-        : const Color(0xFF19834C);
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 39,
-              height: 39,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF19834C), Color(0xFF14532D)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(13),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF14532D).withValues(alpha: 0.20),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: const Text(
-                'E',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'Estudyante',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
-                            color: onHeader,
-                          ),
-                        ),
-                        TextSpan(
-                          text: 'GO',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
-                            color: goColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    'Your Student Companion',
-                    style: TextStyle(fontSize: 10, color: muted),
-                  ),
-                ],
-              ),
-            ),
-            Tooltip(
-              message: 'Notifications',
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: glass
-                      ? Colors.white.withValues(alpha: 0.20)
-                      : Theme.of(context).colorScheme.surface,
-                  shape: BoxShape.circle,
-                ),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: _handleNotificationSettings,
-                  child: Icon(
-                    Icons.notifications_outlined,
-                    size: 20,
-                    color: glass
-                        ? Colors.white
-                        : dark
-                            ? const Color(0xFF4ADE80)
-                            : const Color(0xFF14532D),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 25),
         Text(
           'My Account',
           style: TextStyle(

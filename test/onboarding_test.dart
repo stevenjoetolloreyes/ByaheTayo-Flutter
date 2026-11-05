@@ -854,7 +854,7 @@ void main() {
         tester.widget<Text>(find.byKey(const ValueKey('points-balance'))).data,
         '0 points',
       );
-      // The brand hero above the profile card makes the page taller,
+      // The header above the profile card makes the page taller,
       // so the wallet button can sit below the fold on small
       // surfaces: scroll it into view before tapping.
       await tester.ensureVisible(find.text('Earn Points'));

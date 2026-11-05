@@ -80,7 +80,10 @@ void main() {
       find.text('Manage your profile, preferences, and more.'),
       findsOneWidget,
     );
-    expect(find.byTooltip('Notifications'), findsOneWidget);
+    // The header bell was removed at the user's request (Nov 5); the
+    // "Notification Settings" tile in Preferences still opens the
+    // same settings page, so no bell tooltip remains on the header.
+    expect(find.byTooltip('Notifications'), findsNothing);
     expect(find.text('Points Wallet'), findsOneWidget);
     expect(find.text('Total Earned'), findsOneWidget);
     expect(find.text('Credits'), findsOneWidget);
@@ -149,11 +152,10 @@ void main() {
     await _pumpApp(tester);
     await _openAccount(tester);
 
-    // The brand hero (logo row + "My Account" headline) sits above
-    // the profile card now, so the name starts lower than before —
-    // measured ~289 in the wide test font (shorter in Roboto on a
-    // real phone). Still top-aligned: a vertically centered layout
-    // would start near the middle of the 1280px-tall surface.
+    // The header ("My Account" headline) sits above the profile
+    // card, so the name starts a bit below the top of the surface.
+    // Still top-aligned: a vertically centered layout would start
+    // near the middle of the 1280px-tall surface.
     final top = tester.getTopLeft(find.text('Steven Reyes')).dy;
     expect(top, lessThan(340));
   });
