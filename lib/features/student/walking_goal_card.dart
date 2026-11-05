@@ -110,8 +110,40 @@ class WalkingGoalCard extends StatelessWidget {
                 style: AppText.body),
             SizedBox(height: 4),
             Text(
-              'This device has no step-counter sensor, so no steps '
-              'can be recorded.',
+              'This device has no step-counter sensor, and Health '
+              'Connect isn\'t available either, so no steps can be '
+              'recorded.',
+              style: AppText.caption,
+            ),
+          ],
+        );
+      case WalkingStatus.healthConnectRequired:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your phone has no step-counter sensor, so the app '
+              'can read your steps from Health Connect instead.',
+              style: AppText.body,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: controller.requestHealthConnectPermission,
+                  child: const Text('Connect Health Connect'),
+                ),
+                TextButton(
+                  onPressed: controller.recheckHealthConnect,
+                  child: const Text('Check again'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Steps come from apps like Google Fit via Health '
+              'Connect.',
               style: AppText.caption,
             ),
           ],
@@ -300,6 +332,27 @@ class WalkingGoalCard extends StatelessWidget {
           'Distance and calories are estimates.',
           style: AppText.caption,
         ),
+        // Health Connect is a snapshot source, not a live stream:
+        // the count is from the last read, and Refresh re-reads it.
+        if (controller.isHealthConnect)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Steps from Health Connect'
+                    '${controller.lastHealthConnectReadLabel.isEmpty ? '' : ' · ${controller.lastHealthConnectReadLabel}'}',
+                    style: AppText.caption,
+                  ),
+                ),
+                TextButton(
+                  onPressed: controller.refreshSteps,
+                  child: const Text('Refresh'),
+                ),
+              ],
+            ),
+          ),
         if (!controller.receivedEvent)
           const Padding(
             padding: EdgeInsets.only(top: 4),

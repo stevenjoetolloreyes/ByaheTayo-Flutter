@@ -38,7 +38,14 @@ android {
         applicationId = "com.estudyantego.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Floor is 26 (Android 8.0), NOT the Flutter default 24:
+        // the Health Connect client (Walking Goal fallback for
+        // phones with no step-counter sensor) requires minSdk 26,
+        // and the user approved the bump on Nov 5, 2026. Do not
+        // lower it back to flutter.minSdkVersion without removing
+        // the Health Connect dependency first — the build
+        // hard-fails (manifest merger) if the floor is below 26.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         // Google Maps API key from local.properties (never committed).
         manifestPlaceholders["MAPS_API_KEY"] =
@@ -74,6 +81,18 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+dependencies {
+    // Walking Goal Health Connect fallback (Nov 5, 2026): today's
+    // steps from Health Connect on phones with no step-counter
+    // sensor. connect-client 1.1.0 is the stable release and
+    // requires minSdk 26 — that is why the app floor above is 26.
+    // coroutines-android is added explicitly (not relied on as a
+    // transitive dependency) because MainActivity calls the
+    // client's suspend functions from a CoroutineScope.
+    implementation("androidx.health.connect:connect-client:1.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
 
 kotlin {

@@ -7,6 +7,19 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.activity.result.ActivityResultLauncher
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.aggregate.AggregateRequest
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.time.TimeRangeFilter
+import java.time.Instant
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -24,6 +37,21 @@ class MainActivity : FlutterActivity() {
     private val walkingChannelName = "byahetayo/walking_steps"
     private var sensorManager: SensorManager? = null
     private var stepSensor: Sensor? = null
+
+    // Health Connect fallback for the Walking Goal (Nov 5, 2026):
+    // today's steps from Health Connect on phones with no
+    // TYPE_STEP_COUNTER sensor. The sensor path above always wins
+    // when the sensor exists; this channel is only consulted
+    // when it does not. The permission flow opens the Health
+    // Connect UI (never a runtime permission dialog), so the
+    // MethodChannel result for "requestStepsPermission" is held
+    // until the user finishes that flow.
+    private val healthConnectChannelName = "byahetayo/health_connect_steps"
+    private val healthConnectScope =
+        CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private lateinit var healthConnectPermissionLauncher:
+        ActivityResultLauncher<Set<HealthPermission>>
+    private var pendingHealthConnectResult: MethodChannel.Result? = null
 
     // Production diagnostics log — ONE logging system, shared with
     // the Dart side. Both layers append JSON lines (the exact
@@ -51,6 +79,31 @@ class MainActivity : FlutterActivity() {
         )
         installCrashHandler()
         super.onCreate(savedInstanceState)
+        // Health Connect permission flow: the launcher must be
+        // registered before the activity starts; its callback
+        // completes the pending MethodChannel result.
+        healthConnectPermissionLauncher = registerForActivityResult(
+            PermissionController.createRequestPermissionActivityContract()
+        ) { granted ->
+            val result = pendingHealthConnectResult
+            pendingHealthConnectResult = null
+            try {
+                result?.success(
+                    granted.contains(
+                        HealthPermission.getReadPermission(
+                            StepsRecord::class
+                        )
+                    )
+                )
+            } catch (_: Exception) {
+                // A dead result must never crash the callback.
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        healthConnectScope.cancel()
+        super.onDestroy()
     }
 
     private fun crashLogFile(): File? {
@@ -262,5 +315,155 @@ class MainActivity : FlutterActivity() {
                 }
             }
         )
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            healthConnectChannelName
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                // Plain string, never a raw SDK int: the Dart side
+                // must not guess at HealthConnectClient's constants.
+                "getSdkStatus" -> {
+                    val status = HealthConnectClient.getSdkStatus(this)
+                    result.success(
+                        when (status) {
+                            HealthConnectClient.SDK_AVAILABLE -> "available"
+                            HealthConnectClient
+                                .SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
+                                "updateRequired"
+                            else -> "unavailable"
+                        }
+                    )
+                }
+                "hasStepsPermission" -> {
+                    healthConnectScope.launch {
+                        try {
+                            if (HealthConnectClient.getSdkStatus(
+                                    this@MainActivity
+                                ) != HealthConnectClient.SDK_AVAILABLE
+                            ) {
+                                result.success(false)
+                                return@launch
+                            }
+                            val client = HealthConnectClient.getOrCreate(
+                                this@MainActivity
+                            )
+                            val granted = client.permissionController
+                                .getGrantedPermissions()
+                            result.success(
+                                granted.contains(
+                                    HealthPermission.getReadPermission(
+                                        StepsRecord::class
+                                    )
+                                )
+                            )
+                        } catch (_: Exception) {
+                            // Any failure reads as "not granted" — the
+                            // Dart side shows the connect prompt, never
+                            // a fabricated step count.
+                            result.success(false)
+                        }
+                    }
+                }
+                "requestStepsPermission" -> {
+                    try {
+                        if (HealthConnectClient.getSdkStatus(this) !=
+                            HealthConnectClient.SDK_AVAILABLE
+                        ) {
+                            result.success(false)
+                        } else {
+                            // A previous request still in flight is
+                            // answered as denied rather than left
+                            // hanging forever.
+                            pendingHealthConnectResult?.let { old ->
+                                try {
+                                    old.success(false)
+                                } catch (_: Exception) {
+                                }
+                            }
+                            pendingHealthConnectResult = result
+                            healthConnectPermissionLauncher.launch(
+                                setOf(
+                                    HealthPermission.getReadPermission(
+                                        StepsRecord::class
+                                    )
+                                )
+                            )
+                        }
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+                "readTodaySteps" -> {
+                    val startMillis =
+                        call.argument<Number>("startMillis")?.toLong()
+                    val endMillis =
+                        call.argument<Number>("endMillis")?.toLong()
+                    healthConnectScope.launch {
+                        try {
+                            if (startMillis == null || endMillis == null ||
+                                endMillis <= startMillis ||
+                                HealthConnectClient.getSdkStatus(
+                                    this@MainActivity
+                                ) != HealthConnectClient.SDK_AVAILABLE
+                            ) {
+                                result.error(
+                                    "INVALID_RANGE",
+                                    "Invalid Health Connect read range",
+                                    null
+                                )
+                                return@launch
+                            }
+                            val client = HealthConnectClient.getOrCreate(
+                                this@MainActivity
+                            )
+                            val granted = client.permissionController
+                                .getGrantedPermissions()
+                            if (!granted.contains(
+                                    HealthPermission.getReadPermission(
+                                        StepsRecord::class
+                                    )
+                                )
+                            ) {
+                                result.error(
+                                    "PERMISSION_DENIED",
+                                    "Steps permission not granted",
+                                    null
+                                )
+                                return@launch
+                            }
+                            // Aggregate of StepsRecord for today
+                            // (Manila midnight -> now, supplied by the
+                            // Dart side so the day matches the app's
+                            // Manila date key). A zero here is real
+                            // data — no steps recorded in the window.
+                            val response = client.aggregate(
+                                AggregateRequest(
+                                    metrics = setOf(
+                                        StepsRecord.COUNT_TOTAL
+                                    ),
+                                    timeRangeFilter =
+                                        TimeRangeFilter.between(
+                                            Instant.ofEpochMilli(
+                                                startMillis
+                                            ),
+                                            Instant.ofEpochMilli(endMillis),
+                                        ),
+                                )
+                            )
+                            val steps =
+                                response[StepsRecord.COUNT_TOTAL] ?: 0L
+                            result.success(steps.toInt())
+                        } catch (_: Exception) {
+                            result.error(
+                                "READ_FAILED",
+                                "Could not read steps from Health Connect",
+                                null
+                            )
+                        }
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 }

@@ -32,8 +32,20 @@ class WalkingGoalScreen extends StatelessWidget {
             case WalkingStatus.noSensor:
               return const _Message(
                 title: 'Step counting isn\'t available',
-                body: 'This device has no step-counter sensor, so no '
+                body: 'This device has no step-counter sensor, and '
+                    'Health Connect isn\'t available either, so no '
                     'steps can be recorded.',
+              );
+            case WalkingStatus.healthConnectRequired:
+              return _Message(
+                title: 'Connect Health Connect',
+                body: 'Your phone has no step-counter sensor, so the '
+                    'app can read your steps from Health Connect '
+                    'instead. Steps come from apps like Google Fit.',
+                actionLabel: 'Connect Health Connect',
+                onAction: controller.requestHealthConnectPermission,
+                secondLabel: 'Check again',
+                onSecond: controller.recheckHealthConnect,
               );
             case WalkingStatus.permissionRequired:
               return _Message(
@@ -322,14 +334,41 @@ class _ReadyBody extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppLayout.cardGap),
-        const Text(
-          'Steps count while the app is open. Steps walked while '
-          'the app is closed are picked up when you reopen it on '
-          'the same day; steps from before a reboot or across '
-          'midnight while closed land on the reopen day. Distance, '
-          'duration, and calories are estimates.',
-          style: AppText.caption,
-        ),
+        // Health Connect is a snapshot source, not a live stream:
+        // the count is from the last read, and Refresh re-reads it.
+        // The sensor note below it does not apply in this mode.
+        if (controller.isHealthConnect) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Steps from Health Connect'
+                  '${controller.lastHealthConnectReadLabel.isEmpty ? '' : ' · ${controller.lastHealthConnectReadLabel}'}',
+                  style: AppText.caption,
+                ),
+              ),
+              TextButton(
+                onPressed: controller.refreshSteps,
+                child: const Text('Refresh'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Steps come from Health Connect (recorded by apps like '
+            'Google Fit), even while this app is closed. Distance, '
+            'duration, and calories are estimates.',
+            style: AppText.caption,
+          ),
+        ] else
+          const Text(
+            'Steps count while the app is open. Steps walked while '
+            'the app is closed are picked up when you reopen it on '
+            'the same day; steps from before a reboot or across '
+            'midnight while closed land on the reopen day. Distance, '
+            'duration, and calories are estimates.',
+            style: AppText.caption,
+          ),
       ],
     );
   }

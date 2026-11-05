@@ -34,6 +34,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'health_connect_steps.dart';
 import 'walking_sensor.dart';
 
 /// Asia/Manila date key (yyyy-MM-dd). The Philippines has no daylight
@@ -186,16 +187,28 @@ class WalkingStore {
   }
 }
 
-/// What the Walking Goal UI can show. `ready` means the sensor is
-/// available and permission is granted; a zero step count in that
-/// state is real data (no steps recorded yet), not an error.
+/// What the Walking Goal UI can show. `ready` means a step source
+/// is available and permitted; a zero step count in that state is
+/// real data (no steps recorded yet), not an error.
+/// `healthConnectRequired` is the Health Connect grant state: the
+/// phone has no step-counter sensor, Health Connect is available,
+/// but Steps has not been granted yet.
 enum WalkingStatus {
   loading,
   ready,
   noSensor,
   permissionRequired,
   permissionDenied,
+  healthConnectRequired,
   error,
+}
+
+/// Where today's steps come from. The sensor is a live stream;
+/// Health Connect is a snapshot read on demand (hub load + manual
+/// Refresh) — the UI says so when the source is Health Connect.
+enum WalkingStepSource {
+  sensor,
+  healthConnect,
 }
 
 /// Owns the walking sensor subscription, the daily accumulator, and
@@ -206,16 +219,21 @@ class WalkingController extends ChangeNotifier {
   WalkingController({
     WalkingSensor? sensor,
     ActivityPermission? permission,
+    HealthConnectSteps? healthConnect,
     WalkingStore? store,
   })  : _sensor = sensor ?? PlatformWalkingSensor(),
         _permission = permission ?? AppActivityPermission(),
+        _healthConnect = healthConnect ?? PlatformHealthConnectSteps(),
         _store = store ?? WalkingStore();
 
   final WalkingSensor _sensor;
   final ActivityPermission _permission;
+  final HealthConnectSteps _healthConnect;
   final WalkingStore _store;
 
   WalkingStatus _status = WalkingStatus.loading;
+  WalkingStepSource _stepSource = WalkingStepSource.sensor;
+  DateTime? _lastHealthConnectRead;
   int _goal = WalkingStore.defaultGoal;
   Map<String, int> _history = {};
   WalkingDayState? _state;
@@ -224,6 +242,23 @@ class WalkingController extends ChangeNotifier {
   StreamSubscription<int>? _subscription;
 
   WalkingStatus get status => _status;
+
+  /// Where today's steps come from (sensor by default; Health
+  /// Connect only on sensor-less phones after a successful read).
+  WalkingStepSource get stepSource => _stepSource;
+
+  /// True once a Health Connect read has supplied today's steps.
+  bool get isHealthConnect => _stepSource == WalkingStepSource.healthConnect;
+
+  /// "Updated HH:mm" for the last Health Connect read, or '' when
+  /// no read has happened yet. Device-local wall clock.
+  String get lastHealthConnectReadLabel {
+    final read = _lastHealthConnectRead;
+    if (read == null) return '';
+    final h = read.hour.toString().padLeft(2, '0');
+    final m = read.minute.toString().padLeft(2, '0');
+    return 'Updated $h:$m';
+  }
   int get goal => _goal;
   Map<String, int> get history => Map.unmodifiable(_history);
 
@@ -296,8 +331,9 @@ class WalkingController extends ChangeNotifier {
       _state = state;
       final available = await _sensor.isAvailable;
       if (!available) {
-        _status = WalkingStatus.noSensor;
-        notifyListeners();
+        // Sensor-first, always: Health Connect is only consulted
+        // on phones with no step-counter sensor.
+        await _initHealthConnectFallback();
         return;
       }
       final permission = await _permission.status();
@@ -362,6 +398,123 @@ class WalkingController extends ChangeNotifier {
       _status = WalkingStatus.error;
       notifyListeners();
     }
+  }
+
+  /// Health Connect fallback (sensor-less phones only).
+  ///
+  /// Sensor absent + Health Connect unavailable (or needing an
+  /// install/update) is still [WalkingStatus.noSensor] — the UI
+  /// message says so. Sensor absent + available + ungranted is
+  /// [WalkingStatus.healthConnectRequired]; granted reads today's
+  /// aggregate and the controller becomes ready on that source.
+  Future<void> _initHealthConnectFallback() async {
+    final sdk = await _healthConnect.sdkStatus;
+    if (sdk != HealthConnectSdkStatus.available) {
+      _status = WalkingStatus.noSensor;
+      notifyListeners();
+      return;
+    }
+    final granted = await _healthConnect.hasStepsPermission;
+    if (!granted) {
+      _status = WalkingStatus.healthConnectRequired;
+      notifyListeners();
+      return;
+    }
+    await _readHealthConnectSteps();
+  }
+
+  /// Reads today's Health Connect aggregate and applies it as
+  /// today's total. The aggregate IS the full day's count (not a
+  /// delta), so it replaces today's total rather than adding to
+  /// it. Failures land in [WalkingStatus.error], never as a
+  /// fabricated zero.
+  Future<void> _readHealthConnectSteps() async {
+    try {
+      final steps = await _healthConnect.readTodaySteps();
+      await _applyHealthConnectSteps(steps);
+    } catch (_) {
+      _status = WalkingStatus.error;
+      notifyListeners();
+    }
+  }
+
+  /// Applies one Health Connect aggregate reading. Day rollover
+  /// archives the old day exactly like the sensor path's init
+  /// does; the aggregate replaces today's total.
+  Future<void> _applyHealthConnectSteps(int steps) async {
+    final key = todayKey;
+    final prev = _state;
+    if (prev != null && prev.day != key) {
+      _history = {..._history, prev.day: prev.todaySteps};
+      try {
+        await _store.saveHistory(_history);
+      } catch (_) {
+        // History loss never corrupts today's count.
+      }
+    }
+    final next = WalkingDayState(
+      day: key,
+      todaySteps: steps,
+      lastCumulative: null,
+    );
+    _state = next;
+    _receivedEvent = true;
+    _stepSource = WalkingStepSource.healthConnect;
+    _lastHealthConnectRead = DateTime.now();
+    _status = WalkingStatus.ready;
+    notifyListeners();
+    try {
+      await _store.saveState(next);
+    } catch (_) {
+      // See setGoal: a failed write never fabricates data.
+    }
+  }
+
+  /// User-tapped Health Connect grant (opens the Health Connect
+  /// permission UI; never auto-fired on load).
+  Future<void> requestHealthConnectPermission() async {
+    try {
+      final granted = await _healthConnect.requestStepsPermission();
+      if (granted) {
+        await _readHealthConnectSteps();
+      } else {
+        _status = WalkingStatus.healthConnectRequired;
+        notifyListeners();
+      }
+    } catch (_) {
+      _status = WalkingStatus.error;
+      notifyListeners();
+    }
+  }
+
+  /// Re-checks the Health Connect grant without opening the
+  /// permission UI (used after the user grants in the Health
+  /// Connect app directly).
+  Future<void> recheckHealthConnect() async {
+    try {
+      final granted = await _healthConnect.hasStepsPermission;
+      if (granted) {
+        await _readHealthConnectSteps();
+      } else {
+        _status = WalkingStatus.healthConnectRequired;
+        notifyListeners();
+      }
+    } catch (_) {
+      _status = WalkingStatus.error;
+      notifyListeners();
+    }
+  }
+
+  /// Re-reads today's steps from Health Connect (fallback mode
+  /// only). Health Connect is a snapshot source: the hub card and
+  /// the details screen each offer this Refresh; the sensor path
+  /// is a live stream and needs no refresh, so this is a no-op
+  /// there. Also a no-op until the controller is ready on the
+  /// Health Connect source.
+  Future<void> refreshSteps() async {
+    if (_stepSource != WalkingStepSource.healthConnect) return;
+    if (_status != WalkingStatus.ready) return;
+    await _readHealthConnectSteps();
   }
 
   /// Re-runs init after an error (fresh controller state).

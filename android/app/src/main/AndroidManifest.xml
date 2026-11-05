@@ -76,6 +76,11 @@
          user taps "Allow activity tracking" on the Walking Goal
          card, never at launch. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Walking Goal Health Connect fallback: read today's steps
+         from Health Connect when the phone has no step-counter
+         sensor. Granted in the Health Connect app (never at
+         launch, never via the runtime permission dialog). -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
     <!-- AI quiz generation: photograph notes (Camera) and pick
          pictures (gallery) for Gemini multimodal input. The system
          photo picker is used on Android 13+; READ_MEDIA_IMAGES
