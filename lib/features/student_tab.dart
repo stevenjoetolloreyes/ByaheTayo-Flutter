@@ -5,12 +5,13 @@
 // screen size (his 12:09 correction overruled the earlier 2/3-column
 // grid: on tablets it looked sparse with mismatched card heights).
 // Section order (Full Development Update Phase 1): Walking Goal,
-// Sign-in, Bible, Quick Buttons, then the pre-existing summary
-// widgets (Allowance, Classes, Notes, Upcoming, Tasks, Attendance,
-// Quotes, Commute) kept below the quick buttons.
+// Sign-in, Bible, then the pre-existing summary widgets
+// (Allowance, Classes, Notes, Upcoming, Tasks, Attendance,
+// Quotes, Commute). The Quick Buttons section was removed Nov 5
+// at his request — the screens stay in the codebase.
 //
 // Honest mappings for reference-only items:
-// - Tasks shortcut -> Classes screen (assignments live there).
+// - Tasks card -> Classes screen (assignments live there).
 // - Events section -> honest "No upcoming events." (no events
 //   system exists; nothing is invented).
 // - Notification bell -> honest empty sheet (no notification
@@ -34,7 +35,6 @@ import 'rewards_center.dart';
 import 'rewards_screen.dart';
 import 'school_events.dart';
 import 'student/allowance_screen.dart';
-import 'student/attendance_screen.dart';
 import 'student/bible_screen.dart';
 import 'student/classes_screen.dart';
 import 'student/commute_screen.dart';
@@ -354,25 +354,23 @@ class _StudentTabState extends State<StudentTab> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    final wide = MediaQuery.sizeOf(context).width >= 600;
     // Single column of full-width cards on EVERY screen size (his
     // 12:09 correction: the tablet 2/3-column grid looked sparse
     // with mismatched card heights — "wag ganito").
     //
     // Phase 1 hub order (Full Development Update §1): greeting →
-    // Walking Goal → sign-in → Bible → quick buttons. The eight
+    // Walking Goal → sign-in → Bible → summary widgets. The eight
     // pre-existing summary widgets (allowance, classes, notes,
-    // upcoming, tasks, attendance, quotes, commute) are kept BELOW
-    // the quick buttons rather than deleted: the same spec also
-    // says "do not remove existing sections", and every one of
-    // those screens stays one tap away via the quick buttons.
-    // Shortcuts stay responsive (3x2 grid on phones, one row of 6
-    // on wide screens).
+    // upcoming, tasks, attendance, quotes, commute) are kept rather
+    // than deleted: the same spec also says "do not remove existing
+    // sections". (The Quick Buttons section was removed Nov 5 at
+    // his request; Classes/Notes/Allowance/Tasks stay one tap away
+    // via their summary cards, but Attendance has no Hub entry
+    // point anymore.)
     final sections = [
       _walkingWidget(context),
       _signinWidget(context),
       _bibleWidget(context),
-      _quickAccess(context, wide),
       _rewardsCenterWidget(context),
       _allowanceWidget(context),
       _classesWidget(context),
@@ -476,73 +474,6 @@ class _StudentTabState extends State<StudentTab> {
           ),
         ],
       ),
-    );
-  }
-
-  // ------------------------------------------------------- quick access
-
-  Widget _quickAccess(BuildContext context, bool wide) {
-    final items = [
-      ('Attendance', Icons.fact_check_outlined,
-          () => _open(const AttendanceScreen())),
-      ('Classes', Icons.menu_book_outlined,
-          () => _open(const ClassesScreen())),
-      ('Tasks', Icons.checklist_outlined,
-          () => _open(const ClassesScreen())),
-      ('Notes', Icons.note_outlined,
-          () => _open(const NotesScreen())),
-      ('Quizzes', Icons.quiz_outlined,
-          () => _open(const NotesScreen(initialTab: 'quizzes'))),
-      ('Budgeting', Icons.account_balance_wallet_outlined,
-          () => _open(const AllowanceScreen())),
-    ];
-    final cards = items
-        .map((item) => Card(
-              child: InkWell(
-                onTap: item.$3,
-                borderRadius:
-                    BorderRadius.circular(kStudentCardRadius),
-                child: Padding(
-                  // Vertical 10 (not 14): the tile content needs real
-                  // slack inside the fixed-aspect grid cell — on the
-                  // GitHub runner the label measured 0.14px taller
-                  // than the cell allowed (font rounding), failing
-                  // walking_goal_test's hub-order test. 10px padding
-                  // buys ~8px of margin; look is unchanged.
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(item.$2,
-                          color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(height: 6),
-                      Text(item.$1,
-                          style: AppText.captionSemiBold),
-                    ],
-                  ),
-                ),
-              ),
-            ))
-        .toList();
-    if (wide) {
-      return Row(
-        key: const ValueKey('quick-access'),
-        children: [
-          for (final c in cards) Expanded(child: c),
-        ],
-      );
-    }
-    return GridView(
-      key: const ValueKey('quick-access'),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.95,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      children: cards,
     );
   }
 

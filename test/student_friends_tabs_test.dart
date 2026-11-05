@@ -41,10 +41,12 @@ void main() {
     expect(find.text('Daily Quotes'), findsOneWidget);
     expect(find.text('Bible Verse'), findsOneWidget);
     // The dashboard attendance card was retitled 'School Calendar'
-    // (landscape spec); its attendance content is preserved inside,
-    // and the Attendance screen stays reachable via quick access.
+    // (landscape spec); its attendance content is preserved inside.
+    // The Quick Buttons section was removed Nov 5, so no 'Attendance'
+    // tile remains on the Hub and the Attendance screen has no Hub
+    // entry point anymore.
     expect(find.text('School Calendar'), findsOneWidget);
-    expect(find.text('Attendance'), findsOneWidget);
+    expect(find.text('Attendance'), findsNothing);
     expect(find.text('Tasks & Assignments'), findsOneWidget);
     expect(find.text('No pending tasks.'), findsOneWidget);
     // Real zero state, not an invented amount.

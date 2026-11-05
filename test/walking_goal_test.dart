@@ -308,7 +308,7 @@ void main() {
 
   group('Hub order + details screen', () {
     testWidgets(
-        'hub order is greeting, walking, sign-in, bible, quick buttons',
+        'hub order is greeting, walking, sign-in, bible',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       tester.view.physicalSize = const Size(1080, 12000);
@@ -347,11 +347,9 @@ void main() {
       final signinDy =
           dy(find.byKey(const ValueKey('signin-hub-card')));
       final bibleDy = dy(find.byKey(const ValueKey('bible-hub-card')));
-      final quickDy = dy(find.byKey(const ValueKey('quick-access')));
       expect(greetingDy, lessThan(walkingDy));
       expect(walkingDy, lessThan(signinDy));
       expect(signinDy, lessThan(bibleDy));
-      expect(bibleDy, lessThan(quickDy));
     });
 
     testWidgets('details screen renders in light and dark', (tester) async {
