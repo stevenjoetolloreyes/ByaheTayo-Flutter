@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_layout.dart';
+import 'student_theme.dart';
 import 'walking_repository.dart';
 
 /// Full-width Walking Goal card for the Student Hub.
@@ -37,7 +38,7 @@ class WalkingGoalCard extends StatelessWidget {
           return InkWell(
             onTap: ready ? onOpen : null,
             borderRadius:
-                BorderRadius.circular(AppLayout.cardRadius),
+                BorderRadius.circular(kStudentCardRadius),
             child: Padding(
               padding: AppLayout.cardPadding,
               child: Column(
@@ -63,7 +64,7 @@ class WalkingGoalCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Walking Goal',
-                                style: AppText.sectionTitle),
+                                style: kStudentCardHeading),
                             Text(
                               'Stay active and reach your weekly goal!',
                               style: AppText.caption,
@@ -192,7 +193,7 @@ class WalkingGoalCard extends StatelessWidget {
             Flexible(
               child: Text(
                 _formatNumber(steps),
-                style: AppText.titleStrong,
+                style: kStudentPageTitle,
                 overflow: TextOverflow.ellipsis,
               ),
             ),

@@ -387,19 +387,21 @@ class _StudentTabState extends State<StudentTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: AppLayout.pagePaddingTab,
+        // ChatGPT spacing: 20px horizontal screen padding,
+        // 24px between sections.
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         children: [
           studentHeader(
             greetingName: greetingFor(DateTime.now()),
             onBell: _showNotifications,
             profile: widget.profile,
           ),
-          const SizedBox(height: AppLayout.headerGap),
+          const SizedBox(height: 24),
           for (final s in sections) ...[
-            const SizedBox(height: AppLayout.cardGap),
+            const SizedBox(height: 24),
             s,
           ],
-          const SizedBox(height: AppLayout.headerGap),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -428,8 +430,7 @@ class _StudentTabState extends State<StudentTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: AppText.sectionTitle),
+              Text(title, style: kStudentCardHeading),
               if (subtitle != null)
                 Text(subtitle,
                     style: AppText.caption.copyWith(color: scheme.onSurfaceVariant)),
@@ -450,7 +451,7 @@ class _StudentTabState extends State<StudentTab> {
             else
               InkWell(
                 onTap: onOpen,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 child: header,
               ),
             const SizedBox(height: AppLayout.cardGap),
@@ -499,7 +500,8 @@ class _StudentTabState extends State<StudentTab> {
         .map((item) => Card(
               child: InkWell(
                 onTap: item.$3,
-                borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+                borderRadius:
+                    BorderRadius.circular(kStudentCardRadius),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Column(
@@ -531,8 +533,8 @@ class _StudentTabState extends State<StudentTab> {
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         childAspectRatio: 0.95,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
       ),
       children: cards,
     );
@@ -606,7 +608,7 @@ class _StudentTabState extends State<StudentTab> {
           onViewWallet: widget.onViewAccount,
           adService: widget.adService,
         )),
-        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+        borderRadius: BorderRadius.circular(kStudentCardRadius),
         child: Padding(
           padding: AppLayout.cardPadding,
           child: Column(
@@ -629,7 +631,7 @@ class _StudentTabState extends State<StudentTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('7-Day Sign-in',
-                            style: AppText.sectionTitle),
+                            style: kStudentCardHeading),
                         Text('Build your study habit and earn rewards!',
                             style: AppText.caption),
                       ],
@@ -705,7 +707,7 @@ class _StudentTabState extends State<StudentTab> {
                   Expanded(
                     child: InkWell(
                       onTap: () => showSigninRewardSchedule(context),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       child: _signinStat(
                         icon: Icons.card_giftcard_rounded,
                         iconBg: tileGreen,
@@ -760,7 +762,7 @@ class _StudentTabState extends State<StudentTab> {
             ],
           ),
         ),
-        if (trailing != null) trailing,
+        ?trailing,
       ],
     );
   }
@@ -773,7 +775,7 @@ class _StudentTabState extends State<StudentTab> {
       key: const ValueKey('bible-hub-card'),
       child: InkWell(
         onTap: () => _open(const BibleScreen()),
-        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+        borderRadius: BorderRadius.circular(kStudentCardRadius),
         child: Container(
           padding: AppLayout.cardPadding,
           decoration: const BoxDecoration(
@@ -782,7 +784,8 @@ class _StudentTabState extends State<StudentTab> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
+            borderRadius: BorderRadius.all(
+                Radius.circular(kStudentCardRadius)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -792,7 +795,8 @@ class _StudentTabState extends State<StudentTab> {
                   Icon(Icons.menu_book_outlined, color: Colors.white),
                   SizedBox(width: 8),
                   Text('Bible Verse',
-                      style: AppText.sectionTitle.copyWith(color: Colors.white)),
+                      style: kStudentCardHeading.copyWith(
+                          color: Colors.white)),
                 ],
               ),
               const SizedBox(height: AppSpacing.s8),
@@ -917,7 +921,7 @@ class _StudentTabState extends State<StudentTab> {
           children: [
             miniBox('Income', peso(totalIncome), scheme.secondary),
             const SizedBox(width: AppSpacing.s8),
-            miniBox('Expenses', peso(totalExpense), Colors.red),
+            miniBox('Expenses', peso(totalExpense), kStudentError),
             const SizedBox(width: AppSpacing.s8),
             miniBox(
                 'Remaining',
@@ -1473,7 +1477,7 @@ class _StudentTabState extends State<StudentTab> {
                 _quoteFavs.contains(daily.id)
                     ? Icons.favorite
                     : Icons.favorite_border,
-                color: _quoteFavs.contains(daily.id) ? Colors.red : null,
+                color: _quoteFavs.contains(daily.id) ? kStudentError : null,
               ),
               onPressed: () => _toggleQuoteFav(daily.id),
             ),
@@ -1581,7 +1585,7 @@ class _StudentTabState extends State<StudentTab> {
                     ),
                   ),
                   if (dayEvents.isNotEmpty)
-                    const Icon(Icons.circle, size: 6, color: Colors.blue),
+                    const Icon(Icons.circle, size: 6, color: kStudentInfo),
                 ],
               ),
             );
@@ -1621,7 +1625,7 @@ class _StudentTabState extends State<StudentTab> {
               padding: const EdgeInsets.only(bottom: 2),
               child: Row(
                 children: [
-                  const Icon(Icons.circle, size: 8, color: Colors.blue),
+                  const Icon(Icons.circle, size: 8, color: kStudentInfo),
                   const SizedBox(width: AppSpacing.s8),
                   Expanded(
                     child: Text(

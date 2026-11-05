@@ -1,43 +1,67 @@
-// Student Hub's OWN design — Premium Light Emerald.
+// Student Hub's OWN design — Premium Dark + Emerald Green.
 //
 // This theme applies ONLY to the Student Hub (dashboard + its module
-// screens + the sign-in page). Other tabs keep the app theme. Per the
-// Nov 1 redesign reference: primary Deep Emerald Green #14532D,
-// accent Emerald Green #16A34A, background soft white #F8FAFC, white
-// cards with subtle shadows and rounded corners.
+// screens + the sign-in page). Other tabs keep the app theme.
 //
-// (An earlier Emerald Dark theme shipped Nov 1, 09:57; the redesign
-// reference the user sent later that day specifies this light theme,
-// so the Hub follows the reference now.)
+// Tokens follow the ChatGPT design system Steven adopted Nov 5 as a
+// LOOSE UI base ("wag mo seryusuhin"): Premium Dark + Emerald Green
+// with a matching Light Mode. Adapted, not forced — the Hub keeps
+// its approved structure (single-column dashboard, greeting banner,
+// sign-in card values) and the tokens below are the Hub's own.
+// Primary stays Deep Emerald Green #14532D in both modes; the
+// readable dark accent is #34D399 and the light accent is #059669.
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import '../app_layout.dart';
 import '../onboarding/onboarding_state.dart';
 
 const kStudentEmerald = Color(0xFF14532D);
 const kStudentEmeraldDark = Color(0xFF0A2E1A);
+// Brand accent (greeting/Bible gradients, dark-mode primary, the
+// approved sign-in card's light-mode greens). The ChatGPT light
+// accent (#059669) is kStudentLightAccent below — the sign-in
+// card's exact approved values stay untouched.
 const kStudentEmeraldAccent = Color(0xFF16A34A);
-const kStudentBg = Color(0xFFF8FAFC);
+const kStudentLightAccent = Color(0xFF059669);
+const kStudentBg = Color(0xFFF5F8F6);
 const kStudentCard = Colors.white;
-const kStudentText = Color(0xFF0F172A);
+const kStudentText = Color(0xFF17231C);
 const kStudentSubtext = Color(0xFF64748B);
 const kStudentBorder = Color(0xFFE2E8F0);
 
-// Dark Mode palette for the Student Hub (Nov 2 polish), from the
-// user's Dark Mode color system. Deep emerald #14532D is kept for
-// brand surfaces (the greeting banner gradient); it is never used
-// as foreground text on dark cards, where it would be unreadable —
-// [kStudentDarkAccent] is the readable emerald there (same value
-// as the app dark theme's primary).
-const kStudentDarkBg = Color(0xFF121212);
-const kStudentDarkSecondaryBg = Color(0xFF1B1F20);
-const kStudentDarkCard = Color(0xFF202729);
+// Semantic colors (ChatGPT system) — used only where the Hub
+// already has such a state (expenses, errors, info dots).
+const kStudentSuccess = Color(0xFF22C55E);
+const kStudentWarning = Color(0xFFF59E0B);
+const kStudentError = Color(0xFFEF4444);
+const kStudentInfo = Color(0xFF3B82F6);
+
+// Card corner radius (ChatGPT: 18–22px).
+const kStudentCardRadius = 20.0;
+
+// Dark Mode palette for the Student Hub (ChatGPT dark tokens,
+// adapted: the elevated surface, secondary text and border keep
+// the Nov 2 polished values, which the ChatGPT system does not
+// specify).
+const kStudentDarkBg = Color(0xFF101714);
+const kStudentDarkSecondaryBg = Color(0xFF18221D);
+const kStudentDarkCard = Color(0xFF202B25);
 const kStudentDarkElevated = Color(0xFF252B2D);
-const kStudentDarkText = Color(0xFFFFFFFF);
+const kStudentDarkText = Color(0xFFF8FAF9);
 const kStudentDarkSubtext = Color(0xFFB0B8B5);
 const kStudentDarkBorder = Color(0xFF343B3D);
 const kStudentDarkAccent = Color(0xFF34D399);
+
+// Student Hub typography (ChatGPT scale, Hub-local so the shared
+// AppText scale — used by other tabs — stays untouched).
+// Page title 26 Bold, section heading 20 Semibold, card heading
+// 16 Semibold. Body text keeps the app's established sizes.
+const kStudentPageTitle =
+    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
+const kStudentSectionHeading =
+    TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
+const kStudentCardHeading =
+    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
 
 ThemeData get studentTheme => ThemeData.light().copyWith(
       scaffoldBackgroundColor: kStudentBg,
@@ -45,27 +69,29 @@ ThemeData get studentTheme => ThemeData.light().copyWith(
       colorScheme: const ColorScheme.light(
         primary: kStudentEmerald,
         onPrimary: Colors.white,
-        secondary: kStudentEmeraldAccent,
+        secondary: kStudentLightAccent,
         onSecondary: Colors.white,
         surface: kStudentCard,
         onSurface: kStudentText,
         surfaceContainerHighest: kStudentCard,
         outline: kStudentBorder,
+        error: kStudentError,
       ),
       cardTheme: const CardThemeData(
         color: kStudentCard,
         elevation: 1,
         shadowColor: Color(0x1A0F172A),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
+          borderRadius:
+              BorderRadius.all(Radius.circular(kStudentCardRadius)),
           side: BorderSide(color: kStudentBorder),
         ),
       ),
     );
 
 /// Dark twin of [studentTheme]: same geometry, same Emerald Green
-/// identity, but the user's Dark Mode surfaces — #121212 page,
-/// #202729 cards, #252B2D elevated surfaces, white primary text,
+/// identity, but the ChatGPT dark surfaces — #101714 page,
+/// #202B25 cards, #252B2D elevated surfaces, #F8FAF9 primary text,
 /// #B0B8B5 secondary text, #343B3D borders. The greeting banner
 /// gradient stays deep emerald → accent green in both modes.
 ThemeData get studentDarkTheme => ThemeData.dark().copyWith(
@@ -82,12 +108,14 @@ ThemeData get studentDarkTheme => ThemeData.dark().copyWith(
         surfaceContainerHighest: kStudentDarkElevated,
         onSurfaceVariant: kStudentDarkSubtext,
         outline: kStudentDarkBorder,
+        error: kStudentError,
       ),
       cardTheme: const CardThemeData(
         color: kStudentDarkCard,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
+          borderRadius:
+              BorderRadius.all(Radius.circular(kStudentCardRadius)),
           side: BorderSide(color: kStudentDarkBorder),
         ),
       ),
@@ -186,11 +214,12 @@ Widget studentHeader({
             children: [
               Text(
                 '$greetingName, Steven!',
-                style: AppText.titleStrong.copyWith(color: Colors.white),
+                style: kStudentPageTitle.copyWith(color: Colors.white),
               ),
               Text(
                 'Student Hub',
-                style: AppText.sectionTitle.copyWith(color: Colors.white),
+                style:
+                    kStudentSectionHeading.copyWith(color: Colors.white),
               ),
               const Text(
                 'Your school commute, in one place.',

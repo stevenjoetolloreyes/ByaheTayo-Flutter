@@ -68,7 +68,7 @@ void main() {
     expect(find.text('Student Hub'), findsOneWidget);
     final context = tester.element(find.byType(StudentTab));
     final theme = Theme.of(context);
-    expect(theme.scaffoldBackgroundColor, const Color(0xFFF8FAFC));
+    expect(theme.scaffoldBackgroundColor, const Color(0xFFF5F8F6));
     expect(theme.colorScheme.surface, const Color(0xFFFFFFFF));
     expect(theme.colorScheme.primary, const Color(0xFF14532D));
   });
