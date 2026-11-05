@@ -127,9 +127,6 @@ class _AccountTabState extends State<AccountTab> {
   List<PointsTransaction> get _entries =>
       _walletRemote ? widget.walletController!.entries : const [];
 
-  /// Credits remote mode: the credits controller has a real backend.
-  bool get _creditsRemote => widget.creditsController?.remote ?? false;
-
   /// Live credits balance in minor units in remote mode, 0 otherwise.
   int get _creditsBalanceUnits =>
       widget.creditsController?.balanceUnits ?? 0;
@@ -472,134 +469,136 @@ class _AccountTabState extends State<AccountTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 600;
-        final header = _headerCard(glass);
+        final brand = _brandHeader(glass);
+        final profile = _profileCard(glass);
         final wallet = _walletCard(glass);
         final quickActions = _quickActionsCard(glass);
         final admin = _isAdmin ? _adminCard(glass) : null;
-        final historyTile = ListTile(
-          leading: const Icon(Icons.history),
-          title: const Text('Transaction History'),
-          subtitle: Text(
-            _entries.isEmpty
+        final history = _previewCard(
+          glass,
+          _infoTile(
+            icon: Icons.history,
+            title: 'Transaction History',
+            subtitle: _entries.isEmpty
                 ? 'No transactions yet.'
                 : '${_entries.length} transactions',
+            onTap: _showTransactionHistory,
+            glass: glass,
           ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: _showTransactionHistory,
+          listTheme: true,
         );
-        final history = glass
-            ? GlassCard(
-                child: GlassListTheme(child: historyTile),
-              )
-            : Card(child: historyTile);
         final info = _sectionCard(
           glass: glass,
+          icon: Icons.info_outline,
           title: 'Account Information',
           tiles: [
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('Personal Information'),
-              subtitle: Text(
-                _signedIn
-                    ? '${_profile?.displayName ?? _user!.email}\n${_user!.email}'
-                    : 'Sign in to view',
-              ),
+            _infoTile(
+              icon: Icons.person_outline,
+              title: 'Personal Information',
+              subtitle: _signedIn
+                  ? '${_profile?.displayName ?? _user!.email}\n${_user!.email}'
+                  : 'Sign in to view',
               isThreeLine: _signedIn,
-              trailing: const Icon(Icons.chevron_right),
               onTap: _openProfile,
+              glass: glass,
             ),
-            ListTile(
-              leading: const Icon(Icons.school_outlined),
-              title: const Text('Student Information'),
-              subtitle: Text(_studentInfoSummary()),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.school_outlined,
+              title: 'Student Information',
+              subtitle: _studentInfoSummary(),
               onTap: _openProfile,
+              glass: glass,
             ),
-            ListTile(
-              leading: const Icon(Icons.work_outlined),
-              title: const Text('Employment Information'),
-              subtitle: Text(_employmentInfoSummary()),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.work_outlined,
+              title: 'Employment Information',
+              subtitle: _employmentInfoSummary(),
               onTap: _openProfile,
+              glass: glass,
             ),
           ],
         );
         final preferences = _sectionCard(
           glass: glass,
+          icon: Icons.settings_outlined,
           title: 'Preferences',
           tiles: [
-            ListTile(
-              leading: const Icon(Icons.notifications_outlined),
-              title: const Text('Notification Settings'),
-              subtitle: Text(_notificationStatusLabel()),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.notifications_outlined,
+              title: 'Notification Settings',
+              subtitle: _notificationStatusLabel(),
               onTap: _handleNotificationSettings,
+              glass: glass,
             ),
-            ListTile(
-              leading: const Icon(Icons.brightness_6_outlined),
-              title: const Text('Theme Settings'),
-              subtitle: Text(_themeModeLabel(widget.themeMode)),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.brightness_6_outlined,
+              title: 'Theme Settings',
+              subtitle: _themeModeLabel(widget.themeMode),
               onTap: _pickTheme,
+              glass: glass,
             ),
-            ListTile(
-              leading: const Icon(Icons.language),
-              title: const Text('Language Settings'),
-              subtitle: const Text('English'),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.language,
+              title: 'Language Settings',
+              subtitle: 'English',
               onTap: () => _showInfoDialog(
                 'Language',
                 'EstudyanteGO is available in English only for now. '
                 'Real translations are out of scope for this version.',
               ),
+              glass: glass,
             ),
           ],
         );
         final security = _sectionCard(
           glass: glass,
+          icon: Icons.shield_outlined,
           title: 'Security & Privacy',
           tiles: [
             if (_signedIn) ...[
-              ListTile(
-                leading: const Icon(Icons.account_circle_outlined),
-                title: const Text('Session'),
-                subtitle: Text(
-                  'Signed in as ${_user!.email}\n'
-                  'Email ${_user!.emailVerified ? 'verified' : 'not verified'}',
-                ),
+              _infoTile(
+                icon: Icons.account_circle_outlined,
+                title: 'Session',
+                subtitle: 'Signed in as ${_user!.email}\n'
+                    'Email ${_user!.emailVerified ? 'verified' : 'not verified'}',
                 isThreeLine: true,
+                showChevron: false,
+                glass: glass,
               ),
-              ListTile(
-                leading: const Icon(Icons.lock_outline),
-                title: const Text('Change Password'),
-                subtitle: const Text('Send a reset link to your email'),
-                trailing: const Icon(Icons.chevron_right),
+              _infoTile(
+                icon: Icons.lock_outline,
+                title: 'Change Password',
+                subtitle: 'Send a reset link to your email',
                 onTap: _changePassword,
+                glass: glass,
               ),
               if (_user!.emailVerified)
-                const ListTile(
-                  leading: Icon(Icons.verified_outlined),
-                  title: Text('Account Verification'),
-                  subtitle: Text('Your email is verified.'),
+                _infoTile(
+                  icon: Icons.verified_outlined,
+                  title: 'Account Verification',
+                  subtitle: 'Your email is verified.',
+                  showChevron: false,
+                  glass: glass,
                 )
               else
-                ListTile(
-                  leading: const Icon(Icons.verified_outlined),
-                  title: const Text('Account Verification'),
-                  subtitle: const Text('Your email is not verified yet.'),
-                  trailing: const Icon(Icons.chevron_right),
+                _infoTile(
+                  icon: Icons.verified_outlined,
+                  title: 'Account Verification',
+                  subtitle: 'Your email is not verified yet.',
                   onTap: _verifyEmail,
+                  glass: glass,
                 ),
             ] else
-              const ListTile(
-                leading: Icon(Icons.account_circle_outlined),
-                title: Text('Session'),
-                subtitle: Text('No account signed in.'),
+              _infoTile(
+                icon: Icons.account_circle_outlined,
+                title: 'Session',
+                subtitle: 'No account signed in.',
+                showChevron: false,
+                glass: glass,
               ),
-            ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined),
-              title: const Text('Privacy Settings'),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Settings',
               onTap: () => _showInfoDialog(
                 'Privacy Settings',
                 _signedIn
@@ -611,38 +610,40 @@ class _AccountTabState extends State<AccountTab> {
                         'settings (sidebar, theme) are stored, and '
                         'nothing is uploaded by this app.',
               ),
+              glass: glass,
             ),
           ],
         );
         final actions = _sectionCard(
           glass: glass,
+          icon: Icons.grid_view_outlined,
           title: 'Account Actions',
           tiles: [
-            ListTile(
-              leading: const Icon(Icons.help_outline),
-              title: const Text('Help & Support'),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.help_outline,
+              title: 'Help & Support',
               onTap: () => _showInfoDialog(
                 'Help & Support',
                 'EstudyanteGO v1.0.0. For account help, use password reset '
                 'from the Security & Privacy section.',
               ),
+              glass: glass,
             ),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('About EstudyanteGO'),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.info_outline,
+              title: 'About EstudyanteGO',
+              subtitle: 'Version 1.0.0',
               onTap: () => _showInfoDialog(
                 'About EstudyanteGO',
                 'EstudyanteGO — Northern PH commute at jeepney companion. Trip '
                 'planner, LTFRB fare calculator, at student hub. '
                 'Version 1.0.0 (com.estudyantego.app).',
               ),
+              glass: glass,
             ),
-            ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: const Text('Terms and Conditions'),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.description_outlined,
+              title: 'Terms and Conditions',
               onTap: () => _showInfoDialog(
                 'Terms and Conditions',
                 'EstudyanteGO is a commute companion. Fares shown are '
@@ -650,36 +651,54 @@ class _AccountTabState extends State<AccountTab> {
                 'community posts are user-shared and unverified unless '
                 'marked otherwise.',
               ),
+              glass: glass,
             ),
-            ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined),
-              title: const Text('Privacy Policy'),
-              trailing: const Icon(Icons.chevron_right),
+            _infoTile(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Policy',
               onTap: () => _showInfoDialog(
                 'Privacy Policy',
                 'Your Firebase account holds your email and sign-in '
                 'state. Your profile, settings, and community posts stay '
                 'on this device. The app does not sell or share your data.',
               ),
+              glass: glass,
             ),
             if (_signedIn)
-              ListTile(
-                leading: Icon(
-                  Icons.logout,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                title: Text(
-                  'Sign Out',
-                  style:
-                      TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+              _infoTile(
+                icon: Icons.logout,
+                title: 'Sign Out',
+                iconColor: Theme.of(context).colorScheme.error,
+                iconBackground: _isDark
+                    ? const Color(0xFF3A1A1A)
+                    : const Color(0xFFFCECEC),
+                titleColor: Theme.of(context).colorScheme.error,
+                showChevron: false,
                 onTap: _signOut,
+                glass: glass,
               ),
           ],
         );
 
+        final footer = Padding(
+          padding: const EdgeInsets.fromLTRB(0, 20, 0, 5),
+          child: Text(
+            'ESTUDYANTEGO · VERSION 1.0.0',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 0.5,
+              color: glass
+                  ? Colors.white70
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        );
+
         final sections = <Widget>[
-          header,
+          brand,
+          const SizedBox(height: AppLayout.cardGap),
+          profile,
           const SizedBox(height: AppLayout.cardGap),
           wallet,
           const SizedBox(height: AppLayout.cardGap),
@@ -687,10 +706,6 @@ class _AccountTabState extends State<AccountTab> {
           const SizedBox(height: AppLayout.cardGap),
           quickActions,
           const SizedBox(height: AppLayout.cardGap),
-          if (admin != null) ...[
-            admin,
-            const SizedBox(height: AppLayout.cardGap),
-          ],
           history,
           const SizedBox(height: AppLayout.cardGap),
           if (twoColumns) ...[
@@ -720,6 +735,11 @@ class _AccountTabState extends State<AccountTab> {
             const SizedBox(height: AppLayout.cardGap),
             actions,
           ],
+          if (admin != null) ...[
+            const SizedBox(height: AppLayout.cardGap),
+            admin,
+          ],
+          footer,
         ];
 
         // Full width on purpose: no narrow centered container. The
@@ -768,151 +788,443 @@ class _AccountTabState extends State<AccountTab> {
     return parts.join(' · ');
   }
 
-  Widget _headerCard(bool glass) {
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  /// Soft green tile behind a list-item icon (approved Account
+  /// preview). Theme-aware: pale green on light, deep green on dark,
+  /// translucent white on the iPhone glass path.
+  Widget _tileIcon(
+    IconData icon, {
+    Color? color,
+    Color? background,
+    bool glass = false,
+  }) {
+    final dark = _isDark;
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: background ??
+            (glass
+                ? Colors.white.withValues(alpha: 0.12)
+                : dark
+                    ? const Color(0xFF243B2C)
+                    : const Color(0xFFEAF4ED)),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Icon(
+        icon,
+        size: 18,
+        color: color ??
+            (glass
+                ? Colors.white
+                : dark
+                    ? const Color(0xFF86EFAC)
+                    : Theme.of(context).colorScheme.primary),
+      ),
+    );
+  }
+
+  /// One Account list row in the approved preview style: soft icon
+  /// tile, compact bold title, muted subtitle, chevron. Same taps as
+  /// the rows it replaces — appearance only.
+  Widget _infoTile({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    VoidCallback? onTap,
+    bool showChevron = true,
+    bool isThreeLine = false,
+    Color? titleColor,
+    Color? iconColor,
+    Color? iconBackground,
+    bool glass = false,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      leading: _tileIcon(
+        icon,
+        color: iconColor,
+        background: iconBackground,
+        glass: glass,
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: titleColor,
+        ),
+      ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color: glass
+                    ? null
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+      isThreeLine: isThreeLine,
+      trailing: showChevron
+          ? Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: glass ? null : Theme.of(context).hintColor,
+            )
+          : null,
+      onTap: onTap,
+    );
+  }
+
+  /// Brand hero (approved Account preview): light green gradient,
+  /// white "E" tile + EstudyanteGO wordmark, bell (no dot), and the
+  /// "My Account" headline. Appearance only — the bell reuses the
+  /// existing notification-settings behavior.
+  Widget _brandHeader(bool glass) {
+    final dark = _isDark;
+    final onHeader =
+        glass ? Colors.white : Theme.of(context).colorScheme.onSurface;
+    final muted = glass
+        ? Colors.white70
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    final goColor = glass || dark
+        ? const Color(0xFF4ADE80)
+        : const Color(0xFF19834C);
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 39,
+              height: 39,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF19834C), Color(0xFF14532D)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(13),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF14532D).withValues(alpha: 0.20),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'E',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Estudyante',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                            color: onHeader,
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'GO',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                            color: goColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    'Your Student Companion',
+                    style: TextStyle(fontSize: 10, color: muted),
+                  ),
+                ],
+              ),
+            ),
+            Tooltip(
+              message: 'Notifications',
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: glass
+                      ? Colors.white.withValues(alpha: 0.20)
+                      : Theme.of(context).colorScheme.surface,
+                  shape: BoxShape.circle,
+                ),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: _handleNotificationSettings,
+                  child: Icon(
+                    Icons.notifications_outlined,
+                    size: 20,
+                    color: glass
+                        ? Colors.white
+                        : dark
+                            ? const Color(0xFF4ADE80)
+                            : const Color(0xFF14532D),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 25),
+        Text(
+          'My Account',
+          style: TextStyle(
+            fontSize: 29,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.1,
+            color: onHeader,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          'Manage your profile, preferences, and more.',
+          style: TextStyle(fontSize: 13, color: muted),
+        ),
+      ],
+    );
+    if (glass) {
+      return GlassCard(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 17),
+        child: content,
+      );
+    }
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: dark
+              ? const [Color(0xFF1C3023), Color(0xFF1C3B29)]
+              : const [
+                  Color(0xFFFAFFFB),
+                  Color(0xFFE9F5ED),
+                  Color(0xFFD8EDDF),
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 17),
+        child: content,
+      ),
+    );
+  }
+
+  /// Profile card (approved Account preview): white card with the
+  /// real photo or honest initials, name + email, Verified state,
+  /// and Edit Profile. Signed-out state stays honest — "No account
+  /// signed in", never a guest identity. Same taps as before.
+  Widget _profileCard(bool glass) {
     final user = _user;
+    final onCard =
+        glass ? Colors.white : Theme.of(context).colorScheme.onSurface;
+    final mutedCard = glass
+        ? Colors.white70
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    final accent =
+        glass ? Colors.white : Theme.of(context).colorScheme.primary;
     if (user == null) {
       // Signed out (or Firebase not configured): no guest identity, no
       // guest chip — just an honest signed-out state with a sign-in
       // action. When Firebase is not configured, the sign-in screen
       // explains that.
-      final content = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      final content = Row(
         children: [
-          const Text(
-            'No account signed in',
-            style: AppText.titleSmall,
+          Container(
+            width: 55,
+            height: 55,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [Color(0xFFD9F0E1), Color(0xFF9DCEAD)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Icon(
+              Icons.person_outline,
+              size: 28,
+              color: Color(0xFF14532D),
+            ),
           ),
-          const SizedBox(height: AppSpacing.s8),
-          Text(
-            widget.authService.isConfigured
-                ? 'Sign in to see your profile, points, and settings.'
-                : 'Sign-in is not available in this build yet — '
-                    'Firebase is not configured.',
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No account signed in',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: onCard,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  widget.authService.isConfigured
+                      ? 'Sign in to see your profile, points, and settings.'
+                      : 'Sign-in is not available in this build yet — '
+                          'Firebase is not configured.',
+                  style: TextStyle(fontSize: 11, color: mutedCard),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
           FilledButton(
             onPressed: () => widget.onSignInRequested?.call(),
             child: const Text('Sign In'),
           ),
         ],
       );
-      if (glass) {
-        return GlassCard(child: content);
-      }
-      return Card(
-        child: Padding(
-          padding: AppLayout.cardPadding,
-          child: content,
-        ),
-      );
+      return _previewCard(glass, content);
     }
     final profile = _profile;
     final photoPath = profile?.photoPath;
-    final hasPhoto =
-        photoPath != null && File(photoPath).existsSync();
-    // Same inner content on both paths; only the wrapper changes
-    // (emerald gradient on Material, frosted glass on iPhone).
+    final hasPhoto = photoPath != null && File(photoPath).existsSync();
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             CircleAvatar(
-                  radius: 32,
-                  backgroundColor: Colors.white,
-                  backgroundImage:
-                      hasPhoto ? FileImage(File(photoPath)) : null,
-                  child: hasPhoto
-                      ? null
-                      : Text(
-                          (profile?.initials ??
-                                  _initialsOf(user.displayName ?? user.email))
-                              ,
-                          style: const TextStyle(
-                            color: Color(0xFF14532D),
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        profile?.displayName ??
-                            user.displayName ??
-                            user.email,
-                        style: AppText.titleSmall.copyWith(color: Colors.white),
+              radius: 28,
+              backgroundColor: const Color(0xFFD9F0E1),
+              backgroundImage: hasPhoto ? FileImage(File(photoPath)) : null,
+              child: hasPhoto
+                  ? null
+                  : Text(
+                      profile?.initials ??
+                          _initialsOf(user.displayName ?? user.email),
+                      style: const TextStyle(
+                        color: Color(0xFF14532D),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        user.email,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      const SizedBox(height: AppSpacing.s8),
-                      if (user.emailVerified)
-                        const Row(
-                          children: [
-                            Icon(Icons.verified,
-                                color: Colors.white, size: 16),
-                            SizedBox(width: 4),
-                            Text(
-                              'Verified',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        )
-                      else
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white70),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                          ),
-                          onPressed: _verifyEmail,
-                          icon: const Icon(Icons.mark_email_unread_outlined,
-                              size: 16),
-                          label: const Text('Verify email'),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
             ),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white70),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    profile?.displayName ?? user.displayName ?? user.email,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: onCard,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    user.email,
+                    style: TextStyle(fontSize: 11, color: mutedCard),
+                  ),
+                  const SizedBox(height: 8),
+                  if (user.emailVerified)
+                    Row(
+                      children: [
+                        Icon(Icons.verified, color: accent, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Verified',
+                          style: TextStyle(fontSize: 12, color: onCard),
+                        ),
+                      ],
+                    )
+                  else
+                    OutlinedButton.icon(
+                      style: glass
+                          ? OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white70),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                            )
+                          : OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                            ),
+                      onPressed: _verifyEmail,
+                      icon: const Icon(Icons.mark_email_unread_outlined,
+                          size: 16),
+                      label: const Text('Verify email'),
+                    ),
+                ],
               ),
-              onPressed: () => widget.onEditProfile?.call(),
-              child: const Text('Edit Profile'),
             ),
           ],
-        );
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            style: glass
+                ? OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white70),
+                  )
+                : null,
+            onPressed: () => widget.onEditProfile?.call(),
+            child: const Text('Edit Profile'),
+          ),
+        ),
+      ],
+    );
+    return _previewCard(glass, content);
+  }
+
+  /// Shared card wrapper for the preview-styled cards: frosted
+  /// glass on iPhone, theme surface with a soft border + 21dp
+  /// corners on Material (light and dark).
+  Widget _previewCard(bool glass, Widget child, {bool listTheme = false}) {
     if (glass) {
+      final content = listTheme ? GlassListTheme(child: child) : child;
       return GlassCard(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(13),
         child: content,
       );
     }
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(21),
+        side: BorderSide(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
         ),
-        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: content,
+        padding: const EdgeInsets.all(13),
+        child: child,
       ),
     );
   }
@@ -927,82 +1239,150 @@ class _AccountTabState extends State<AccountTab> {
 
   Widget _walletCard(bool glass) {
     // Same inner content on both paths; only the wrapper changes.
+    // Preview style: 130deg emerald gradient, POINTS WALLET header,
+    // big balance, Total Earned + Credits side by side (plain
+    // numbers, no peso sign — formatMinorUnits never adds one), and
+    // a full-width white Earn Points button.
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(
+            const Icon(
+              Icons.account_balance_wallet_outlined,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            const Text(
               'Points Wallet',
-                  style: AppText.heading.copyWith(color: Colors.white),
-                ),
-                Spacer(),
-                Icon(Icons.account_balance_wallet, color: Colors.white),
-              ],
-            ),
-            const SizedBox(height: AppLayout.cardGap),
-            Text(
-              '$_balance points',
-              key: const ValueKey('points-balance'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 36,
-                fontWeight: FontWeight.w800,
+              style: TextStyle(
+                color: Color(0xFFD9F1E1),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
               ),
-            ),
-            if (_walletRemote) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Total earned: $_totalEarned points',
-                style: AppText.label.copyWith(color: Colors.white70),
-              ),
-            ],
-            if (_creditsRemote) ...[
-              const SizedBox(height: 4),
-              Text(
-                '${formatMinorUnits(_creditsBalanceUnits)} credits',
-                style: AppText.label.copyWith(color: Colors.white70),
-              ),
-            ],
-            const SizedBox(height: 4),
-            Text(
-              _walletRemote
-                  ? 'Your points from the 7-Day Sign-in, saved to your '
-                      'account. They follow you across devices.'
-                  : 'This is your account wallet. Student Hub sign-in points '
-                      'are tracked separately in the Student tab.',
-              style: AppText.label.copyWith(color: Colors.white70),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF14532D),
-              ),
-              onPressed: () => widget.onViewStudent?.call(),
-              child: const Text('Earn Points'),
             ),
           ],
-        );
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '$_balance points',
+          key: const ValueKey('points-balance'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 34,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1,
+          ),
+        ),
+        const SizedBox(height: 13),
+        Row(
+          children: [
+            _walletStat(
+              Icons.emoji_events_outlined,
+              'Total Earned',
+              '$_totalEarned',
+            ),
+            const SizedBox(width: 28),
+            _walletStat(
+              Icons.monetization_on_outlined,
+              'Credits',
+              formatMinorUnits(_creditsBalanceUnits),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _walletRemote
+              ? 'Your points from the 7-Day Sign-in, saved to your '
+                  'account. They follow you across devices.'
+              : 'This is your account wallet. Student Hub sign-in points '
+                  'are tracked separately in the Student tab.',
+          style: AppText.label.copyWith(color: Colors.white70),
+        ),
+        const SizedBox(height: 17),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF14532D),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
+            ),
+            onPressed: () => widget.onViewStudent?.call(),
+            icon: const Icon(Icons.add_circle_outline, size: 16),
+            label: const Text(
+              'Earn Points',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
+    );
     if (glass) {
       return GlassCard(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: content,
       );
     }
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
+          colors: [Color(0xFF14532D), Color(0xFF087D48), Color(0xFF15965A)],
+          stops: [0, 0.65, 1],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
+        borderRadius: BorderRadius.all(Radius.circular(22)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0xFF14532D).withValues(alpha: 0.17),
+            blurRadius: 22,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: content,
       ),
+    );
+  }
+
+  /// One wallet stat (icon + label over a bold value), as in the
+  /// approved preview. Values are the real controller balances
+  /// (0 when no backend is attached) — never invented.
+  Widget _walletStat(IconData icon, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: const Color(0xFFD9F1E1)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFFD9F1E1),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1016,95 +1396,147 @@ class _AccountTabState extends State<AccountTab> {
   /// card always shows the real current plan (Free): there is no
   /// payment provider, so no paid plan can ever be active.
   Widget _subscriptionCard(bool glass) {
-    // Same row on both paths; glass only recolors it for emerald.
+    // Preview style: pale-yellow crown tile, "Subscription Member"
+    // + "Your current membership plan", green plan pill, chevron.
+    // The pill shows the REAL current plan (Free): there is no
+    // payment provider, so no paid plan can ever be active — the
+    // preview's STANDARD tag is example data, not the user's plan.
+    final dark = _isDark;
     final tileColor = glass
         ? Colors.white.withValues(alpha: 0.12)
-        : const Color(0xFF16A34A).withValues(alpha: 0.12);
-    final crownColor = glass ? Colors.white : const Color(0xFF14532D);
+        : dark
+            ? const Color(0xFF3A2E14)
+            : const Color(0xFFFFF4D9);
+    final crownColor = glass
+        ? Colors.white
+        : dark
+            ? const Color(0xFFFBBF24)
+            : const Color(0xFFB45309);
     final titleColor = glass ? Colors.white : null;
-    final subtitleColor = glass ? Colors.white70 : Colors.black54;
+    final subtitleColor = glass
+        ? Colors.white70
+        : Theme.of(context).colorScheme.onSurfaceVariant;
     final chevronColor = glass ? Colors.white : null;
+    final tagBackground = glass
+        ? Colors.white.withValues(alpha: 0.15)
+        : dark
+            ? const Color(0xFF1E3A28)
+            : const Color(0xFFE0F4E6);
+    final tagColor = glass
+        ? Colors.white
+        : dark
+            ? const Color(0xFF86EFAC)
+            : const Color(0xFF176238);
     final inkWell = InkWell(
-        key: const Key('subscription-member-card'),
-        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
-        onTap: () => setState(() => _showingMembership = true),
-        child: Padding(
-          padding: AppLayout.cardPadding,
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: tileColor,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: CrownIcon(size: 28, color: crownColor),
+      key: const Key('subscription-member-card'),
+      borderRadius: BorderRadius.circular(19),
+      onTap: () => setState(() => _showingMembership = true),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: tileColor,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: CrownIcon(size: 24, color: crownColor),
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Subscription Member',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: titleColor,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Your current membership plan',
+                    style: TextStyle(fontSize: 11, color: subtitleColor),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+              decoration: BoxDecoration(
+                color: tagBackground,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Free Plan',
+                style: TextStyle(
+                  color: tagColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Subscription Member',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: titleColor,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Unlock premium features and get more benefits.',
-                      style: TextStyle(color: subtitleColor),
-                    ),
-                    SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF14532D),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: const Text(
-                          'Free Plan',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right, color: chevronColor),
-            ],
-          ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, color: chevronColor),
+          ],
         ),
-      );
+      ),
+    );
     if (glass) {
       return GlassCard(child: inkWell);
     }
     return Card(
-      color: const Color(0xFFDCFCE7),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(19),
+        side: BorderSide(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
+        ),
+      ),
       child: inkWell,
     );
   }
 
+  /// Quick Actions (approved preview): "Quick Actions" + "Explore
+  /// shortcuts" title row above four bordered tiles. Same four
+  /// actions, same taps as before.
   Widget _quickActionsCard(bool glass) {
-    return _sectionCard(
-      glass: glass,
-      title: 'Quick Actions',
-      tiles: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(5, 9, 5, 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Quick Actions',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: glass ? Colors.white : null,
+                  ),
+                ),
+              ),
+              Text(
+                'Explore shortcuts',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: glass
+                      ? Colors.white70
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
         GridView.count(
           crossAxisCount: 4,
           shrinkWrap: true,
@@ -1145,44 +1577,53 @@ class _AccountTabState extends State<AccountTab> {
 
   Widget _quickTile(
       IconData icon, String label, VoidCallback onTap, bool glass) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: glass
-                  ? Colors.white.withValues(alpha: 0.12)
-                  : Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
+    return Material(
+      color: glass
+          ? Colors.white.withValues(alpha: 0.12)
+          : Theme.of(context).cardColor,
+      elevation: glass ? 0 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: glass
+              ? Colors.white.withValues(alpha: 0.35)
+              : Theme.of(context).dividerColor.withValues(alpha: 0.6),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
               icon,
+              size: 22,
               color: glass
                   ? Colors.white
                   : Theme.of(context).colorScheme.primary,
             ),
-          ),
-          const SizedBox(height: AppSpacing.s8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            // Guard: the wide test font wraps labels to 3 lines and
-            // overflows the fixed grid cell on narrow phones. On a
-            // real phone (Roboto) labels fit in 1–2 lines, so this
-            // cap never clips visible text there.
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.smallSemiBold,
-          ),
-        ],
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                // Guard: the wide test font wraps labels to 3 lines and
+                // overflows the fixed grid cell on narrow phones. On a
+                // real phone (Roboto) labels fit in 1–2 lines, so this
+                // cap never clips visible text there.
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: glass ? Colors.white : null,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1191,55 +1632,140 @@ class _AccountTabState extends State<AccountTab> {
     // Admin-only section: visible only to allowlisted admin accounts
     // (admin_access.dart). The actions jump to the Communities tab,
     // where the gated admin screens live — no duplicated post state.
+    // Both existing tiles are kept; the preview shows only the LGU
+    // tile, but Post approvals is a real admin function.
+    final dark = _isDark;
     return _sectionCard(
       glass: glass,
-      title: 'Admin',
-      tiles: [
-        ListTile(
-          leading: const Icon(Icons.verified_outlined),
-          title: const Text('Post approvals'),
-          subtitle: const Text('Review community submissions'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => widget.onViewCommunities?.call(),
+      icon: Icons.star_outline,
+      title: 'Admin Access',
+      titleTrailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: glass
+              ? Colors.white.withValues(alpha: 0.15)
+              : dark
+                  ? const Color(0xFF1E3A28)
+                  : const Color(0xFFDFF5E6),
+          borderRadius: BorderRadius.circular(20),
         ),
-        ListTile(
-          leading: const Icon(Icons.account_balance_outlined),
-          title: const Text('LGU directory'),
-          subtitle: const Text('Manage LGU directory entries'),
-          trailing: const Icon(Icons.chevron_right),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.lock_outlined,
+              size: 11,
+              color: glass
+                  ? Colors.white
+                  : dark
+                      ? const Color(0xFF86EFAC)
+                      : const Color(0xFF176238),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'RESTRICTED',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: glass
+                    ? Colors.white
+                    : dark
+                        ? const Color(0xFF86EFAC)
+                        : const Color(0xFF176238),
+              ),
+            ),
+          ],
+        ),
+      ),
+      surfaceColor: glass
+          ? null
+          : dark
+              ? const Color(0xFF192C20)
+              : const Color(0xFFF0FAF3),
+      tiles: [
+        _infoTile(
+          icon: Icons.verified_outlined,
+          title: 'Post approvals',
+          subtitle: 'Review community submissions',
           onTap: () => widget.onViewCommunities?.call(),
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.account_balance_outlined,
+          title: 'LGU directory',
+          subtitle: 'Manage LGU directory entries',
+          onTap: () => widget.onViewCommunities?.call(),
+          glass: glass,
         ),
       ],
     );
   }
 
-  Widget _sectionCard(
-      {required String title,
-      required List<Widget> tiles,
-      bool glass = false}) {
+  /// Grouped card (approved preview): icon + title header, rows
+  /// separated by hairline dividers. Theme-aware surface; the admin
+  /// group passes its own green-tinted surface.
+  Widget _sectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> tiles,
+    Widget titleTrailing = const SizedBox.shrink(),
+    Color? surfaceColor,
+    bool glass = false,
+  }) {
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 5),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: glass
+                ? Colors.white
+                : Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          titleTrailing,
+        ],
+      ),
+    );
+    final separated = <Widget>[];
+    for (var i = 0; i < tiles.length; i++) {
+      if (i > 0) separated.add(const Divider(height: 1));
+      separated.add(tiles[i]);
+    }
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Text(
-            title,
-            style: AppText.cardTitle,
-          ),
-        ),
-        const Divider(height: 8),
-        ...tiles,
+        header,
+        ...separated,
+        const SizedBox(height: 6),
       ],
     );
     if (glass) {
       return GlassCard(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: GlassListTheme(child: content),
       );
     }
     return Card(
+      color: surfaceColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(19),
+        side: BorderSide(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: content,
       ),
     );

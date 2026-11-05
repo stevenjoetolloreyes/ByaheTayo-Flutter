@@ -64,7 +64,7 @@ void main() {
 
     expect(find.text('Subscription Member'), findsOneWidget);
     expect(
-      find.text('Unlock premium features and get more benefits.'),
+      find.text('Your current membership plan'),
       findsOneWidget,
     );
     expect(find.text('Free Plan'), findsOneWidget);

@@ -480,7 +480,10 @@ void main() {
             .data,
         '20 points',
       );
-      expect(find.text('Total earned: 20 points'), findsOneWidget);
+      // Approved Account preview: Total Earned is a stats label with
+      // the value below it, not one "Total earned: N points" line.
+      expect(find.text('Total Earned'), findsOneWidget);
+      expect(find.text('20'), findsOneWidget);
       await tester.ensureVisible(find.text('Transactions'));
       await tester.tap(find.text('Transactions'));
       await tester.pumpAndSettle();

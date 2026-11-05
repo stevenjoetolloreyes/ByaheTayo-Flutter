@@ -75,13 +75,24 @@ void main() {
     expect(find.text('steven@example.com'), findsOneWidget);
     expect(find.text('Verified'), findsOneWidget);
     expect(find.text('Edit Profile'), findsOneWidget);
+    expect(find.text('My Account'), findsOneWidget);
+    expect(
+      find.text('Manage your profile, preferences, and more.'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Notifications'), findsOneWidget);
     expect(find.text('Points Wallet'), findsOneWidget);
+    expect(find.text('Total Earned'), findsOneWidget);
+    expect(find.text('Credits'), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const ValueKey('points-balance'))).data,
       '0 points',
     );
     expect(find.text('Earn Points'), findsOneWidget);
+    expect(find.text('Subscription Member'), findsOneWidget);
+    expect(find.text('Free Plan'), findsOneWidget);
     expect(find.text('Quick Actions'), findsOneWidget);
+    expect(find.text('Explore shortcuts'), findsOneWidget);
     expect(find.text('My Profile'), findsOneWidget);
     expect(find.text('My Student ID'), findsOneWidget);
     expect(find.text('Transactions'), findsOneWidget);
@@ -104,6 +115,7 @@ void main() {
     expect(find.text('Terms and Conditions'), findsOneWidget);
     expect(find.text('Privacy Policy'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
+    expect(find.text('ESTUDYANTEGO · VERSION 1.0.0'), findsOneWidget);
     // No invented identity, no guest wording, no fake badge.
     expect(find.text('Guest'), findsNothing);
     expect(find.text('No account signed in'), findsNothing);
@@ -137,8 +149,13 @@ void main() {
     await _pumpApp(tester);
     await _openAccount(tester);
 
+    // The brand hero (logo row + "My Account" headline) sits above
+    // the profile card now, so the name starts lower than before —
+    // measured ~289 in the wide test font (shorter in Roboto on a
+    // real phone). Still top-aligned: a vertically centered layout
+    // would start near the middle of the 1280px-tall surface.
     final top = tester.getTopLeft(find.text('Steven Reyes')).dy;
-    expect(top, lessThan(200));
+    expect(top, lessThan(340));
   });
 
   testWidgets('dashboard scrolls to the last section',

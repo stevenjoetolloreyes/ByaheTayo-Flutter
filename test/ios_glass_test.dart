@@ -110,10 +110,10 @@ void main() {
   testWidgets('glass Account keeps Admin gated by allowlist',
       (WidgetTester tester) async {
     await _pumpAccount(tester, glass: true);
-    expect(find.text('Admin'), findsNothing);
+    expect(find.text('Admin Access'), findsNothing);
 
     await _pumpAccount(tester, user: _adminUser, glass: true);
-    await tester.ensureVisible(find.text('Admin'));
+    await tester.ensureVisible(find.text('Admin Access'));
     expect(find.text('Post approvals'), findsOneWidget);
     expect(find.text('LGU directory'), findsOneWidget);
   });
