@@ -13,7 +13,8 @@ void main() {
     await tester.pumpWidget(wrap(const TripsTab()));
     await tester.pumpAndSettle();
     expect(find.text('Find a Route'), findsOneWidget);
-    expect(find.text('Nearby Routes (13)'), findsOneWidget);
+    // 16 hubs minus the Cabugao origin = 15 nearby routes.
+    expect(find.text('Nearby Routes (15)'), findsOneWidget);
     // Nearest to the Cabugao default origin is San Juan, Ilocos Sur.
     expect(find.text('Cabugao → San Juan, Ilocos Sur'), findsOneWidget);
   });
@@ -31,10 +32,11 @@ void main() {
       (tester) async {
     // Tall viewport so the whole list (including recents, which render
     // below the nearby cards) builds without scrolling. Cards wrap to
-    // two lines, so the viewport must clear ~3000px of content.
+    // two lines, so the viewport must clear ~3000px of content — now
+    // taller with 15 nearby routes instead of 13.
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    tester.view.physicalSize = const Size(390, 6000);
+    tester.view.physicalSize = const Size(390, 7000);
     tester.view.devicePixelRatio = 1.0;
     await tester.pumpWidget(wrap(const TripsTab()));
     await tester.pumpAndSettle();
@@ -65,8 +67,10 @@ void main() {
     await tester.pumpWidget(wrap(const TripsTab()));
     await tester.pumpAndSettle();
     expect(find.text('Routes Directory · From Cabugao'), findsOneWidget);
-    expect(find.text('↑ NORTHBOUND (2)'), findsOneWidget);
-    expect(find.text('↓ SOUTHBOUND (11)'), findsOneWidget);
+    // 3 north (Sinait, Laoag City, Laoag Terminal) / 12 south
+    // (the Vigan Bus Terminal joins the southbound group).
+    expect(find.text('↑ NORTHBOUND (3)'), findsOneWidget);
+    expect(find.text('↓ SOUTHBOUND (12)'), findsOneWidget);
   });
 
   testWidgets('Directory detail shows stops and View on map',
