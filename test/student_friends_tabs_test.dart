@@ -3,10 +3,10 @@
 // Dashboard rule: every summary line comes from real on-device data
 // (a zero balance is shown as ₱0, never an invented amount); module
 // cards open real screens.
-import 'package:estudyantego/features/floating_nav.dart';
 import 'package:estudyantego/features/friends_tab.dart';
 import 'package:estudyantego/features/student/student_theme.dart';
 import 'package:estudyantego/features/student_tab.dart';
+import 'package:estudyantego/features/top_nav.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +27,11 @@ void main() {
   testWidgets('Student Hub dashboard shows all 7 modules, honest data', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 6000);
+    // Tall viewport: the redesigned Hub (group headers, at-a-glance
+    // card, week grid, Google Tasks card, allowance charts) is
+    // taller than the old layout, and the ListView only builds
+    // on-screen items.
+    tester.view.physicalSize = const Size(390, 10000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -63,7 +67,10 @@ void main() {
   testWidgets('Student Hub cards stack in one column even at 800px wide', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(800, 1200);
+    // Height 6000: the redesigned Hub is taller, and the ListView
+    // only builds on-screen cards — the width assertion needs the
+    // Bible card built too.
+    tester.view.physicalSize = const Size(800, 6000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -165,7 +172,7 @@ void main() {
         const EstudyanteGOApp(initialThemeMode: ThemeMode.dark),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Student', skipOffstage: true));
+      await tester.tap(find.byKey(const Key('top-nav-item-Student')));
       await tester.pumpAndSettle();
       expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
       final context = tester.element(find.byType(StudentTab));
@@ -174,7 +181,7 @@ void main() {
       expect(theme.colorScheme.surface, kStudentDarkCard);
       expect(theme.colorScheme.primary, kStudentEmeraldAccent);
       expect(theme.colorScheme.outline, kStudentDarkBorder);
-      expect(find.byType(FloatingGlassNav), findsOneWidget);
+      expect(find.byType(TopNavBar), findsOneWidget);
     },
   );
 }
