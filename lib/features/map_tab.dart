@@ -26,7 +26,7 @@
 //   from Google Places (New) Text Search — markers + a list sheet.
 //   It needs the Places API enabled and billing linked on the key,
 //   like Routes.
-// - Search covers the 14 hubs only (the web app's barangay search is not
+// - Search covers the 16 hubs only (the web app's barangay search is not
 //   ported to Flutter).
 // - Road path shape comes from the Google Routes API (DRIVE mode,
 //   main-road routing); only the two endpoint coordinates are sent,
@@ -47,8 +47,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'add_route_sheet.dart';
+import 'admin_access.dart';
 import 'community_posts.dart';
+import 'custom_routes.dart';
 import 'fares_tab.dart';
+import 'onboarding/auth_service.dart';
 
 /// Map tab's OWN ChatGPT tokens (loose UI base, Nov 5): Premium Dark +
 /// Emerald Green with a matching Light Mode. Only the chrome around
@@ -198,12 +202,19 @@ class RouteInfo {
     required this.dest,
     required this.roadKm,
     required this.direction,
+    this.customRoute,
   });
 
   final String originName;
   final Hub dest;
   final double roadKm;
   final Direction direction;
+
+  /// Set only for admin-added routes (see custom_routes.dart): the
+  /// card shows this route's own operator/fare, and the map draws
+  /// its own via-stops line instead of the generic hub line. Null
+  /// for every generated hub-to-hub route.
+  final CustomRoute? customRoute;
 }
 
 /// All hubs reachable from [lat]/[lng], nearest first. A hub closer than
@@ -250,6 +261,26 @@ List<RouteInfo> filterRoutesByQuery(List<RouteInfo> routes, String query) {
       )
       .toList();
 }
+
+/// Via waypoint forcing the Google road shape into Vigan through
+/// Avenida Quezon when the destination is the Vigan Bus Terminal.
+/// Verified Nov 6, 2026 against the real OSRM road path for
+/// Cabugao → terminal (Route 2 → Govantes Dike Road → Avenida
+/// Quezon → Liberation Boulevard → Jose Singson Street): this point
+/// is the start of the Avenida Quezon leg. Without it Google may
+/// route the final leg via Quirino Boulevard instead. Only the
+/// terminal destination gets a waypoint — leaving the terminal
+/// northbound, the road path is Calle Rivero → Calle Rizal →
+/// Route 2, so no waypoint is added there.
+const LatLng _quezonAveViaPoint = LatLng(17.576831, 120.387462);
+
+/// Via waypoints for a Routes API request to [dest]: the Quezon Ave
+/// point when the destination is the Vigan Bus Terminal, none
+/// otherwise.
+List<LatLng> viaWaypointsForDestination(Hub dest) =>
+    dest.name == 'Vigan Bus Terminal'
+        ? const [_quezonAveViaPoint]
+        : const [];
 
 /// Decodes a Google encoded polyline into map points. Standard
 /// algorithm (5-bit chunks, zigzag deltas, 1e5 scale). Anything
@@ -999,10 +1030,21 @@ double pathKmBetween(List<LatLng> pts, int from, int to) {
 const knownBusFares = <String, int>{
   'Cabugao|Vigan City': 60,
   'Vigan City|Cabugao': 60,
+  // Same verified Cabugao ↔ Vigan bus trip, with its real Vigan
+  // endpoint: the Vigan Bus Terminal (Jose Singson / Rivero).
+  // NOT a new fare — the ₱60 Steven verified Oct 16, 2026 for
+  // Cabugao ↔ Vigan, applied to the terminal hub as well.
+  'Cabugao|Vigan Bus Terminal': 60,
+  'Vigan Bus Terminal|Cabugao': 60,
   'Cabugao|San Juan, Ilocos Sur': 20,
   'San Juan, Ilocos Sur|Cabugao': 20,
   'Sinait|Cabugao': 20,
   'Cabugao|Sinait': 20,
+  // Deliberately ABSENT: Vigan Bus Terminal ↔ San Juan (₱45 sample)
+  // and Laoag Terminal ↔ Vigan Bus Terminal (₱120 sample) are
+  // unverified samples only, so they are NOT in this table. Those
+  // pairs fall through to the LTFRB formula fare like every other
+  // unverified pair — never a sample presented as verified.
 };
 
 /// User-verified fare for an origin|destination pair, or null.
@@ -1148,7 +1190,21 @@ String sheetToggleTooltip(bool sheetHidden) =>
     sheetHidden ? 'Show bottom panel' : 'Hide bottom panel';
 
 class MapTab extends StatefulWidget {
-  const MapTab({super.key});
+  /// The signed-in user (null when signed out). Drives the
+  /// admin-only Add Route entry point — see admin_access.dart.
+  /// Null keeps the old behaviour: no Add Route button, and the
+  /// tab shows only the generated hub routes.
+  const MapTab({
+    super.key,
+    this.currentUser,
+    this.customRouteRepository,
+  });
+
+  final AuthUser? currentUser;
+
+  /// Admin-added routes source. Null = no custom routes are loaded
+  /// (e.g. tests, or Firebase not configured and no local repo).
+  final CustomRouteRepository? customRouteRepository;
 
   @override
   State<MapTab> createState() => _MapTabState();
@@ -1325,16 +1381,21 @@ class _MapTabState extends State<MapTab> {
   bool _tracking = false;
   bool _destinationMode = false;
   int _fromIndex = _homeHub; // -1 = My location.
-  int _toIndex = 1; // Vigan City.
+  int _toIndex = 14; // Vigan Bus Terminal.
   TravelMode _travelMode = TravelMode.transit;
   TravelMode _previewMode = TravelMode.transit;
   Set<String> _savedRoutes = {};
+
+  /// Admin-added routes (Add Route), newest first. Visible to
+  /// everyone; only admins may add, edit, or delete them.
+  List<CustomRoute> _customRoutes = [];
 
   @override
   void initState() {
     super.initState();
     _refreshLocationGranted();
     _loadSaved();
+    _loadCustomRoutes();
     _loadArrowIcon();
     _loadCarIcon();
     _loadVehicleIcons();
@@ -1596,6 +1657,118 @@ class _MapTabState extends State<MapTab> {
       await prefs.setStringList(_savedKey, _savedRoutes.toList());
     } catch (_) {
       // Saving is best-effort; the in-memory set still works this session.
+    }
+  }
+
+  // ---- Admin-added routes (Add Route) ----
+
+  bool get _isAdmin => isAdminUser(widget.currentUser);
+
+  Future<void> _loadCustomRoutes() async {
+    final repo = widget.customRouteRepository;
+    if (repo == null) return;
+    final routes = await repo.loadAll();
+    if (mounted) setState(() => _customRoutes = routes);
+  }
+
+  /// Custom routes starting at [originName], as sheet entries with
+  /// their own operator, fare, and via-stops line.
+  List<RouteInfo> _customRoutesFrom(String originName) {
+    return _customRoutes
+        .where((r) => r.from == originName)
+        .map(customRouteToRouteInfo)
+        .toList();
+  }
+
+  /// Selects a custom route: the active line is the route's OWN
+  /// via-stops line (From → via… → To), never the generic hub line.
+  void _selectCustomRoute(RouteInfo route) {
+    final custom = route.customRoute;
+    if (custom == null) return;
+    final origin = hubByName(custom.from);
+    if (origin == null) return;
+    if (_navigating) {
+      _navSub?.cancel();
+      _navSub = null;
+    }
+    setState(() {
+      _selectedChurch = null;
+      _selectedHub = route.dest;
+      _activeRoute = route;
+      _activeRouteOrigin = LatLng(origin.lat, origin.lng);
+      _roadPoints = null;
+      _routeError = null;
+      _churchPreview = false;
+      _resetNavFields();
+    });
+    _fetchRoadPath(
+      origin.lat,
+      origin.lng,
+      route.dest,
+      via: _customRouteViaPoints(route),
+    );
+  }
+
+  /// Opens the Add Route form (admin only — the button is hidden
+  /// for everyone else, and the repository re-checks on save).
+  Future<void> _openAddRoute({CustomRoute? existing}) async {
+    final user = widget.currentUser;
+    final repo = widget.customRouteRepository;
+    if (user == null || repo == null || !isAdminUser(user)) return;
+    final saved = await showModalBottomSheet<CustomRoute>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AddRouteSheet(
+        existing: existing,
+        repository: repo,
+        author: user,
+      ),
+    );
+    if (saved != null && mounted) {
+      await _loadCustomRoutes();
+      _snack(
+        existing == null ? 'Route added.' : 'Route updated.',
+      );
+    }
+  }
+
+  /// Deletes an admin-added route after a confirm dialog. The
+  /// repository re-checks the admin allowlist on delete.
+  Future<void> _deleteCustomRoute(CustomRoute route) async {
+    final user = widget.currentUser;
+    final repo = widget.customRouteRepository;
+    if (user == null || repo == null || !isAdminUser(user)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this route?'),
+        content: Text('${route.from} → ${route.to} · ${route.operator}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await repo.delete(route, user);
+      await _loadCustomRoutes();
+      if (_activeRoute?.customRoute?.id == route.id) {
+        setState(() {
+          _activeRoute = null;
+          _activeRouteOrigin = null;
+          _roadPoints = null;
+        });
+      }
+      _snack('Route deleted.');
+    } catch (e) {
+      _snack('Could not delete the route: $e');
     }
   }
 
@@ -2421,7 +2594,12 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-  Future<void> _fetchRoadPath(double oLat, double oLng, Hub dest) async {
+  Future<void> _fetchRoadPath(
+    double oLat,
+    double oLng,
+    Hub dest, {
+    List<LatLng> via = const [],
+  }) async {
     final requestId = ++_roadRequestId;
     if (_googleApiKey.isEmpty) {
       if (mounted) {
@@ -2450,28 +2628,44 @@ class _MapTabState extends State<MapTab> {
         )
         ..set('X-Android-Package', 'com.estudyantego.app')
         ..set('X-Android-Cert', '89D1B79AD3344B1344A5D72694A1E863953F8534');
-      request.write(
-        jsonEncode({
-          'origin': {
-            'location': {
-              'latLng': {'latitude': oLat, 'longitude': oLng},
-            },
+      // A custom route's own via-stops win; otherwise the terminal
+      // destination gets its Quezon Ave waypoint (see
+      // viaWaypointsForDestination). An explicit empty list means
+      // "no via points", so only fall back when none were given.
+      final effectiveVia =
+          via.isNotEmpty ? via : viaWaypointsForDestination(dest);
+      final requestBody = <String, Object?>{
+        'origin': {
+          'location': {
+            'latLng': {'latitude': oLat, 'longitude': oLng},
           },
-          'destination': {
-            'location': {
-              'latLng': {'latitude': dest.lat, 'longitude': dest.lng},
-            },
+        },
+        'destination': {
+          'location': {
+            'latLng': {'latitude': dest.lat, 'longitude': dest.lng},
           },
-          'travelMode': 'DRIVE',
-          'routingPreference': 'TRAFFIC_UNAWARE',
-          'routeModifiers': routeModifiersJson(
-            avoidHighways: _avoidHighways,
-            avoidTolls: _avoidTolls,
-            avoidFerries: _avoidFerries,
-          ),
-          'languageCode': 'en',
-        }),
-      );
+        },
+        'travelMode': 'DRIVE',
+        'routingPreference': 'TRAFFIC_UNAWARE',
+        'routeModifiers': routeModifiersJson(
+          avoidHighways: _avoidHighways,
+          avoidTolls: _avoidTolls,
+          avoidFerries: _avoidFerries,
+        ),
+        'languageCode': 'en',
+      };
+      if (effectiveVia.isNotEmpty) {
+        requestBody['intermediates'] = [
+          for (final p in effectiveVia)
+            {
+              'location': {
+                'latLng': {'latitude': p.latitude, 'longitude': p.longitude},
+              },
+              'via': true,
+            },
+        ];
+      }
+      request.write(jsonEncode(requestBody));
       final response = await request.close().timeout(
         const Duration(seconds: 20),
       );
@@ -2638,7 +2832,12 @@ class _MapTabState extends State<MapTab> {
     // If road routing failed earlier, retry now that navigation
     // needs the shape + steps.
     if (_roadPoints == null) {
-      _fetchRoadPath(origin.latitude, origin.longitude, route.dest);
+      _fetchRoadPath(
+        origin.latitude,
+        origin.longitude,
+        route.dest,
+        via: _customRouteViaPoints(route),
+      );
     }
     _navSub?.cancel();
     _navSub = Geolocator.getPositionStream(
@@ -2855,7 +3054,23 @@ class _MapTabState extends State<MapTab> {
     final origin = _activeRouteOrigin;
     final route = _activeRoute;
     if (origin == null || route == null) return;
-    _fetchRoadPath(origin.latitude, origin.longitude, route.dest);
+    _fetchRoadPath(
+      origin.latitude,
+      origin.longitude,
+      route.dest,
+      via: _customRouteViaPoints(route),
+    );
+  }
+
+  /// Via points for the active route's own line: a custom route's
+  /// via-stops (excluding its endpoints), otherwise none (the
+  /// terminal Quezon Ave waypoint is added inside _fetchRoadPath).
+  List<LatLng> _customRouteViaPoints(RouteInfo route) {
+    final custom = route.customRoute;
+    if (custom == null) return const [];
+    final points = customRouteLinePoints(custom);
+    if (points.length < 3) return const [];
+    return points.sublist(1, points.length - 1);
   }
 
   Future<void> _shareRouteText(String text) async {
@@ -2869,12 +3084,15 @@ class _MapTabState extends State<MapTab> {
   Future<void> _shareActiveRoute() async {
     final route = _activeRoute;
     if (route == null) return;
-    final fare = resolveTransitFare(
-      from: route.originName,
-      to: route.dest.name,
-      vehicle: _vehicle,
-      roadKm: route.roadKm,
-    );
+    // A custom route shares its own admin-entered fare, never the
+    // formula fare for its pair.
+    final fare = route.customRoute?.fare ??
+        resolveTransitFare(
+          from: route.originName,
+          to: route.dest.name,
+          vehicle: _vehicle,
+          roadKm: route.roadKm,
+        );
     _shareRouteText(
       'EstudyanteGO route: ${route.originName} → ${route.dest.name} · '
       '${route.roadKm.toStringAsFixed(1)} km · '
@@ -2888,12 +3106,13 @@ class _MapTabState extends State<MapTab> {
   String _previewSummaryFare() {
     final route = _activeRoute;
     if (route == null) return 'No fare';
-    final fare = resolveTransitFare(
-      from: route.originName,
-      to: route.dest.name,
-      vehicle: _vehicle,
-      roadKm: route.roadKm,
-    );
+    final fare = route.customRoute?.fare ??
+        resolveTransitFare(
+          from: route.originName,
+          to: route.dest.name,
+          vehicle: _vehicle,
+          roadKm: route.roadKm,
+        );
     return fare == null ? 'No fare' : peso(fare);
   }
 
@@ -2912,6 +3131,14 @@ class _MapTabState extends State<MapTab> {
   }
 
   void _openSavedRoute(String key) {
+    // A saved custom route reopens with its own via-stops line.
+    if (key.startsWith('custom:')) {
+      final id = key.substring('custom:'.length);
+      final match = _customRoutes.where((r) => r.id == id);
+      if (match.isEmpty) return;
+      _selectCustomRoute(customRouteToRouteInfo(match.first));
+      return;
+    }
     final parts = key.split('>');
     if (parts.length != 2) return;
     final fromName = parts[0];
@@ -2969,6 +3196,12 @@ class _MapTabState extends State<MapTab> {
             name: hubs[_homeHub].name,
           );
     var routes = routesFrom(origin.lat, origin.lng, origin.name);
+    // Admin-added routes starting here ride along: their own
+    // operator, fare, and via-stops line — never folded into the
+    // generic hub routes. They only match a hub origin (a 'Your
+    // location' origin has no admin route starting there).
+    routes = [...routes, ..._customRoutesFrom(origin.name)];
+    routes.sort((a, b) => a.roadKm.compareTo(b.roadKm));
     if (_stopView == _StopView.nearest && routes.isNotEmpty) {
       routes = [routes.first];
     }
@@ -3006,7 +3239,11 @@ class _MapTabState extends State<MapTab> {
       );
       solid = _roadPoints != null;
     } else {
-      points = _roadPoints ?? [_activeRouteOrigin!, dest];
+      // No road shape yet: the dashed fallback follows the custom
+      // route's own via-stops instead of a straight origin→dest
+      // line, so a Partas line already differs from a Dominion line.
+      final via = _customRouteViaPoints(_activeRoute!);
+      points = _roadPoints ?? [_activeRouteOrigin!, ...via, dest];
       solid = _roadPoints != null;
     }
     return {
@@ -3626,6 +3863,15 @@ class _MapTabState extends State<MapTab> {
                                     : 'Plan a Trip',
                               ),
                             ),
+                            // Admin-only Add Route: regular users never
+                            // see it, and the repository re-checks the
+                            // allowlist on save.
+                            if (_isAdmin)
+                              TextButton.icon(
+                                onPressed: () => _openAddRoute(),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Route'),
+                              ),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -4141,18 +4387,25 @@ class _MapTabState extends State<MapTab> {
   }
 
   Widget _routeCard(RouteInfo route, ColorScheme scheme) {
-    final key = '${route.originName}>${route.dest.name}';
+    final custom = route.customRoute;
+    final key = custom == null
+        ? '${route.originName}>${route.dest.name}'
+        : 'custom:${custom.id ?? '${custom.from}>${custom.to}'}';
     final saved = _savedRoutes.contains(key);
-    // Vehicle-aware fare: bus previews use the provincial bus rate, a
-    // user-verified fare wins for its pair, and car/motorcycle/train
-    // previews show no fare instead of an invented one.
-    final fare = resolveTransitFare(
-      from: route.originName,
-      to: route.dest.name,
-      vehicle: _vehicle,
-      roadKm: route.roadKm,
-    );
-    final modeLabel = previewModeLabel(_vehicle);
+    // A custom route shows its own admin-entered fare. Otherwise the
+    // vehicle-aware fare: bus previews use the provincial bus rate,
+    // a user-verified fare wins for its pair, and car/motorcycle/
+    // train previews show no fare instead of an invented one.
+    final fare = custom?.fare ??
+        resolveTransitFare(
+          from: route.originName,
+          to: route.dest.name,
+          vehicle: _vehicle,
+          roadKm: route.roadKm,
+        );
+    final modeLabel = custom == null
+        ? previewModeLabel(_vehicle)
+        : '${custom.operator} · ${custom.vehicle}';
     return Card(
       child: ListTile(
         leading: Icon(
@@ -4165,9 +4418,25 @@ class _MapTabState extends State<MapTab> {
               : Icons.directions_bus_outlined,
         ),
         title: Text('${route.originName} → ${route.dest.name}'),
-        subtitle: Text(
-          '$modeLabel · ${route.roadKm.toStringAsFixed(1)} km · '
-          '${route.direction == Direction.northbound ? 'Northbound' : 'Southbound'}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$modeLabel · ${route.roadKm.toStringAsFixed(1)} km · '
+              '${route.direction == Direction.northbound ? 'Northbound' : 'Southbound'}',
+            ),
+            if (custom != null)
+              Text(
+                // The admin sees their own route as "Added by you";
+                // everyone else just sees that it is a custom route.
+                _isAdmin ? 'Added by you · Custom route' : 'Custom route',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -4188,9 +4457,27 @@ class _MapTabState extends State<MapTab> {
               tooltip: saved ? 'Remove from saved' : 'Save route',
               onPressed: () => _toggleSaved(route),
             ),
+            if (custom != null && _isAdmin)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                tooltip: 'Route options',
+                onSelected: (v) {
+                  if (v == 'edit') _openAddRoute(existing: custom);
+                  if (v == 'delete') _deleteCustomRoute(custom);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit route')),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete route'),
+                  ),
+                ],
+              ),
           ],
         ),
-        onTap: () => _selectHub(route.dest),
+        onTap: () => custom == null
+            ? _selectHub(route.dest)
+            : _selectCustomRoute(route),
       ),
     );
   }
