@@ -9,8 +9,10 @@
 //
 // Wide layout (width >= 600, tablet portrait + landscape) uses a
 // collapsible left sidebar (220dp expanded / 80dp collapsed, preference
-// saved locally). Phones (width < 600) keep the bottom NavigationBar.
-// The Account tab is the premium dashboard in
+// saved locally). Phones (width < 600) use the plain "EstudyanteGO"
+// wordmark header + the Facebook-style icon-only top nav (Student is
+// the default tab); there is no bottom nav on phones. The Account tab
+// is the premium dashboard in
 // lib/features/account_tab.dart. The Fares tab is a real calculator in
 // lib/features/fares_tab.dart.
 //
@@ -38,11 +40,10 @@ import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/custom_routes.dart';
 import 'features/fares_tab.dart';
-import 'features/floating_nav.dart';
 import 'features/friend_cloud_repository.dart';
-import 'features/ios_glass.dart';
 import 'features/friends_tab.dart';
 import 'features/map_tab.dart';
+import 'features/top_nav.dart';
 import 'features/onboarding/auth_screen.dart';
 import 'features/onboarding/auth_service.dart';
 import 'features/onboarding/firebase_auth_service.dart';
@@ -225,6 +226,7 @@ ThemeMode _themeModeFromString(String? value) {
 
 // ---- Brand — Premium Dark Minimalist redesign (Oct 31 spec): emerald accent ----
 const _primary = Color(0xFF16A34A);
+const _deepEmerald = Color(0xFF14532D);
 const _primaryDark = Color(0xFF059669);
 const _indicatorLight = Color(0xFFD1FAE5);
 const _indicatorDark = Color(0xFF064E3B);
@@ -334,9 +336,11 @@ ThemeData _darkTheme() {
 }
 
 // ---- Destinations (6 tabs) ----
-// Order: Map, Fares, Student, Friends, Communities, Account.
-// Communities sits after Friends: the Community section moved out of
-// the Friends tab into its own destination at the user's request.
+// Order (preview port, Nov 6): Student, Friends, Fares, Map,
+// Communities, Account. Student is the DEFAULT tab on open
+// (index 0). Communities sits after Friends: the Community section
+// moved out of the Friends tab into its own destination at the
+// user's request.
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
   final String label;
@@ -345,10 +349,10 @@ class _Destination {
 }
 
 const _destinations = <_Destination>[
-  _Destination('Map', Icons.map_outlined, Icons.map),
-  _Destination('Fares', Icons.payments_outlined, Icons.payments),
   _Destination('Student', Icons.school_outlined, Icons.school),
   _Destination('Friends', Icons.people_outlined, Icons.people),
+  _Destination('Fares', Icons.payments_outlined, Icons.payments),
+  _Destination('Map', Icons.map_outlined, Icons.map),
   _Destination('Communities', Icons.groups_outlined, Icons.groups),
   _Destination('Account', Icons.person_outlined, Icons.person),
 ];
@@ -735,7 +739,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
           user: _user,
           profile: _profile,
           permissionService: _permissionService,
-          onViewStudent: () => _selectTab(2),
+          onViewStudent: () => _selectTab(0),
           onViewCommunities: () => _selectTab(4),
           onEditProfile: () => _openProfileSetup(isEdit: true),
           onSignInRequested: () {
@@ -845,29 +849,18 @@ class _HomeShellState extends State<_HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Phones: bottom NavigationBar. Tablets / wide screens: collapsible
-    // left sidebar. One codebase, both form factors.
+    // Phones: wordmark header + icon-only top nav (no bottom nav).
+    // Tablets / wide screens: collapsible left sidebar (unchanged).
+    // One codebase, both form factors. The IndexedStack order
+    // follows _destinations: Student, Friends, Fares, Map,
+    // Communities, Account — Student (index 0) is the default tab.
     final wide = MediaQuery.sizeOf(context).width >= 600;
     final body = IndexedStack(
       index: widget.selectedIndex,
       children: [
-        MapTab(
-          currentUser: widget.user,
-          customRouteRepository:
-              widget.authService.isConfigured
-                  ? FirestoreCustomRouteRepository()
-                  : LocalCustomRouteRepository(),
-        ),
-        FaresTab(
-          currentUser: widget.user,
-          customRouteRepository:
-              widget.authService.isConfigured
-                  ? FirestoreCustomRouteRepository()
-                  : LocalCustomRouteRepository(),
-        ),
         StudentHubTheme(
           child: StudentTab(
-            onViewOnMap: () => widget.onSelect(0),
+            onViewOnMap: () => widget.onSelect(3),
             onViewAccount: () => widget.onSelect(5),
             user: widget.user,
             profile: widget.profile,
@@ -884,8 +877,23 @@ class _HomeShellState extends State<_HomeShell> {
           cloudUserName:
               widget.user?.displayName ?? widget.user?.email,
         ),
+        FaresTab(
+          onViewOnMap: () => widget.onSelect(3),
+          currentUser: widget.user,
+          customRouteRepository:
+              widget.authService.isConfigured
+                  ? FirestoreCustomRouteRepository()
+                  : LocalCustomRouteRepository(),
+        ),
+        MapTab(
+          currentUser: widget.user,
+          customRouteRepository:
+              widget.authService.isConfigured
+                  ? FirestoreCustomRouteRepository()
+                  : LocalCustomRouteRepository(),
+        ),
         CommunitiesTab(
-          onViewOnMap: () => widget.onSelect(0),
+          onViewOnMap: () => widget.onSelect(3),
           currentUser: widget.user,
           postRepository: widget.authService.isConfigured
               ? FirestorePostRepository()
@@ -911,11 +919,12 @@ class _HomeShellState extends State<_HomeShell> {
     );
 
     if (wide) {
-      // No top AppBar: the in-page titles are the only titles now
-      // (top bar removed per user request, Nov 4, 2026).
       return Scaffold(
+        appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
+        // Top inset is handled by the AppBar; left/right/bottom insets
+        // (gesture bar, cutouts) are respected here.
         body: SafeArea(
-          top: true,
+          top: false,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -934,36 +943,123 @@ class _HomeShellState extends State<_HomeShell> {
       );
     }
 
-    // iPhone only: same 6 tabs, same order, same destinations —
-    // only the bar's appearance turns to glass, and the AppBar
-    // matches the emerald page. Android uses the floating dark-glass
-    // capsule below (same 6 tabs, same order, same destinations).
-    // Tablets (wide branch above) are untouched on every platform.
-    final glass = iosGlassEnabled;
+    // Phones (preview port, Nov 6): the plain "EstudyanteGO"
+    // wordmark header + the icon-only top nav directly under it.
+    // There is NO bottom nav on phones anymore (the floating
+    // glass capsule / iOS glass bar are retired); the top nav is
+    // the only tab switcher. The wide branch above is untouched.
     return Scaffold(
-      // No top AppBar: the in-page titles are the only titles now
-      // (top bar removed per user request, Nov 4, 2026).
       body: SafeArea(
-        top: true,
-        child: body,
-      ),
-      bottomNavigationBar: glass
-          ? GlassBottomNav(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _PhoneHeader(onBell: () => _showNotifications(context)),
+            TopNavBar(
               selectedIndex: widget.selectedIndex,
               onSelect: widget.onSelect,
               destinations: [
                 for (final d in _destinations)
-                  GlassNavDestination(d.label, d.icon, d.selectedIcon),
-              ],
-            )
-          : FloatingGlassNav(
-              selectedIndex: widget.selectedIndex,
-              onSelect: widget.onSelect,
-              destinations: [
-                for (final d in _destinations)
-                  FloatingNavDestination(d.label, d.icon, d.selectedIcon),
+                  TopNavDestination(d.label, d.icon, d.selectedIcon),
               ],
             ),
+            Expanded(child: body),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Header bell: the app has no notification system, so this is
+  /// the same honest empty state the Student tab bell shows — never
+  /// a fake unread dot.
+  void _showNotifications(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => const Padding(
+        padding: AppLayout.pagePaddingLarge,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Notifications', style: AppText.headingStrong),
+            SizedBox(height: AppSpacing.s8),
+            Text('No notifications yet.'),
+            SizedBox(height: AppSpacing.s4),
+            Text(
+              'This app does not have a notification system yet, so there is nothing to show here.',
+              style: AppText.caption,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Phone header (preview port, Nov 6): plain styled "EstudyanteGO"
+/// wordmark — bold, emerald gradient lettering, short gradient
+/// underline bar, NO logo mark — plus the notifications bell.
+///
+/// NOTE: there is deliberately NO theme toggle here. The preview's
+/// header theme toggle is preview chrome; the Nov 5 rule keeps the
+/// dark-mode toggle ONLY in Settings → General → Appearance, and
+/// the real app keeps its existing theme handling.
+class _PhoneHeader extends StatelessWidget {
+  const _PhoneHeader({required this.onBell});
+
+  final VoidCallback onBell;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.surface,
+      padding: const EdgeInsets.fromLTRB(20, 12, 8, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [_deepEmerald, _primary],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ).createShader(bounds),
+                  child: const Text(
+                    'EstudyanteGO',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: 48,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [_deepEmerald, _primary],
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const Key('header-notifications'),
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'Notifications',
+            onPressed: onBell,
+          ),
+        ],
+      ),
     );
   }
 }
