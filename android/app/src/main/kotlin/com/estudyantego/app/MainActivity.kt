@@ -10,7 +10,7 @@ import android.hardware.SensorManager
 import androidx.activity.result.ActivityResultLauncher
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
-import androidx.health.connect.client.aggregate.AggregateRequest
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -27,13 +27,13 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val walkingChannelName = "byahetayo/walking_steps"
     private var sensorManager: SensorManager? = null
     private var stepSensor: Sensor? = null
@@ -50,7 +50,7 @@ class MainActivity : FlutterActivity() {
     private val healthConnectScope =
         CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var healthConnectPermissionLauncher:
-        ActivityResultLauncher<Set<HealthPermission>>
+        ActivityResultLauncher<Set<String>>
     private var pendingHealthConnectResult: MethodChannel.Result? = null
 
     // Production diagnostics log — ONE logging system, shared with
@@ -83,7 +83,7 @@ class MainActivity : FlutterActivity() {
         // registered before the activity starts; its callback
         // completes the pending MethodChannel result.
         healthConnectPermissionLauncher = registerForActivityResult(
-            PermissionController.createRequestPermissionActivityContract()
+            PermissionController.createRequestPermissionResultContract()
         ) { granted ->
             val result = pendingHealthConnectResult
             pendingHealthConnectResult = null
