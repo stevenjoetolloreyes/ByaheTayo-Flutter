@@ -3,8 +3,8 @@
 // only: there is no payment provider, so Subscribe Now must stop at
 // a confirmation sheet with an honest note — never a charge,
 // verification, or activation.
-import 'package:estudyantego/features/floating_nav.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/features/top_nav.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -190,11 +190,11 @@ void main() {
     await _setSurface(tester, const Size(390, 844));
     await _pumpApp(tester);
 
-    await tester.tap(find.text('Account'));
+    await tester.tap(find.byKey(const Key('top-nav-item-Account')));
     await tester.pumpAndSettle();
     await _openMembership(tester);
 
-    expect(find.byType(FloatingGlassNav), findsOneWidget);
+    expect(find.byType(TopNavBar), findsOneWidget);
 
     await tester.ensureVisible(
       find.byKey(const Key('membership-action-button')),
@@ -203,6 +203,6 @@ void main() {
     await tester.tap(find.byKey(const Key('membership-action-button')));
     await tester.pumpAndSettle();
     expect(find.text('Pro Plan'), findsNWidgets(2));
-    expect(find.byType(FloatingGlassNav), findsNothing);
+    expect(find.byType(TopNavBar), findsNothing);
   });
 }
