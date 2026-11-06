@@ -4,8 +4,9 @@
 // with icons only, centered, labels hidden, selected indicator preserved,
 // Tooltips on every icon; chevron toggle at the top; ~225ms animation;
 // selection never resets on toggle; preference persisted under
-// 'byahetayo_sidebar_collapsed'; phones keep the bottom FloatingGlassNav.
-import 'package:estudyantego/features/floating_nav.dart';
+// 'byahetayo_sidebar_collapsed'; phones use the top nav (no sidebar,
+// no bottom nav).
+import 'package:estudyantego/features/top_nav.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +21,14 @@ Future<void> _setSurface(WidgetTester tester, Size size) async {
 
 double _sidebarWidth(WidgetTester tester) {
   return tester.getSize(find.byKey(const Key('sidebar-container'))).width;
+}
+
+/// The sidebar chevron, read off the toggle button itself (scoped by
+/// key so dashboard card chevrons never collide with it).
+IconData? _toggleIcon(WidgetTester tester) {
+  final button =
+      tester.widget<IconButton>(find.byKey(const Key('sidebar-toggle')));
+  return (button.icon as Icon).icon;
 }
 
 void main() {
@@ -38,7 +47,9 @@ void main() {
 
     expect(_sidebarWidth(tester), 220);
     expect(find.text('EstudyanteGO'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_left), findsOneWidget);
+    // The toggle icon is scoped by key: the Student dashboard (now
+    // the default tab) also renders chevrons in its cards.
+    expect(_toggleIcon(tester), Icons.chevron_left);
   });
 
   testWidgets('toggle collapses to 80dp, hides labels, keeps tooltips', (
@@ -58,7 +69,7 @@ void main() {
     expect(find.text('Fares'), findsNothing);
     expect(find.byTooltip('Fares'), findsOneWidget);
     expect(find.byTooltip('Map'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(_toggleIcon(tester), Icons.chevron_right);
 
     // Expand again.
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
@@ -85,9 +96,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
-    // Still on Fares: no top AppBar anymore, and the sidebar
-    // label is gone while collapsed, so 'Fares' appears nowhere.
-    expect(find.text('Fares'), findsNothing);
+    // Still on Fares: AppBar title + calculator content — the sidebar
+    // label is gone while collapsed.
+    expect(find.text('Fares'), findsOneWidget);
     expect(
       find.text(
         'LTFRB fare calculator — same rates and formula as the web app.',
@@ -97,8 +108,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
-    // Expanded again: only the sidebar label now — no top AppBar.
-    expect(find.text('Fares'), findsOneWidget);
+    // Expanded again: AppBar + calculator content + sidebar label.
+    expect(find.text('Fares'), findsNWidgets(2));
     expect(
       find.text(
         'LTFRB fare calculator — same rates and formula as the web app.',
@@ -150,14 +161,15 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('phones keep the bottom FloatingGlassNav, no sidebar', (
+  testWidgets('phones use the top nav, no sidebar, no bottom nav', (
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(390, 844));
     await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
 
-    expect(find.byType(FloatingGlassNav), findsOneWidget);
+    expect(find.byType(TopNavBar), findsOneWidget);
     expect(find.byKey(const Key('sidebar-container')), findsNothing);
+    expect(find.byKey(const Key('floating-nav')), findsNothing);
   });
 }
