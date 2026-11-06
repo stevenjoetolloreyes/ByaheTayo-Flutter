@@ -62,11 +62,12 @@ void main() {
     // No distance yet: the guidance state shows.
     expect(find.textContaining('Starting location needed'),
         findsOneWidget);
-    // Switch to hub origin: Cabugao -> Vigan City auto-computes
-    // (no manual distance field anymore).
+    // Switch to hub origin: Cabugao -> Vigan Bus Terminal
+    // auto-computes (no manual distance field anymore).
+    // 31.6 km, traditional jeepney 14 + ceil(27.6)×2 = ₱70.
     await tester.tap(find.text('Choose a hub'));
     await tester.pump();
-    expect(find.text('32.3 km'), findsOneWidget);
-    expect(find.textContaining('₱72'), findsWidgets);
+    expect(find.text('31.6 km'), findsOneWidget);
+    expect(find.textContaining('₱70'), findsWidgets);
   });
 }
