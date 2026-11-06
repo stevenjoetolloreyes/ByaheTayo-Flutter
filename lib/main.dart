@@ -36,6 +36,7 @@ import 'features/app_layout.dart';
 import 'features/communities_tab.dart';
 import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
+import 'features/custom_routes.dart';
 import 'features/fares_tab.dart';
 import 'features/floating_nav.dart';
 import 'features/friend_cloud_repository.dart';
@@ -850,8 +851,20 @@ class _HomeShellState extends State<_HomeShell> {
     final body = IndexedStack(
       index: widget.selectedIndex,
       children: [
-        const MapTab(),
-        const FaresTab(),
+        MapTab(
+          currentUser: widget.user,
+          customRouteRepository:
+              widget.authService.isConfigured
+                  ? FirestoreCustomRouteRepository()
+                  : LocalCustomRouteRepository(),
+        ),
+        FaresTab(
+          currentUser: widget.user,
+          customRouteRepository:
+              widget.authService.isConfigured
+                  ? FirestoreCustomRouteRepository()
+                  : LocalCustomRouteRepository(),
+        ),
         StudentHubTheme(
           child: StudentTab(
             onViewOnMap: () => widget.onSelect(0),
