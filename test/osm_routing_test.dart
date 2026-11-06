@@ -1,0 +1,284 @@
+// Unit tests for the OSM routing helpers (no map widget, no
+// network — fixtures only).
+import 'package:estudyantego/features/fares_tab.dart';
+import 'package:estudyantego/features/osm_routing.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+void main() {
+  group('parseOsrmRoute', () {
+    test('parses GeoJSON geometry, distance, duration and steps', () {
+      final route = parseOsrmRoute({
+        'routes': [
+          {
+            'distance': 27534.5,
+            'duration': 2194.3,
+            'geometry': {
+              'coordinates': [
+                [120.45838, 17.78916],
+                [120.45719, 17.73979],
+                [120.38590, 17.56641],
+              ],
+            },
+            'legs': [
+              {
+                'steps': [
+                  {
+                    'maneuver': {
+                      'type': 'depart',
+                      'location': [120.45838, 17.78916],
+                    },
+                    'name': 'MacArthur Highway',
+                    'distance': 5500.0,
+                  },
+                  {
+                    'maneuver': {
+                      'type': 'turn',
+                      'modifier': 'left',
+                      'location': [120.387462, 17.576831],
+                    },
+                    'name': 'Avenida Quezon',
+                    'distance': 1200.0,
+                  },
+                  {
+                    'maneuver': {
+                      'type': 'arrive',
+                      'location': [120.38590, 17.56641],
+                    },
+                    'name': '',
+                    'distance': 0.0,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      expect(route, isNotNull);
+      expect(route!.points.length, 3);
+      // GeoJSON [lng, lat] is flipped to LatLng(lat, lng).
+      expect(route.points.first.latitude, closeTo(17.78916, 1e-5));
+      expect(route.points.first.longitude, closeTo(120.45838, 1e-5));
+      expect(route.distanceKm, closeTo(27.5345, 0.001));
+      expect(route.durationSec, closeTo(2194.3, 0.01));
+      expect(route.steps.length, 3);
+      expect(route.steps[0].instruction, 'Head out on MacArthur Highway');
+      expect(
+        route.steps[1].instruction,
+        'Turn left onto Avenida Quezon',
+      );
+      expect(route.steps[2].instruction, 'Arrive at destination');
+    });
+
+    test('returns null for missing or unusable routes', () {
+      expect(parseOsrmRoute({}), isNull);
+      expect(parseOsrmRoute({'routes': []}), isNull);
+      expect(
+        parseOsrmRoute({
+          'routes': [
+            {
+              'geometry': {
+                'coordinates': [
+                  [120.0, 17.0],
+                ],
+              },
+            },
+          ],
+        }),
+        isNull,
+      );
+    });
+  });
+
+  group('osrmRouteUrl', () {
+    test('orders lng,lat and inserts the via point', () {
+      final dest = hubs.firstWhere((h) => h.name == 'Vigan Bus Terminal');
+      final url = osrmRouteUrl(
+        oLat: 17.78916,
+        oLng: 120.45838,
+        dest: dest,
+        via: const [LatLng(17.576831, 120.387462)],
+      );
+      expect(
+        url,
+        contains(
+          '120.45838,17.78916;120.387462,17.576831;120.3859,17.56641',
+        ),
+      );
+      expect(url, contains('overview=full'));
+      expect(url, contains('geometries=geojson'));
+      expect(url, contains('steps=true'));
+    });
+  });
+
+  group('parseNominatimChurches', () {
+    test('parses name + coordinates, skips unusable entries', () {
+      final places = parseNominatimChurches([
+        {
+          'display_name':
+              'Vigan Cathedral, Burgos Street, Vigan City, Ilocos Sur, Philippines',
+          'lat': '17.571234',
+          'lon': '120.387123',
+        },
+        {'display_name': 'No coords here'},
+        {'display_name': '', 'lat': '17.0', 'lon': '120.0'},
+      ]);
+      expect(places.length, 1);
+      expect(places.first.name, 'Vigan Cathedral');
+      expect(places.first.lat, closeTo(17.571234, 1e-6));
+      expect(places.first.lng, closeTo(120.387123, 1e-6));
+      expect(places.first.address, contains('Vigan City'));
+    });
+  });
+
+  group('nominatimChurchesUrl', () {
+    test('is bounded to the Northern Luzon viewbox', () {
+      final url = nominatimChurchesUrl();
+      expect(url, contains('bounded=1'));
+      expect(url, contains('viewbox=119.9,15.9,122.3,18.7'));
+      expect(url, contains('Catholic'));
+    });
+  });
+
+  group('routeStops', () {
+    final dest = hubs.firstWhere((h) => h.name == 'Vigan Bus Terminal');
+    // Hand-made road line Cabugao -> San Juan -> Vigan Terminal.
+    // San Juan hub sits exactly on the line; Sinait is ~10 km off
+    // it; Vigan City hub sits at the destination end.
+    final road = <LatLng>[
+      const LatLng(17.78916, 120.45838),
+      const LatLng(17.73979, 120.45719),
+      const LatLng(17.65, 120.42),
+      const LatLng(17.60, 120.40),
+      const LatLng(17.56641, 120.38590),
+    ];
+
+    test('origin, on-the-way hubs in road order, destination', () {
+      final stops = routeStops(
+        origin: const LatLng(17.78916, 120.45838),
+        originName: 'Cabugao',
+        dest: dest,
+        roadPoints: road,
+        totalKm: 27.5,
+      );
+      expect(
+        stops.map((s) => s.name).toList(),
+        ['Cabugao', 'San Juan, Ilocos Sur', 'Vigan Bus Terminal'],
+      );
+      expect(stops.first.role, 'Start');
+      expect(stops[1].role, 'Stop');
+      expect(stops.last.role, 'End');
+      expect(stops.first.kmFromOrigin, 0);
+      expect(stops.last.kmFromOrigin, greaterThan(20));
+      // San Juan's distance from origin is measured along the
+      // road, not as the crow flies.
+      expect(stops[1].kmFromOrigin, greaterThan(4));
+      expect(stops[1].kmFromOrigin, lessThan(8));
+    });
+
+    test('no road geometry yet means origin + destination only', () {
+      final stops = routeStops(
+        origin: const LatLng(17.78916, 120.45838),
+        originName: 'Cabugao',
+        dest: dest,
+        roadPoints: null,
+        totalKm: 27.5,
+      );
+      expect(
+        stops.map((s) => s.name).toList(),
+        ['Cabugao', 'Vigan Bus Terminal'],
+      );
+      expect(stops.last.kmFromOrigin, 27.5);
+    });
+
+    test('via-hubs of a custom route are always stops', () {
+      final stops = routeStops(
+        origin: const LatLng(17.78916, 120.45838),
+        originName: 'Cabugao',
+        dest: dest,
+        roadPoints: null,
+        totalKm: 27.5,
+        viaHubNames: const ['San Juan, Ilocos Sur'],
+      );
+      expect(
+        stops.map((s) => s.name).toList(),
+        ['Cabugao', 'San Juan, Ilocos Sur', 'Vigan Bus Terminal'],
+      );
+    });
+  });
+
+  group('splitPathAt', () {
+    test('split point belongs to both parts, no gap', () {
+      final pts = [
+        const LatLng(17.0, 120.0),
+        const LatLng(17.1, 120.1),
+        const LatLng(17.2, 120.2),
+        const LatLng(17.3, 120.3),
+      ];
+      final split = splitPathAt(pts, 1);
+      expect(split.before.length, 2);
+      expect(split.after.length, 3);
+      expect(split.before.last, split.after.first);
+    });
+  });
+
+  group('estimatedStopMinutes', () {
+    test('scales by distance and rounds to 5', () {
+      expect(
+        estimatedStopMinutes(
+          kmFromOrigin: 13.75,
+          totalKm: 27.5,
+          totalMinutes: 40,
+        ),
+        20,
+      );
+      expect(
+        estimatedStopMinutes(
+          kmFromOrigin: 0,
+          totalKm: 27.5,
+          totalMinutes: 40,
+        ),
+        0,
+      );
+      expect(
+        estimatedStopMinutes(
+          kmFromOrigin: 5,
+          totalKm: 0,
+          totalMinutes: 40,
+        ),
+        0,
+      );
+    });
+  });
+
+  group('tileUrlTemplate', () {
+    test('standard is OSM, satellite is Esri', () {
+      expect(
+        tileUrlTemplate(satellite: false),
+        contains('tile.openstreetmap.org'),
+      );
+      expect(
+        tileUrlTemplate(satellite: true),
+        contains('arcgisonline.com'),
+      );
+    });
+  });
+
+  group('distanceAlongPath / nearestPathIndex', () {
+    test('sums segments between indices', () {
+      final pts = [
+        const LatLng(17.78916, 120.45838),
+        const LatLng(17.73979, 120.45719),
+        const LatLng(17.56641, 120.38590),
+      ];
+      final leg = distanceAlongPath(pts, 0, 1);
+      expect(leg, greaterThan(4));
+      expect(distanceAlongPath(pts, 0, 2), greaterThan(leg));
+      expect(distanceAlongPath(pts, 1, 1), 0);
+      expect(
+        nearestPathIndex(pts, const LatLng(17.74, 120.457)),
+        1,
+      );
+    });
+  });
+}
