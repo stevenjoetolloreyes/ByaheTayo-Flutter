@@ -1,7 +1,7 @@
 // Fares tab — LTFRB fare calculator (EstudyanteGO web app parity).
 //
 // Faithful port of the web app's faresController.js: same 11 vehicle
-// rates, same formula, same 14 hubs, same distance rule (straight-line
+// rates, same formula, same 16 hubs, same distance rule (straight-line
 // distance + 22% road allowance). Differences from the web version are
 // deliberate and small: the tab does NOT auto-prompt for location on
 // open (tap "Gamitin ang lokasyon ko" instead), and the distance is
@@ -16,7 +16,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'add_route_sheet.dart';
+import 'admin_access.dart';
 import 'app_layout.dart';
+import 'custom_routes.dart';
+import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
 
 // Fares-local ChatGPT design tokens (Premium Dark + Emerald Green,
@@ -207,6 +211,16 @@ const hubs = <Hub>[
   Hub('Ilagan City', 'Isabela', 17.17717, 121.94163),
   Hub('Santiago City', 'Isabela', 16.70647, 121.54278),
   Hub('Bayombong', 'Nueva Vizcaya', 16.50537, 121.13958),
+  // Vigan Bus Terminal (Jose Singson / Rivero, Vigan) is a SEPARATE
+  // hub from 'Vigan City' — the city hub's name is used by community
+  // posts and other screens, so it is kept as-is. The terminal is
+  // the Vigan endpoint of the Cabugao bus (verified ₱60 trip) and
+  // the default destination. Appended last so existing hub indices
+  // do not shift.
+  Hub('Vigan Bus Terminal', 'Ilocos Sur', 17.56641, 120.38590),
+  // Laoag Terminal (RCJ Terminal, Fr. Castro Ave, Laoag City) —
+  // separate from the 'Laoag City' hub for the same reason.
+  Hub('Laoag Terminal', 'Ilocos Norte', 18.1958, 120.59062),
 ];
 
 /// Straight-line distance in km (haversine), same as the web app's
@@ -322,7 +336,18 @@ List<OperatorFareGroup> groupOperatorFares([
 enum _OriginMode { location, hub }
 
 class FaresTab extends StatefulWidget {
-  const FaresTab({super.key});
+  /// The signed-in user (null when signed out). Drives the
+  /// admin-only Add Route entry point — see admin_access.dart.
+  const FaresTab({
+    super.key,
+    this.currentUser,
+    this.customRouteRepository,
+  });
+
+  final AuthUser? currentUser;
+
+  /// Admin-added routes source. Null = no custom routes are shown.
+  final CustomRouteRepository? customRouteRepository;
 
   @override
   State<FaresTab> createState() => _FaresTabState();
@@ -333,10 +358,105 @@ class _FaresTabState extends State<FaresTab> {
   bool _discounted = false;
   _OriginMode _originMode = _OriginMode.location;
   int _originHub = 2; // Cabugao.
-  int _destHub = 1; // Vigan City.
+  int _destHub = 14; // Vigan Bus Terminal.
   double? _deviceLat;
   double? _deviceLng;
   bool _locating = false;
+
+  /// Admin-added routes (Add Route), newest first.
+  List<CustomRoute> _customRoutes = [];
+
+  bool get _isAdmin => isAdminUser(widget.currentUser);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCustomRoutes();
+  }
+
+  Future<void> _loadCustomRoutes() async {
+    final repo = widget.customRouteRepository;
+    if (repo == null) return;
+    final routes = await repo.loadAll();
+    if (mounted) setState(() => _customRoutes = routes);
+  }
+
+  /// Applies a custom route to the calculator: sets From/To to the
+  /// route's hubs (hub-origin mode) so the distance recomputes.
+  void _applyCustomRoute(CustomRoute route) {
+    final fromIndex = hubs.indexWhere((h) => h.name == route.from);
+    final toIndex = hubs.indexWhere((h) => h.name == route.to);
+    if (fromIndex < 0 || toIndex < 0) return;
+    setState(() {
+      _originMode = _OriginMode.hub;
+      _originHub = fromIndex;
+      _destHub = toIndex;
+    });
+  }
+
+  /// Opens the Add Route form (admin only — the button is hidden
+  /// for everyone else, and the repository re-checks on save).
+  Future<void> _openAddRoute({CustomRoute? existing}) async {
+    final user = widget.currentUser;
+    final repo = widget.customRouteRepository;
+    if (user == null || repo == null || !isAdminUser(user)) return;
+    final saved = await showModalBottomSheet<CustomRoute>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AddRouteSheet(
+        existing: existing,
+        repository: repo,
+        author: user,
+      ),
+    );
+    if (saved != null && mounted) {
+      await _loadCustomRoutes();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            existing == null ? 'Route added.' : 'Route updated.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteCustomRoute(CustomRoute route) async {
+    final user = widget.currentUser;
+    final repo = widget.customRouteRepository;
+    if (user == null || repo == null || !isAdminUser(user)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this route?'),
+        content: Text('${route.from} → ${route.to} · ${route.operator}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await repo.delete(route, user);
+      await _loadCustomRoutes();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Route deleted.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete the route: $e')),
+      );
+    }
+  }
 
   FareRate? get _rate {
     for (final r in fareRates) {
@@ -681,6 +801,80 @@ class _FaresTabState extends State<FaresTab> {
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
+            const SizedBox(height: AppSpacing.s24),
+            sectionTitle('Added routes'),
+            Text(
+              'Routes added by an admin. Tap one to load it into the '
+              'calculator above. The fare shown is the one the admin '
+              'entered — never a guess.',
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppLayout.cardGap),
+            if (_isAdmin)
+              FilledButton.icon(
+                onPressed: () => _openAddRoute(),
+                icon: const Icon(Icons.add),
+                label: const Text('Add Route'),
+              ),
+            if (_isAdmin) const SizedBox(height: AppLayout.cardGap),
+            if (_customRoutes.isEmpty)
+              Text(
+                'No added routes yet.',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              )
+            else
+              for (final route in _customRoutes)
+                Card(
+                  color: _faresCardColor(context),
+                  shape: _faresCardShape(context),
+                  child: ListTile(
+                    leading: const Icon(Icons.directions_bus_outlined),
+                    title: Text('${route.from} → ${route.to}'),
+                    subtitle: Text(
+                      '${route.operator} · ${route.vehicle}'
+                      '${route.viaHubs.isEmpty ? '' : ' · via ${route.viaHubs.join(' → ')}'}'
+                      '\nCustom route',
+                    ),
+                    isThreeLine: true,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          peso(route.fare),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (_isAdmin)
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            tooltip: 'Route options',
+                            onSelected: (v) {
+                              if (v == 'edit') {
+                                _openAddRoute(existing: route);
+                              }
+                              if (v == 'delete') {
+                                _deleteCustomRoute(route);
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit route'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete route'),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                    onTap: () => _applyCustomRoute(route),
+                  ),
+                ),
             const SizedBox(height: AppSpacing.s24),
             sectionTitle('Posted operator fares'),
             Text(
