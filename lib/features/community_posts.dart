@@ -34,7 +34,7 @@
 // are kept verbatim in storage and mapped for display only.
 //
 // Davao data is NOT copied: route names, hubs, vehicles, and fares here
-// come from the user and from EstudyanteGO's own 14 hubs.
+// come from the user and from EstudyanteGO's own 16 hubs.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
