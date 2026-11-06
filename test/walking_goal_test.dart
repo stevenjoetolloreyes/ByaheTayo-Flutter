@@ -308,10 +308,14 @@ void main() {
 
   group('Hub order + details screen', () {
     testWidgets(
-        'hub order is greeting, walking, sign-in, bible',
+        'hub order is greeting, sign-in, rewards, walking, …, bible',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
-      tester.view.physicalSize = const Size(1080, 12000);
+      // Tall surface: the redesigned Hub is taller than the old
+      // layout, and the lazy ListView only builds on-screen cards —
+      // the Bible card (last group) needs the extra height to be
+      // built at all. (Logical height 9000 at devicePixelRatio 3.)
+      tester.view.physicalSize = const Size(1080, 27000);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
 
@@ -342,14 +346,19 @@ void main() {
       double dy(Finder finder) =>
           tester.getTopLeft(finder).dy;
       final greetingDy = dy(find.textContaining('Steven!'));
-      final walkingDy =
-          dy(find.byKey(const ValueKey('walking-hub-card')));
       final signinDy =
           dy(find.byKey(const ValueKey('signin-hub-card')));
+      final rewardsDy =
+          dy(find.byKey(const ValueKey('rewards-center')));
+      final walkingDy =
+          dy(find.byKey(const ValueKey('walking-hub-card')));
       final bibleDy = dy(find.byKey(const ValueKey('bible-hub-card')));
-      expect(greetingDy, lessThan(walkingDy));
-      expect(walkingDy, lessThan(signinDy));
-      expect(signinDy, lessThan(bibleDy));
+      // Preview port (Nov 6): the Hub is grouped — Rewards & Goals
+      // first (sign-in, rewards, walking), Bible in the last group.
+      expect(greetingDy, lessThan(signinDy));
+      expect(signinDy, lessThan(rewardsDy));
+      expect(rewardsDy, lessThan(walkingDy));
+      expect(walkingDy, lessThan(bibleDy));
     });
 
     testWidgets('details screen renders in light and dark', (tester) async {
