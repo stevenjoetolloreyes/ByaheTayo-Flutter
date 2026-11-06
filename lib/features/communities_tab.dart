@@ -816,7 +816,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
 
   /// Create sheet (reference Local Transport form, updated): From +
   /// To + vehicle + fare required, hours + photo optional, location
-  /// = one of EstudyanteGO's own 14 hubs. New posts are shared via
+  /// = one of EstudyanteGO's own 16 hubs. New posts are shared via
   /// Firestore (never saved locally); failures surface honestly in
   /// the sheet and nothing is saved.
   Future<void> _openCreateSheet() async {
