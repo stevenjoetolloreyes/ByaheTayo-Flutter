@@ -52,6 +52,316 @@ Color _faresCardColor(BuildContext context) {
       : Colors.white;
 }
 
+/// Brand tokens (Nov 5 emerald system, shared with the preview):
+/// Deep Emerald #14532D and accent #16A34A.
+const kFaresDeepEmerald = Color(0xFF14532D);
+const kFaresAccent = Color(0xFF16A34A);
+
+/// 20% off, rounded to the nearest ₱0.25 — the same rule
+/// [computeFare] uses for a discounted fare.
+double discountedFareOf(double fare) => (fare * 0.8 * 4).round() / 4;
+
+/// One route in the "Popular Routes" list (preview design, ported
+/// Nov 6, 2026). Only REAL routes are listed here:
+///
+/// * Verified fares come from the Oct 16, 2026 user-verified trips
+///   (the same pairs as `knownBusFares` in map_tab.dart — that table
+///   stays the source of truth for the Map/Trips path; the values
+///   below are copied from it, never re-derived).
+/// * Routes Steven asked for by name with no fare yet (Partas Laoag
+///   → Cubao, GMW Bantay → Tuguegarao, Vigan Bus Terminal → San
+///   Juan, Laoag Terminal → Vigan Bus Terminal) carry `fare: null`
+///   and show "Fare not set" — never a sample.
+/// * The preview's SAMPLE fares are deliberately NOT here: ₱45
+///   Vigan → San Juan, ₱120 Laoag → Vigan, ₱40/₱13/₱7 breakdown,
+///   and the Dominion Van Cabugao → Vigan ₱60 (operator and fare
+///   both sample-only) are all omitted.
+/// * `operator` is set ONLY where Steven named the operator
+///   (Partas, GMW Trans). The verified ₱60/₱20 trips were reported
+///   as "bus" with no company named, so they carry no operator —
+///   the operator filter only ever matches a named operator.
+class PopularRoute {
+  const PopularRoute({
+    required this.from,
+    required this.to,
+    required this.vehicle,
+    this.operator,
+    this.fare,
+    this.fareLabel,
+    this.distanceKm,
+    this.distanceNote,
+  });
+
+  /// Endpoint names as shown on the card. Hub names (members of
+  /// [hubs]) let the route load into the calculator; other names
+  /// (e.g. 'Laoag Partas Terminal') are display-only.
+  final String from;
+  final String to;
+
+  /// One of 'Bus', 'Van', 'Jeepney', 'Tricycle'.
+  final String vehicle;
+
+  /// Bus company, or null when no operator was verified/named.
+  final String? operator;
+
+  /// The route's own fare in pesos, or null when no fare is set.
+  final double? fare;
+
+  /// Label for [fare] when set, e.g. 'Verified bus fare'.
+  final String? fareLabel;
+
+  /// Road distance in km when known without the calculator
+  /// (only the GMW route, measured on the preview map Nov 6,
+  /// 2026). Hub routes compute it from hub coordinates instead.
+  final double? distanceKm;
+
+  /// Where [distanceKm] came from, when it is a stored value.
+  final String? distanceNote;
+
+  bool get isBus => vehicle == 'Bus';
+
+  /// True when both endpoints are hubs, so the route can load
+  /// into the calculator and show a formula breakdown.
+  bool get hasHubEndpoints =>
+      hubByName(from) != null && hubByName(to) != null;
+
+  /// Road distance for hub routes (straight-line × 1.22, the
+  /// calculator's rule); the stored [distanceKm] otherwise.
+  double? get roadKm {
+    if (distanceKm != null) return distanceKm;
+    final fromHub = hubByName(from);
+    final toHub = hubByName(to);
+    if (fromHub == null || toHub == null) return null;
+    return math.max(
+      0.1,
+      haversineKm(fromHub.lat, fromHub.lng, toHub.lat, toHub.lng) * 1.22,
+    );
+  }
+}
+
+/// Built-in Popular Routes: verified fares first, then Steven's
+/// named no-fare routes. Admin-added custom routes are appended
+/// at runtime (see [_FaresTabState._allPopularRoutes]).
+const popularRoutes = <PopularRoute>[
+  // Cabugao → Vigan Bus Terminal, bus ₱60 (verified Oct 16, 2026;
+  // knownBusFares 'Cabugao|Vigan Bus Terminal'). 20% off = ₱48.
+  PopularRoute(
+    from: 'Cabugao',
+    to: 'Vigan Bus Terminal',
+    vehicle: 'Bus',
+    fare: 60,
+    fareLabel: 'Verified bus fare',
+  ),
+  // Cabugao → San Juan, Ilocos Sur, bus ₱20 (verified Oct 16, 2026).
+  PopularRoute(
+    from: 'Cabugao',
+    to: 'San Juan, Ilocos Sur',
+    vehicle: 'Bus',
+    fare: 20,
+    fareLabel: 'Verified bus fare',
+  ),
+  // Sinait → Cabugao, bus ₱20 (verified Oct 16, 2026).
+  PopularRoute(
+    from: 'Sinait',
+    to: 'Cabugao',
+    vehicle: 'Bus',
+    fare: 20,
+    fareLabel: 'Verified bus fare',
+  ),
+  // Vigan Bus Terminal → San Juan: Steven's requested route (Nov 6).
+  // No verified fare — the preview's ₱45 sample is NOT used.
+  PopularRoute(
+    from: 'Vigan Bus Terminal',
+    to: 'San Juan, Ilocos Sur',
+    vehicle: 'Bus',
+  ),
+  // Laoag Terminal → Vigan Bus Terminal: Steven's requested route
+  // (Nov 6). No verified fare — the preview's ₱120 sample is NOT used.
+  PopularRoute(
+    from: 'Laoag Terminal',
+    to: 'Vigan Bus Terminal',
+    vehicle: 'Bus',
+  ),
+  // Laoag Partas Terminal → Cubao Partas Terminal (Partas):
+  // Steven's requested route (Nov 6). Fare not set.
+  PopularRoute(
+    from: 'Laoag Partas Terminal',
+    to: 'Cubao Partas Terminal',
+    operator: 'Partas',
+    vehicle: 'Bus',
+  ),
+  // Bantay GMW Terminal → Tuguegarao GMW Terminal (GMW Trans):
+  // Steven's requested route (Nov 6). Fare not set. The 401.0 km
+  // road distance was measured on the preview map (OSRM road path,
+  // Nov 6, 2026); the 6 hr 28 min preview duration is NOT carried
+  // over — the app's ETA model lives in map_tab.dart and is not
+  // duplicated here.
+  PopularRoute(
+    from: 'Bantay GMW Terminal',
+    to: 'Tuguegarao GMW Terminal',
+    operator: 'GMW Trans',
+    vehicle: 'Bus',
+    distanceKm: 401.0,
+    distanceNote: 'Road distance from the preview map, Nov 6, 2026.',
+  ),
+];
+
+/// Vehicle filter chips (preview order).
+const vehicleFilters = <String>[
+  'All',
+  'Bus',
+  'Van',
+  'Jeepney',
+  'Tricycle',
+];
+
+/// Bus operator filter chips (preview order, shown only while the
+/// Bus vehicle chip is active).
+const busOperatorFilters = <String>[
+  'All',
+  'Partas',
+  'Dominion',
+  'GV Florida',
+  'Viron',
+  'Victory Liner',
+  'Solid North',
+  'Dagupan Bus',
+  'Genesis',
+  'Five Star',
+  'JAC Liner',
+  'ALPS',
+  'Bicol Isarog',
+  'GMW Trans',
+];
+
+/// Whether [routeOperator] matches the operator chip [chip].
+/// 'All' matches everything (including routes with no operator);
+/// a named chip matches when either name contains the other, so
+/// short chip labels match the app's full operator names
+/// ('Dominion' ↔ 'Dominion Bus Lines', 'ALPS' ↔ 'ALPS The Bus',
+/// 'GV Florida' ↔ 'GV Florida Transport'). Routes with no
+/// operator never match a named chip.
+bool popularRouteMatchesOperator(String? routeOperator, String chip) {
+  if (chip == 'All') return true;
+  if (routeOperator == null) return false;
+  final route = routeOperator.toLowerCase();
+  final want = chip.toLowerCase();
+  return route.contains(want) || want.contains(route);
+}
+
+/// Filters [routes] by vehicle chip and (Bus only) operator chip.
+/// Pure, so the filter behaviour is unit-testable without widgets.
+List<PopularRoute> filterPopularRoutes(
+  List<PopularRoute> routes, {
+  required String vehicle,
+  required String operator,
+}) {
+  return routes.where((route) {
+    if (vehicle != 'All' && route.vehicle != vehicle) return false;
+    if (vehicle == 'Bus' &&
+        operator != 'All' &&
+        !popularRouteMatchesOperator(route.operator, operator)) {
+      return false;
+    }
+    return true;
+  }).toList();
+}
+
+/// One admin-added route as a Popular Route (operator + fare are
+/// the admin's own entries — never invented).
+PopularRoute popularRouteFromCustomRoute(CustomRoute route) {
+  return PopularRoute(
+    from: route.from,
+    to: route.to,
+    operator: route.operator,
+    vehicle: route.vehicle,
+    fare: route.fare,
+    fareLabel: 'Admin-entered fare',
+  );
+}
+
+/// The fare breakdown of one calculator result, line by line, so
+/// the fare breakdown sheet shows real arithmetic instead of the
+/// preview's sample ₱40 + ₱13 + ₱7. Every field is derived from
+/// the same inputs as [computeFare]; [regular] and [collected]
+/// always equal the corresponding [FareResult] values.
+class FareBreakdown {
+  const FareBreakdown({
+    required this.base,
+    required this.bracket,
+    required this.perKm,
+    required this.billableKm,
+    required this.distanceFare,
+    required this.formulaFare,
+    required this.minimumAdjustment,
+    required this.regular,
+    required this.discounted,
+    required this.collected,
+  });
+
+  /// Base fare covering the first [bracket] km.
+  final double base;
+
+  /// Km covered by [base].
+  final double bracket;
+
+  /// Per-km charge after the bracket.
+  final double perKm;
+
+  /// Billable km: ceil(roadKm − bracket), never below 0.
+  final int billableKm;
+
+  /// [billableKm] × [perKm].
+  final double distanceFare;
+
+  /// [base] + [distanceFare], before any minimum.
+  final double formulaFare;
+
+  /// Amount the minimum added (0 when the formula already beats
+  /// it): minimum − [formulaFare].
+  final double minimumAdjustment;
+
+  /// Fare before discount (minimum applied when it beats the
+  /// formula).
+  final double regular;
+
+  /// Whether the 20% discount applies.
+  final bool discounted;
+
+  /// Amount to actually pay.
+  final double collected;
+}
+
+/// Builds the breakdown for [rate] at [roadKm]. Returns null only
+/// when there is no rate (the tricycle-local state has no fare to
+/// break down).
+FareBreakdown? fareBreakdownFor(
+  FareRate rate,
+  double roadKm,
+  bool discounted,
+) {
+  final billableKm = math.max(0, (roadKm - rate.bracket).ceil());
+  final distanceFare = billableKm * rate.perKm;
+  final formulaFare = rate.base + distanceFare;
+  final minimumAdjustment = rate.minimum != null
+      ? math.max(0.0, rate.minimum! - formulaFare)
+      : 0.0;
+  final regular = formulaFare + minimumAdjustment;
+  final collected = discounted ? (regular * 0.8 * 4).round() / 4 : regular;
+  return FareBreakdown(
+    base: rate.base,
+    bracket: rate.bracket,
+    perKm: rate.perKm,
+    billableKm: billableKm,
+    distanceFare: distanceFare,
+    formulaFare: formulaFare,
+    minimumAdjustment: minimumAdjustment,
+    regular: regular,
+    discounted: discounted,
+    collected: collected,
+  );
+}
+
 /// One vehicle rate from the web calculator's fareRates table.
 class FareRate {
   const FareRate({
@@ -342,12 +652,20 @@ class FaresTab extends StatefulWidget {
     super.key,
     this.currentUser,
     this.customRouteRepository,
+    this.onViewOnMap,
   });
 
   final AuthUser? currentUser;
 
   /// Admin-added routes source. Null = no custom routes are shown.
   final CustomRouteRepository? customRouteRepository;
+
+  /// Opens the Map tab for the current trip. Null when the host
+  /// does not wire it (same pattern as StudentTab/CommunitiesTab):
+  /// the "Find routes" and "View on Map" buttons are hidden then,
+  /// so there is never a dead button. main.dart is the only place
+  /// that can wire this (it owns tab switching).
+  final VoidCallback? onViewOnMap;
 
   @override
   State<FaresTab> createState() => _FaresTabState();
@@ -365,6 +683,12 @@ class _FaresTabState extends State<FaresTab> {
 
   /// Admin-added routes (Add Route), newest first.
   List<CustomRoute> _customRoutes = [];
+
+  /// Popular Routes filters (preview chips). The operator filter
+  /// only applies while the Bus vehicle chip is active; picking
+  /// any other vehicle resets it to All.
+  String _vehicleFilter = 'All';
+  String _operatorFilter = 'All';
 
   bool get _isAdmin => isAdminUser(widget.currentUser);
 
@@ -458,6 +782,128 @@ class _FaresTabState extends State<FaresTab> {
     }
   }
 
+  /// Popular Routes: the built-in verified / named routes plus
+  /// admin-added custom routes (newest first). The list is rebuilt
+  /// from [_customRoutes] on every build, so a newly added route
+  /// appears here without a reload.
+  List<PopularRoute> get _allPopularRoutes => [
+    ...popularRoutes,
+    for (final route in _customRoutes)
+      popularRouteFromCustomRoute(route),
+  ];
+
+  /// The Popular Routes list under the current chip filters.
+  List<PopularRoute> get _filteredPopularRoutes =>
+      filterPopularRoutes(
+        _allPopularRoutes,
+        vehicle: _vehicleFilter,
+        operator: _operatorFilter,
+      );
+
+  /// Loads a hub route into the calculator: hub-origin mode with
+  /// From/To set to the route's hubs, so the distance and fare
+  /// recompute. Non-hub routes cannot load (their endpoints are
+  /// not hubs) and are left untouched.
+  void _loadRouteIntoCalculator(PopularRoute route) {
+    if (!route.hasHubEndpoints) return;
+    final fromIndex = hubs.indexWhere((h) => h.name == route.from);
+    final toIndex = hubs.indexWhere((h) => h.name == route.to);
+    if (fromIndex < 0 || toIndex < 0) return;
+    setState(() {
+      _originMode = _OriginMode.hub;
+      _originHub = fromIndex;
+      _destHub = toIndex;
+    });
+  }
+
+  /// Tapping a Popular Route loads it into the calculator (hub
+  /// routes only) and opens the fare breakdown sheet for it.
+  void _openRouteSheet(PopularRoute route) {
+    _loadRouteIntoCalculator(route);
+    final rate = _rate;
+    final roadKm = _roadKm;
+    final breakdown = rate != null && roadKm != null
+        ? fareBreakdownFor(rate, roadKm, _discounted)
+        : null;
+    final fromHub = hubByName(route.from);
+    final toHub = hubByName(route.to);
+    final distanceKm = route.roadKm;
+    final distanceNote = route.distanceNote ??
+        (fromHub != null && toHub != null
+            ? 'Straight-line distance + 22% road allowance.'
+            : null);
+    final canViewOnMap =
+        widget.onViewOnMap != null && route.hasHubEndpoints;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _FareBreakdownSheet(
+        from: route.from,
+        to: route.to,
+        operator: route.operator,
+        vehicle: route.vehicle,
+        isBus: route.isBus,
+        showRouteFare: true,
+        routeFare: route.fare,
+        routeFareLabel: route.fareLabel,
+        routeFareNote: route.fare == null
+            ? null
+            : route.fareLabel == 'Verified bus fare'
+                ? 'Verified Oct 16, 2026 — shown as reported, not calculated.'
+                : 'Fare entered by an admin.',
+        distanceKm: distanceKm,
+        distanceNote: distanceNote,
+        breakdown: breakdown,
+        breakdownNote: breakdown == null && route.hasHubEndpoints
+            ? 'No calculator breakdown for the current vehicle and trip.'
+            : null,
+        onViewOnMap: canViewOnMap ? widget.onViewOnMap : null,
+      ),
+    );
+  }
+
+  /// Opens the fare breakdown sheet for the current calculation
+  /// (from the result card's "See breakdown" button).
+  void _openCurrentBreakdown() {
+    final rate = _rate;
+    final roadKm = _roadKm;
+    if (rate == null || roadKm == null) return;
+    final breakdown = fareBreakdownFor(rate, roadKm, _discounted);
+    final fromLabel = _originMode == _OriginMode.location
+        ? 'My location'
+        : hubs[_originHub].name;
+    final canViewOnMap =
+        widget.onViewOnMap != null &&
+        _originMode == _OriginMode.hub;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _FareBreakdownSheet(
+        from: fromLabel,
+        to: hubs[_destHub].name,
+        operator: null,
+        vehicle: rate.label,
+        isBus:
+            rate.id.startsWith('prov-') || rate.id.startsWith('city-'),
+        showRouteFare: false,
+        routeFare: null,
+        routeFareLabel: null,
+        routeFareNote: null,
+        distanceKm: roadKm,
+        distanceNote: 'Straight-line distance + 22% road allowance.',
+        breakdown: breakdown,
+        breakdownNote: null,
+        onViewOnMap: canViewOnMap ? widget.onViewOnMap : null,
+      ),
+    );
+  }
+
   FareRate? get _rate {
     for (final r in fareRates) {
       if (r.id == _rateId) return r;
@@ -541,6 +987,7 @@ class _FaresTabState extends State<FaresTab> {
     final rate = _rate;
     final roadKm = _roadKm;
     final directKm = _directKm;
+    final filteredRoutes = _filteredPopularRoutes;
 
     Widget sectionTitle(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -556,74 +1003,7 @@ class _FaresTabState extends State<FaresTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Know your fare before you go',
-              style: kFaresPageTitle,
-            ),
-            const SizedBox(height: AppSpacing.s2),
-            Text(
-              'LTFRB fare calculator — same rates and formula as the web app.',
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              color: _faresCardColor(context),
-              shape: _faresCardShape(context),
-              child: Padding(
-                padding: AppLayout.cardPadding,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    sectionTitle('Sasakyan'),
-                    DropdownButtonFormField<String>(
-                      value: _rateId,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(kFaresInputRadius),
-                        ),
-                      ),
-                      items: [
-                        for (final r in fareRates)
-                          DropdownMenuItem(value: r.id, child: Text(r.label)),
-                        const DropdownMenuItem(
-                          value: 'tricycle-local',
-                          child: Text('Other tricycle · local matrix needed'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _rateId = value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: AppLayout.cardGap),
-                    SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment(value: false, label: Text('Regular')),
-                        ButtonSegment(
-                          value: true,
-                          label: Text('Student / Senior / PWD · 20% off'),
-                        ),
-                      ],
-                      selected: {_discounted},
-                      onSelectionChanged: (selection) {
-                        setState(() => _discounted = selection.first);
-                      },
-                    ),
-                    if (rate != null && rate.minimum != null) ...[
-                      const SizedBox(height: AppSpacing.s8),
-                      Text(
-                        '${peso(rate.minimum!)} minimum',
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+            _FaresHero(),
             const SizedBox(height: 24),
             Card(
               color: _faresCardColor(context),
@@ -707,6 +1087,22 @@ class _FaresTabState extends State<FaresTab> {
                         },
                       ),
                     ],
+                    if (_originMode == _OriginMode.hub) ...[
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: IconButton(
+                          tooltip: 'Swap From and To',
+                          onPressed: () {
+                            setState(() {
+                              final from = _originHub;
+                              _originHub = _destHub;
+                              _destHub = from;
+                            });
+                          },
+                          icon: const Icon(Icons.swap_vert),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppLayout.cardGap),
                     DropdownButtonFormField<int>(
                       value: _destHub,
@@ -750,6 +1146,182 @@ class _FaresTabState extends State<FaresTab> {
                         style: Theme.of(context).textTheme.titleLarge
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
+                    if (widget.onViewOnMap != null) ...[
+                      const SizedBox(height: AppLayout.cardGap),
+                      FilledButton.icon(
+                        onPressed: widget.onViewOnMap,
+                        icon: const Icon(Icons.map_outlined),
+                        label: const Text('Find routes'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text('Popular Routes', style: kFaresCardHeading),
+                const Spacer(),
+                Text(
+                  '${filteredRoutes.length} ${filteredRoutes.length == 1 ? 'route' : 'routes'}',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.s8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final vehicle in vehicleFilters)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(vehicle),
+                        selected: _vehicleFilter == vehicle,
+                        showCheckmark: false,
+                        selectedColor: kFaresAccent,
+                        backgroundColor: _faresCardColor(context),
+                        side: BorderSide(
+                          color: _vehicleFilter == vehicle
+                              ? kFaresAccent
+                              : scheme.outline,
+                        ),
+                        labelStyle: TextStyle(
+                          color: _vehicleFilter == vehicle
+                              ? Colors.white
+                              : null,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        onSelected: (_) {
+                          setState(() {
+                            _vehicleFilter = vehicle;
+                            if (vehicle != 'Bus') _operatorFilter = 'All';
+                          });
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (_vehicleFilter == 'Bus') ...[
+              const SizedBox(height: AppLayout.cardGap),
+              Text(
+                'Bus operator — Luzon, city & provincial',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: AppSpacing.s8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final operator in busOperatorFilters)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(operator),
+                          selected: _operatorFilter == operator,
+                          showCheckmark: false,
+                          selectedColor: kFaresAccent,
+                          backgroundColor: _faresCardColor(context),
+                          side: BorderSide(
+                            color: _operatorFilter == operator
+                                ? kFaresAccent
+                                : scheme.outline,
+                          ),
+                          labelStyle: TextStyle(
+                            color: _operatorFilter == operator
+                                ? Colors.white
+                                : null,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          onSelected: (_) {
+                            setState(() => _operatorFilter = operator);
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: AppLayout.cardGap),
+            if (filteredRoutes.isEmpty)
+              Text(
+                _vehicleFilter == 'Bus' && _operatorFilter != 'All'
+                    ? 'No $_operatorFilter routes yet.'
+                    : _vehicleFilter == 'All'
+                        ? 'No routes yet.'
+                        : 'No ${_vehicleFilter.toLowerCase()} routes yet.',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              )
+            else
+              for (final route in filteredRoutes)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _PopularRouteCard(
+                    route: route,
+                    onTap: () => _openRouteSheet(route),
+                  ),
+                ),
+            const SizedBox(height: 24),
+            Card(
+              color: _faresCardColor(context),
+              shape: _faresCardShape(context),
+              child: Padding(
+                padding: AppLayout.cardPadding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    sectionTitle('Sasakyan'),
+                    DropdownButtonFormField<String>(
+                      value: _rateId,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(kFaresInputRadius),
+                        ),
+                      ),
+                      items: [
+                        for (final r in fareRates)
+                          DropdownMenuItem(value: r.id, child: Text(r.label)),
+                        const DropdownMenuItem(
+                          value: 'tricycle-local',
+                          child: Text('Other tricycle · local matrix needed'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _rateId = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: AppLayout.cardGap),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('Regular')),
+                        ButtonSegment(
+                          value: true,
+                          label: Text('Student / Senior / PWD · 20% off'),
+                        ),
+                      ],
+                      selected: {_discounted},
+                      onSelectionChanged: (selection) {
+                        setState(() => _discounted = selection.first);
+                      },
+                    ),
+                    if (rate != null && rate.minimum != null) ...[
+                      const SizedBox(height: AppSpacing.s8),
+                      Text(
+                        '${peso(rate.minimum!)} minimum',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -788,10 +1360,21 @@ class _FaresTabState extends State<FaresTab> {
                           ),
                         ],
                       )
-                    : _FareAmount(
-                        rate: rate,
-                        roadKm: roadKm,
-                        discounted: _discounted,
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _FareAmount(
+                            rate: rate,
+                            roadKm: roadKm,
+                            discounted: _discounted,
+                          ),
+                          const SizedBox(height: AppLayout.cardGap),
+                          TextButton.icon(
+                            onPressed: _openCurrentBreakdown,
+                            icon: const Icon(Icons.receipt_long),
+                            label: const Text('See breakdown'),
+                          ),
+                        ],
                       ),
               ),
             ),
@@ -978,6 +1561,500 @@ class _FareAmount extends StatelessWidget {
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       ],
+    );
+  }
+}
+
+/// Whole km without decimals, fractional km with one decimal.
+String formatKm(double km) =>
+    km.toStringAsFixed(km.truncateToDouble() == km ? 0 : 1);
+
+/// Hero panel at the top of the Fares tab (preview design): a Deep
+/// Emerald gradient carrying the tab's existing title and subtitle.
+/// No dark-mode toggle here — that lives only in Settings →
+/// General → Appearance (Nov 5 rule); the preview's in-tab toggle
+/// is preview chrome and is deliberately not ported.
+class _FaresHero extends StatelessWidget {
+  const _FaresHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [kFaresDeepEmerald, Color(0xFF166534)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(kFaresCardRadius),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.calculate_outlined,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s12),
+              const Expanded(
+                child: Text(
+                  'Know your fare before you go',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          const Text(
+            'LTFRB fare calculator — same rates and formula as the web app.',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Provincial" scope tag carried by every bus route card and the
+/// fare breakdown sheet (preview design). Van / jeepney / tricycle
+/// routes carry no scope tag.
+class _ProvincialTag extends StatelessWidget {
+  const _ProvincialTag();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: kFaresDeepEmerald.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Text(
+        'Provincial',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: kFaresDeepEmerald,
+        ),
+      ),
+    );
+  }
+}
+
+/// Material icon for a Popular Route vehicle. No emoji anywhere.
+IconData _popularRouteIcon(String vehicle) {
+  switch (vehicle) {
+    case 'Bus':
+      return Icons.directions_bus;
+    case 'Van':
+      return Icons.airport_shuttle;
+    case 'Jeepney':
+      return Icons.directions_bus_outlined;
+    case 'Tricycle':
+      return Icons.motorcycle;
+    default:
+      return Icons.directions_transit;
+  }
+}
+
+/// One Popular Routes card: vehicle icon, From → To, operator and
+/// vehicle with the "Provincial" scope tag on bus cards, and the
+/// route's own fare (regular + 20%-off) or "Fare not set".
+class _PopularRouteCard extends StatelessWidget {
+  const _PopularRouteCard({required this.route, required this.onTap});
+
+  final PopularRoute route;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fare = route.fare;
+    return Card(
+      color: _faresCardColor(context),
+      shape: _faresCardShape(context),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: AppLayout.cardPadding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: kFaresAccent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  _popularRouteIcon(route.vehicle),
+                  color: kFaresAccent,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${route.from} → ${route.to}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: AppSpacing.s4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (route.operator != null)
+                          Text(
+                            route.operator!,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        Text(
+                          route.vehicle,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                        if (route.isBus) const _ProvincialTag(),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s8),
+              fare == null
+                  ? Text(
+                      'Fare not set',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          peso(fare),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          '${peso(discountedFareOf(fare))} student',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: kFaresAccent),
+                        ),
+                      ],
+                    ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One labelled row in the fare breakdown sheet.
+class _SheetRow extends StatelessWidget {
+  const _SheetRow({
+    required this.label,
+    this.detail,
+    required this.amount,
+    this.bold = false,
+  });
+
+  final String label;
+  final String? detail;
+  final String amount;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight:
+                        bold ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+                if (detail != null)
+                  Text(
+                    detail!,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s12),
+          Text(
+            amount,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fare breakdown bottom sheet (preview design, real numbers): the
+/// route's own fare (verified / admin-entered / not set) and, when
+/// the trip can be priced, the LTFRB calculator breakdown for the
+/// current vehicle and discount. Every row comes from
+/// [FareBreakdown] or the route's own fare — the preview's sample
+/// ₱40 + ₱13 + ₱7 breakdown is never shown.
+class _FareBreakdownSheet extends StatelessWidget {
+  const _FareBreakdownSheet({
+    required this.from,
+    required this.to,
+    required this.operator,
+    required this.vehicle,
+    required this.isBus,
+    required this.showRouteFare,
+    required this.routeFare,
+    required this.routeFareLabel,
+    required this.routeFareNote,
+    required this.distanceKm,
+    required this.distanceNote,
+    required this.breakdown,
+    required this.breakdownNote,
+    required this.onViewOnMap,
+  });
+
+  final String from;
+  final String to;
+  final String? operator;
+  final String vehicle;
+  final bool isBus;
+
+  /// False for the current-calculation sheet (no route fare to
+  /// show); true for a tapped Popular Route.
+  final bool showRouteFare;
+  final double? routeFare;
+  final String? routeFareLabel;
+  final String? routeFareNote;
+  final double? distanceKm;
+  final String? distanceNote;
+  final FareBreakdown? breakdown;
+  final String? breakdownNote;
+  final VoidCallback? onViewOnMap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final breakdown = this.breakdown;
+    final routeFare = this.routeFare;
+    final distanceKm = this.distanceKm;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: scheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s16),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Fare breakdown',
+                      style: kFaresCardHeading,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Text(
+                '$from → $to',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: AppSpacing.s4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (operator != null)
+                    Text(
+                      operator!,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  Text(
+                    vehicle,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  if (isBus) const _ProvincialTag(),
+                ],
+              ),
+              if (distanceKm != null) ...[
+                const SizedBox(height: AppSpacing.s16),
+                _SheetRow(
+                  label: 'Distance',
+                  detail: distanceNote,
+                  amount: '${distanceKm.toStringAsFixed(1)} km',
+                ),
+              ],
+              if (showRouteFare) ...[
+                const SizedBox(height: AppSpacing.s16),
+                const Text('Route fare', style: kFaresCardHeading),
+                const SizedBox(height: AppSpacing.s8),
+                if (routeFare != null) ...[
+                  _SheetRow(
+                    label: routeFareLabel ?? 'Route fare',
+                    amount: peso(routeFare),
+                    bold: true,
+                  ),
+                  _SheetRow(
+                    label: '20% off (Student / Senior / PWD)',
+                    amount: peso(discountedFareOf(routeFare)),
+                  ),
+                  if (routeFareNote != null)
+                    Text(
+                      routeFareNote!,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                ] else ...[
+                  const Text(
+                    'Fare not set',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: AppSpacing.s4),
+                  Text(
+                    'No fare has been set for this route yet.',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ],
+              if (breakdown != null) ...[
+                const SizedBox(height: AppSpacing.s16),
+                const Text('Calculator estimate', style: kFaresCardHeading),
+                const SizedBox(height: AppSpacing.s8),
+                _SheetRow(
+                  label: 'Base fare',
+                  detail: 'Covers the first ${formatKm(breakdown.bracket)} km',
+                  amount: peso(breakdown.base),
+                ),
+                _SheetRow(
+                  label: 'Distance',
+                  detail:
+                      '${breakdown.billableKm} km × ${peso(breakdown.perKm)} per km',
+                  amount: peso(breakdown.distanceFare),
+                ),
+                if (breakdown.minimumAdjustment > 0)
+                  _SheetRow(
+                    label: 'Minimum applied',
+                    detail:
+                        'Formula fare ${peso(breakdown.formulaFare)} was below the minimum',
+                    amount: '+${peso(breakdown.minimumAdjustment)}',
+                  ),
+                const Divider(),
+                _SheetRow(
+                  label: 'Regular fare',
+                  amount: peso(breakdown.regular),
+                  bold: true,
+                ),
+                if (breakdown.discounted)
+                  _SheetRow(
+                    label: 'Student / Senior / PWD discount',
+                    detail: '20% off',
+                    amount:
+                        '−${peso(breakdown.regular - breakdown.collected)}',
+                  ),
+                const SizedBox(height: AppSpacing.s8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Amount to pay',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '≈ ${peso(breakdown.collected)}',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: kFaresAccent,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.s8),
+                Text(
+                  'LTFRB formula — same rates as the calculator above.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ] else if (breakdownNote != null) ...[
+                const SizedBox(height: AppSpacing.s16),
+                Text(
+                  breakdownNote!,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+              if (onViewOnMap != null) ...[
+                const SizedBox(height: AppSpacing.s16),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onViewOnMap!();
+                  },
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('View on Map'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
