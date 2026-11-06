@@ -76,23 +76,32 @@ void main() {
     }
   });
 
-  test('groupRoutesByDirection splits Cabugao routes 2 north / 11 south',
+  test('groupRoutesByDirection splits Cabugao routes 3 north / 12 south',
       () {
     final routes = routesFrom(17.78916, 120.45838, 'Cabugao');
     final grouped = groupRoutesByDirection(routes);
-    expect(grouped[Direction.northbound]!.length, 2);
-    expect(grouped[Direction.southbound]!.length, 11);
+    expect(grouped[Direction.northbound]!.length, 3);
+    expect(grouped[Direction.southbound]!.length, 12);
     expect(
       grouped[Direction.northbound]!.map((r) => r.dest.name),
-      containsAll(['Sinait', 'Laoag City']),
+      containsAll(['Sinait', 'Laoag City', 'Laoag Terminal']),
+    );
+    expect(
+      grouped[Direction.southbound]!.map((r) => r.dest.name),
+      contains('Vigan Bus Terminal'),
     );
   });
 
   test('filterRoutesByQuery matches destination name or region', () {
     final routes = routesFrom(17.78916, 120.45838, 'Cabugao');
     final filtered = filterRoutesByQuery(routes, 'Vigan');
-    expect(filtered.length, 1);
-    expect(filtered.first.dest.name, 'Vigan City');
+    expect(filtered.length, 2);
+    // The terminal is the nearer Vigan endpoint, so it sorts first.
+    expect(filtered.first.dest.name, 'Vigan Bus Terminal');
+    expect(
+      filtered.map((r) => r.dest.name),
+      contains('Vigan City'),
+    );
     expect(filterRoutesByQuery(routes, '').length, routes.length);
     expect(filterRoutesByQuery(routes, 'zzz'), isEmpty);
   });
@@ -101,6 +110,74 @@ void main() {
     expect(knownBusFares['Cabugao|Vigan City'], 60);
     expect(knownBusFares['Cabugao|Sinait'], 20);
     expect(knownBusFares['Vigan City|Sinait'], isNull);
+  });
+
+  test('Vigan Bus Terminal is a separate hub at Jose Singson / Rivero',
+      () {
+    final terminal = hubs.firstWhere((h) => h.name == 'Vigan Bus Terminal');
+    expect(terminal.lat, 17.56641);
+    expect(terminal.lng, 120.38590);
+    expect(terminal.region, 'Ilocos Sur');
+    // The old Vigan City hub is kept: community posts use its name.
+    final city = hubs.firstWhere((h) => h.name == 'Vigan City');
+    expect(city.lat, 17.56138);
+    expect(city.lng, 120.38564);
+    // Appended last, so earlier hub indices do not shift.
+    expect(hubs.indexOf(terminal), 14);
+    expect(hubs.length, 16);
+  });
+
+  test('Laoag Terminal is a separate hub from Laoag City', () {
+    final terminal = hubs.firstWhere((h) => h.name == 'Laoag Terminal');
+    expect(terminal.lat, 18.1958);
+    expect(terminal.lng, 120.59062);
+    expect(hubs.indexOf(terminal), 15);
+  });
+
+  test('terminal pairs use the verified Cabugao-Vigan ₱60 fare', () {
+    expect(knownBusFares['Cabugao|Vigan Bus Terminal'], 60);
+    expect(knownBusFares['Vigan Bus Terminal|Cabugao'], 60);
+    // Sample fares are deliberately NOT verified fares.
+    expect(knownBusFares['Vigan Bus Terminal|San Juan, Ilocos Sur'],
+        isNull);
+    expect(knownBusFares['Laoag Terminal|Vigan Bus Terminal'], isNull);
+  });
+
+  test('Quezon Ave via waypoint applies only to the terminal', () {
+    final terminal = hubs.firstWhere((h) => h.name == 'Vigan Bus Terminal');
+    final via = viaWaypointsForDestination(terminal);
+    expect(via.length, 1);
+    // Start of the Avenida Quezon leg (OSRM-verified Nov 6, 2026).
+    expect(via.first.latitude, 17.576831);
+    expect(via.first.longitude, 120.387462);
+    final city = hubs.firstWhere((h) => h.name == 'Vigan City');
+    expect(viaWaypointsForDestination(city), isEmpty);
+    final sanJuan = hubs.firstWhere((h) => h.name == 'San Juan, Ilocos Sur');
+    expect(viaWaypointsForDestination(sanJuan), isEmpty);
+  });
+
+  test('routesFrom Cabugao reaches both new hubs', () {
+    final routes = routesFrom(17.78916, 120.45838, 'Cabugao');
+    final names = routes.map((r) => r.dest.name).toList();
+    expect(names, contains('Vigan Bus Terminal'));
+    expect(names, contains('Laoag Terminal'));
+    final toTerminal = routes.firstWhere(
+      (r) => r.dest.name == 'Vigan Bus Terminal',
+    );
+    expect(toTerminal.roadKm.toStringAsFixed(1), '31.6');
+    expect(toTerminal.direction, Direction.southbound);
+    final toLaoag = routes.firstWhere(
+      (r) => r.dest.name == 'Laoag Terminal',
+    );
+    // Cabugao → Laoag Terminal is 57.7 km; 89.4 km is the
+    // Laoag Terminal → Vigan Bus Terminal leg (tested in the
+    // fare test via resolveTransitFare).
+    expect(toLaoag.roadKm.toStringAsFixed(1), '57.7');
+    expect(toLaoag.direction, Direction.northbound);
+    final toSanJuan = routesFrom(17.56641, 120.38590, 'Vigan Bus Terminal')
+        .firstWhere((r) => r.dest.name == 'San Juan, Ilocos Sur');
+    expect(toSanJuan.roadKm.toStringAsFixed(1), '25.3');
+    expect(toSanJuan.direction, Direction.northbound);
   });
 
 
