@@ -48,6 +48,7 @@ import 'student/student_theme.dart';
 import 'student/walking_goal_card.dart';
 import 'student/walking_goal_screen.dart';
 import 'student/walking_repository.dart';
+import 'student/week_grid.dart';
 import 'fares_tab.dart' as fares;
 import 'map_tab.dart' as maps;
 
@@ -107,6 +108,7 @@ class _StudentTabState extends State<StudentTab> {
   bool _loading = true;
   bool _hideBalance = false;
   String _classesTab = 'today';
+  bool _tasksCompletedExpanded = false;
   List<AllowanceTxn> _txns = [];
   List<SavingsGoal> _goals = [];
   List<BudgetLimit> _budgets = [];
@@ -358,28 +360,49 @@ class _StudentTabState extends State<StudentTab> {
     // 12:09 correction: the tablet 2/3-column grid looked sparse
     // with mismatched card heights — "wag ganito").
     //
-    // Phase 1 hub order (Full Development Update §1): greeting →
-    // Walking Goal → sign-in → Bible → summary widgets. The eight
-    // pre-existing summary widgets (allowance, classes, notes,
-    // upcoming, tasks, attendance, quotes, commute) are kept rather
-    // than deleted: the same spec also says "do not remove existing
-    // sections". (The Quick Buttons section was removed Nov 5 at
+    // Preview port (Nov 6): the same sections, reorganized into 5
+    // headed groups — Rewards & Goals, Study, Money, Commute,
+    // Inspiration & Calendar. NOTHING is removed; only the order
+    // changes. (The Quick Buttons section was removed Nov 5 at
     // his request; Classes/Notes/Allowance/Tasks stay one tap away
     // via their summary cards, but Attendance has no Hub entry
     // point anymore.)
-    final sections = [
-      _walkingWidget(context),
-      _signinWidget(context),
-      _bibleWidget(context),
-      _rewardsCenterWidget(context),
-      _allowanceWidget(context),
-      _classesWidget(context),
-      _notesWidget(context),
-      _upcomingWidget(context),
-      _tasksWidget(context),
-      _attendanceWidget(context),
-      _quotesWidget(context),
-      _commuteWidget(context),
+    final now = DateTime.now();
+    final groups = <({String title, List<Widget> sections})>[
+      (
+        title: 'Rewards & Goals',
+        sections: [
+          _signinWidget(context),
+          _rewardsCenterWidget(context),
+          _walkingWidget(context),
+        ],
+      ),
+      (
+        title: 'Study',
+        sections: [
+          _classesWidget(context),
+          _notesWidget(context),
+          _tasksWidget(context),
+          _upcomingWidget(context),
+        ],
+      ),
+      (
+        title: 'Money',
+        sections: [_allowanceWidget(context)],
+      ),
+      (
+        title: 'Commute',
+        sections: [_commuteWidget(context)],
+      ),
+      (
+        title: 'Inspiration & Calendar',
+        sections: [
+          _bibleWidget(context),
+          _quotesWidget(context),
+          _attendanceWidget(context),
+          _notificationsWidget(context),
+        ],
+      ),
     ];
 
     return RefreshIndicator(
@@ -390,17 +413,108 @@ class _StudentTabState extends State<StudentTab> {
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         children: [
           studentHeader(
-            greetingName: greetingFor(DateTime.now()),
+            greetingName: greetingFor(now),
             onBell: _showNotifications,
             profile: widget.profile,
           ),
-          const SizedBox(height: 24),
-          for (final s in sections) ...[
+          const SizedBox(height: 16),
+          _atAGlanceWidget(context, now),
+          for (final g in groups) ...[
             const SizedBox(height: 24),
-            s,
+            _groupHeader(g.title),
+            const SizedBox(height: 12),
+            for (final s in g.sections) ...[
+              s,
+              const SizedBox(height: 12),
+            ],
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
         ],
+      ),
+    );
+  }
+
+  /// Group heading for the preview-port sections (Material 3).
+  Widget _groupHeader(String title) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: scheme.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: kStudentSectionHeading,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// At-a-glance summary under the greeting hero: today's date
+  /// plus the three live counts — points, free scans, classes
+  /// today. All real data; zero states stay honest.
+  Widget _atAGlanceWidget(BuildContext context, DateTime now) {
+    final scheme = Theme.of(context).colorScheme;
+    final points = widget.walletController?.balance ?? 0;
+    final freeScans =
+        widget.creditsController?.scanCounter.freeRemaining ??
+            freeScansPerDay;
+    final classesToday = classesOnDay(_subjects, now.weekday).length;
+
+    Widget stat(String label, String value) {
+      return Expanded(
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: AppText.bodyStrong.copyWith(color: scheme.primary),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: AppText.small.copyWith(color: scheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: AppLayout.cardPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${weekdayName(now.weekday)}, ${monthName(now.month)} ${now.day}, ${now.year}',
+              style: AppText.caption.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s8),
+            Row(
+              children: [
+                stat('Points', '$points'),
+                stat('Free scans', '$freeScans/$freeScansPerDay'),
+                stat(
+                  'Classes today',
+                  '$classesToday',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -777,6 +891,8 @@ class _StudentTabState extends State<StudentTab> {
     final bars = lastMonthsExpense(_txns, now, 6);
     final maxBar =
         bars.fold<double>(0, (m, b) => b.amount > m ? b.amount : m);
+    final totalSpent =
+        bars.fold<double>(0, (s, b) => s + b.amount);
     var budgetedSpent = 0.0;
     var budgetTotal = 0.0;
     for (final b in _budgets) {
@@ -789,10 +905,12 @@ class _StudentTabState extends State<StudentTab> {
               t.date.month == now.month)
           .fold<double>(0, (s, t) => s + t.amount);
     }
+    final totalSaved =
+        _goals.fold<double>(0, (s, g) => s + g.saved);
     final recent = List.of(_txns)
       ..sort((a, b) => b.date.compareTo(a.date));
 
-    Widget miniBox(String label, String value, Color color) {
+    Widget miniBox(String label, String value, Color color, IconData icon) {
       return Expanded(
         child: Container(
           padding: const EdgeInsets.all(10),
@@ -803,7 +921,14 @@ class _StudentTabState extends State<StudentTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: AppText.small),
+              Row(
+                children: [
+                  Icon(icon, size: 16, color: color),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text(label, style: AppText.small)),
+                ],
+              ),
+              const SizedBox(height: 2),
               Text(value,
                   style: TextStyle(
                       fontWeight: FontWeight.w700, color: color)),
@@ -812,6 +937,40 @@ class _StudentTabState extends State<StudentTab> {
         ),
       );
     }
+
+    // Income vs Expenses split bar: widths are the real shares;
+    // both ₱0.00 means a 0% / 0% empty track.
+    final splitTotal = totalIncome + totalExpense;
+    final incomeShare =
+        splitTotal > 0 ? totalIncome / splitTotal : 0.0;
+    final expenseShare =
+        splitTotal > 0 ? totalExpense / splitTotal : 0.0;
+
+    Widget legendDot(Color color, String label, double value) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text('$label ${peso(value)}', style: AppText.small),
+        ],
+      );
+    }
+
+    // Budget Utilization donut: empty track with a "— Used"
+    // center when no budgets exist; overall utilization otherwise.
+    final overallUtilization =
+        budgetTotal > 0 ? (budgetedSpent / budgetTotal).clamp(0, 1) : 0.0;
+    final donutCenter = budgetTotal > 0
+        ? '${(overallUtilization * 100).toStringAsFixed(0)}% Used'
+        : '— Used';
 
     return _widgetCard(
       context,
@@ -823,114 +982,315 @@ class _StudentTabState extends State<StudentTab> {
         Container(
           padding: AppLayout.cardPadding,
           decoration: const BoxDecoration(
-            color: kStudentEmerald,
+            gradient: LinearGradient(
+              colors: [kStudentEmerald, kStudentEmeraldAccent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Available Balance',
-                        style: TextStyle(color: Colors.white70)),
-                    Text(
-                      _hideBalance ? '₱••••' : peso(balance),
-                      style: AppText.displaySmall.copyWith(color: Colors.white),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Available Balance',
+                            style: TextStyle(color: Colors.white70)),
+                        Text(
+                          _hideBalance ? '₱••••' : peso(balance),
+                          style: AppText.displaySmall
+                              .copyWith(color: Colors.white),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (_budgets.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'No budgets set',
+                        style: AppText.smallBold
+                            .copyWith(color: Colors.white),
+                      ),
+                    ),
+                  IconButton(
+                    onPressed: () =>
+                        setState(() => _hideBalance = !_hideBalance),
+                    icon: Icon(
+                        _hideBalance
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: Colors.white),
+                  ),
+                ],
               ),
-              IconButton(
-                onPressed: () =>
-                    setState(() => _hideBalance = !_hideBalance),
-                icon: Icon(
-                    _hideBalance
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: Colors.white),
+              const SizedBox(height: AppSpacing.s4),
+              Text(
+                'Income ${peso(totalIncome)} · Expenses ${peso(totalExpense)}',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
           ),
         ),
         const SizedBox(height: AppLayout.cardGap),
+        const Text('Income vs Expenses',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: AppSpacing.s4),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                height: 10,
+                color: scheme.outline.withValues(alpha: 0.5),
+                child: Row(
+                  children: [
+                    if (incomeShare > 0)
+                      Container(
+                        width: width * incomeShare,
+                        color: scheme.secondary,
+                      ),
+                    if (expenseShare > 0)
+                      Container(
+                        width: width * expenseShare,
+                        color: kStudentError,
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.s4),
+        Wrap(
+          spacing: 16,
+          runSpacing: 4,
+          children: [
+            legendDot(
+              scheme.secondary,
+              'Income',
+              totalIncome,
+            ),
+            legendDot(
+              kStudentError,
+              'Expenses',
+              totalExpense,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppLayout.cardGap),
         Row(
           children: [
-            miniBox('Income', peso(totalIncome), scheme.secondary),
+            miniBox('Income', peso(totalIncome), scheme.secondary,
+                Icons.trending_up),
             const SizedBox(width: AppSpacing.s8),
-            miniBox('Expenses', peso(totalExpense), kStudentError),
+            miniBox('Expenses', peso(totalExpense), kStudentError,
+                Icons.trending_down),
             const SizedBox(width: AppSpacing.s8),
             miniBox(
                 'Remaining',
                 _budgets.isEmpty
                     ? 'No budgets'
                     : peso(budgetTotal - budgetedSpent),
-                scheme.primary),
+                scheme.primary,
+                Icons.account_balance_wallet_outlined),
           ],
         ),
         const SizedBox(height: AppLayout.cardGap),
         const Text('Monthly Spending (Last 6 Months)',
             style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: AppSpacing.s4),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (final b in bars)
-              Expanded(
-                child: Column(
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest
+                .withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outline.withValues(alpha: 0.6)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 96,
+                child: Stack(
                   children: [
-                    Container(
-                      height: maxBar > 0 ? 48 * (b.amount / maxBar) : 2,
-                      width: 18,
-                      decoration: BoxDecoration(
-                        color: scheme.primary,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
+                    // Grid lines.
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        for (var i = 0; i < 3; i++)
+                          Container(
+                            height: 1,
+                            color: scheme.outline.withValues(alpha: 0.5),
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.s2),
-                    Text(b.label, style: AppText.micro),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (final b in bars)
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(
+                                  peso(b.amount),
+                                  style: AppText.micro.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  height: maxBar > 0
+                                      ? 56 * (b.amount / maxBar)
+                                      : 2,
+                                  width: 18,
+                                  decoration: BoxDecoration(
+                                    color: scheme.primary,
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.s2),
+                                Text(b.label, style: AppText.micro),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-          ],
+              const SizedBox(height: AppSpacing.s4),
+              Text(
+                '${peso(totalSpent)} Total spent',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              if (totalSpent == 0)
+                Text(
+                  'No spending recorded in the last 6 months.',
+                  style: AppText.caption.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.s8),
         const Text('Budget Utilization',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        if (_budgets.isEmpty)
-          const Text('No budget limits set yet.')
-        else
-          for (final b in _budgets.take(3))
-            Builder(builder: (_) {
-              final spent = _txns
-                  .where((t) =>
-                      t.kind == 'expense' &&
-                      t.category == b.category &&
-                      t.date.year == now.year &&
-                      t.date.month == now.month)
-                  .fold<double>(0, (s, t) => s + t.amount);
-              return Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${b.category}: ${peso(spent)} of ${peso(b.limit)}'),
-                    const SizedBox(height: AppSpacing.s2),
-                    LinearProgressIndicator(
-                      value: b.limit > 0
-                          ? (spent / b.limit).clamp(0, 1).toDouble()
-                          : 0,
+        const SizedBox(height: AppSpacing.s4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: CircularProgressIndicator(
+                      value: overallUtilization.toDouble(),
+                      strokeWidth: 8,
+                      backgroundColor:
+                          scheme.outline.withValues(alpha: 0.5),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        scheme.primary,
+                      ),
                     ),
+                  ),
+                  Text(
+                    donutCenter,
+                    textAlign: TextAlign.center,
+                    style: AppText.micro.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_budgets.isEmpty) ...[
+                    const Text('No budget limits set yet.'),
+                    Text('Budgets set: 0',
+                        style: AppText.caption.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        )),
+                  ] else ...[
+                    Text('Budgets set: ${_budgets.length}',
+                        style: AppText.caption.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        )),
+                    for (final b in _budgets.take(3))
+                      Builder(builder: (_) {
+                        final spent = _txns
+                            .where((t) =>
+                                t.kind == 'expense' &&
+                                t.category == b.category &&
+                                t.date.year == now.year &&
+                                t.date.month == now.month)
+                            .fold<double>(0, (s, t) => s + t.amount);
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  '${b.category}: ${peso(spent)} of ${peso(b.limit)}'),
+                              const SizedBox(height: AppSpacing.s2),
+                              LinearProgressIndicator(
+                                value: b.limit > 0
+                                    ? (spent / b.limit).clamp(0, 1).toDouble()
+                                    : 0,
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                   ],
-                ),
-              );
-            }),
+                ],
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.s8),
         const Text('Savings Progress',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        if (_goals.isEmpty)
-          const Text('No savings goals yet.')
-        else
+        if (_goals.isEmpty) ...[
+          const Text('No savings goals yet.'),
+          Text(
+            'Saved ${peso(0)} / Goal: not set',
+            style: AppText.caption
+                .copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.s2),
+          LinearProgressIndicator(
+            value: 0,
+            backgroundColor: scheme.outline.withValues(alpha: 0.5),
+          ),
+        ] else ...[
+          Text(
+            'Saved ${peso(totalSaved)} / Goal: ${peso(_goals.fold<double>(0, (s, g) => s + g.target))}',
+            style: AppText.caption
+                .copyWith(color: scheme.onSurfaceVariant),
+          ),
           for (final g in _goals.take(3))
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -947,11 +1307,31 @@ class _StudentTabState extends State<StudentTab> {
                 ],
               ),
             ),
+        ],
         const SizedBox(height: AppSpacing.s8),
         const Text('Recent Transactions',
             style: TextStyle(fontWeight: FontWeight.w700)),
         if (recent.isEmpty)
-          const Text('No transactions yet.')
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: scheme.primary.withValues(alpha: 0.12),
+                  child: Icon(
+                    Icons.receipt_long_outlined,
+                    color: scheme.primary,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('No transactions yet.'),
+                ),
+              ],
+            ),
+          )
         else
           for (final t in recent.take(3))
             _row(
@@ -984,11 +1364,19 @@ class _StudentTabState extends State<StudentTab> {
       return 'Subject';
     }
 
+    // Google Calendar-style grids (preview port, Nov 6): Today =
+    // day grid, This Week = full Monday-first week grid, All
+    // Classes = subjects list. Grids render real subjects only;
+    // with none, the grid is empty and the honest empty state
+    // below it stays. Both grids show the red now-line and open
+    // scrolled to the current hour.
     Widget tabBody;
     if (_classesTab == 'today') {
       tabBody = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ClassWeekGrid(subjects: _subjects, days: [now], now: now),
+          const SizedBox(height: AppSpacing.s8),
           if (next != null)
             _row('Next class',
                 '${next.subject.name} · ${weekdayName(next.date.weekday)} ${formatMinutes(next.subject.startMin)}'),
@@ -1005,20 +1393,18 @@ class _StudentTabState extends State<StudentTab> {
         ],
       );
     } else if (_classesTab == 'week') {
-      final days = <Widget>[];
-      for (var day = 1; day <= 7; day++) {
-        final dayClasses = classesOnDay(_subjects, day);
-        if (dayClasses.isEmpty) continue;
-        days.add(_row(
-          weekdayName(day),
-          dayClasses.map((s) => s.name).join(', '),
-        ));
-      }
+      final monday = mondayOfWeek(now);
+      final weekDays = [
+        for (var i = 0; i < 7; i++)
+          DateTime(monday.year, monday.month, monday.day + i),
+      ];
+      final hasAny = _subjects.isNotEmpty;
       tabBody = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (days.isEmpty) const Text('No classes this week.'),
-          ...days,
+          ClassWeekGrid(subjects: _subjects, days: weekDays, now: now),
+          const SizedBox(height: AppSpacing.s8),
+          if (!hasAny) const Text('No classes this week.'),
         ],
       );
     } else {
@@ -1245,16 +1631,91 @@ class _StudentTabState extends State<StudentTab> {
   }
 
   // ------------------------------------------------- tasks & assignments
+  // Google Tasks style (preview port, Nov 6): pale-yellow MY TASKS
+  // card with grip bar + pending chip, "Add a task" row, honest
+  // empty state as a task row, working "Completed" collapsible,
+  // and the picture's pastel list bars below (WORK / FAMILY /
+  // GROCERIES / TRAVEL — list names from the picture, not real
+  // lists, so they are empty header bars with no tasks inside).
+  // No sample tasks are invented: pending rows come only from real
+  // assignments, and "Add a task" opens the Classes screen where
+  // assignments live.
 
   Widget _tasksWidget(BuildContext context) {
     final pending = _assignments.where((a) => !a.done).toList()
       ..sort((a, b) => a.due.compareTo(b.due));
+    final completed = _assignments.where((a) => a.done).toList()
+      ..sort((a, b) => b.due.compareTo(a.due));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
+    // Pale-yellow MY TASKS card (Google Tasks picture): light
+    // pastel in light mode, dark tint in dark mode.
+    final tasksCardColor = isDark
+        ? const Color(0xFF2E2A17)
+        : const Color(0xFFFFF8E1);
+    const pastelLists = [
+      ('WORK', Color(0xFFEDE9FE)),
+      ('FAMILY', Color(0xFFFCE7F3)),
+      ('GROCERIES', Color(0xFFDCFCE7)),
+      ('TRAVEL', Color(0xFFF3E8FF)),
+    ];
+    const pastelListsDark = [
+      ('WORK', Color(0xFF2E2A4A)),
+      ('FAMILY', Color(0xFF3A2436)),
+      ('GROCERIES', Color(0xFF1E3325)),
+      ('TRAVEL', Color(0xFF2E2440)),
+    ];
 
     String subjectName(String id) {
       for (final s in _subjects) {
         if (s.id == id) return s.name;
       }
       return 'Subject';
+    }
+
+    Widget taskRow({
+      required String title,
+      String? detail,
+      bool completedRow = false,
+    }) {
+      final textStyle = AppText.body.copyWith(
+        decoration:
+            completedRow ? TextDecoration.lineThrough : null,
+        color: completedRow ? scheme.onSurfaceVariant : null,
+      );
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Icon(
+              completedRow
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked,
+              color: completedRow
+                  ? scheme.primary
+                  : scheme.onSurfaceVariant,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: textStyle),
+                  if (detail != null)
+                    Text(
+                      detail,
+                      style: AppText.small.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(Icons.star_border, size: 20),
+          ],
+        ),
+      );
     }
 
     return _widgetCard(
@@ -1264,13 +1725,178 @@ class _StudentTabState extends State<StudentTab> {
       subtitle: 'What is due next.',
       onOpen: () => _open(const ClassesScreen()),
       children: [
-        _row('Pending tasks', '${pending.length}'),
-        if (pending.isEmpty)
-          const Text('No pending tasks.')
-        else
-          for (final a in pending.take(4))
-            _row(subjectName(a.subjectId),
-                '${a.title} · ${formatDate(a.due)}'),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: BoxDecoration(
+            color: tasksCardColor,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Grip bar.
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Text(
+                    'MY TASKS',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${pending.length} pending',
+                      style: AppText.smallBold.copyWith(
+                        color: scheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () => _open(const ClassesScreen()),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: scheme.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.add,
+                          size: 14,
+                          color: scheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Add a task',
+                        style: AppText.body.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(height: 8),
+              if (pending.isEmpty)
+                taskRow(title: 'No pending tasks.')
+              else
+                for (final a in pending.take(4))
+                  InkWell(
+                    onTap: () => _open(const ClassesScreen()),
+                    borderRadius: BorderRadius.circular(8),
+                    child: taskRow(
+                      title:
+                          '${subjectName(a.subjectId)} · ${a.title}',
+                      detail: formatDate(a.due),
+                    ),
+                  ),
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () => setState(
+                  () => _tasksCompletedExpanded = !_tasksCompletedExpanded,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _tasksCompletedExpanded
+                            ? Icons.keyboard_arrow_down
+                            : Icons.keyboard_arrow_right,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Completed (${completed.length})',
+                        style: AppText.bodySmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_tasksCompletedExpanded) ...[
+                if (completed.isEmpty)
+                  taskRow(
+                    title: 'No completed tasks.',
+                    completedRow: true,
+                  )
+                else
+                  for (final a in completed.take(4))
+                    taskRow(
+                      title:
+                          '${subjectName(a.subjectId)} · ${a.title}',
+                      detail: formatDate(a.due),
+                      completedRow: true,
+                    ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s8),
+        // Pastel list bars from the picture: empty header bars only.
+        for (final (name, color) in isDark ? pastelListsDark : pastelLists)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1432,6 +2058,30 @@ class _StudentTabState extends State<StudentTab> {
     );
   }
 
+  // -------------------------------------------------------- notifications
+  // Preview port (Nov 6): Notifications as its own section in the
+  // Inspiration & Calendar group. Opens the same honest empty
+  // sheet as the bells — the app has no notification system, so
+  // there is never a fake unread dot.
+
+  Widget _notificationsWidget(BuildContext context) {
+    return _widgetCard(
+      context,
+      icon: Icons.notifications_outlined,
+      title: 'Notifications',
+      subtitle: 'Stay in the loop.',
+      onOpen: _showNotifications,
+      children: const [
+        Text('No notifications yet.'),
+        SizedBox(height: AppSpacing.s4),
+        Text(
+          'This app does not have a notification system yet, so there is nothing to show here.',
+          style: AppText.caption,
+        ),
+      ],
+    );
+  }
+
   // -------------------------------------------------------- attendance
   // (Preserved so the calendar, breakdown, and monthly report stay
   // reachable from the dashboard.)
@@ -1492,6 +2142,7 @@ class _StudentTabState extends State<StudentTab> {
             final dayEvents = schoolEventsOnDay(_school, dayDate);
             final hasNoClassEvent = dayEvents.any((e) => e.noClasses);
             final isToday = day == now.day;
+            final isHoliday = kind == SchoolDayKind.holiday;
             final Color? dayColor = switch (kind) {
               SchoolDayKind.holiday => scheme.error,
               SchoolDayKind.weekend => scheme.onSurfaceVariant,
@@ -1502,26 +2153,34 @@ class _StudentTabState extends State<StudentTab> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Google Calendar style: today is a filled emerald
+                  // circle with white text.
                   Container(
-                    padding: const EdgeInsets.all(4),
+                    width: 26,
+                    height: 26,
+                    alignment: Alignment.center,
                     decoration: isToday
-                        ? BoxDecoration(
-                            border: Border.all(color: scheme.primary),
-                            borderRadius: BorderRadius.circular(8),
+                        ? const BoxDecoration(
+                            color: kStudentEmerald,
+                            shape: BoxShape.circle,
                           )
                         : null,
                     child: Text(
                       '$day',
                       style: TextStyle(
                         fontSize: 12,
-                        color: dayColor,
-                        fontWeight: kind == SchoolDayKind.holiday
+                        color: isToday ? Colors.white : dayColor,
+                        fontWeight: isToday || isHoliday
                             ? FontWeight.w800
                             : null,
                       ),
                     ),
                   ),
-                  if (dayEvents.isNotEmpty)
+                  // Red dot under real holidays; blue dot under
+                  // school events.
+                  if (isHoliday)
+                    const Icon(Icons.circle, size: 6, color: Colors.red)
+                  else if (dayEvents.isNotEmpty)
                     const Icon(Icons.circle, size: 6, color: kStudentInfo),
                 ],
               ),
