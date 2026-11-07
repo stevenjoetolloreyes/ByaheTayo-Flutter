@@ -745,6 +745,88 @@ List<OperatorFareGroup> groupOperatorFares([
   return groups;
 }
 
+/// The result of [resetAllDirectionsPlan]: which stored
+/// directions to clear, which overrides to save with the
+/// direction removed, and which overrides to delete (they carry
+/// nothing but a direction). Fares are never part of a reset.
+class ResetAllDirectionsPlan {
+  const ResetAllDirectionsPlan({
+    required this.clearedCustoms,
+    required this.clearedOverrides,
+    required this.deletedOverrideKeys,
+  });
+
+  /// Admin-added routes whose saved direction is cleared (a
+  /// copy with viaHubs + viaWaypoints emptied; fares untouched).
+  final List<CustomRoute> clearedCustoms;
+
+  /// Seeded-route overrides whose saved direction is cleared
+  /// but which still carry a fare (saved back with the
+  /// direction removed; fares untouched).
+  final List<RouteFareOverride> clearedOverrides;
+
+  /// Seeded-route override keys whose override carried ONLY a
+  /// direction — clearing it empties the override, so the doc
+  /// is deleted (a reset to the built-in route).
+  final List<String> deletedOverrideKeys;
+
+  /// Routes touched by the reset (custom + override saves +
+  /// override deletes).
+  int get affectedCount =>
+      clearedCustoms.length +
+      clearedOverrides.length +
+      deletedOverrideKeys.length;
+
+  bool get isEmpty => affectedCount == 0;
+}
+
+/// Plans a full reset of every saved direction (Steven, Nov 7,
+/// 20:41: "Mag Reset Direction ka ako na gagawa New Line" +
+/// "Lahat" — he draws the new lines himself). Clears BOTH
+/// [CustomRoute.viaWaypoints] (drawn line points) AND
+/// [CustomRoute.viaHubs] (named via stops) on every admin-added
+/// route, and the same two fields on every seeded-route
+/// override — a full reset to each route's generated/OSRM path.
+/// Fares (regular / student / PWD / Senior) are NEVER changed:
+/// an override that still carries a fare is saved back, one
+/// that carried only a direction is deleted. Routes with no
+/// saved direction are left alone (no-ops are skipped, so a
+/// reset touches only what it must).
+ResetAllDirectionsPlan resetAllDirectionsPlan({
+  required List<CustomRoute> customs,
+  required List<RouteFareOverride> overrides,
+}) {
+  final clearedCustoms = <CustomRoute>[];
+  for (final route in customs) {
+    if (route.viaHubs.isNotEmpty || route.viaWaypoints.isNotEmpty) {
+      clearedCustoms.add(
+        route.copyWith(viaHubs: const [], viaWaypoints: const []),
+      );
+    }
+  }
+  final clearedOverrides = <RouteFareOverride>[];
+  final deletedOverrideKeys = <String>[];
+  for (final override in overrides) {
+    final hasDirection = (override.viaHubs?.isNotEmpty == true) ||
+        (override.viaWaypoints?.isNotEmpty == true);
+    if (!hasDirection) continue;
+    final cleared = override.copyWith(
+      viaHubs: const [],
+      viaWaypoints: const [],
+    );
+    if (routeFareOverrideIsEmpty(cleared)) {
+      deletedOverrideKeys.add(override.routeKey);
+    } else {
+      clearedOverrides.add(cleared);
+    }
+  }
+  return ResetAllDirectionsPlan(
+    clearedCustoms: clearedCustoms,
+    clearedOverrides: clearedOverrides,
+    deletedOverrideKeys: deletedOverrideKeys,
+  );
+}
+
 enum _OriginMode { location, hub }
 
 class FaresTab extends StatefulWidget {
@@ -1385,6 +1467,95 @@ class _FaresTabState extends State<FaresTab> {
     }
   }
 
+  /// Resets every saved direction (admin only): clears the
+  /// drawn line points (viaWaypoints) AND the named via stops
+  /// (viaHubs) on every route in one tap — Steven (Nov 7,
+  /// 20:41) resets them all and draws the new lines himself.
+  /// Fares are never touched: an override that still carries a
+  /// fare is saved back with only the direction removed; one
+  /// that carried only a direction is deleted (reset to the
+  /// built-in route). A confirm dialog shows the count first —
+  /// this wipes all saved directions. The repos enforce the
+  /// admin allowlist on every write; the button is hidden for
+  /// non-admins and this method re-checks.
+  Future<void> _resetAllDirections() async {
+    final user = widget.currentUser;
+    final repo = widget.customRouteRepository;
+    final overrideRepo = widget.fareOverrideRepository;
+    if (user == null ||
+        repo == null ||
+        overrideRepo == null ||
+        !isAdminUser(user)) {
+      return;
+    }
+    final plan = resetAllDirectionsPlan(
+      customs: _customRoutes,
+      overrides: _fareOverrides.values.toList(),
+    );
+    if (plan.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No saved directions to reset.')),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reset all directions?'),
+        content: Text(
+          'This clears the saved direction on '
+          '${plan.affectedCount} route(s) — every drawn line and '
+          'every named via stop. Fares stay as they are. You can '
+          'draw new lines on the Map afterwards.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Reset all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      for (final route in plan.clearedCustoms) {
+        await repo.update(route, user, busStops: _busStops);
+      }
+      for (final override in plan.clearedOverrides) {
+        await overrideRepo.save(override, user);
+      }
+      for (final routeKey in plan.deletedOverrideKeys) {
+        await overrideRepo.delete(routeKey, user);
+      }
+      await _loadRouteData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reset ${plan.affectedCount} direction(s). '
+            'Fares were not changed.',
+          ),
+        ),
+      );
+    } catch (_) {
+      await _loadRouteData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Some directions could not be reset. Check the routes '
+            'and try again.',
+          ),
+        ),
+      );
+    }
+  }
+
   FareRate? get _rate {
     for (final r in fareRates) {
       if (r.id == _rateId) return r;
@@ -1775,6 +1946,25 @@ class _FaresTabState extends State<FaresTab> {
                 onPressed: _showManageBusStops,
                 icon: const Icon(Icons.push_pin_outlined),
                 label: const Text('Manage bus stops'),
+              ),
+              const SizedBox(height: 8),
+              // Reset all directions (admin only, Steven Nov 7,
+              // 20:41: "Mag Reset Direction ka ako na gagawa New
+              // Line" + "Lahat"). One tap clears every saved
+              // direction — drawn lines AND named via stops — on
+              // every route, so each route falls back to its
+              // generated/OSRM path and he can draw the new lines
+              // himself on the Map. Fares are never touched.
+              // It lives here, next to Manage bus stops, because
+              // this is where the admin manages route data and
+              // the Fares tab already holds the repos + loaded
+              // data (so the confirm dialog can count the
+              // affected routes). The Draw line UI is per-route
+              // — the wrong scope for a bulk action.
+              OutlinedButton.icon(
+                onPressed: _resetAllDirections,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Reset all directions'),
               ),
             ],
           ],

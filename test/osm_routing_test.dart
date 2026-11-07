@@ -2,6 +2,7 @@
 // network — fixtures only).
 import 'dart:convert';
 
+import 'package:estudyantego/features/bus_stops.dart';
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/osm_routing.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -206,6 +207,55 @@ void main() {
         stops.map((s) => s.name).toList(),
         ['Cabugao', 'San Juan, Ilocos Sur', 'Vigan Bus Terminal'],
       );
+    });
+
+    test('drawn waypoints carry their waypoint index for renaming', () {
+      // No road geometry yet: only origin + waypoints +
+      // destination, in tap order — the exact shape of Steven's
+      // Cabugao → Vigan stops list (Nov 7, 20:54: "Point 1" /
+      // "Point 2" must be renamable to real place names).
+      final stops = routeStops(
+        origin: const LatLng(17.78916, 120.45838),
+        originName: 'Cabugao',
+        dest: dest,
+        roadPoints: null,
+        totalKm: 27.5,
+        viaWaypoints: const [
+          RouteWaypoint(lat: 17.72, lng: 120.45),
+          RouteWaypoint(
+            name: 'Magsingal Market',
+            lat: 17.70,
+            lng: 120.44,
+          ),
+        ],
+      );
+      expect(
+        stops.map((s) => s.name).toList(),
+        ['Cabugao', 'Point 1', 'Magsingal Market', 'Vigan Bus Terminal'],
+      );
+      expect(stops[0].waypointIndex, isNull);
+      expect(stops[1].waypointIndex, 0);
+      expect(stops[2].waypointIndex, 1);
+      expect(stops[3].waypointIndex, isNull);
+      // The unnamed waypoint shows its positional label, never
+      // an invented place name.
+      expect(stops[1].role, 'Stop');
+    });
+
+    test('named via stops and on-the-way hubs are not waypoints', () {
+      final stops = routeStops(
+        origin: const LatLng(17.78916, 120.45838),
+        originName: 'Cabugao',
+        dest: dest,
+        roadPoints: road,
+        totalKm: 27.5,
+        viaHubNames: const ['San Juan, Ilocos Sur'],
+      );
+      expect(
+        stops.map((s) => s.name).toList(),
+        ['Cabugao', 'San Juan, Ilocos Sur', 'Vigan Bus Terminal'],
+      );
+      expect(stops.every((s) => s.waypointIndex == null), isTrue);
     });
   });
 

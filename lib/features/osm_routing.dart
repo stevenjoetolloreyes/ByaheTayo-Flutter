@@ -648,6 +648,7 @@ class RouteStop {
     required this.isDestination,
     required this.pathIndex,
     required this.kmFromOrigin,
+    this.waypointIndex,
   });
 
   /// Stop name (hub name, or 'Your location' for a GPS origin).
@@ -669,6 +670,15 @@ class RouteStop {
 
   /// Distance from the origin along the road geometry, in km.
   final double kmFromOrigin;
+
+  /// Index into the route's effective drawn waypoints
+  /// ([viaWaypoints]) when this stop IS one of them; null for
+  /// the origin, the destination, on-the-way hubs, and named
+  /// via stops. Lets the Map tab offer a rename for exactly the
+  /// drawn points (Steven, Nov 7, 20:54: "Point 1" / "Point 2"
+  /// must be renamable to real place names) — the index maps
+  /// the stop card back to the waypoint the name is saved on.
+  final int? waypointIndex;
 
   /// Start / Stop / End label for the stop card.
   String get role => isOrigin
@@ -724,7 +734,13 @@ List<RouteStop> routeStops({
   // over the named via stops. Unnamed waypoints are labelled
   // "Point N" in tap order — a positional label, never an
   // invented place name.
-  final viaStops = <({String name, String region, double lat, double lng})>[];
+  final viaStops = <({
+    String name,
+    String region,
+    double lat,
+    double lng,
+    int? waypointIndex,
+  })>[];
   if (viaWaypoints.isNotEmpty) {
     for (var i = 0; i < viaWaypoints.length; i++) {
       final w = viaWaypoints[i];
@@ -733,6 +749,7 @@ List<RouteStop> routeStops({
         region: w.name == null ? '' : _regionOf(w.name!, extraStops),
         lat: w.lat,
         lng: w.lng,
+        waypointIndex: i,
       ));
     }
   } else {
@@ -744,6 +761,7 @@ List<RouteStop> routeStops({
           region: hub.region,
           lat: hub.lat,
           lng: hub.lng,
+          waypointIndex: null,
         ));
       }
     }
@@ -795,6 +813,7 @@ List<RouteStop> routeStops({
         isDestination: false,
         pathIndex: idx,
         kmFromOrigin: kmFrom(idx),
+        waypointIndex: stop.waypointIndex,
       ),
     );
   }

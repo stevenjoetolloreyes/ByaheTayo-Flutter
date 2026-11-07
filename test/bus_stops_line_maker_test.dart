@@ -726,4 +726,79 @@ void main() {
       expect(find.text('Manage bus stops'), findsNothing);
     });
   });
+
+  group('set Start/End mode', () {
+    testWidgets('admin sees Set Start/End; tapping it opens the bar',
+        (tester) async {
+      await _pumpMap(tester, currentUser: _admin);
+
+      expect(find.text('Set Start/End'), findsOneWidget);
+      await tester.tap(find.text('Set Start/End'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Tap the map to place the Start pin'),
+        findsOneWidget,
+      );
+      expect(find.text('Name & save'), findsOneWidget);
+      expect(find.text('Clear'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+    });
+
+    testWidgets('a non-admin never sees Set Start/End', (tester) async {
+      await _pumpMap(tester, currentUser: _nonAdmin);
+      expect(find.text('Set Start/End'), findsNothing);
+    });
+
+    testWidgets('Name & save and Clear are disabled until pins exist',
+        (tester) async {
+      await _pumpMap(tester, currentUser: _admin);
+      await tester.tap(find.text('Set Start/End'));
+      await tester.pumpAndSettle();
+
+      // No pins placed yet: the actions wait for the taps.
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.ancestor(
+                of: find.text('Name & save'),
+                matching: find.byType(FilledButton),
+              ),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.ancestor(
+                of: find.text('Clear'),
+                matching: find.byType(OutlinedButton),
+              ),
+            )
+            .onPressed,
+        isNull,
+      );
+    });
+
+    testWidgets('Cancel exits the mode and the sheet returns',
+        (tester) async {
+      await _pumpMap(tester, currentUser: _admin);
+      await tester.tap(find.text('Set Start/End'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Tap the map to place the Start pin'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Tap the map to place the Start pin'),
+        findsNothing,
+      );
+      expect(find.text('Set Start/End'), findsOneWidget);
+    });
+  });
 }

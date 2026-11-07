@@ -1438,6 +1438,19 @@ class MapLineLayerSpec {
 /// up) is preserved exactly: the same four layers, same widths,
 /// same colours — only expressed as specs. It never runs in
 /// draw mode (entering draw mode clears the selection).
+///
+/// [roadLoading] (Sinait → Cabugao, Nov 7, 20:40): the new
+/// route's road shape is still loading — draw NO route line.
+/// The old route's line is gone the instant the route changes
+/// (the caller nulls _roadPoints and sets roadLoading), so the
+/// layer list transitions exactly once per fetch (nothing →
+/// solid shape, or nothing → dashed on failure) instead of
+/// twice (old solid → dashed → new solid). Two transitions in
+/// quick succession are what let the plugin's un-awaited
+/// remove+add orphan the previous route's line: the sheet
+/// showed Sinait → Cabugao while the map still drew the
+/// Cabugao → Vigan line. The draft slot (if any) is the admin's
+/// in-progress work and is NOT suppressed by roadLoading.
 List<MapLineLayerSpec> mapLineLayers({
   required List<LatLng> routePoints,
   required bool routeSolid,
@@ -1449,64 +1462,69 @@ List<MapLineLayerSpec> mapLineLayers({
   required LatLng draftOrigin,
   required LatLng draftDest,
   required List<LatLng>? draftRoadPoints,
+  bool roadLoading = false,
 }) {
   const green = Color(0xFF16A34A);
   const amber = Color(0xFFF59E0B);
   final layers = <MapLineLayerSpec>[];
   // Slot 0: the saved route line, always present when a route
   // is active — including in draw mode, as the reference under
-  // the draft being drawn.
-  if (drawMode) {
-    layers.add(
-      MapLineLayerSpec(
-        points: routePoints,
-        color: green,
-        solid: routeSolid,
-      ),
-    );
-  } else if (selectedStopIndex != null &&
-      routeStops.isNotEmpty &&
-      roadPoints != null &&
-      roadPoints.length >= 2) {
-    final stop = routeStops[
-        selectedStopIndex.clamp(0, routeStops.length - 1)];
-    final split = splitPathAt(roadPoints, stop.pathIndex);
-    layers.addAll([
-      // Earlier part: dimmed to 0.15.
-      MapLineLayerSpec(
-        points: split.before,
-        color: green.withValues(alpha: 0.15),
-        solid: true,
-      ),
-      // Remaining part: soft glow + white casing + wide
-      // light-green core.
-      MapLineLayerSpec(
-        points: split.after,
-        color: green.withValues(alpha: 0.25),
-        solid: true,
-        width: 16,
-      ),
-      MapLineLayerSpec(
-        points: split.after,
-        color: Colors.white,
-        solid: true,
-        width: 11,
-      ),
-      MapLineLayerSpec(
-        points: split.after,
-        color: const Color(0xFF4ADE80),
-        solid: true,
-        width: 7,
-      ),
-    ]);
-  } else {
-    layers.add(
-      MapLineLayerSpec(
-        points: routePoints,
-        color: green,
-        solid: routeSolid,
-      ),
-    );
+  // the draft being drawn. Omitted entirely while the new
+  // route's road shape is loading (roadLoading): no line for
+  // the wrong route is ever drawn, not even briefly.
+  if (!roadLoading) {
+    if (drawMode) {
+      layers.add(
+        MapLineLayerSpec(
+          points: routePoints,
+          color: green,
+          solid: routeSolid,
+        ),
+      );
+    } else if (selectedStopIndex != null &&
+        routeStops.isNotEmpty &&
+        roadPoints != null &&
+        roadPoints.length >= 2) {
+      final stop = routeStops[
+          selectedStopIndex.clamp(0, routeStops.length - 1)];
+      final split = splitPathAt(roadPoints, stop.pathIndex);
+      layers.addAll([
+        // Earlier part: dimmed to 0.15.
+        MapLineLayerSpec(
+          points: split.before,
+          color: green.withValues(alpha: 0.15),
+          solid: true,
+        ),
+        // Remaining part: soft glow + white casing + wide
+        // light-green core.
+        MapLineLayerSpec(
+          points: split.after,
+          color: green.withValues(alpha: 0.25),
+          solid: true,
+          width: 16,
+        ),
+        MapLineLayerSpec(
+          points: split.after,
+          color: Colors.white,
+          solid: true,
+          width: 11,
+        ),
+        MapLineLayerSpec(
+          points: split.after,
+          color: const Color(0xFF4ADE80),
+          solid: true,
+          width: 7,
+        ),
+      ]);
+    } else {
+      layers.add(
+        MapLineLayerSpec(
+          points: routePoints,
+          color: green,
+          solid: routeSolid,
+        ),
+      );
+    }
   }
   // Trailing slot, draw mode only and only once the admin has
   // tapped (or the draft was pre-filled from a saved direction):
@@ -1692,6 +1710,18 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // never starts from an empty map.
   bool _lineMakerActive = false;
   bool _lineMakerAddStop = false;
+  // Set Start/End mode (admin only, Steven Nov 7, 20:52: "Yung
+  // Start at End mismo, ako maglalagay"): two map taps place
+  // the route's Start pin, then its End pin. The points become
+  // named bus stops (he names each one) and the map jumps to
+  // the new route between them — no coordinates are ever stored
+  // raw, and no stop name is ever invented. Like the line
+  // maker it hides the sheet (restored on exit) and suppresses
+  // the stop card while active. Mutually exclusive with the
+  // line maker: entering one exits the other.
+  bool _setEndpointsActive = false;
+  LatLng? _pendingStart;
+  LatLng? _pendingEnd;
   List<RouteWaypoint> _draftPoints = const [];
   List<LatLng>? _draftRoadPoints;
   // Memoized line-layer spec + the PolylineLayer list built from
@@ -1707,6 +1737,16 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // Road-following shape from OSRM (null = still loading or failed;
   // the dashed direct line shows until real geometry arrives).
   List<LatLng>? _roadPoints;
+  // True while a road fetch is in flight for the CURRENT route
+  // (set with the route change, cleared when the fetch settles).
+  // While true, _routePolylineLayers draws NO line: the old
+  // route's line is gone the instant the route changes, and the
+  // layer list transitions exactly once per fetch — the stale
+  // line Steven saw on Sinait → Cabugao (Nov 7, 20:40) came
+  // from two transitions in quick succession (old solid →
+  // dashed → new solid) through the plugin's un-awaited
+  // remove+add reconciliation.
+  bool _roadLoading = false;
   double _routeDurationSec = 0;
   // Google's own route length (km) from routes.distanceMeters.
   // 0 = not loaded yet; the bottom bar then falls back to the
@@ -2257,6 +2297,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _activeRouteOverride = resolved.override;
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
+      _roadLoading = route != null;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
     });
@@ -2542,6 +2583,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _activeRouteOverride = resolved.override;
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
+      _roadLoading = route != null;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
     });
@@ -2600,11 +2642,18 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     );
     if (!mounted || requestId != _roadRequestId) return;
     if (result == null || result.points.isEmpty) {
-      // OSRM routing unavailable — the dashed direct line stays.
+      // OSRM routing unavailable — the fetch has settled, so
+      // the dashed direct line shows (roadLoading off). The
+      // re-sync re-asserts it once, same as the success path.
+      if (mounted) {
+        setState(() => _roadLoading = false);
+      }
+      _resyncLineLayers(requestId);
       return;
     }
     setState(() {
       _roadPoints = result.points;
+      _roadLoading = false;
       _routeDurationSec = result.durationSec;
       _routeDistanceKm = result.distanceKm;
       _selectedStopIndex = null;
@@ -2630,6 +2679,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         );
       }
     });
+    _resyncLineLayers(requestId);
   }
 
 
@@ -2642,6 +2692,37 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
 
 
+
+
+  /// Re-asserts the current line layers once, on the next frame.
+  /// The maplibre plugin reconciles layers by index with
+  /// un-awaited remove+add, so a single update can be lost — and
+  /// once the Dart list has settled on the new spec, the memo in
+  /// [_routePolylineLayers] suppresses every later update (the
+  /// spec is unchanged, so the plugin sees no change and the
+  /// wrong line stays forever — the Sinait → Cabugao bug, Nov 7,
+  /// 20:40: the sheet showed the new route while the map still
+  /// drew the previous route's line). Busting the memo once
+  /// makes the next build hand the plugin a fresh list for the
+  /// SAME spec, re-applying the correct line. Guarded by the
+  /// fetch's request id + route, so a newer route change wins
+  /// and a stale callback never re-asserts an old line.
+  void _resyncLineLayers(int requestId) {
+    final route = _activeRoute;
+    if (route == null) return;
+    final originName = route.originName;
+    final destName = route.dest.name;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || requestId != _roadRequestId) return;
+      final current = _activeRoute;
+      if (current == null ||
+          current.originName != originName ||
+          current.dest.name != destName) {
+        return;
+      }
+      setState(() => _lineLayerSpecs = null);
+    });
+  }
 
 
   /// Via points for the active route's own line: the effective
@@ -2702,6 +2783,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       draftOrigin: origin,
       draftDest: dest,
       draftRoadPoints: _draftRoadPoints,
+      roadLoading: _roadLoading,
     );
     if (_lineLayerSpecs != null &&
         listEquals(_lineLayerSpecs, specs)) {
@@ -2740,13 +2822,44 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// needs no special case.
   List<Marker> _stopMarkers() {
     final markers = <Marker>[];
-    // Draw mode: the route pins hide and the draft pins show
-    // instead (amber numbered circles). They carry NO
-    // GestureDetector — taps fall through to the map click
-    // handler, whose 100 m guard opens the tapped point's
-    // actions (see _onLineMakerMapTap). Add-stop mode keeps the
-    // route pins: the route is the context for placing the stop.
-    if (_lineMakerActive && !_lineMakerAddStop) {
+    // Set Start/End mode: the route pins hide and the two
+    // pending pins show instead (green numbered circles, 1 =
+    // Start, 2 = End — the same numbers the new route's stops
+    // list will show). They carry NO GestureDetector — taps
+    // fall through to the map click handler, which places the
+    // pins (see _onSetEndpointsMapTap).
+    if (_setEndpointsActive) {
+      if (_pendingStart != null) {
+        markers.add(
+          Marker(
+            point: Geographic(
+              lon: _pendingStart!.longitude,
+              lat: _pendingStart!.latitude,
+            ),
+            size: const Size(44, 44),
+            child: Center(child: _numberedPin(1, selected: false)),
+          ),
+        );
+      }
+      if (_pendingEnd != null) {
+        markers.add(
+          Marker(
+            point: Geographic(
+              lon: _pendingEnd!.longitude,
+              lat: _pendingEnd!.latitude,
+            ),
+            size: const Size(44, 44),
+            child: Center(child: _numberedPin(2, selected: false)),
+          ),
+        );
+      }
+    } else if (_lineMakerActive && !_lineMakerAddStop) {
+      // Draw mode: the route pins hide and the draft pins show
+      // instead (amber numbered circles). They carry NO
+      // GestureDetector — taps fall through to the map click
+      // handler, whose 100 m guard opens the tapped point's
+      // actions (see _onLineMakerMapTap). Add-stop mode keeps the
+      // route pins: the route is the context for placing the stop.
       for (var i = 0; i < _draftPoints.length; i++) {
         markers.add(
           Marker(
@@ -2901,6 +3014,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// exit) and the stop card dismisses.
   void _enterDrawLineMode() {
     if (!isAdminUser(widget.currentUser)) return;
+    if (_setEndpointsActive) _exitSetEndpointsMode();
     final route = _activeRoute;
     final origin = _activeRouteOrigin;
     if (route == null || origin == null) {
@@ -2929,6 +3043,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// No active route is needed — the stop is placed, not drawn.
   void _enterAddStopMode() {
     if (!isAdminUser(widget.currentUser)) return;
+    if (_setEndpointsActive) _exitSetEndpointsMode();
     setState(() {
       _lineMakerActive = true;
       _lineMakerAddStop = true;
@@ -2953,6 +3068,242 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _selectedDraftIndex = null;
       _sheetHidden = false;
     });
+  }
+
+  /// Enters Set Start/End mode (admin-only, sheet header
+  /// button). No active route is needed — the taps CREATE the
+  /// route. The sheet hides (restored on exit) and the stop
+  /// card dismisses; the line maker exits if it was active.
+  void _enterSetEndpointsMode() {
+    if (!isAdminUser(widget.currentUser)) return;
+    if (_lineMakerActive) _exitLineMaker();
+    setState(() {
+      _setEndpointsActive = true;
+      _pendingStart = null;
+      _pendingEnd = null;
+      _selectedStopIndex = null;
+      _pendingStopIndex = null;
+      _sheetHidden = true;
+    });
+  }
+
+  /// Leaves Set Start/End mode and restores the sheet. The
+  /// pending points are discarded — nothing is saved unless the
+  /// admin tapped "Name & save".
+  void _exitSetEndpointsMode() {
+    if (!_setEndpointsActive) return;
+    setState(() {
+      _setEndpointsActive = false;
+      _pendingStart = null;
+      _pendingEnd = null;
+      _sheetHidden = false;
+    });
+  }
+
+  /// A map tap while Set Start/End mode is active: the first
+  /// tap places the Start pin, the second the End pin. Once
+  /// both are placed, further taps do nothing — tap "Name &
+  /// save" to continue or "Clear" to start over (predictable;
+  /// a mis-tap is fixed with Clear, not by silently moving a
+  /// pin the admin already placed).
+  void _onSetEndpointsMapTap(Geographic point) {
+    final tapped = LatLng(point.lat, point.lon);
+    if (_pendingStart == null) {
+      setState(() => _pendingStart = tapped);
+    } else if (_pendingEnd == null) {
+      setState(() => _pendingEnd = tapped);
+    }
+  }
+
+  /// Discards the placed points and starts the pair over.
+  void _clearEndpoints() {
+    setState(() {
+      _pendingStart = null;
+      _pendingEnd = null;
+    });
+  }
+
+  /// Validates the two endpoint names before either stop is
+  /// created: both non-empty, different from each other, and
+  /// neither matching an existing hub or bus stop
+  /// (case-insensitive) — reuses [validateBusStop], and the
+  /// repo re-validates on create as defense in depth.
+  String? _validateEndpointNames(
+    String startName,
+    String endName,
+    String region,
+  ) {
+    final start = _pendingStart;
+    final end = _pendingEnd;
+    if (start == null || end == null) return 'Place both pins first.';
+    if (startName.trim().toLowerCase() ==
+        endName.trim().toLowerCase()) {
+      return 'The Start and End names must be different.';
+    }
+    final startError = validateBusStop(
+      name: startName,
+      region: region,
+      lat: start.latitude,
+      lng: start.longitude,
+      existingStops: _busStops,
+    );
+    if (startError != null) return startError;
+    return validateBusStop(
+      name: endName,
+      region: region,
+      lat: end.latitude,
+      lng: end.longitude,
+      existingStops: _busStops,
+    );
+  }
+
+  /// Names the two placed points and saves them as bus stops
+  /// (one shared region — they are the two ends of one route),
+  /// then jumps the map to the new route between them. The
+  /// route itself is a generated route between two stops (no
+  /// custom route or override is written); its fare is "not
+  /// set" until he sets it via the existing Edit route flow.
+  /// If a create still fails midway (rare — the dialog
+  /// pre-validates duplicates), the already-created stop
+  /// remains as a real stop (harmless), the error is shown,
+  /// and he can re-enter the mode.
+  Future<void> _showNameEndpointsDialog() async {
+    final user = widget.currentUser;
+    final repo = widget.busStopRepository;
+    final start = _pendingStart;
+    final end = _pendingEnd;
+    if (user == null || repo == null || start == null || end == null) {
+      return;
+    }
+    final regions = hubRegions();
+    var region = regions.first;
+    final startController = TextEditingController();
+    final endController = TextEditingController();
+    final result = await showDialog<(String, String, String)?>(
+      context: context,
+      builder: (dialogContext) {
+        String? error;
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Name the Start and End stops'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'The two points become bus stops, so the route '
+                    'can use them as its From and To.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: startController,
+                    decoration: const InputDecoration(
+                      labelText: 'Start stop name',
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: endController,
+                    decoration: const InputDecoration(
+                      labelText: 'End stop name',
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final r in regions)
+                        ChoiceChip(
+                          label: Text(r),
+                          selected: region == r,
+                          onSelected: (_) =>
+                              setDialogState(() => region = r),
+                        ),
+                    ],
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final err = _validateEndpointNames(
+                      startController.text,
+                      endController.text,
+                      region,
+                    );
+                    if (err != null) {
+                      setDialogState(() => error = err);
+                      return;
+                    }
+                    Navigator.pop(
+                      dialogContext,
+                      (
+                        startController.text.trim(),
+                        endController.text.trim(),
+                        region,
+                      ),
+                    );
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    startController.dispose();
+    endController.dispose();
+    if (result == null || !mounted) return;
+    final (startName, endName, chosenRegion) = result;
+    try {
+      await repo.create(
+        BusStop(
+          name: startName,
+          region: chosenRegion,
+          lat: start.latitude,
+          lng: start.longitude,
+        ),
+        user,
+      );
+      await repo.create(
+        BusStop(
+          name: endName,
+          region: chosenRegion,
+          lat: end.latitude,
+          lng: end.longitude,
+        ),
+        user,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _snack('Could not save the stops. Check the names and try again.');
+      return;
+    }
+    if (!mounted) return;
+    _exitSetEndpointsMode();
+    // The jump reloads stops before matching hubs (see
+    // _onFaresJump), so the just-added stops match as the
+    // route's From/To.
+    faresMapJump.value = (from: startName, to: endName);
+    _onFaresJump();
   }
 
   /// A map tap while the line maker is active. In add-stop mode
@@ -3032,6 +3383,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _activeRoute = resolved.route ?? route;
       _activeRouteOverride = resolved.override;
       _roadPoints = null;
+      _roadLoading = resolved.route != null;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
     });
@@ -3164,6 +3516,139 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _snack('Could not clear the line.');
     } finally {
       if (mounted) setState(() => _lineMakerSaving = false);
+    }
+  }
+
+  /// Renames one drawn waypoint (admin only, Steven Nov 7,
+  /// 20:54: "Dapat May Name: Stops along the way, Hindi lang
+  /// puro Point nga name." + "make it editable"). The name is
+  /// typed by the admin — never invented — and saved with the
+  /// waypoint in the stored direction (custom route → update;
+  /// seeded route → override save, with the empty-override
+  /// delete rule applying). The stops list + map pins then show
+  /// the saved name (see [routeStops], which displays
+  /// `w.name ?? 'Point N'`). Only drawn waypoints are
+  /// renamable — hub stops (Cabugao, San Juan, Vigan Terminal)
+  /// are fixed hub names. When a drawn point is saved as a bus
+  /// stop, its name becomes the stop name (existing flow).
+  /// After the save the route reloads and the card closes; the
+  /// renamed stop shows in the stops list + on the map.
+  Future<void> _showRenameWaypointDialog(int waypointIndex) async {
+    final route = _activeRoute;
+    final author = widget.currentUser;
+    if (route == null || author == null || !isAdminUser(author)) return;
+    final waypoints = effectiveRouteWaypoints(
+      customRoute: route.customRoute,
+      override: _activeRouteOverride,
+      busStops: _busStops,
+    );
+    if (waypointIndex < 0 || waypointIndex >= waypoints.length) return;
+    final waypoint = waypoints[waypointIndex];
+    final controller = TextEditingController(text: waypoint.name ?? '');
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) {
+        String? error;
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Rename this stop'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      labelText: 'Stop name',
+                      hintText: waypoint.name == null
+                          ? 'e.g. Cabugao Public Market'
+                          : null,
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    autofocus: true,
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final name = controller.text.trim();
+                    if (name.isEmpty) {
+                      setDialogState(
+                        () => error = 'Enter a name for the stop.',
+                      );
+                      return;
+                    }
+                    if (name.length > 100) {
+                      setDialogState(
+                        () => error =
+                            'The name must be 100 characters or fewer.',
+                      );
+                      return;
+                    }
+                    Navigator.pop(dialogContext, name);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+    final renamed = List<RouteWaypoint>.of(waypoints);
+    renamed[waypointIndex] = waypoint.copyWith(name: result);
+    try {
+      final custom = route.customRoute;
+      if (custom != null) {
+        final repo = widget.customRouteRepository;
+        if (repo == null) {
+          _snack('Routes cannot be saved right now.');
+          return;
+        }
+        await repo.update(
+          custom.copyWith(viaWaypoints: renamed),
+          author,
+          busStops: _busStops,
+        );
+      } else {
+        final repo = widget.fareOverrideRepository;
+        if (repo == null) {
+          _snack('Routes cannot be saved right now.');
+          return;
+        }
+        final key = seededRouteKey(route.originName, route.dest.name);
+        final existing = _activeRouteOverride;
+        final next = (existing ?? RouteFareOverride(routeKey: key))
+            .copyWith(viaWaypoints: renamed);
+        if (routeFareOverrideIsEmpty(next)) {
+          if (existing != null) await repo.delete(key, author);
+        } else {
+          await repo.save(next, author);
+        }
+      }
+      if (!mounted) return;
+      await _reloadActiveRoute();
+      if (!mounted) return;
+      _snack('Stop renamed.');
+    } catch (_) {
+      if (!mounted) return;
+      _snack('Could not rename the stop.');
     }
   }
 
@@ -3425,6 +3910,79 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     );
   }
 
+  /// Bottom bar for Set Start/End mode (admin only): the sheet
+  /// is hidden while placing, so this bar takes its place at
+  /// the bottom — the same floating card as [_lineMakerBar],
+  /// mutually exclusive with it.
+  Widget _setEndpointsBar(ColorScheme scheme) {
+    final startSet = _pendingStart != null;
+    final endSet = _pendingEnd != null;
+    final instruction = !startSet
+        ? 'Tap the map to place the Start pin'
+        : !endSet
+            ? 'Tap the map to place the End pin'
+            : 'Both pins placed — name them to save the route';
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 16,
+      child: Material(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        elevation: 8,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                instruction,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Start: ${startSet ? 'placed' : 'not placed'}'
+                ' · End: ${endSet ? 'placed' : 'not placed'}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Wrap, not Row: on a narrow phone the three
+              // buttons flow to a second line instead of
+              // overflowing the bar.
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton(
+                    onPressed:
+                        startSet && endSet ? _showNameEndpointsDialog : null,
+                    child: const Text('Name & save'),
+                  ),
+                  OutlinedButton(
+                    onPressed:
+                        startSet || endSet ? _clearEndpoints : null,
+                    child: const Text('Clear'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _exitSetEndpointsMode,
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   /// Numbered stop pin (emerald circle, white number; deep
   /// emerald while its card is open). Draft pins are amber
@@ -3602,6 +4160,24 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+                // Rename (admin only, Steven Nov 7, 20:54:
+                // "Dapat May Name: Stops along the way, Hindi
+                // lang puro Point nga name." + "make it
+                // editable"): only drawn-waypoint stops carry a
+                // waypointIndex, so the pencil shows exactly on
+                // those ("Point N" or an already-named point) —
+                // never on hub stops (Cabugao, San Juan, Vigan
+                // Terminal), whose names are fixed.
+                if (isAdminUser(widget.currentUser) &&
+                    stop.waypointIndex != null)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined,
+                        color: Colors.white),
+                    tooltip: 'Rename this stop',
+                    onPressed: () => _showRenameWaypointDialog(
+                      stop.waypointIndex!,
+                    ),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white),
                   tooltip: 'Dismiss',
@@ -3821,6 +4397,28 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+              // "Set Start/End" (admin only, Steven Nov 7, 20:52):
+              // tap the map twice to place the route's Start and
+              // End pins himself. Same header slot as Draw line —
+              // the route-scoped direction tool, where the active
+              // route is named.
+              if (isAdminUser(widget.currentUser) && !_setEndpointsActive)
+                TextButton(
+                  onPressed: _enterSetEndpointsMode,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF16A34A),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Set Start/End',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -4004,7 +4602,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               _mapZoom = camera.zoom;
               _bearing.value = camera.bearing;
             } else if (event is MapEventClick) {
-              if (_lineMakerActive) {
+              if (_setEndpointsActive) {
+                // Set Start/End mode: the tap places the Start
+                // pin, then the End pin (see _onSetEndpointsMapTap).
+                _onSetEndpointsMapTap(event.point);
+              } else if (_lineMakerActive) {
                 // Draw / add-stop mode: the tap places or
                 // selects a draft point (see _onLineMakerMapTap);
                 // it never dismisses a card (none is open).
@@ -4201,6 +4803,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         // hidden while drawing / placing, so this bar takes its
         // place at the bottom.
         if (_lineMakerActive) _lineMakerBar(scheme),
+        if (_setEndpointsActive) _setEndpointsBar(scheme),
         // Draggable bottom sheet: Peek / Half ONLY (no Full).
         // Wrapped in Offstage (never removed from the tree) so the
         // logo toggle hides it without losing any state: same
