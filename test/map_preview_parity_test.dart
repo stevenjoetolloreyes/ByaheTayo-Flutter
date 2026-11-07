@@ -47,8 +47,12 @@ void main() {
     // markers; the clean map shows numbered stop pins only.
     expect(find.byIcon(Icons.place), findsNothing);
 
-    // The numbered stop pins are on the map (origin + destination
+    // The stops list numbers the stops 1..N (origin + destination
     // without road geometry; more stops appear once OSRM loads).
+    // The matching numbered pins on the map itself are WidgetLayer
+    // markers, which need the native map view and cannot render
+    // in flutter test — their data is covered by the routeStopPins
+    // unit tests instead (map_route_logic_test.dart).
     expect(find.text('1'), findsWidgets);
     expect(find.text('2'), findsWidgets);
   });

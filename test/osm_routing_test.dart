@@ -1,5 +1,7 @@
 // Unit tests for the OSM routing helpers (no map widget, no
 // network — fixtures only).
+import 'dart:convert';
+
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/osm_routing.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -274,6 +276,44 @@ void main() {
         contains('openstreetmap.org'),
       );
       expect(mapAttributionUrl(dark: true), contains('carto.com'));
+    });
+  });
+
+  group('metaMapStyleUrl', () {
+    test('dark is Canterbury Dark, light is canterbury_1_0', () {
+      expect(
+        metaMapStyleUrl(dark: true),
+        'https://external.xx.fbcdn.net/maps/vt/style/dark/',
+      );
+      expect(
+        metaMapStyleUrl(dark: false),
+        'https://external.xx.fbcdn.net/maps/vt/style/canterbury_1_0/',
+      );
+      // The /style/light/ path returns HTTP 500 — it is never used.
+      expect(metaMapStyleUrl(dark: false), isNot(contains('/style/light/')));
+    });
+
+    test('Meta attribution is Meta itself (no attribution in the style)', () {
+      expect(metaMapAttributionText, '© Meta');
+    });
+  });
+
+  group('cartoFallbackStyleJson', () {
+    test('is a valid MapLibre raster style for CartoDB Dark Matter', () {
+      final decoded =
+          jsonDecode(cartoFallbackStyleJson()) as Map<String, dynamic>;
+      expect(decoded['version'], 8);
+      final sources = decoded['sources'] as Map<String, dynamic>;
+      expect(sources.keys, ['carto-dark']);
+      final source = sources['carto-dark'] as Map<String, dynamic>;
+      expect(source['type'], 'raster');
+      final tiles = source['tiles'] as List;
+      expect(tiles.single, contains('basemaps.cartocdn.com/dark_all'));
+      // No flutter_map {r} placeholder: MapLibre only expands {z}/{x}/{y}.
+      expect(tiles.single, isNot(contains('{r}')));
+      final layers = decoded['layers'] as List;
+      expect(layers.length, 1);
+      expect((layers.single as Map)['type'], 'raster');
     });
   });
 

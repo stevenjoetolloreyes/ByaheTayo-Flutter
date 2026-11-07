@@ -1,10 +1,12 @@
-// Map tab — full-screen OpenStreetMap + draggable bottom sheet
-// (Peek / Half only, no Full). Tiles are OSM Standard, or Esri
-// World Imagery for the Satellite pill; 3D is dropped (accepted).
-// Routing is OSRM road geometry (never a straight line) and place
-// lookup is Nominatim — the Google Maps SDK, Routes API, and
-// Places API are gone, because the map was blank without linked
-// billing (REQUEST_DENIED).
+// Map tab — full-screen Meta vector map + draggable bottom sheet
+// (Peek / Half only, no Full). The basemap is Meta's "Canterbury"
+// vector style (the same map the Fares Phone Preview renders),
+// via the maplibre plugin; if that style fails to load, the map
+// falls back to a CartoDB Dark Matter raster style (same dark
+// look). Routing is OSRM road geometry (never a straight line)
+// and place lookup is Nominatim — the Google Maps SDK, Routes API,
+// and Places API are gone, because the map was blank without
+// linked billing (REQUEST_DENIED).
 //
 // Reference-based redesign (Oct 31 spec): floating search bar, category
 // chips, custom zoom + my-location controls, and a draggable sheet with
@@ -39,14 +41,15 @@
 //   unreachable.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:latlong2/latlong.dart' as ll;
+import 'package:google_maps_flutter/google_maps_flutter.dart' hide Marker;
+import 'package:maplibre/maplibre.dart' hide Position;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'community_posts.dart';
@@ -1130,6 +1133,11 @@ String? mapStyleForBrightness(Brightness brightness) =>
 /// header only) and Half (~55% of the screen). No Full.
 enum _SheetSnap { peek, half }
 
+/// Which basemap the Map tab is showing: Meta's Canterbury
+/// vector style, or the CartoDB Dark Matter raster fallback after
+/// a failed Meta load.
+enum _MapStyleMode { meta, cartoFallback }
+
 
 /// Map view modes for the Map tab. Real Google Maps SDK
 /// functionality only — no simulated 3D graphics, no fake
@@ -1183,6 +1191,55 @@ double mapControlsBottomOffset({required bool sheetHidden}) =>
 String sheetToggleTooltip(bool sheetHidden) =>
     sheetHidden ? 'Show bottom panel' : 'Hide bottom panel';
 
+/// Data for one numbered stop pin on the map (pure — see
+/// [_MapTabState._stopMarkers]): [number] is 1-based in stop
+/// order, [selected] while its card is open.
+class MapStopPin {
+  const MapStopPin({
+    required this.number,
+    required this.lat,
+    required this.lng,
+    required this.selected,
+  });
+
+  final int number;
+  final double lat;
+  final double lng;
+  final bool selected;
+}
+
+/// Numbered stop pins for a route's stops (pure): one pin per
+/// stop, 1..N in stop order — the clean map shows ONLY these pins
+/// (plus the user's own blue dot, added separately in
+/// [_MapTabState._stopMarkers]). Tested without pumping the
+/// native map view, which cannot render in flutter test.
+List<MapStopPin> routeStopPins(
+  List<RouteStop> stops,
+  int? selectedStopIndex,
+) {
+  return [
+    for (var i = 0; i < stops.length; i++)
+      MapStopPin(
+        number: i + 1,
+        lat: stops[i].lat,
+        lng: stops[i].lng,
+        selected: selectedStopIndex == i,
+      ),
+  ];
+}
+
+/// Whether the native MapLibre map can render on this platform:
+/// Android, iOS, and web have federated implementations; desktop
+/// (and the Linux test host) do not — the plugin's own stub throws
+/// UnsupportedError there. This deliberately uses dart:io's
+/// [Platform], not Flutter's [defaultTargetPlatform]: widget
+/// tests report android for [defaultTargetPlatform] even on the
+/// Linux host, while [Platform] tells the host truth. The app is
+/// Android/iOS-only by design, so off those platforms the tab
+/// shows a placeholder box and the sheet + controls keep working.
+bool get mapLibreSupported =>
+    kIsWeb || Platform.isAndroid || Platform.isIOS;
+
 class MapTab extends StatefulWidget {
   /// The signed-in user (null when signed out). Drives the
   /// admin-only Add Route entry point — see admin_access.dart.
@@ -1204,17 +1261,42 @@ class MapTab extends StatefulWidget {
   State<MapTab> createState() => _MapTabState();
 }
 
-class _MapTabState extends State<MapTab>
-    with WidgetsBindingObserver, TickerProviderStateMixin {
+class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   static const _initialCenter = LatLng(16.9, 121.05);
   static const _initialZoom = 8.0;
   static const _homeHub = 2; // Cabugao — his home hub (Fares default origin).
 
-  // OpenStreetMap controller (flutter_map). The Google Maps SDK
-  // is gone: tiles come from OSM/Esri, routing from OSRM, lookup
-  // from Nominatim. The google_maps_flutter LatLng value type is
-  // kept for the pure route helpers + their tests (see _toLl).
-  final fm.MapController _mapController = fm.MapController();
+  /// Placeholder in [_activeStyleUrl] while the CartoDB raster
+  /// fallback is live (it is a style document, not a URL).
+  static const _cartoFallbackSentinel = 'carto-fallback';
+
+  // MapLibre controller, set in onMapCreated (null until the
+  // native map exists — every camera call null-checks it, so a
+  // tap before the map is ready is a no-op, as before). The
+  // basemap is Meta's Canterbury vector style, routing is OSRM,
+  // lookup is Nominatim. The google_maps_flutter LatLng value
+  // type is kept for the pure route helpers + their tests.
+  MapController? _mapController;
+  // The style URL the map is showing (Meta by default, the
+  // sentinel above once the CartoDB fallback fires). Kept in
+  // sync with the theme in didChangeDependencies.
+  String _activeStyleUrl = '';
+  // The theme brightness the style was last switched for, so a
+  // rebuild from another cause (rotation, locale) does not
+  // re-attempt the Meta style while the fallback is live.
+  bool? _lastStyleDark;
+  // Which basemap is live: Meta vector, or the CartoDB raster
+  // fallback after a failed Meta load.
+  _MapStyleMode _styleMode = _MapStyleMode.meta;
+  // True once the current style has reported loaded (cleared on
+  // every style switch, so the fallback timer only fires for a
+  // style that never loads).
+  bool _styleLoaded = false;
+  // Fallback timer for a Meta style that never loads.
+  Timer? _styleLoadTimer;
+  // Flight generation: a newer _flyTo retargets the camera, and
+  // the older flight's 1900 ms fallback must not yank it back.
+  int _flyGeneration = 0;
   // Last known camera centre/zoom, updated (without setState) by
   // onPositionChanged — the same role _lastCamera played.
   LatLng _mapCenter = _initialCenter;
@@ -1229,7 +1311,7 @@ class _MapTabState extends State<MapTab>
   // on the map, plus the origin point it starts from.
   RouteInfo? _activeRoute;
   LatLng? _activeRouteOrigin;
-  // Road-following shape from Google (null = still loading or failed;
+  // Road-following shape from OSRM (null = still loading or failed;
   // the dashed direct line shows until real geometry arrives).
   List<LatLng>? _roadPoints;
   double _routeDurationSec = 0;
@@ -1263,8 +1345,6 @@ class _MapTabState extends State<MapTab>
   ScrollController? _sheetScrollController;
   // Keyboard focus for the sheet (Arrow Up/Down, Home, End).
   final FocusNode _sheetFocusNode = FocusNode();
-  // Flight animation controller (cancelled by a newer flight).
-  AnimationController? _flyController;
   // Live bearing for the compass needle only (a ValueNotifier so
   // the needle rebuilds alone, never the whole map).
   final ValueNotifier<double> _bearing = ValueNotifier<double>(0);
@@ -1293,6 +1373,68 @@ class _MapTabState extends State<MapTab>
       if (!mounted || _activeRoute != null) return;
       _selectHub(hubs[14]); // Vigan Bus Terminal.
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Theme changes re-run this: switch the basemap style to
+    // match (MapOptions.initStyle only applies at creation). The
+    // [_lastStyleDark] guard keeps a rebuild from another cause
+    // (rotation, locale) from re-attempting the Meta style while
+    // the CartoDB fallback is live — only a real theme change
+    // retries it.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    if (dark == _lastStyleDark) return;
+    _lastStyleDark = dark;
+    final desired = metaMapStyleUrl(dark: dark);
+    if (desired == _activeStyleUrl) return;
+    _activeStyleUrl = desired;
+    _styleMode = _MapStyleMode.meta;
+    _styleLoaded = false;
+    final controller = _mapController;
+    if (controller == null) return; // First build: initStyle covers it.
+    _armStyleFallbackTimer();
+    controller.setStyle(desired);
+  }
+
+  /// Starts (or restarts) the fallback timer for the Meta style
+  /// currently loading: if it never reports loaded within 8 s,
+  /// the map switches to the CartoDB Dark Matter raster style
+  /// (same dark look) instead of sitting on a blank map.
+  void _armStyleFallbackTimer() {
+    _styleLoadTimer?.cancel();
+    _styleLoadTimer = Timer(const Duration(seconds: 8), () {
+      if (!mounted ||
+          _styleMode != _MapStyleMode.meta ||
+          _styleLoaded) {
+        return;
+      }
+      final controller = _mapController;
+      if (controller == null) return;
+      _styleMode = _MapStyleMode.cartoFallback;
+      _activeStyleUrl = _cartoFallbackSentinel;
+      controller.setStyle(cartoFallbackStyleJson());
+      setState(() {}); // Attribution chip switches to OSM + CARTO.
+    });
+  }
+
+  /// The native map is ready: the fallback timer starts for the
+  /// initial style, and a default route selected before creation
+  /// (post-frame _selectHub) can finally fit its bounds.
+  void _onMapCreated(MapController controller) {
+    _mapController = controller;
+    if (_styleMode == _MapStyleMode.meta && !_styleLoaded) {
+      _armStyleFallbackTimer();
+    }
+    _fitActiveRoute();
+  }
+
+  /// A style finished loading (Meta, or the CartoDB fallback):
+  /// the fallback timer is no longer needed for this style.
+  void _onStyleLoaded(StyleController _) {
+    _styleLoadTimer?.cancel();
+    _styleLoaded = true;
   }
 
   /// Sheet snap tracking: when the extent crosses the Peek/Half
@@ -1403,16 +1545,7 @@ class _MapTabState extends State<MapTab>
     _refreshRouteStops();
     _resetSheetScroll();
     if (route != null) {
-      _fitBounds(
-        LatLng(
-          math.min(oLat, destHub.lat) - 0.01,
-          math.min(oLng, destHub.lng) - 0.01,
-        ),
-        LatLng(
-          math.max(oLat, destHub.lat) + 0.01,
-          math.max(oLng, destHub.lng) + 0.01,
-        ),
-      );
+      _fitActiveRoute();
       _fetchRoadPath(oLat, oLng, destHub);
       _snapSheet(_SheetSnap.half);
     }
@@ -1424,8 +1557,7 @@ class _MapTabState extends State<MapTab>
     faresMapJump.removeListener(_onFaresJump);
     WidgetsBinding.instance.removeObserver(this);
     _sheetController.removeListener(_onSheetExtentChanged);
-    _flyController?.dispose();
-    _mapController.dispose();
+    _styleLoadTimer?.cancel();
     _sheetController.dispose();
     _sheetFocusNode.dispose();
     _bearing.dispose();
@@ -1495,88 +1627,103 @@ class _MapTabState extends State<MapTab>
     }
   }
 
-  /// OSM point conversion: the app's route logic uses the
-  /// google_maps_flutter LatLng value type (kept so the pure
-  /// helpers and their tests stay unchanged); flutter_map takes
-  /// its own LatLng. This is the only conversion point.
-  ll.LatLng _toLl(LatLng p) => ll.LatLng(p.latitude, p.longitude);
-
-  /// Fits the map to a southwest/northeast box (flutter_map's
-  /// CameraFit.bounds replaces Google's newLatLngBounds).
-  void _fitBounds(LatLng sw, LatLng ne) {
+  /// Fits the map to a southwest/northeast box. Native fitBounds
+  /// has no maxZoom, so a short hop (two nearby hubs) is clamped
+  /// back to zoom 15 afterwards, like before.
+  Future<void> _fitBounds(LatLng sw, LatLng ne) async {
+    final controller = _mapController;
+    if (controller == null) return;
     try {
-      _mapController.fitCamera(
-        fm.CameraFit.bounds(
-          bounds: fm.LatLngBounds(_toLl(sw), _toLl(ne)),
-          padding: const EdgeInsets.all(80),
-          maxZoom: 15,
+      await controller.fitBounds(
+        bounds: LngLatBounds(
+          longitudeWest: math.min(sw.longitude, ne.longitude),
+          longitudeEast: math.max(sw.longitude, ne.longitude),
+          latitudeSouth: math.min(sw.latitude, ne.latitude),
+          latitudeNorth: math.max(sw.latitude, ne.latitude),
         ),
+        padding: const EdgeInsets.all(80),
+        nativeDuration: const Duration(milliseconds: 1400),
       );
+      final camera = controller.getCamera();
+      _mapCenter = LatLng(camera.center.lat, camera.center.lon);
+      _mapZoom = camera.zoom;
+      _bearing.value = camera.bearing;
+      if (camera.zoom > 15) {
+        await controller.moveCamera(center: camera.center, zoom: 15);
+        _mapZoom = 15;
+      }
     } catch (_) {
       // The map is not attached yet (e.g. a tap before the first
       // frame) — the next camera move still lands.
     }
   }
 
-  /// Animated move ("flyTo"): interpolates centre + zoom with an
-  /// ease curve, because flutter_map's move() jumps instantly.
-  /// Starting a new flight stops the old one.
+  /// Fits the map to the active route's endpoints (origin +
+  /// destination, padded so the bounds never degenerate). Used by
+  /// _selectHub / _onFaresJump and once when the native map is
+  /// created, when a route selected before creation can finally
+  /// fit.
+  void _fitActiveRoute() {
+    final route = _activeRoute;
+    final origin = _activeRouteOrigin;
+    if (route == null || origin == null) return;
+    _fitBounds(
+      LatLng(
+        math.min(origin.latitude, route.dest.lat) - 0.01,
+        math.min(origin.longitude, route.dest.lng) - 0.01,
+      ),
+      LatLng(
+        math.max(origin.latitude, route.dest.lat) + 0.01,
+        math.max(origin.longitude, route.dest.lng) + 0.01,
+      ),
+    );
+  }
+
+  /// Animated move ("flyTo"): the map's own native animation,
+  /// so the zoom is slow enough to be seen on a phone. Starting
+  /// a new flight retargets the camera; the older flight's
+  /// fallback is ignored via [_flyGeneration].
   ///
-  /// Timing follows the preview (v34): a 1400 ms flight, so the
-  /// zoom is slow enough to be seen on a phone, plus a 1900 ms
-  /// fallback — if the flight has not landed by then (e.g. the
-  /// animation was interrupted), the final camera position is
-  /// forced directly instead of leaving the map where it was.
-  /// The stop card's reveal gate lives in [_selectStop] (min
-  /// 650 ms), so the zoom is always visible before the card opens.
+  /// Timing follows the preview (v34): a 1400 ms flight, plus a
+  /// 1900 ms fallback — if the flight has not landed by then
+  /// (e.g. the animation was interrupted), the final camera
+  /// position is forced directly instead of leaving the map
+  /// where it was. The stop card's reveal gate lives in
+  /// [_selectStop] (min 650 ms), so the zoom is always visible
+  /// before the card opens.
   Future<void> _flyTo(LatLng target, {double zoom = 13}) async {
-    _flyController?.stop();
-    _flyController?.dispose();
-    final fromCenter = _mapCenter;
-    final fromZoom = _mapZoom;
-    final controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    _flyController = controller;
-    final curved = CurvedAnimation(
-      parent: controller,
-      curve: Curves.easeInOut,
-    );
-    final lat = Tween<double>(
-      begin: fromCenter.latitude,
-      end: target.latitude,
-    );
-    final lng = Tween<double>(
-      begin: fromCenter.longitude,
-      end: target.longitude,
-    );
-    final zoomTween = Tween<double>(begin: fromZoom, end: zoom);
-    controller.addListener(() {
-      if (!mounted) return;
-      try {
-        _mapController.move(
-          ll.LatLng(lat.evaluate(curved), lng.evaluate(curved)),
-          zoomTween.evaluate(curved),
-        );
-      } catch (_) {}
-    });
+    final controller = _mapController;
+    if (controller == null) return;
+    final generation = ++_flyGeneration;
+    var landed = false;
+    try {
+      await controller.animateCamera(
+        center: Geographic(lon: target.longitude, lat: target.latitude),
+        zoom: zoom,
+        nativeDuration: const Duration(milliseconds: 1400),
+      );
+      _mapCenter = target;
+      _mapZoom = zoom;
+    } catch (_) {
+      // Interrupted by a newer flight — the newer one owns the view.
+    }
+    landed = true;
     // Fallback (preview v34): force the landing if the flight
     // has not finished 1900 ms after it started. A newer flight
     // owns the view by then, so this only fires for a stuck one.
-    Future.delayed(const Duration(milliseconds: 1900), () {
-      if (!mounted || _flyController != controller) return;
+    Future.delayed(const Duration(milliseconds: 1900), () async {
+      if (!mounted || landed || _flyGeneration != generation) return;
+      final current = _mapController;
+      if (current == null) return;
       try {
-        _mapController.move(_toLl(target), zoom);
+        await current.moveCamera(
+          center: Geographic(lon: target.longitude, lat: target.latitude),
+          zoom: zoom,
+        );
+        _mapCenter = target;
+        _mapZoom = zoom;
       } catch (_) {}
     });
-    try {
-      await controller.forward();
-    } catch (_) {
-      // Cancelled by a newer flight — the newer one owns the view.
-    }
-    if (_flyController == controller) _flyController = null;
-    controller.dispose();
   }
 
   Future<void> _moveTo(LatLng target, {double zoom = 13}) async {
@@ -1588,8 +1735,15 @@ class _MapTabState extends State<MapTab>
   /// Compass tap: face north again (rotate 0), keeping centre
   /// and zoom.
   Future<void> _resetBearing() async {
+    final controller = _mapController;
+    if (controller == null) return;
     try {
-      _mapController.rotate(0);
+      final camera = controller.getCamera();
+      await controller.moveCamera(
+        center: camera.center,
+        zoom: camera.zoom,
+        bearing: 0,
+      );
     } catch (_) {}
     _bearing.value = 0;
   }
@@ -1646,16 +1800,7 @@ class _MapTabState extends State<MapTab>
     _resetSheetScroll();
     if (route != null) {
       // Fit both endpoints, padded so the bounds never degenerate.
-      _fitBounds(
-        LatLng(
-          math.min(oLat, hub.lat) - 0.01,
-          math.min(oLng, hub.lng) - 0.01,
-        ),
-        LatLng(
-          math.max(oLat, hub.lat) + 0.01,
-          math.max(oLng, hub.lng) + 0.01,
-        ),
-      );
+      _fitActiveRoute();
       _fetchRoadPath(oLat, oLng, hub);
     } else {
       _moveTo(LatLng(hub.lat, hub.lng), zoom: 13);
@@ -1760,20 +1905,16 @@ class _MapTabState extends State<MapTab>
 
 
 
-  /// Points + style for the active-route line. Solid = real road shape
-  /// from Google; dashed = direct-line fallback. During navigation the
-  /// line starts at the user's CURRENT position (trimmed road points
-  /// from the nearest point onward), so it always runs current
-  /// location -> destination even as the user moves away from the
-  /// position where the route was first tapped.
-  /// Points + style for the active-route line on OSM. Solid =
-  /// real OSRM road shape; dashed = direct-line fallback. When a
-  /// stop is tapped, only the line from that stop to the
-  /// destination lights up (soft glow + white casing + wide
-  /// light-green core) while the earlier part dims; tapping the
-  /// destination leaves nothing lit. Dismissing the card restores
-  /// this normal standard-green line.
-  List<fm.Polyline> _routePolylines() {
+  /// Points + style for the active-route line. Solid = real
+  /// OSRM road shape; dashed = direct-line fallback. When a stop
+  /// is tapped, only the line from that stop to the destination
+  /// lights up (soft glow + white casing + wide light-green core)
+  /// while the earlier part dims; tapping the destination leaves
+  /// nothing lit. Dismissing the card restores this normal
+  /// standard-green line. One [PolylineLayer] per visual style
+  /// (MapLibre styles a whole layer one colour/width, so the
+  /// highlight is four layers drawn bottom-to-top, as before).
+  List<PolylineLayer> _routePolylineLayers() {
     if (_activeRoute == null || _activeRouteOrigin == null) {
       return const [];
     }
@@ -1787,57 +1928,62 @@ class _MapTabState extends State<MapTab>
     final via = _customRouteViaPoints(_activeRoute!);
     points = _roadPoints ?? [_activeRouteOrigin!, ...via, dest];
     solid = _roadPoints != null;
+    Feature<LineString> line(List<LatLng> pts) => Feature<LineString>(
+      geometry: LineString(
+        pts
+            .expand((p) => [p.longitude, p.latitude])
+            .toList()
+            .positions(Coords.xy),
+      ),
+    );
     // Route segment highlight: the tapped stop → destination
     // lights up, the earlier part dims.
-    if (
-        _selectedStopIndex != null &&
+    if (_selectedStopIndex != null &&
         _routeStops.isNotEmpty &&
         _roadPoints != null &&
         _roadPoints!.length >= 2) {
       final stop = _routeStops[
           _selectedStopIndex!.clamp(0, _routeStops.length - 1)];
       final split = splitPathAt(_roadPoints!, stop.pathIndex);
-      final before = split.before.map(_toLl).toList();
-      final after = split.after.map(_toLl).toList();
+      final before = split.before;
+      final after = split.after;
       return [
         // Earlier part: dimmed to 0.15.
-        fm.Polyline(
-          points: before,
+        PolylineLayer(
+          polylines: [line(before)],
           color: green.withValues(alpha: 0.15),
-          strokeWidth: 6,
+          width: 6,
         ),
         // Remaining part: soft glow + white casing + wide
         // light-green core.
-        fm.Polyline(
-          points: after,
+        PolylineLayer(
+          polylines: [line(after)],
           color: green.withValues(alpha: 0.25),
-          strokeWidth: 16,
+          width: 16,
         ),
-        fm.Polyline(
-          points: after,
+        PolylineLayer(
+          polylines: [line(after)],
           color: Colors.white,
-          strokeWidth: 11,
+          width: 11,
         ),
-        fm.Polyline(
-          points: after,
+        PolylineLayer(
+          polylines: [line(after)],
           color: const Color(0xFF4ADE80),
-          strokeWidth: 7,
+          width: 7,
         ),
       ];
     }
     return [
-      fm.Polyline(
-        points: points.map(_toLl).toList(),
+      PolylineLayer(
+        polylines: [line(points)],
         color: green,
-        strokeWidth: 6,
-        pattern: solid
-            ? const fm.StrokePattern.solid()
-            : fm.StrokePattern.dashed(segments: const [24, 12]),
+        width: 6,
+        dashArray: solid ? null : const [24, 12],
       ),
     ];
   }
 
-  /// OSM markers — clean, like the preview: ONLY the active
+  /// Map markers — clean, like the preview: ONLY the active
   /// route's numbered stop pins (1..N), each tappable to fly to
   /// that stop + open its card. No scattered hub pins across the
   /// region and no church markers: the preview's map shows the
@@ -1846,34 +1992,30 @@ class _MapTabState extends State<MapTab>
   /// are the user's own position, not route clutter. A 'Your
   /// location' origin is stop 1 in [_routeStops] already, so it
   /// needs no special case.
-  List<fm.Marker> _osmMarkers() {
-    final markers = <fm.Marker>[];
-    for (var i = 0; i < _routeStops.length; i++) {
-      final stop = _routeStops[i];
-      markers.add(
-        fm.Marker(
-          point: _toLl(LatLng(stop.lat, stop.lng)),
-          width: 44,
-          height: 44,
+  List<Marker> _stopMarkers() {
+    final markers = <Marker>[
+      for (final pin in routeStopPins(_routeStops, _selectedStopIndex))
+        Marker(
+          point: Geographic(lon: pin.lng, lat: pin.lat),
+          size: const Size(44, 44),
           child: GestureDetector(
-            onTap: () => _selectStop(i),
-            child: _numberedPin(
-              i + 1,
-              selected: _selectedStopIndex == i,
+            onTap: () => _selectStop(pin.number - 1),
+            child: Center(
+              child: _numberedPin(pin.number, selected: pin.selected),
             ),
           ),
         ),
-      );
-    }
-    // User position: a plain blue-dot circle (flutter_map has
-    // no built-in blue dot).
+    ];
+    // User position: a plain blue-dot circle (MapLibre has no
+    // built-in blue dot).
     if (_userPos != null && _locationGranted) {
-      final pos = LatLng(_userPos!.latitude, _userPos!.longitude);
       markers.add(
-        fm.Marker(
-          point: _toLl(pos),
-          width: 24,
-          height: 24,
+        Marker(
+          point: Geographic(
+            lon: _userPos!.longitude,
+            lat: _userPos!.latitude,
+          ),
+          size: const Size(24, 24),
           child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF4285F4),
@@ -1970,28 +2112,46 @@ class _MapTabState extends State<MapTab>
     );
   }
 
-  /// "© OpenStreetMap contributors" — required attribution,
-  /// tappable to the OSM copyright page.
-  /// Attribution chip — required credit for the tile layer in
-  /// use (OSM in light mode, OSM + CARTO in dark mode), tappable
-  /// to that layer's attribution page.
+  /// Attribution chip — required credit for the basemap in use.
+  /// Meta's Canterbury styles declare no attribution string of
+  /// their own, so the Meta map is credited as "© Meta" (plain
+  /// text — there is no Meta attribution page to link). On the
+  /// CartoDB raster fallback the chip is the OSM + CARTO credit,
+  /// tappable to that layer's attribution page, as before.
   Widget _attributionChip({required bool dark}) {
-    return GestureDetector(
-      onTap: () => launchUrl(Uri.parse(mapAttributionUrl(dark: dark))),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          mapAttributionText(dark: dark),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.white, fontSize: 11),
-        ),
+    final fallback = _styleMode == _MapStyleMode.cartoFallback;
+    final text = fallback
+        ? mapAttributionText(dark: dark)
+        : metaMapAttributionText;
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Colors.white, fontSize: 11),
       ),
     );
+    if (!fallback) return chip;
+    return GestureDetector(
+      onTap: () => launchUrl(Uri.parse(mapAttributionUrl(dark: dark))),
+      child: chip,
+    );
+  }
+
+  /// The ⓘ attribution button: on the CartoDB fallback it opens
+  /// that layer's attribution page; on the Meta map (no
+  /// attribution page exists) it states the credit plainly.
+  void _onAttributionTap({required bool dark}) {
+    if (_styleMode == _MapStyleMode.cartoFallback) {
+      launchUrl(Uri.parse(mapAttributionUrl(dark: dark)));
+      return;
+    }
+    _snack('Map data $metaMapAttributionText — Canterbury');
   }
 
   /// One row of the stop card (label left, value right).
@@ -2423,53 +2583,62 @@ class _MapTabState extends State<MapTab>
 
     return Stack(
       children: [
-        // Full-screen OpenStreetMap under the top nav: no text
+        // Full-screen Meta vector map under the top nav: no text
         // block above it — the old direction card is gone, route
-        // info lives in the sheet.
-        fm.FlutterMap(
-          mapController: _mapController,
-          options: fm.MapOptions(
-            initialCenter: _toLl(_initialCenter),
-            initialZoom: _initialZoom,
+        // info lives in the sheet. The native map only builds
+        // where the plugin has an implementation (see
+        // mapLibreSupported); elsewhere a placeholder box keeps
+        // the sheet + controls working.
+        if (mapLibreSupported)
+          MapLibreMap(
+          options: MapOptions(
+            // Theme-driven style: Meta's Canterbury vector style
+            // (dark / light), the same map the preview renders.
+            // If it fails to load, the fallback timer switches
+            // to the CartoDB Dark Matter raster style.
+            initStyle: metaMapStyleUrl(
+              dark: scheme.brightness == Brightness.dark,
+            ),
+            initCenter: const Geographic(lon: 121.05, lat: 16.9),
+            initZoom: _initialZoom,
             minZoom: 3,
             maxZoom: 19,
-            onTap: (_, _) {
+          ),
+          onMapCreated: _onMapCreated,
+          onStyleLoaded: _onStyleLoaded,
+          onEvent: (event) {
+            if (event is MapEventMoveCamera) {
+              final camera = event.camera;
+              _mapCenter = LatLng(camera.center.lat, camera.center.lon);
+              _mapZoom = camera.zoom;
+              _bearing.value = camera.bearing;
+            } else if (event is MapEventClick) {
               // A plain map tap dismisses the open stop card (and
               // restores the normal line).
               if (_selectedStopIndex != null) {
                 setState(() => _selectedStopIndex = null);
               }
-            },
-            onPositionChanged: (position, _) {
-              _mapCenter = LatLng(
-                position.center.latitude,
-                position.center.longitude,
-              );
-              _mapZoom = position.zoom;
-              try {
-                _bearing.value = _mapController.camera.rotation;
-              } catch (_) {}
-            },
-          ),
+            }
+          },
+          layers: _routePolylineLayers(),
           children: [
-            fm.TileLayer(
-              // Theme-driven tiles: CartoDB Dark Matter in dark
-              // mode (the preview's dark map look), standard OSM
-              // in light mode. The preview itself renders Meta's
-              // "Canterbury Dark" vector basemap, which flutter_map
-              // cannot render — Dark Matter is its raster
-              // equivalent, same dark background + bright green
-              // route line.
-              urlTemplate: tileUrlTemplate(
-                dark: scheme.brightness == Brightness.dark,
-              ),
-              userAgentPackageName: 'com.estudyantego.app',
-              maxZoom: 19,
+            WidgetLayer(
+              allowInteraction: true,
+              markers: _stopMarkers(),
             ),
-            fm.PolylineLayer(polylines: _routePolylines()),
-            fm.MarkerLayer(markers: _osmMarkers()),
           ],
-        ),
+        )
+        else
+          Container(
+            color: scheme.brightness == Brightness.dark
+                ? const Color(0xFF0C1410)
+                : const Color(0xFFE8EDE9),
+            alignment: Alignment.center,
+            child: Text(
+              'Map unavailable on this platform',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ),
         // Floating map controls (above the peeked sheet, or
         // just above the screen bottom when the sheet is hidden).
         Positioned(
@@ -2495,12 +2664,19 @@ class _MapTabState extends State<MapTab>
               _MapControlButton(
                 icon: Icons.add,
                 tooltip: 'Zoom in',
-                onPressed: () {
+                onPressed: () async {
+                  final controller = _mapController;
+                  if (controller == null) return;
+                  final zoom = (_mapZoom + 1).clamp(3.0, 19.0);
                   try {
-                    _mapController.move(
-                      _toLl(_mapCenter),
-                      (_mapZoom + 1).clamp(3.0, 19.0),
+                    await controller.moveCamera(
+                      center: Geographic(
+                        lon: _mapCenter.longitude,
+                        lat: _mapCenter.latitude,
+                      ),
+                      zoom: zoom,
                     );
+                    _mapZoom = zoom;
                   } catch (_) {}
                 },
               ),
@@ -2508,12 +2684,19 @@ class _MapTabState extends State<MapTab>
               _MapControlButton(
                 icon: Icons.remove,
                 tooltip: 'Zoom out',
-                onPressed: () {
+                onPressed: () async {
+                  final controller = _mapController;
+                  if (controller == null) return;
+                  final zoom = (_mapZoom - 1).clamp(3.0, 19.0);
                   try {
-                    _mapController.move(
-                      _toLl(_mapCenter),
-                      (_mapZoom - 1).clamp(3.0, 19.0),
+                    await controller.moveCamera(
+                      center: Geographic(
+                        lon: _mapCenter.longitude,
+                        lat: _mapCenter.latitude,
+                      ),
+                      zoom: zoom,
                     );
+                    _mapZoom = zoom;
                   } catch (_) {}
                 },
               ),
@@ -2540,12 +2723,13 @@ class _MapTabState extends State<MapTab>
             ],
           ),
         ),
-        // OSM attribution (ⓘ button, bottom-left above the sheet):
+        // Basemap attribution (ⓘ button, bottom-left above the sheet):
         // the preview's map carries its attribution as a small
         // corner button, and the preview has no Standard/Satellite
         // pill — the pill is gone, so this spot is free. Tapping
-        // opens the OSM copyright page. When the sheet is hidden
-        // the full chip shows centred at the bottom instead.
+        // opens the fallback layer's attribution page, or states
+        // the Meta credit. When the sheet is hidden the full chip
+        // shows centred at the bottom instead.
         if (!_sheetHidden)
           Positioned(
             left: 16,
@@ -2556,12 +2740,8 @@ class _MapTabState extends State<MapTab>
               elevation: 4,
               child: InkWell(
                 borderRadius: BorderRadius.circular(999),
-                onTap: () => launchUrl(
-                  Uri.parse(
-                    mapAttributionUrl(
-                      dark: scheme.brightness == Brightness.dark,
-                    ),
-                  ),
+                onTap: () => _onAttributionTap(
+                  dark: scheme.brightness == Brightness.dark,
                 ),
                 child: const Padding(
                   padding: EdgeInsets.all(8),
@@ -2574,7 +2754,7 @@ class _MapTabState extends State<MapTab>
               ),
             ),
           ),
-        // OSM attribution: visible whenever the sheet is hidden
+        // Basemap attribution: visible whenever the sheet is hidden
         // (when shown, the ⓘ button above carries it).
         if (_sheetHidden)
           Positioned(
@@ -2645,7 +2825,7 @@ class _MapTabState extends State<MapTab>
                           // attribution chip shared the row.
                           // Tap cycles Peek <-> Half; dragging the
                           // handle drives the sheet (the body
-                          // scroll area drags it too). The OSM
+                          // scroll area drags it too). The basemap
                           // attribution lives on the map now (the
                           // ⓘ button, bottom-left above the sheet).
                           GestureDetector(

@@ -2,9 +2,11 @@
 //
 // This file is the OSM side of the Map tab: OSRM road routing
 // (replacing the Google Routes API), Nominatim place lookup
-// (replacing Google Places where a lookup is needed), the OSM /
-// Esri tile URLs, and the pure route-stop math (stops along the
-// way, distances along the real road geometry, segment split).
+// (replacing Google Places where a lookup is needed), the map
+// style URLs (Meta's Canterbury vector style by default, CartoDB
+// Dark Matter raster as the fallback), and the pure route-stop
+// math (stops along the way, distances along the real road
+// geometry, segment split).
 //
 // Everything here is pure except the two fetchers at the bottom,
 // which only do one HTTP GET each and hand the body to the pure
@@ -26,16 +28,22 @@ import 'fares_tab.dart';
 const osmStandardTileUrl =
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-/// CartoDB Dark Matter raster tiles (dark mode) — the dark tile
-/// layer matching the preview's dark map look. The preview itself
-/// renders Meta's "Canterbury Dark" vector basemap
-/// (external.xx.fbcdn.net/maps/vt/style/dark/), a MapLibre vector
-/// style flutter_map cannot render; Dark Matter is the raster
-/// equivalent (same dark background, light roads/labels), served
-/// from OpenStreetMap data, so the attribution stays OSM + CARTO.
-/// Standard OSM tiles stay in light mode.
+/// CartoDB Dark Matter raster tiles — the FALLBACK basemap when
+/// the Meta vector style fails to load (see [metaMapStyleUrl]).
+/// Same dark look as the preview's map (dark background, light
+/// roads/labels), served from OpenStreetMap data, so the
+/// attribution stays OSM + CARTO. The `{r}` is flutter_map's
+/// retina placeholder, kept for [tileUrlTemplate]; the MapLibre
+/// fallback style document ([cartoFallbackStyleJson]) uses
+/// [cartoDarkRasterTileUrl] instead — MapLibre only expands
+/// {z}/{x}/{y}.
 const cartoDarkTileUrl =
     'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+/// CartoDB Dark Matter tiles without the `{r}` retina
+/// placeholder, for the MapLibre fallback style document.
+const cartoDarkRasterTileUrl =
+    'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
 
 /// CARTO attribution page, opened from the attribution chip in
 /// dark mode (the tiles are CARTO's Dark Matter rendering of OSM
@@ -45,21 +53,71 @@ const cartoAttributionUrl = 'https://carto.com/attributions';
 /// OSM copyright page, opened from the attribution chip.
 const osmCopyrightUrl = 'https://www.openstreetmap.org/copyright';
 
-/// Tile URL template for the current theme: dark mode gets the
-/// CartoDB Dark Matter layer, light mode the standard OSM tiles.
+/// Tile URL template for the FALLBACK raster layer (dark mode
+/// gets CartoDB Dark Matter, light mode standard OSM tiles).
+/// Kept for the tile tests; the live map uses the Meta vector
+/// styles below by default and this layer only on fallback.
 /// (The old Standard/Satellite pill is gone — no satellite path.)
 String tileUrlTemplate({bool dark = false}) =>
     dark ? cartoDarkTileUrl : osmStandardTileUrl;
 
-/// Attribution line for the current tile layer (CARTO requires
+/// Attribution line for the fallback tile layer (CARTO requires
 /// the © CARTO credit alongside OSM in dark mode).
 String mapAttributionText({required bool dark}) => dark
     ? '© OpenStreetMap contributors © CARTO'
     : '© OpenStreetMap contributors';
 
-/// Attribution page for the current tile layer.
+/// Attribution page for the fallback tile layer.
 String mapAttributionUrl({required bool dark}) =>
     dark ? cartoAttributionUrl : osmCopyrightUrl;
+
+/// Meta "Canterbury" vector styles — the app's DEFAULT basemap
+/// (the same map the Fares Phone Preview renders), via the
+/// maplibre plugin. Dark = "Canterbury Dark", light =
+/// "Canterbury Light" (the /style/light/ path returns HTTP 500,
+/// so canterbury_1_0 is the correct light URL). Served from
+/// Meta's internal CDN with no auth and no public third-party
+/// terms — reachable and rendering (verified Nov 7), but
+/// availability is NOT guaranteed. If a style fails to load, the
+/// map falls back to the CartoDB raster style below
+/// ([cartoFallbackStyleJson]).
+const metaDarkMapStyleUrl =
+    'https://external.xx.fbcdn.net/maps/vt/style/dark/';
+const metaLightMapStyleUrl =
+    'https://external.xx.fbcdn.net/maps/vt/style/canterbury_1_0/';
+
+/// MapLibre style URL for the current theme.
+String metaMapStyleUrl({required bool dark}) =>
+    dark ? metaDarkMapStyleUrl : metaLightMapStyleUrl;
+
+/// Attribution for the Meta basemap. The Canterbury style
+/// documents declare NO attribution string of their own (verified
+/// Nov 7 — each has a single 'facebook' vector source with no
+/// attribution field), so the credit is Meta itself, whose CDN
+/// serves the map. There is no Meta attribution page to link, so
+/// the chip shows this as plain text (see map_tab.dart).
+const metaMapAttributionText = '© Meta';
+
+/// MapLibre style document for the CartoDB Dark Matter raster
+/// fallback: a single raster source + layer. If the Meta style
+/// fails to load, the map switches to this document via setStyle
+/// — same dark look (OSM data rendered by CARTO), so the route
+/// line and pins keep working on a raster basemap.
+String cartoFallbackStyleJson() => jsonEncode({
+  'version': 8,
+  'name': 'CartoDB Dark Matter (fallback)',
+  'sources': {
+    'carto-dark': {
+      'type': 'raster',
+      'tiles': [cartoDarkRasterTileUrl],
+      'tileSize': 256,
+      'attribution': mapAttributionText(dark: true),
+    },
+  },
+  'layers': [
+    {'id': 'carto-dark', 'type': 'raster', 'source': 'carto-dark'},
+  ],
+});
 
 /// One route from OSRM: the road-following geometry (GeoJSON
 /// [lng, lat] pairs, converted here), the routed length and

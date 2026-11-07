@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/map_tab.dart';
+import 'package:estudyantego/features/osm_routing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -577,5 +578,39 @@ void main() {
     expect(found.first.address, 'Vigan City, Ilocos Sur');
     expect(parsePlacesChurches({}), isEmpty);
     expect(parsePlacesChurches({'places': 'nope'}), isEmpty);
+  });
+
+  group('routeStopPins', () {
+    // Cabugao -> Vigan Bus Terminal, no road geometry yet:
+    // origin + destination only.
+    List<RouteStop> defaultStops() => routeStops(
+      origin: const LatLng(17.78916, 120.45838),
+      originName: 'Cabugao',
+      dest: hubs.firstWhere((h) => h.name == 'Vigan Bus Terminal'),
+      roadPoints: null,
+      totalKm: 32.3,
+    );
+
+    test('default route has numbered pins 1..N in stop order', () {
+      final stops = defaultStops();
+      expect(stops.length, 2);
+      final pins = routeStopPins(stops, null);
+      expect(pins.map((p) => p.number), [1, 2]);
+      expect(pins[0].lat, stops[0].lat);
+      expect(pins[0].lng, stops[0].lng);
+      expect(pins[1].lat, stops[1].lat);
+      expect(pins[1].lng, stops[1].lng);
+      expect(pins.every((p) => !p.selected), isTrue);
+    });
+
+    test('selected stop is flagged on its pin only', () {
+      final pins = routeStopPins(defaultStops(), 1);
+      expect(pins[0].selected, isFalse);
+      expect(pins[1].selected, isTrue);
+    });
+
+    test('no stops means no pins', () {
+      expect(routeStopPins(const [], null), isEmpty);
+    });
   });
 }

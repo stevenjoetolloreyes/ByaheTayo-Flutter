@@ -10,7 +10,6 @@
 import 'package:estudyantego/features/top_nav.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -40,13 +39,17 @@ void main() {
     expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
   });
 
-  testWidgets('Map tab shows a real OpenStreetMap when selected', (
+  testWidgets('Map tab opens with its controls when selected', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester);
     await tester.tap(find.byKey(const Key('sidebar-item-Map')));
     await tester.pumpAndSettle();
-    expect(find.byType(FlutterMap), findsOneWidget);
+    // The native MapLibre view cannot render on the Linux test
+    // host (the plugin has no desktop implementation), so the tab
+    // shows its placeholder + controls; the real map render is
+    // verified on Steven's phone.
+    expect(find.text('Map unavailable on this platform'), findsOneWidget);
     expect(find.byIcon(Icons.my_location), findsOneWidget);
   });
 
