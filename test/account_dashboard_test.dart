@@ -48,6 +48,9 @@ Future<void> _pumpApp(
     permissionService: permissions ?? FakePermissionService(),
   ));
   await tester.pumpAndSettle();
+  // Tap-to-start splash (Nov 6): the app waits for the tap.
+  await tester.tap(find.byKey(const Key('splash-start')));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _openAccount(WidgetTester tester) async {
@@ -270,10 +273,28 @@ void main() {
     await tester.ensureVisible(find.text('Sign Out'));
     await tester.pumpAndSettle();
 
+    // Resize only: pumpWidget reuses the live tree, so a second
+    // _pumpApp would find no splash to tap. The Account tab stays
+    // selected across the resize; just re-scroll to the bottom.
     await _setSurface(tester, const Size(1280, 800));
-    await _pumpApp(tester);
-    await _openAccount(tester);
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Sign Out'));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('Quick Actions has a Friends tile that opens Friends',
+      (WidgetTester tester) async {
+    await _setSurface(tester, const Size(800, 1280));
+    await _pumpApp(tester);
+    await _openAccount(tester);
+
+    // Friends moved out of the top nav into Quick Actions (preview
+    // parity, Nov 6): the fifth tile, beside My Profile, Student
+    // ID, Transactions, Rewards.
+    expect(find.text('Quick Actions'), findsOneWidget);
+    expect(find.text('Friends'), findsOneWidget);
+    await _tapVisible(tester, 'Friends');
+    expect(find.text('My Friends'), findsOneWidget);
+    expect(find.text('My Friend Code'), findsOneWidget);
   });
 }
