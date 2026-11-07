@@ -73,6 +73,15 @@ const kMapInfo = Color(0xFF3B82F6);
 const kMapSuccess = Color(0xFF22C55E);
 const kMapCardRadius = 20.0;
 
+/// Top offset of the floating stop card (Steven, Nov 7: the card
+/// floats over the map in the upper area, not docked at the
+/// bottom). It sits just below the top-right control cluster —
+/// five 48px buttons + four 10px gaps starting at top:16, so the
+/// cluster ends at 16 + 5 * 48 + 4 * 10 = 296; the card starts
+/// 16dp below that, clear of the buttons and of the peeked sheet
+/// below. Same card, same content — only the position changed.
+const kMapStopCardTop = 312.0;
+
 /// Travel modes for the destination ETA, mirroring the web planner.
 enum TravelMode { transit, motorcycle, bicycle, walking }
 
@@ -2772,13 +2781,18 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               ),
             ),
           ),
-        // Stop card, above the peeked sheet (the sheet snaps to
-        // Peek when a stop is tapped so the card has room).
+        // Stop card, floating over the map in the upper area
+        // (Steven, Nov 7: not docked at the bottom above the
+        // sheet). It pins just below the top-right control cluster
+        // and floats clear of both the cluster and the peeked
+        // sheet — same card, same content, only the position
+        // changed. It stays put whether the sheet is shown or
+        // hidden; a plain map tap or the X still dismisses it.
         if (_selectedStopIndex != null)
           Positioned(
             left: 16,
             right: 16,
-            bottom: _sheetHidden ? 16 : 200,
+            top: kMapStopCardTop,
             child: _stopCard(),
           ),
         // Draggable bottom sheet: Peek / Half ONLY (no Full).
