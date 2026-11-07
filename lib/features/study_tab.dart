@@ -19,10 +19,16 @@
 //   file bytes.
 // * Notes — the real notes from NotesScreen (StudentStorage),
 //   searchable; tapping one opens NotesScreen for full CRUD.
-// * Review — the real quizzes + attempts (StudentStorage) and the
-//   real study entry points: Flashcards, Quiz, and AI Quiz. The
-//   preview's Drag & Drop and Identification modes have no app
-//   equivalent and are NOT faked with a substitute.
+// * Review — the real quizzes (StudentStorage) and the real study
+//   entry points: Flashcards, Quiz, and AI Quiz. Quiz shows the
+//   deck cards; Summary shows the same decks as summary cards
+//   (icon + title + teaser + chevron), exactly as the preview's
+//   #stReviewSummary does. The stats view the port first built
+//   in Summary (Quizzes completed/saved, Average score, Notes
+//   saved, Recent attempts) has no counterpart anywhere in the
+//   preview's Review tab, so it is gone — not moved elsewhere.
+//   The preview's Drag & Drop and Identification modes have no
+//   app equivalent and are NOT faked with a substitute.
 //
 // Real-data mappings for the preview's chips (the preview's ❤️ 15
 // is a hardcoded sample):
@@ -33,6 +39,12 @@
 //   tests, where the chip honestly shows 0 pts).
 //
 // Deviations from the preview, with reasons:
+// * The preview's Summary cards show a prose description excerpt
+//   as the teaser; Quiz stores no summary/description text, so
+//   the teaser is the deck's real facts instead (subject ·
+//   question count · difficulty) — never invented. Tapping a
+//   Summary card opens the quizzes list, where the deck's
+//   content lives; the app has no standalone summary reader.
 // * Quiz deck cards show the quiz's subject where the preview
 //   shows a date ("Oct 16"): Quiz stores no creation date, and
 //   the last-attempt date would mean something else, so it is
@@ -373,7 +385,6 @@ class _StudyTabState extends State<StudyTab> {
   List<StudyFile> _files = [];
   List<Note> _notes = [];
   List<Quiz> _quizzes = [];
-  List<QuizAttempt> _attempts = [];
 
   @override
   void initState() {
@@ -416,8 +427,6 @@ class _StudyTabState extends State<StudyTab> {
     final notes = await StudentStorage.loadList(StudentStorage.notesKey);
     final quizzes =
         await StudentStorage.loadList(StudentStorage.quizzesKey);
-    final attempts =
-        await StudentStorage.loadList(StudentStorage.attemptsKey);
     if (!mounted) return;
     setState(() {
       _subjects = subjects.map(Subject.fromJson).toList();
@@ -427,8 +436,6 @@ class _StudyTabState extends State<StudyTab> {
       _notes = notes.map(Note.fromJson).toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
       _quizzes = quizzes.map(Quiz.fromJson).toList();
-      _attempts = attempts.map(QuizAttempt.fromJson).toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
     });
   }
 
@@ -1651,12 +1658,6 @@ class _StudyTabState extends State<StudyTab> {
 
   Widget _reviewPanel(BuildContext context, _StudyTokens tokens,
       {required Key key}) {
-    final avg = _attempts.isEmpty
-        ? null
-        : _attempts
-                .map((a) => a.total > 0 ? a.score / a.total * 100 : 0.0)
-                .reduce((a, b) => a + b) /
-            _attempts.length;
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1715,42 +1716,23 @@ class _StudyTabState extends State<StudyTab> {
             onTap: () => _open(const AiQuizGenerateScreen()),
           ),
         ] else ...[
-          _statCard(tokens,
-              icon: Icons.check_circle_outline,
-              title: 'Quizzes completed',
-              value: '${_attempts.length}'),
-          const SizedBox(height: 8),
-          _statCard(tokens,
-              icon: Icons.quiz_outlined,
-              title: 'Quizzes saved',
-              value: '${_quizzes.length}'),
-          const SizedBox(height: 8),
-          _statCard(tokens,
-              icon: Icons.analytics_outlined,
-              title: 'Average score',
-              value: avg == null ? '—' : '${avg.toStringAsFixed(1)}%'),
-          const SizedBox(height: 8),
-          _statCard(tokens,
-              icon: Icons.note_outlined,
-              title: 'Notes saved',
-              value: '${_notes.length}'),
-          const SizedBox(height: AppSpacing.s12),
-          Text(
-            'Recent attempts',
-            style: TextStyle(
-                fontWeight: FontWeight.w700, color: tokens.text),
-          ),
-          const SizedBox(height: AppSpacing.s8),
-          if (_attempts.isEmpty)
+          // The preview's Summary shows the same decks as summary
+          // cards (icon + title + teaser + chevron) — not the stats
+          // view the port first built here. The stats (Quizzes
+          // completed/saved, Average score, Notes saved) and the
+          // Recent attempts list have no counterpart anywhere in
+          // the preview's Review tab, so they are gone — not moved
+          // elsewhere.
+          if (_quizzes.isEmpty)
             _emptyCard(
               tokens,
-              'No quiz attempts yet.',
-              'Take a quiz to see your results here.',
+              'No quizzes yet.',
+              'Create one with AI or add a quiz from your notes.',
             )
           else
-            for (var i = 0; i < _attempts.take(5).length; i++) ...[
-              if (i > 0) const SizedBox(height: 8),
-              _attemptCard(tokens, _attempts[i]),
+            for (var i = 0; i < _quizzes.length; i++) ...[
+              if (i > 0) const SizedBox(height: 12),
+              _summaryCard(tokens, _quizzes[i], i),
             ],
         ],
       ],
@@ -1852,6 +1834,80 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
+  /// Preview summary card: the same deck gradient as [_deckCard]
+  /// (hues cycle blue → green → amber), but a list icon + title +
+  /// teaser + chevron instead of the big question count — this is
+  /// what the preview's #stReviewSummary renders. The teaser is
+  /// the deck's real facts (subject · question count ·
+  /// difficulty): Quiz stores no prose summary/description, so
+  /// no teaser text is invented. Tapping opens the quizzes list,
+  /// where the deck's content lives — the app has no standalone
+  /// summary reader.
+  Widget _summaryCard(_StudyTokens tokens, Quiz quiz, int index) {
+    final hue = tokens.deckHues[index % tokens.deckHues.length];
+    final teaser =
+        '${quiz.subject.isEmpty ? 'No subject' : quiz.subject} · '
+        '${quiz.questions.length} questions · '
+        '${quizDifficultyLabel(quiz.difficulty)}';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            border: Border.all(color: tokens.line),
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              // CSS 155deg: top-left toward bottom-right.
+              begin: const Alignment(-0.423, -0.906),
+              end: const Alignment(0.423, 0.906),
+              colors: [hue.from, hue.to],
+            ),
+          ),
+          child: InkWell(
+            onTap: () => _open(const NotesScreen(initialTab: 'quizzes')),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.list_alt, size: 22, color: hue.hue),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          quiz.title,
+                          style: TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.bold,
+                            color: tokens.text,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          teaser,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: tokens.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Icon(Icons.chevron_right, color: tokens.muted),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Study entry card (Flashcards / Quiz / AI Quiz): brand-soft
   /// icon tile, title, subtitle, chevron.
   Widget _entryCard(
@@ -1909,68 +1965,6 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview summary card: 42px brand-soft icon tile, title,
-  /// value.
-  Widget _statCard(
-    _StudyTokens tokens, {
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return _studyCard(
-      tokens,
-      Padding(
-        padding: const EdgeInsets.all(15),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: tokens.brandSoft,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, size: 22, color: tokens.accent),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: tokens.text,
-                ),
-              ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: tokens.text,
-              ),
-            ),
-          ],
-        ),
-      ),
-      radius: 17,
-    );
-  }
-
-  Widget _attemptCard(_StudyTokens tokens, QuizAttempt attempt) {
-    return _studyCard(
-      tokens,
-      ListTile(
-        title: Text(attempt.quizTitle,
-            style: TextStyle(color: tokens.text)),
-        subtitle: Text(
-          '${attempt.score}/${attempt.total}',
-          style: TextStyle(color: tokens.muted),
-        ),
-      ),
-    );
-  }
 }
 
 class _LegendDot extends StatelessWidget {

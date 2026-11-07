@@ -242,9 +242,49 @@ void main() {
     expect(find.text('Drag & Drop'), findsNothing);
     await tester.tap(find.text('Summary'));
     await tester.pumpAndSettle();
-    expect(find.text('Quizzes completed'), findsOneWidget);
-    expect(find.text('Average score'), findsOneWidget);
-    expect(find.text('No quiz attempts yet.'), findsOneWidget);
+    // Summary shows the same decks as summary cards, never the
+    // stats view (no counterpart in the preview's Review tab).
+    expect(find.text('Quizzes completed'), findsNothing);
+    expect(find.text('Quizzes saved'), findsNothing);
+    expect(find.text('Average score'), findsNothing);
+    expect(find.text('Notes saved'), findsNothing);
+    expect(find.text('Recent attempts'), findsNothing);
+    expect(find.text('No quiz attempts yet.'), findsNothing);
+    expect(find.text('No quizzes yet.'), findsOneWidget);
+  });
+
+  testWidgets('Summary shows deck summary cards from real quizzes',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_quizzes': _quizJson,
+    });
+    await _tapNav(tester, 'review');
+    await tester.tap(find.text('Summary'));
+    await tester.pumpAndSettle();
+    // The real quiz's summary card: title + factual teaser
+    // (subject · question count · difficulty), list icon, chevron.
+    expect(find.text('My first quiz'), findsOneWidget);
+    expect(find.text('Math · 2 questions · Medium'), findsOneWidget);
+    expect(find.byIcon(Icons.list_alt), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    // No stats view, no sample decks, no invented teaser.
+    expect(find.text('Quizzes completed'), findsNothing);
+    expect(find.text('Quizzes saved'), findsNothing);
+    expect(find.text('Average score'), findsNothing);
+    expect(find.text('Notes saved'), findsNothing);
+    expect(find.text('Recent attempts'), findsNothing);
+    expect(find.text('No quiz attempts yet.'), findsNothing);
+    expect(find.text('11 Nursing Theorists and Their Theories'),
+        findsNothing);
+    expect(find.text('Audit Principles and Process'), findsNothing);
+    expect(find.text('Computer Programming Fundamentals'), findsNothing);
+    // Quiz pill still shows the question-count deck card.
+    await tester.tap(find.text('Quiz'));
+    await tester.pumpAndSettle();
+    expect(find.text('MULTIPLE CHOICE'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('questions'), findsOneWidget);
+    expect(find.text('Math'), findsOneWidget);
   });
 
   testWidgets('Review deck card shows a real quiz, never sample decks',
