@@ -40,6 +40,7 @@ import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/custom_routes.dart';
 import 'features/fares_tab.dart';
+import 'features/route_fare_overrides.dart';
 import 'features/map_tab.dart';
 import 'features/study_tab.dart';
 import 'features/top_nav.dart';
@@ -933,6 +934,10 @@ class _HomeShellState extends State<_HomeShell>
               widget.authService.isConfigured
                   ? FirestoreCustomRouteRepository()
                   : LocalCustomRouteRepository(),
+          fareOverrideRepository:
+              widget.authService.isConfigured
+                  ? FirestoreRouteFareOverrideRepository()
+                  : LocalRouteFareOverrideRepository(),
         ),
         MapTab(
           currentUser: widget.user,
@@ -940,6 +945,10 @@ class _HomeShellState extends State<_HomeShell>
               widget.authService.isConfigured
                   ? FirestoreCustomRouteRepository()
                   : LocalCustomRouteRepository(),
+          fareOverrideRepository:
+              widget.authService.isConfigured
+                  ? FirestoreRouteFareOverrideRepository()
+                  : LocalRouteFareOverrideRepository(),
         ),
         CommunitiesTab(
           onViewOnMap: () => widget.onSelect(3),

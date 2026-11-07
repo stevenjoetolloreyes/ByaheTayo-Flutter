@@ -20,6 +20,7 @@ import 'app_layout.dart';
 import 'custom_routes.dart';
 import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
+import 'route_fare_overrides.dart';
 
 // Fares-local ChatGPT design tokens (Premium Dark + Emerald Green,
 // adopted Nov 5 as a LOOSE UI base). Tab-local on purpose: the shared
@@ -102,10 +103,12 @@ class PopularRoute {
     required this.vehicle,
     this.operator,
     this.fare,
+    this.studentFare,
     this.fareLabel,
     this.distanceKm,
     this.distanceNote,
     this.viaHubs = const [],
+    this.customRouteId,
   });
 
   /// Endpoint names as shown on the card. Hub names (members of
@@ -123,6 +126,10 @@ class PopularRoute {
   /// The route's own fare in pesos, or null when no fare is set.
   final double? fare;
 
+  /// The student fare in pesos, set by an admin — or null to
+  /// derive 20% off [fare] (see [effectiveStudentFare]).
+  final double? studentFare;
+
   /// Label for [fare] when set, e.g. 'Verified bus fare'.
   final String? fareLabel;
 
@@ -138,7 +145,40 @@ class PopularRoute {
   /// own line). Empty for built-in routes.
   final List<String> viaHubs;
 
+  /// The admin-added route's id, when this came from
+  /// [popularRouteFromCustomRoute]; null for built-in routes.
+  final String? customRouteId;
+
   bool get isBus => vehicle == 'Bus';
+
+  /// The student fare to show: the admin-set [studentFare] when
+  /// present, otherwise 20% off [fare] — null when no fare is set.
+  double? get effectiveStudentFare {
+    if (fare == null) return null;
+    return studentFare ?? discountedFareOf(fare!);
+  }
+
+  /// A copy of this route with an admin's [RouteFareOverride]
+  /// merged in (built-in routes only — custom routes carry their
+  /// own fare/student fare). Null override = unchanged.
+  PopularRoute applyOverride(RouteFareOverride? override) {
+    if (override == null) return this;
+    return PopularRoute(
+      from: from,
+      to: to,
+      vehicle: vehicle,
+      operator: operator,
+      fare: override.fare ?? fare,
+      studentFare: override.studentFare ?? studentFare,
+      fareLabel: override.fare != null ? 'Admin-set fare' : fareLabel,
+      distanceKm: distanceKm,
+      distanceNote: distanceNote,
+      viaHubs: override.viaHubs == null || override.viaHubs!.isEmpty
+          ? viaHubs
+          : override.viaHubs!,
+      customRouteId: customRouteId,
+    );
+  }
 
   /// True when both endpoints are hubs, so the route can load
   /// into the calculator and show a formula breakdown.
@@ -289,8 +329,10 @@ PopularRoute popularRouteFromCustomRoute(CustomRoute route) {
     operator: route.operator,
     vehicle: route.vehicle,
     fare: route.fare,
+    studentFare: route.studentFare,
     fareLabel: 'Admin-entered fare',
     viaHubs: route.viaHubs,
+    customRouteId: route.id,
   );
 }
 
@@ -664,6 +706,7 @@ class FaresTab extends StatefulWidget {
     super.key,
     this.currentUser,
     this.customRouteRepository,
+    this.fareOverrideRepository,
     this.onViewOnMap,
   });
 
@@ -671,6 +714,10 @@ class FaresTab extends StatefulWidget {
 
   /// Admin-added routes source. Null = no custom routes are shown.
   final CustomRouteRepository? customRouteRepository;
+
+  /// Admin-set fare / student fare / direction overrides for the
+  /// built-in routes. Null = no overrides are applied.
+  final RouteFareOverrideRepository? fareOverrideRepository;
 
   /// Opens the Map tab for the current trip. Null when the host
   /// does not wire it (same pattern as StudentTab/CommunitiesTab):
@@ -699,6 +746,10 @@ class _FaresTabState extends State<FaresTab> {
   /// Admin-added routes (Add Route), newest first.
   List<CustomRoute> _customRoutes = [];
 
+  /// Admin-set overrides for the built-in routes, keyed by
+  /// [seededRouteKey] ('From|To'). Empty when none are stored.
+  Map<String, RouteFareOverride> _fareOverrides = {};
+
   /// Popular Routes filters (preview chips). The operator filter
   /// only applies while the Bus vehicle chip is active; picking
   /// any other vehicle resets it to All.
@@ -710,14 +761,22 @@ class _FaresTabState extends State<FaresTab> {
   @override
   void initState() {
     super.initState();
-    _loadCustomRoutes();
+    _loadRouteData();
   }
 
-  Future<void> _loadCustomRoutes() async {
+  Future<void> _loadRouteData() async {
     final repo = widget.customRouteRepository;
-    if (repo == null) return;
-    final routes = await repo.loadAll();
-    if (mounted) setState(() => _customRoutes = routes);
+    final overrideRepo = widget.fareOverrideRepository;
+    if (repo != null) {
+      final routes = await repo.loadAll();
+      if (mounted) setState(() => _customRoutes = routes);
+    }
+    if (overrideRepo != null) {
+      final overrides = await overrideRepo.loadAll();
+      if (mounted) {
+        setState(() => _fareOverrides = overrides);
+      }
+    }
   }
 
   /// Opens the Add Route form (admin only — the button is hidden
@@ -726,28 +785,83 @@ class _FaresTabState extends State<FaresTab> {
     final user = widget.currentUser;
     final repo = widget.customRouteRepository;
     if (user == null || repo == null || !isAdminUser(user)) return;
-    final saved = await showModalBottomSheet<CustomRoute>(
+    final result = await showModalBottomSheet<AddRouteSheetResult>(
       context: context,
       isScrollControlled: true,
       builder: (_) =>
           AddRouteSheet(existing: existing, repository: repo, author: user),
     );
-    if (saved != null && mounted) {
-      await _loadCustomRoutes();
+    if (result != null && mounted) {
+      await _loadRouteData();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(existing == null ? 'Route added.' : 'Route updated.'),
+          content: Text(
+            result.deleted
+                ? 'Route deleted.'
+                : existing == null
+                ? 'Route added.'
+                : 'Route updated.',
+          ),
         ),
       );
     }
   }
 
-  /// Popular Routes: the built-in verified / named routes plus
-  /// admin-added custom routes (newest first). The list is rebuilt
-  /// from [_customRoutes] on every build, so a newly added route
-  /// appears here without a reload.
+  /// Opens the edit sheet for one Popular Route (admin only —
+  /// the entry point is hidden for everyone else, and the
+  /// repositories re-check on save). Admin-added routes edit
+  /// their custom route; built-in routes edit their stored
+  /// override (fare, student fare, and via stops).
+  Future<void> _openEditRoute(PopularRoute route) async {
+    final user = widget.currentUser;
+    if (user == null || !isAdminUser(user)) return;
+    final customId = route.customRouteId;
+    if (customId != null) {
+      final existing = _customRoutes
+          .where((r) => r.id == customId)
+          .firstOrNull;
+      if (existing == null) return;
+      await _openAddRoute(existing: existing);
+      return;
+    }
+    final overrideRepo = widget.fareOverrideRepository;
+    if (overrideRepo == null) return;
+    final result = await showModalBottomSheet<AddRouteSheetResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AddRouteSheet.editSeededRoute(
+        route: route,
+        existingOverride: _fareOverrides[seededRouteKey(route.from, route.to)],
+        overrideRepository: overrideRepo,
+        author: user,
+      ),
+    );
+    if (result != null && mounted) {
+      await _loadRouteData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.deleted
+                ? 'Route reset to its built-in fare.'
+                : 'Route updated.',
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Popular Routes: the built-in verified / named routes (with
+  /// any admin overrides merged in) plus admin-added custom routes
+  /// (newest first). The list is rebuilt from [_customRoutes] and
+  /// [_fareOverrides] on every build, so a newly added route or
+  /// an edited fare appears here without a reload.
   List<PopularRoute> get _allPopularRoutes => [
-    ...popularRoutes,
+    for (final route in popularRoutes)
+      route.applyOverride(
+        _fareOverrides[seededRouteKey(route.from, route.to)],
+      ),
     for (final route in _customRoutes) popularRouteFromCustomRoute(route),
   ];
 
@@ -841,6 +955,9 @@ class _FaresTabState extends State<FaresTab> {
             : route.fareLabel == 'Verified bus fare'
             ? 'Verified Oct 16, 2026 — shown as reported, not calculated.'
             : 'Fare entered by an admin.',
+        routeFareStudent: route.effectiveStudentFare,
+        routeFareStudentSet: route.studentFare != null,
+        onEditRoute: _isAdmin ? () => _openEditRoute(route) : null,
         distanceKm: distanceKm,
         distanceNote: distanceNote,
         etaMinutes: etaMinutes,
@@ -1442,7 +1559,7 @@ class _PopularRouteCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '${peso(discountedFareOf(fare))} student',
+                          '${peso(route.effectiveStudentFare!)} student',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: kFaresAccent),
                         ),
@@ -1527,6 +1644,8 @@ class _FareBreakdownSheet extends StatelessWidget {
     required this.routeFare,
     required this.routeFareLabel,
     required this.routeFareNote,
+    this.routeFareStudent,
+    this.routeFareStudentSet = false,
     required this.distanceKm,
     required this.distanceNote,
     required this.etaMinutes,
@@ -1536,6 +1655,7 @@ class _FareBreakdownSheet extends StatelessWidget {
     required this.breakdown,
     required this.breakdownNote,
     required this.onViewOnMap,
+    this.onEditRoute,
   });
 
   final String from;
@@ -1550,6 +1670,15 @@ class _FareBreakdownSheet extends StatelessWidget {
   final double? routeFare;
   final String? routeFareLabel;
   final String? routeFareNote;
+
+  /// The student fare to show — the admin-set value when present,
+  /// otherwise 20% off [routeFare]; null when no fare is set.
+  final double? routeFareStudent;
+
+  /// True when [routeFareStudent] was set by an admin (not
+  /// derived) — the detail line says so instead of "20% off".
+  final bool routeFareStudentSet;
+
   final double? distanceKm;
   final String? distanceNote;
 
@@ -1571,6 +1700,11 @@ class _FareBreakdownSheet extends StatelessWidget {
   final FareBreakdown? breakdown;
   final String? breakdownNote;
   final VoidCallback? onViewOnMap;
+
+  /// Admin-only: opens the edit sheet for this route. Null for
+  /// non-admins (no edit entry is shown) and for the calculator
+  /// sheet (no route to edit).
+  final VoidCallback? onEditRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -1602,6 +1736,15 @@ class _FareBreakdownSheet extends StatelessWidget {
                   const Expanded(
                     child: Text('Fare breakdown', style: kFaresCardHeading),
                   ),
+                  if (onEditRoute != null)
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onEditRoute!();
+                      },
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit route'),
+                    ),
                   IconButton(
                     tooltip: 'Close',
                     onPressed: () => Navigator.pop(context),
@@ -1669,8 +1812,12 @@ class _FareBreakdownSheet extends StatelessWidget {
                   ),
                   _SheetRow(
                     label: 'Student discount',
-                    detail: '20% off with a valid student ID',
-                    amount: peso(discountedFareOf(routeFare)),
+                    detail: routeFareStudentSet
+                        ? 'Set by an admin'
+                        : '20% off with a valid student ID',
+                    amount: peso(
+                      routeFareStudent ?? discountedFareOf(routeFare),
+                    ),
                   ),
                   _SheetRow(
                     label: 'PWD discount',

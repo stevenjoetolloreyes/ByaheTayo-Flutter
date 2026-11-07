@@ -57,6 +57,7 @@ import 'custom_routes.dart';
 import 'fares_tab.dart';
 import 'onboarding/auth_service.dart';
 import 'osm_routing.dart';
+import 'route_fare_overrides.dart';
 
 /// Map tab's OWN ChatGPT tokens (loose UI base, Nov 5): Premium Dark +
 /// Emerald Green with a matching Light Mode. Only the chrome around
@@ -1086,6 +1087,11 @@ FareRate? previewRateForVehicle(VehicleType vehicle) {
 /// 'No fare'). This replaces the old behavior where every preview
 /// used the traditional-jeepney rate — e.g. Cabugao → Tuguegarao
 /// 168.7 km showed ₱344 — even for bus travel.
+///
+/// Kept for its unit tests and the preview-rate path: the Map
+/// ETA • FARE sheet itself no longer uses it (see
+/// [resolveMapSheetFares]) — a pair with no admin-set or verified
+/// fare shows "Fare not set" there instead of a computed number.
 double? resolveTransitFare({
   required String from,
   required String to,
@@ -1097,6 +1103,77 @@ double? resolveTransitFare({
   final rate = previewRateForVehicle(vehicle);
   if (rate == null) return null;
   return computeFare(rate, roadKm, false).regular;
+}
+
+/// The admin-added custom route for a From|To pair, or null.
+/// Exact hub-name match; the first match wins (a pair has at most
+/// one custom route — the Add Route sheet blocks duplicates).
+CustomRoute? matchCustomRoute(
+  List<CustomRoute> customs,
+  String from,
+  String to,
+) {
+  for (final route in customs) {
+    if (route.from == from && route.to == to) return route;
+  }
+  return null;
+}
+
+/// Map points for ordered via-stop hub names (unknown names are
+/// skipped — never invented). Intermediate points only: the
+/// caller supplies the origin and destination separately.
+List<LatLng> viaPointsForHubNames(List<String> names) {
+  final points = <LatLng>[];
+  for (final name in names) {
+    final hub = hubByName(name);
+    if (hub != null) points.add(LatLng(hub.lat, hub.lng));
+  }
+  return points;
+}
+
+/// Via points for the OSRM fetch of a route: a custom route's own
+/// via-stops (excluding its endpoints), else a seeded route's
+/// admin-override via-stops, else none (the terminal Quezon Ave
+/// waypoint is added inside _fetchRoadPath when no via points are
+/// given).
+List<LatLng> routeViaPoints(RouteInfo route, RouteFareOverride? override) {
+  final custom = route.customRoute;
+  if (custom != null) {
+    final points = customRouteLinePoints(custom);
+    if (points.length < 3) return const [];
+    return points.sublist(1, points.length - 1);
+  }
+  final viaHubs = override?.viaHubs;
+  if (viaHubs == null || viaHubs.isEmpty) return const [];
+  return viaPointsForHubNames(viaHubs);
+}
+
+/// The fares the Map ETA • FARE sheet shows for a route — the
+/// EFFECTIVE fare, in the same precedence the Fares tab uses
+/// (see PopularRoute.applyOverride / effectiveStudentFare):
+///
+/// * an admin-added custom route's own fare / student fare;
+/// * else an admin override's fare / student fare for the
+///   built-in pair;
+/// * else the user-verified fare from [knownBusFares];
+/// * else null — the sheet shows "Fare not set", never a
+///   computed number.
+///
+/// A blank student fare derives 20% off the effective regular
+/// fare ([discountedFareOf]), exactly like the Fares tab.
+({double? regular, double? discounted}) resolveMapSheetFares({
+  CustomRoute? customRoute,
+  RouteFareOverride? override,
+  required String from,
+  required String to,
+}) {
+  final regular = customRoute?.fare ??
+      override?.fare ??
+      knownBusFare(from, to)?.toDouble();
+  final discounted = customRoute?.studentFare ??
+      override?.studentFare ??
+      (regular == null ? null : discountedFareOf(regular));
+  return (regular: regular, discounted: discounted);
 }
 
 /// Preview label for a route card, following the vehicle selection.
@@ -1259,6 +1336,7 @@ class MapTab extends StatefulWidget {
     super.key,
     this.currentUser,
     this.customRouteRepository,
+    this.fareOverrideRepository,
   });
 
   final AuthUser? currentUser;
@@ -1266,6 +1344,10 @@ class MapTab extends StatefulWidget {
   /// Admin-added routes source. Null = no custom routes are loaded
   /// (e.g. tests, or Firebase not configured and no local repo).
   final CustomRouteRepository? customRouteRepository;
+
+  /// Admin-set fare / student fare / direction overrides for the
+  /// built-in routes. Null = no overrides are applied.
+  final RouteFareOverrideRepository? fareOverrideRepository;
 
   @override
   State<MapTab> createState() => _MapTabState();
@@ -1331,6 +1413,19 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // on the map, plus the origin point it starts from.
   RouteInfo? _activeRoute;
   LatLng? _activeRouteOrigin;
+  // The admin override for the active route, if any — set together
+  // with [_activeRoute] by [_resolveRoute]. Drives the sheet's
+  // effective fare and the route's via-stops line. Null for
+  // admin-added routes (they carry their own fare + via stops)
+  // and for built-in routes with no stored override.
+  RouteFareOverride? _activeRouteOverride;
+  // Admin-added routes (Add Route) and admin-set overrides for the
+  // built-in routes, loaded in [_ensureRouteData] before every
+  // route selection so an edit made in the Fares tab reaches the
+  // map without a restart. Reads are for everyone; writes stay
+  // admin-only (repository-side allowlist).
+  List<CustomRoute> _customRoutes = [];
+  Map<String, RouteFareOverride> _fareOverrides = {};
   // Road-following shape from OSRM (null = still loading or failed;
   // the dashed direct line shows until real geometry arrives).
   List<LatLng>? _roadPoints;
@@ -1340,7 +1435,6 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // app's roadKm estimate for the minutes fraction.
   double _routeDistanceKm = 0;
   int _roadRequestId = 0;
-  final VehicleType _vehicle = VehicleType.bus;
   // Bottom-sheet visibility toggle (logo button).
   // Visibility only: the sheet stays in the tree wrapped in
   // Offstage, so hiding never clears routes, destinations, church
@@ -1587,6 +1681,87 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _selectHub(match.first);
   }
 
+  /// Loads the admin-added routes + fare overrides (both repos
+  /// never throw — a failure returns the local cache). Called
+  /// before every route selection so an edit made in the Fares
+  /// tab reaches the map without a restart. A slow load is
+  /// bounded at 5 s and keeps the current data, so selection
+  /// never stalls on a bad connection.
+  Future<void> _ensureRouteData() async {
+    final customRepo = widget.customRouteRepository;
+    final overrideRepo = widget.fareOverrideRepository;
+    if (customRepo == null && overrideRepo == null) return;
+    try {
+      final loaded = await Future.wait<dynamic>([
+        customRepo?.loadAll() ??
+            Future<List<CustomRoute>>.value(const []),
+        overrideRepo?.loadAll() ??
+            Future<Map<String, RouteFareOverride>>.value(const {}),
+      ]).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => <dynamic>[_customRoutes, _fareOverrides],
+      );
+      if (!mounted) return;
+      setState(() {
+        _customRoutes = loaded[0] as List<CustomRoute>;
+        _fareOverrides = loaded[1] as Map<String, RouteFareOverride>;
+      });
+    } catch (_) {
+      // Keep whatever is in state — the generated route still
+      // draws, and the next selection retries the load.
+    }
+  }
+
+  /// Resolves the route for an origin + destination after
+  /// refreshing the route data: an admin-added custom route with
+  /// the same From|To wins (its own fare, student fare, and
+  /// via-stops line); else the generated hub route, with any
+  /// admin override for its From|To pair (fare / student fare /
+  /// via stops). Returns the route, the override for a generated
+  /// route (null for custom routes), and the via points for the
+  /// OSRM fetch. A GPS origin ('Your location') never matches a
+  /// custom route — those are hub-named only.
+  Future<
+    ({
+      RouteInfo? route,
+      RouteFareOverride? override,
+      List<LatLng> via,
+    })
+  >
+  _resolveRoute({
+    required String originName,
+    required double oLat,
+    required double oLng,
+    required Hub destHub,
+  }) async {
+    await _ensureRouteData();
+    final custom = matchCustomRoute(_customRoutes, originName, destHub.name);
+    if (custom != null) {
+      final route = customRouteToRouteInfo(custom);
+      return (
+        route: route,
+        override: null,
+        via: routeViaPoints(route, null),
+      );
+    }
+    final matches = routesFrom(
+      oLat,
+      oLng,
+      originName,
+    ).where((r) => r.dest.name == destHub.name);
+    final route = matches.isEmpty ? null : matches.first;
+    if (route == null) {
+      return (route: null, override: null, via: const <LatLng>[]);
+    }
+    final override =
+        _fareOverrides[seededRouteKey(originName, destHub.name)];
+    return (
+      route: route,
+      override: override,
+      via: routeViaPoints(route, override),
+    );
+  }
+
   /// A Fares "Find routes" / "Show direction on Map" sets
   /// [faresMapJump]; draw that hub-to-hub route (direction line +
   /// ETA • FARE sheet, snapped to Half so the route details show),
@@ -1595,7 +1770,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// known, else the home hub — the same rule as the hub-tap flow.
   /// Non-hub names are ignored: the tab opens with no route rather
   /// than drawing a line to a place the app does not know.
-  void _onFaresJump() {
+  void _onFaresJump() async {
     final jump = faresMapJump.value;
     if (jump == null) return;
     faresMapJump.value = null;
@@ -1617,14 +1792,17 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       oLng = _userPos?.longitude ?? hubs[_homeHub].lng;
       oName = _userPos != null ? 'Your location' : hubs[_homeHub].name;
     }
-    final matches = routesFrom(
-      oLat,
-      oLng,
-      oName,
-    ).where((r) => r.dest.name == destHub.name);
-    final route = matches.isEmpty ? null : matches.first;
+    final resolved = await _resolveRoute(
+      originName: oName,
+      oLat: oLat,
+      oLng: oLng,
+      destHub: destHub,
+    );
+    if (!mounted) return;
+    final route = resolved.route;
     setState(() {
       _activeRoute = route;
+      _activeRouteOverride = resolved.override;
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
       _selectedStopIndex = null;
@@ -1634,7 +1812,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _resetSheetScroll();
     if (route != null) {
       _fitActiveRoute();
-      _fetchRoadPath(oLat, oLng, destHub);
+      _fetchRoadPath(oLat, oLng, destHub, via: resolved.via);
       _snapSheet(_SheetSnap.half);
     }
   }
@@ -1868,18 +2046,21 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
   /// mid-navigation ends that navigation (start again for the new
   /// destination).
-  void _selectHub(Hub hub) {
+  void _selectHub(Hub hub) async {
     final oLat = _userPos?.latitude ?? hubs[_homeHub].lat;
     final oLng = _userPos?.longitude ?? hubs[_homeHub].lng;
     final oName = _userPos != null ? 'Your location' : hubs[_homeHub].name;
-    final matches = routesFrom(
-      oLat,
-      oLng,
-      oName,
-    ).where((r) => r.dest.name == hub.name);
-    final route = matches.isEmpty ? null : matches.first;
+    final resolved = await _resolveRoute(
+      originName: oName,
+      oLat: oLat,
+      oLng: oLng,
+      destHub: hub,
+    );
+    if (!mounted) return;
+    final route = resolved.route;
     setState(() {
       _activeRoute = route;
+      _activeRouteOverride = resolved.override;
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
       _selectedStopIndex = null;
@@ -1890,7 +2071,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     if (route != null) {
       // Fit both endpoints, padded so the bounds never degenerate.
       _fitActiveRoute();
-      _fetchRoadPath(oLat, oLng, hub);
+      _fetchRoadPath(oLat, oLng, hub, via: resolved.via);
     } else {
       _moveTo(LatLng(hub.lat, hub.lng), zoom: 13);
     }
@@ -1958,7 +2139,9 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           totalKm: result.distanceKm > 0
               ? result.distanceKm
               : _activeRoute!.roadKm,
-          viaHubNames: _activeRoute!.customRoute?.viaHubs ?? const [],
+          viaHubNames: _activeRoute!.customRoute?.viaHubs ??
+              _activeRouteOverride?.viaHubs ??
+              const [],
         );
       }
     });
@@ -1977,15 +2160,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
 
   /// Via points for the active route's own line: a custom route's
-  /// via-stops (excluding its endpoints), otherwise none (the
-  /// terminal Quezon Ave waypoint is added inside _fetchRoadPath).
-  List<LatLng> _customRouteViaPoints(RouteInfo route) {
-    final custom = route.customRoute;
-    if (custom == null) return const [];
-    final points = customRouteLinePoints(custom);
-    if (points.length < 3) return const [];
-    return points.sublist(1, points.length - 1);
-  }
+  /// via-stops, else a seeded route's admin-override via-stops,
+  /// otherwise none (the terminal Quezon Ave waypoint is added
+  /// inside _fetchRoadPath).
+  List<LatLng> _customRouteViaPoints(RouteInfo route) =>
+      routeViaPoints(route, _activeRouteOverride);
 
 
 
@@ -2137,7 +2316,9 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         dest: route.dest,
         roadPoints: _roadPoints,
         totalKm: _routeDistanceKm > 0 ? _routeDistanceKm : route.roadKm,
-        viaHubNames: route.customRoute?.viaHubs ?? const [],
+        viaHubNames: route.customRoute?.viaHubs ??
+            _activeRouteOverride?.viaHubs ??
+            const [],
       );
     });
   }
@@ -2457,7 +2638,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   Widget _sheetFixedHeader(ColorScheme scheme) {
     final route = _activeRoute;
     if (route == null) return const SizedBox.shrink();
-    final verified = knownBusFare(route.originName, route.dest.name);
+    // The badge claims the fare is the Oct 16 user-verified one,
+    // so it only shows when the fare on display IS that fare: an
+    // admin-set fare (custom route or override) supersedes it.
+    final adminFare =
+        route.customRoute?.fare ?? _activeRouteOverride?.fare;
+    final verified = adminFare == null
+        ? knownBusFare(route.originName, route.dest.name)
+        : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
       child: Column(
@@ -2555,21 +2743,21 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   }
 
   /// The preview's fare cards: REGULAR FARE and DISCOUNTED -20%,
-  /// side by side. The regular fare is the user-verified fare
-  /// when the pair has one (Cabugao ↔ Vigan ₱60), otherwise the
-  /// formula fare; the discounted fare is 20% off, rounded to the
-  /// nearest ₱0.25 — the same rule as computeFare. A route with
-  /// no fare at all (Partas Laoag → Cubao, GMW) says so plainly.
+  /// side by side. The fares are the EFFECTIVE fares (see
+  /// [resolveMapSheetFares]): an admin-added route's own fares,
+  /// else an admin override's fares, else the user-verified fare
+  /// — a pair with none of those shows "Fare not set", never a
+  /// computed number. A blank student fare derives 20% off the
+  /// effective regular fare.
   Widget _fareCards(ColorScheme scheme, RouteInfo route) {
-    final regular = route.customRoute?.fare ??
-        resolveTransitFare(
-          from: route.originName,
-          to: route.dest.name,
-          vehicle: _vehicle,
-          roadKm: route.roadKm,
-        );
-    final discounted =
-        regular == null ? null : (regular * 0.8 * 4).round() / 4;
+    final fares = resolveMapSheetFares(
+      customRoute: route.customRoute,
+      override: _activeRouteOverride,
+      from: route.originName,
+      to: route.dest.name,
+    );
+    final regular = fares.regular;
+    final discounted = fares.discounted;
     return Row(
       children: [
         Expanded(

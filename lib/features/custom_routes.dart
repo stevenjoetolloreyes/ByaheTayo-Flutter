@@ -78,6 +78,7 @@ class CustomRoute {
     required this.operator,
     required this.vehicle,
     required this.fare,
+    this.studentFare,
     this.viaHubs = const [],
     this.authorUid = '',
     this.authorEmail = '',
@@ -101,6 +102,12 @@ class CustomRoute {
   /// Fare in pesos, typed by the admin. Always > 0.
   final double fare;
 
+  /// Student fare in pesos, typed by the admin — or null to derive
+  /// 20% off [fare] (see [discountedFareOf] in fares_tab.dart).
+  /// Null is the default: an admin only types this when the
+  /// student fare is NOT the plain 20% discount.
+  final double? studentFare;
+
   /// Ordered via-stops (hub names) the line must pass through.
   /// Empty = the generic From → To line.
   final List<String> viaHubs;
@@ -118,6 +125,7 @@ class CustomRoute {
     String? operator,
     String? vehicle,
     double? fare,
+    double? studentFare,
     List<String>? viaHubs,
     String? authorUid,
     String? authorEmail,
@@ -131,6 +139,7 @@ class CustomRoute {
       operator: operator ?? this.operator,
       vehicle: vehicle ?? this.vehicle,
       fare: fare ?? this.fare,
+      studentFare: studentFare ?? this.studentFare,
       viaHubs: viaHubs ?? this.viaHubs,
       authorUid: authorUid ?? this.authorUid,
       authorEmail: authorEmail ?? this.authorEmail,
@@ -146,6 +155,7 @@ class CustomRoute {
     'operator': operator,
     'vehicle': vehicle,
     'fare': fare,
+    if (studentFare != null) 'studentFare': studentFare,
     'viaHubs': viaHubs,
     if (authorUid.isNotEmpty) 'authorUid': authorUid,
     if (authorEmail.isNotEmpty) 'authorEmail': authorEmail,
@@ -165,6 +175,9 @@ class CustomRoute {
       operator: data['operator'] is String ? data['operator'] as String : '',
       vehicle: data['vehicle'] is String ? data['vehicle'] as String : '',
       fare: data['fare'] is num ? (data['fare'] as num).toDouble() : 0,
+      studentFare: data['studentFare'] is num
+          ? (data['studentFare'] as num).toDouble()
+          : null,
       viaHubs: via is List ? via.whereType<String>().toList() : const [],
       authorUid: data['authorUid'] is String ? data['authorUid'] : '',
       authorEmail:
@@ -366,15 +379,21 @@ abstract class CustomRouteRepository {
 }
 
 /// Validates a route object itself (repository-side, same rules as
-/// the form validator, minus the text parsing).
+/// the form validator, minus the text parsing). A student fare is
+/// optional, but when present it must be more than ₱0.
 String? validateCustomRouteObject(CustomRoute route) {
-  return validateCustomRoute(
+  final base = validateCustomRoute(
     from: route.from,
     to: route.to,
     operator: route.operator,
     vehicle: route.vehicle,
     fareText: route.fare.toString(),
   );
+  if (base != null) return base;
+  if (route.studentFare != null && route.studentFare! <= 0) {
+    return 'The student fare must be more than ₱0.';
+  }
+  return null;
 }
 
 List<CustomRoute> _sortedNewestFirst(List<CustomRoute> routes) {
@@ -485,6 +504,7 @@ class FirestoreCustomRouteRepository implements CustomRouteRepository {
       'operator': route.operator,
       'vehicle': route.vehicle,
       'fare': route.fare,
+      'studentFare': route.studentFare,
       'viaHubs': route.viaHubs,
       'updatedAt': FieldValue.serverTimestamp(),
     });
