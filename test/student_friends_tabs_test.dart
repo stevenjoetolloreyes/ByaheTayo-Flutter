@@ -172,6 +172,9 @@ void main() {
         const EstudyanteGOApp(initialThemeMode: ThemeMode.dark),
       );
       await tester.pumpAndSettle();
+      // Tap-to-start splash (Nov 6): the app waits for the tap.
+      await tester.tap(find.byKey(const Key('splash-start')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('top-nav-item-Student')));
       await tester.pumpAndSettle();
       expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
@@ -182,6 +185,46 @@ void main() {
       expect(theme.colorScheme.primary, kStudentEmeraldAccent);
       expect(theme.colorScheme.outline, kStudentDarkBorder);
       expect(find.byType(TopNavBar), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Student Hub is graph-first: ring, gauge, week bars, donuts, Add school',
+    (tester) async {
+      // Preview parity (Nov 6): Review ring + gauge, Commute stat
+      // panels + week bars, calendar legend + Add school chip,
+      // Subject breakdown + Monthly report donuts — all from real
+      // (empty) data. The old holiday text list is gone.
+      tester.view.physicalSize = const Size(390, 10000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(wrap(const StudentTab()));
+      await tester.pumpAndSettle();
+      // Review card: ring + gauge.
+      expect(find.text('Learning Progress'), findsOneWidget);
+      expect(find.text('0%'), findsWidgets);
+      expect(find.text('Average score'), findsOneWidget);
+      expect(find.text('No quizzes taken'), findsOneWidget);
+      expect(find.text('Quizzes this week'), findsOneWidget);
+      expect(find.text('0 of 0 completed'), findsOneWidget);
+      // Commute card: stat panels + week bars.
+      expect(find.text('Routes'), findsOneWidget);
+      expect(find.text('0 Trips this week'), findsOneWidget);
+      // Calendar: legend + Add school chip, no holiday text list.
+      expect(find.text('Holiday'), findsOneWidget);
+      expect(find.text('Add school'), findsOneWidget);
+      expect(find.text('Holidays this month'), findsNothing);
+      expect(find.textContaining('No school saved'), findsNothing);
+      // Donuts with honest empty centres.
+      expect(find.text('Subject breakdown'), findsOneWidget);
+      expect(find.text('0 Subjects'), findsOneWidget);
+      expect(find.text('0 Records'), findsOneWidget);
+      expect(find.text('Monthly report'), findsOneWidget);
+      expect(find.text('0.0%'), findsOneWidget);
+      // 'Present' is both the donut centre label and a legend row.
+      expect(find.text('Present'), findsWidgets);
+      expect(find.text('Absent'), findsOneWidget);
     },
   );
 }
