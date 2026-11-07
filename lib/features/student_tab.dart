@@ -20,6 +20,8 @@
 //   exists; no photo is baked into the app.
 // - Greeting name "Steven" matches the reference mockup; it becomes
 //   dynamic when an account system exists.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1472,6 +1474,32 @@ class _StudentTabState extends State<StudentTab> {
 
   // ------------------------------------------------------------ notes
 
+  /// True when [d] falls in the current Mon–Sun week.
+  bool _isThisWeek(DateTime d) {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = day.difference(monday).inDays;
+    return diff >= 0 && diff < 7;
+  }
+
+  /// Mon–Sun counts for the week-bars (preview viz-bars): how many
+  /// of [dates] fall on each day of the current week. Dates outside
+  /// this week count nowhere — a quiet week draws flat bars.
+  List<int> _weekCounts(Iterable<DateTime> dates) {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final counts = List<int>.filled(7, 0);
+    for (final d in dates) {
+      final day = DateTime(d.year, d.month, d.day);
+      final diff = day.difference(monday).inDays;
+      if (diff >= 0 && diff < 7) counts[diff]++;
+    }
+    return counts;
+  }
+
   Widget _notesWidget(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final attemptedIds = <String>{};
@@ -1528,6 +1556,60 @@ class _StudentTabState extends State<StudentTab> {
       subtitle: 'Study, practice, and track your progress.',
       onOpen: () => _open(const NotesScreen()),
       children: [
+        // Graph-first (preview parity, Nov 6): Learning Progress
+        // ring + Average Score gauge, from the real quizzes and
+        // attempts — 0% / "—" when nothing is recorded yet.
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                children: [
+                  _VizRing(
+                    fraction: _quizzes.isEmpty
+                        ? 0
+                        : (attemptedIds.length / _quizzes.length)
+                            .clamp(0.0, 1.0),
+                    top:
+                        '${(_quizzes.isEmpty ? 0 : (attemptedIds.length / _quizzes.length * 100)).round()}%',
+                    bottom: 'Done',
+                    color: kStudentEmerald,
+                  ),
+                  const SizedBox(height: AppSpacing.s4),
+                  const Text('Learning Progress',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  Text(
+                    '${attemptedIds.length} of ${_quizzes.length} completed',
+                    style: AppText.small,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  _VizGauge(
+                    fraction: _attempts.isEmpty ? 0 : (avg / 100).clamp(0, 1).toDouble(),
+                    top: _attempts.isEmpty
+                        ? '—'
+                        : '${avg.toStringAsFixed(0)}%',
+                    bottom: 'Avg. Score',
+                    color: const Color(0xFF2563EB),
+                  ),
+                  const SizedBox(height: AppSpacing.s4),
+                  const Text('Average score',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  Text(
+                    _attempts.isEmpty
+                        ? 'No quizzes taken'
+                        : '${avg.toStringAsFixed(1)}%',
+                    style: AppText.small,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s8),
         Row(
           children: [
             statBox(Icons.note_outlined, '${_notes.length}', 'Saved Notes'),
@@ -1547,13 +1629,9 @@ class _StudentTabState extends State<StudentTab> {
           ],
         ),
         const SizedBox(height: AppSpacing.s8),
-        const Text('Learning Progress',
+        const Text('Quizzes this week',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        if (_attempts.isEmpty)
-          const Text('Take a quiz to start tracking progress.')
-        else
-          LinearProgressIndicator(
-              value: (avg / 100).clamp(0, 1).toDouble()),
+        _WeekBars(values: _weekCounts(_attempts.map((a) => a.date))),
         const SizedBox(height: AppSpacing.s8),
         const Text('Recent Study Activity',
             style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1908,7 +1986,7 @@ class _StudentTabState extends State<StudentTab> {
   Widget _commuteWidget(BuildContext context) {
     final rate = fares.fareRates.firstWhere((r) => r.id == 'trad-jeep');
     String? firstDistance;
-    String? firstFare;
+    double? maxFare;
     for (final key in _savedKeys) {
       final parts = key.split('>');
       if (parts.length < 2) continue;
@@ -1917,9 +1995,9 @@ class _StudentTabState extends State<StudentTab> {
       if (origin == null || dest == null) continue;
       final roadKm = maps.roadKmBetween(
           origin.lat, origin.lng, dest.lat, dest.lng);
-      firstDistance = '${roadKm.toStringAsFixed(1)} km';
-      firstFare = peso(fares.computeFare(rate, roadKm, false).regular);
-      break;
+      firstDistance ??= '${roadKm.toStringAsFixed(1)} km';
+      final fare = fares.computeFare(rate, roadKm, false).regular;
+      if (maxFare == null || fare > maxFare) maxFare = fare;
     }
     final sortedExpenses = List.of(_commuteExpenses)
       ..sort((a, b) => b.date.compareTo(a.date));
@@ -1937,13 +2015,37 @@ class _StudentTabState extends State<StudentTab> {
       subtitle: 'Favorites, expenses, and map shortcuts.',
       onOpen: () => _open(CommuteScreen(onViewOnMap: widget.onViewOnMap)),
       children: [
-        _row('Saved routes', '${_savedKeys.length}'),
+        // Graph-first (preview parity, Nov 6): Saved Routes +
+        // Est. Fare stat panels, then the week's trips as bars —
+        // all from the real saved routes and logged expenses.
+        Row(
+          children: [
+            _StatPanel(
+              value: '${_savedKeys.length}',
+              label: 'Routes',
+              sub: 'Saved Routes · Shared with Map tab',
+            ),
+            const SizedBox(width: AppSpacing.s8),
+            _StatPanel(
+              value: maxFare == null ? '₱0' : peso(maxFare),
+              label: 'max',
+              sub: 'Est. Fare · Jeepney',
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s8),
         _row('Trip distance', firstDistance ?? 'No hub route saved'),
-        _row('Estimated fare (jeepney)', firstFare ?? '—'),
         const Text(
           'Fares shown for traditional jeepney. Saved routes are shared with the Map tab.',
           style: TextStyle(fontSize: 12),
         ),
+        const SizedBox(height: AppSpacing.s8),
+        Text(
+          '${sortedExpenses.where((e) => _isThisWeek(e.date)).length} Trips this week',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        _WeekBars(
+            values: _weekCounts(sortedExpenses.map((e) => e.date))),
         const SizedBox(height: AppSpacing.s8),
         const Text('Recent trips',
             style: TextStyle(fontWeight: FontWeight.w700)),
@@ -2099,8 +2201,6 @@ class _StudentTabState extends State<StudentTab> {
     final monthStart = DateTime(now.year, now.month, 1);
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final firstWeekday = monthStart.weekday; // 1 = Mon
-    final monthHolidays = philippineHolidaysInMonth(now.year, now.month);
-    final monthEvents = schoolEventsInMonth(_school, now.year, now.month);
     final schoolLabel = _school?.trim();
     final scheme = Theme.of(context).colorScheme;
 
@@ -2187,65 +2287,485 @@ class _StudentTabState extends State<StudentTab> {
             );
           },
         ),
-        if (monthHolidays.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.s8),
-          const Text('Holidays this month',
-              style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: AppSpacing.s4),
-          for (final h in monthHolidays)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Row(
-                children: [
-                  Icon(Icons.circle, size: 8, color: scheme.error),
-                  const SizedBox(width: AppSpacing.s8),
-                  Expanded(
-                    child: Text(
-                        '${monthShortName(now.month)} ${h.day} · ${h.name}'),
-                  ),
-                ],
-              ),
+        // Legend (preview parity, Nov 6): holidays are red numbers
+        // + dots on the dates themselves — no holiday text list —
+        // and the Add school chip opens the Account tab, where the
+        // school lives under Student Information.
+        const SizedBox(height: AppSpacing.s8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, size: 8, color: scheme.error),
+                const SizedBox(width: AppSpacing.s4),
+                const Text('Holiday'),
+              ],
             ),
-        ],
-        if (schoolLabel == null || schoolLabel.isEmpty) ...[
-          const SizedBox(height: AppSpacing.s8),
-          const Text(
-              'No school saved — add your school in Account → Student Information to show school events here.'),
-        ] else if (monthEvents.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.s8),
-          const Text('Events this month',
-              style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: AppSpacing.s4),
-          for (final e in monthEvents)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Row(
-                children: [
-                  const Icon(Icons.circle, size: 8, color: kStudentInfo),
-                  const SizedBox(width: AppSpacing.s8),
-                  Expanded(
-                    child: Text(
-                        '${formatEventRange(e)} · ${e.name} · ${e.noClasses ? 'No classes' : 'Has classes'}'),
-                  ),
-                ],
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.circle,
+                    size: 8, color: kStudentEmerald),
+                const SizedBox(width: AppSpacing.s4),
+                const Text('Today'),
+              ],
             ),
-        ],
+            ActionChip(
+              label: const Text('Add school'),
+              onPressed: widget.onViewAccount,
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.s8),
         const Text('Subject breakdown',
             style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: AppSpacing.s8),
+        Center(
+          child: _VizDonut(
+            segments: [
+              for (var i = 0; i < bySubject.entries.length; i++)
+                (
+                  color: _vizPalette[i % _vizPalette.length],
+                  value: bySubject.entries
+                      .elementAt(i)
+                      .value
+                      .length
+                      .toDouble(),
+                ),
+            ],
+            centerTop: '${bySubject.length} Subjects',
+            centerBottom: '${_attendance.length} Records',
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s8),
         if (bySubject.isEmpty)
           const Text('No records yet.')
         else
-          for (final e in bySubject.entries)
-            _row(e.key,
-                '${attendanceStats(e.value).percent.toStringAsFixed(1)}% · ${e.value.length} records'),
+          for (var i = 0; i < bySubject.entries.length; i++)
+            _row(
+              bySubject.entries.elementAt(i).key,
+              '${attendanceStats(bySubject.entries.elementAt(i).value).percent.toStringAsFixed(1)}% · ${bySubject.entries.elementAt(i).value.length} records',
+            ),
         const SizedBox(height: AppSpacing.s4),
         const Text('Monthly report',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        Text(
-            'This month: ${monthStats.percent.toStringAsFixed(1)}% · ${monthRecords.length} records · Present ${monthStats.present} · Absent ${monthStats.absent}'),
+        const SizedBox(height: AppSpacing.s8),
+        Center(
+          child: _VizDonut(
+            segments: [
+              (color: kStudentEmerald, value: monthStats.present.toDouble()),
+              (color: scheme.error, value: monthStats.absent.toDouble()),
+            ],
+            centerTop:
+                '${monthStats.percent.toStringAsFixed(1)}%',
+            centerBottom: 'Present',
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s8),
+        _row('Present', '${monthStats.present}'),
+        _row('Absent', '${monthStats.absent}'),
+        Text('${monthRecords.length} records',
+            style: Theme.of(context).textTheme.bodySmall),
       ],
+    );
+  }
+}
+
+// ------------------------------------------------------------ viz
+// (Preview graph-first Student sections, Nov 6, 2026.)
+//
+// Ring / gauge / donut / week-bars drawn with CustomPainter —
+// pure draws, no animation controller, so they are reduced-motion
+// safe by construction and show the final value immediately.
+// Every value comes from the app's real data; empty data draws an
+// empty track with a "0" centre, never invented numbers.
+
+/// Palette for donut segments (subject breakdown, monthly report).
+const _vizPalette = <Color>[
+  Color(0xFF16A34A),
+  Color(0xFF2563EB),
+  Color(0xFFF59E0B),
+  Color(0xFF8B5CF6),
+  Color(0xFF06B6D4),
+  Color(0xFFEC4899),
+];
+
+class _RingPainter extends CustomPainter {
+  _RingPainter({
+    required this.fraction,
+    required this.color,
+    required this.trackColor,
+  });
+
+  final double fraction;
+  final Color color;
+  final Color trackColor;
+  static const double strokeWidth = 8;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (math.min(size.width, size.height) / 2) - strokeWidth / 2;
+    final track = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, track);
+    final f = fraction.clamp(0.0, 1.0);
+    if (f > 0) {
+      final fill = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -math.pi / 2,
+        math.pi * 2 * f,
+        false,
+        fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) =>
+      old.fraction != fraction || old.color != color;
+}
+
+class _DonutPainter extends CustomPainter {
+  _DonutPainter({required this.segments, required this.trackColor});
+
+  /// (color, value) segments; empty or all-zero draws the track only.
+  final List<({Color color, double value})> segments;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const strokeWidth = 14.0;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (math.min(size.width, size.height) / 2) - strokeWidth / 2;
+    final track = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, track);
+    final total = segments.fold<double>(0, (s, e) => s + e.value);
+    if (total <= 0) return;
+    var start = -math.pi / 2;
+    for (final seg in segments) {
+      if (seg.value <= 0) continue;
+      final sweep = math.pi * 2 * (seg.value / total);
+      final fill = Paint()
+        ..color = seg.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        start,
+        sweep,
+        false,
+        fill,
+      );
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter old) =>
+      old.segments != segments;
+}
+
+class _GaugePainter extends CustomPainter {
+  _GaugePainter({
+    required this.fraction,
+    required this.color,
+    required this.trackColor,
+  });
+
+  /// 0..1 across the semicircle (left = 0, right = 1).
+  final double fraction;
+  final Color color;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const strokeWidth = 8.0;
+    // Semicircle: width 2r, height r + stroke.
+    final radius = size.width / 2 - strokeWidth / 2;
+    final center = Offset(size.width / 2, size.height - strokeWidth / 2);
+    final track = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      math.pi,
+      math.pi,
+      false,
+      track,
+    );
+    final f = fraction.clamp(0.0, 1.0);
+    if (f > 0) {
+      final fill = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        math.pi,
+        math.pi * f,
+        false,
+        fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GaugePainter old) =>
+      old.fraction != fraction || old.color != color;
+}
+
+/// Full-circle progress ring with a centre label (preview
+/// "viz-ring": Learning Progress).
+class _VizRing extends StatelessWidget {
+  const _VizRing({
+    required this.fraction,
+    required this.top,
+    required this.bottom,
+    required this.color,
+  });
+
+  final double fraction;
+  final String top;
+  final String bottom;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 76,
+      height: 76,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(76, 76),
+            painter: _RingPainter(
+              fraction: fraction,
+              color: color,
+              trackColor: scheme.outlineVariant,
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(top,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w800)),
+              Text(bottom, style: AppText.small),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Semicircle gauge with a centre label (preview "viz-gauge":
+/// Average Score).
+class _VizGauge extends StatelessWidget {
+  const _VizGauge({
+    required this.fraction,
+    required this.top,
+    required this.bottom,
+    required this.color,
+  });
+
+  final double fraction;
+  final String top;
+  final String bottom;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 76,
+      height: 76,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: 14,
+            child: CustomPaint(
+              size: const Size(76, 46),
+              painter: _GaugePainter(
+                fraction: fraction,
+                color: color,
+                trackColor: scheme.outlineVariant,
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 6,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(top,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w800)),
+                Text(bottom, style: AppText.small),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Donut with a two-line centre label (preview "viz-donut":
+/// Subject breakdown, Monthly report).
+class _VizDonut extends StatelessWidget {
+  const _VizDonut({
+    required this.segments,
+    required this.centerTop,
+    required this.centerBottom,
+  });
+
+  final List<({Color color, double value})> segments;
+  final String centerTop;
+  final String centerBottom;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 120,
+      height: 120,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(120, 120),
+            painter: _DonutPainter(
+              segments: segments,
+              trackColor: scheme.outlineVariant,
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(centerTop,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800)),
+              Text(centerBottom,
+                  textAlign: TextAlign.center, style: AppText.small),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mon–Sun bar chart (preview "viz-bars": Trips this week,
+/// Quizzes this week). Bars scale to the week's max; zero weeks
+/// draw flat tracks, never fake heights.
+class _WeekBars extends StatelessWidget {
+  const _WeekBars({required this.values});
+
+  /// 7 counts, Monday first.
+  final List<int> values;
+
+  static const _labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final max = values.fold<int>(0, (m, v) => v > m ? v : m);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (var i = 0; i < 7; i++)
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${values[i]}', style: AppText.small),
+                const SizedBox(height: 2),
+                Container(
+                  height: 36,
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    width: 14,
+                    height: max == 0
+                        ? 2
+                        : 4 + 32 * (values[i] / max),
+                    decoration: BoxDecoration(
+                      color: values[i] == 0
+                          ? scheme.outlineVariant
+                          : kStudentEmerald,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(_labels[i], style: AppText.small),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Big-value stat panel (preview "viz-panel": Saved Routes,
+/// Est. Fare).
+class _StatPanel extends StatelessWidget {
+  const _StatPanel({
+    required this.value,
+    required this.label,
+    this.sub,
+  });
+
+  final String value;
+  final String label;
+  final String? sub;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: scheme.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w800)),
+            Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            if (sub != null)
+              Text(sub!, style: AppText.small),
+          ],
+        ),
+      ),
     );
   }
 }
