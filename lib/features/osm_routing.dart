@@ -176,6 +176,55 @@ String metaVectorTileUrl({
   return (x: x, y: y);
 }
 
+/// The tile under ([lat], [lng]) at zoom [z] plus its east and
+/// south neighbours (centre first). Pure, so the neighbour math
+/// is testable. East wraps at the antimeridian (x + 1 mod 2^z);
+/// south clamps at the bottom row (Web Mercator has no tile
+/// below y = 2^z − 1). The tile probe fetches all three: one
+/// small tile can arrive while the viewport never does
+/// (Steven's phone, Nov 7, 22:10 — the probe passed on a single
+/// rural tile, the watchdog was cancelled, and the map stayed
+/// blank with no banner and no Retry).
+List<({int x, int y})> metaTileNeighbours({
+  required double lat,
+  required double lng,
+  required int z,
+}) {
+  final centre = metaTileXy(lat: lat, lng: lng, z: z);
+  final zoom = z.clamp(0, 16);
+  final n = 1 << zoom;
+  return [
+    centre,
+    (x: (centre.x + 1) % n, y: centre.y),
+    (x: centre.x, y: (centre.y + 1).clamp(0, n - 1)),
+  ];
+}
+
+/// One tile fetch: GETs [url], returns the body bytes on HTTP
+/// 200 with a non-empty body, null on any failure or timeout
+/// (8 s per stage — connect, headers, body). Never throws. The
+/// shared core of both tile probes, so the timeouts stay
+/// identical.
+Future<List<int>?> _fetchTileBytes(Uri url) async {
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+  try {
+    final request = await client.getUrl(url);
+    request.headers.set('User-Agent', 'EstudyanteGO/1.0');
+    final response = await request.close().timeout(
+      const Duration(seconds: 8),
+    );
+    if (response.statusCode != 200) return null;
+    final bytes = await response
+        .fold<List<int>>(<int>[], (a, b) => a..addAll(b))
+        .timeout(const Duration(seconds: 8));
+    return bytes.isEmpty ? null : bytes;
+  } catch (_) {
+    return null;
+  } finally {
+    client.close();
+  }
+}
+
 /// Probes whether the Meta vector tile CDN is reachable from
 /// this device right now: GETs the single vector tile covering
 /// ([lat], [lng]) at zoom [z]. True on HTTP 200 with a
@@ -190,25 +239,38 @@ Future<bool> probeMetaVectorTile({
   required int z,
 }) async {
   final tile = metaTileXy(lat: lat, lng: lng, z: z);
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-  try {
-    final request = await client.getUrl(
-      Uri.parse(metaVectorTileUrl(z: z, x: tile.x, y: tile.y)),
-    );
-    request.headers.set('User-Agent', 'EstudyanteGO/1.0');
-    final response = await request.close().timeout(
-      const Duration(seconds: 8),
-    );
-    if (response.statusCode != 200) return false;
-    final bytes = await response
-        .fold<List<int>>(<int>[], (a, b) => a..addAll(b))
-        .timeout(const Duration(seconds: 8));
-    return bytes.isNotEmpty;
-  } catch (_) {
-    return false;
-  } finally {
-    client.close();
-  }
+  return await _fetchTileBytes(
+        Uri.parse(metaVectorTileUrl(z: z, x: tile.x, y: tile.y)),
+      ) !=
+      null;
+}
+
+/// Hardened Meta tile probe: fetches the centre tile under
+/// ([lat], [lng]) at zoom [z] PLUS its east and south
+/// neighbours, concurrently, and reports true only when ALL
+/// THREE arrive. One tile can arrive while the viewport never
+/// does (the 22:10 blank-map case) — three concurrent tiles
+/// are much stronger evidence the CDN is actually serving this
+/// area, and on a slow connection they arrive in parallel, so
+/// the cost is the slowest tile, not the sum. Same 8 s
+/// per-stage timeouts as the single-tile probe. Never throws.
+/// No minimum tile size is required: a legitimately empty
+/// vector tile (open sea) can be a few hundred bytes, and a
+/// size floor would false-fail over water.
+Future<bool> probeMetaVectorTiles({
+  required double lat,
+  required double lng,
+  required int z,
+}) async {
+  final tiles = metaTileNeighbours(lat: lat, lng: lng, z: z);
+  final results = await Future.wait(
+    tiles.map(
+      (tile) => _fetchTileBytes(
+        Uri.parse(metaVectorTileUrl(z: z, x: tile.x, y: tile.y)),
+      ),
+    ),
+  );
+  return results.every((bytes) => bytes != null);
 }
 
 /// The one CartoDB raster tile under [z]/[x]/[y] for the
@@ -244,25 +306,35 @@ Future<bool> probeCartoTile({
   required bool dark,
 }) async {
   final tile = metaTileXy(lat: lat, lng: lng, z: z);
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-  try {
-    final request = await client.getUrl(
-      Uri.parse(cartoTileUrl(dark: dark, z: z, x: tile.x, y: tile.y)),
-    );
-    request.headers.set('User-Agent', 'EstudyanteGO/1.0');
-    final response = await request.close().timeout(
-      const Duration(seconds: 8),
-    );
-    if (response.statusCode != 200) return false;
-    final bytes = await response
-        .fold<List<int>>(<int>[], (a, b) => a..addAll(b))
-        .timeout(const Duration(seconds: 8));
-    return bytes.isNotEmpty;
-  } catch (_) {
-    return false;
-  } finally {
-    client.close();
-  }
+  return await _fetchTileBytes(
+        Uri.parse(cartoTileUrl(dark: dark, z: z, x: tile.x, y: tile.y)),
+      ) !=
+      null;
+}
+
+/// Hardened CartoDB fallback probe (the symmetric partner of
+/// [probeMetaVectorTiles]): centre tile PLUS its east and south
+/// neighbours, concurrently, true only when ALL THREE arrive.
+/// Same reasoning as the Meta probe — one small raster tile
+/// passing proves almost nothing about the viewport on a slow
+/// connection. Never throws.
+Future<bool> probeCartoTiles({
+  required double lat,
+  required double lng,
+  required int z,
+  required bool dark,
+}) async {
+  final tiles = metaTileNeighbours(lat: lat, lng: lng, z: z);
+  final results = await Future.wait(
+    tiles.map(
+      (tile) => _fetchTileBytes(
+        Uri.parse(
+          cartoTileUrl(dark: dark, z: z, x: tile.x, y: tile.y),
+        ),
+      ),
+    ),
+  );
+  return results.every((bytes) => bytes != null);
 }
 
 /// One route from OSRM: the road-following geometry (GeoJSON
@@ -468,7 +540,19 @@ Future<OsrmRoute?> fetchOsrmRoute({
     final response = await request.close().timeout(
       const Duration(seconds: 20),
     );
-    final body = await response.transform(utf8.decoder).join();
+    // The body read MUST be bounded: connect (15 s) and headers
+    // (20 s) already time out, but the old bare join() could
+    // stall forever once headers arrived and the body trickled
+    // — and _roadLoading (map_tab) clears only when this fetch
+    // settles, so the route line stayed suppressed indefinitely
+    // (Steven's phone, Nov 7, 22:10: pins visible, no line).
+    // 60 s is generous on slow data (a 20–50 KB route body is
+    // 13–33 s at 1.5 KB/s) but finite: on timeout the fetch
+    // returns null and the caller shows the dashed direct line.
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 60));
     if (response.statusCode != 200) return null;
     final decoded = jsonDecode(body);
     if (decoded is! Map<String, dynamic>) return null;
@@ -505,7 +589,13 @@ Future<OsrmRoute?> fetchOsrmRouteForPoints(List<LatLng> points) async {
     final response = await request.close().timeout(
       const Duration(seconds: 20),
     );
-    final body = await response.transform(utf8.decoder).join();
+    // Same bounded body read as [fetchOsrmRoute]: a stalled body
+    // used to leave the line-maker draft road line unsettled
+    // forever. 60 s, same reasoning.
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 60));
     if (response.statusCode != 200) return null;
     final decoded = jsonDecode(body);
     if (decoded is! Map<String, dynamic>) return null;

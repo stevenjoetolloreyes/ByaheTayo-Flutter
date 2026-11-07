@@ -1370,6 +1370,27 @@ EdgeInsets routeFitPadding({
 }) =>
     EdgeInsets.fromLTRB(80, 80, 80, 80 + screenHeight * sheetFraction);
 
+/// Centre the tile probe on: the midpoint of the active route
+/// (origin → destination) when a route is selected, otherwise
+/// the current camera centre. Pure, so the choice is testable.
+/// The old probe always used the camera centre, which at style
+/// load is still the init centre (16.9, 121.05 — central Luzon),
+/// so the probed tile was not even a viewport tile for the
+/// Cabugao → Vigan route (Steven's phone, Nov 7, 22:10). The
+/// midpoint sits on the route corridor, so the probed tiles are
+/// the ones the map actually needs.
+LatLng mapProbeCenter({
+  LatLng? origin,
+  Hub? dest,
+  required LatLng currentCenter,
+}) {
+  if (origin == null || dest == null) return currentCenter;
+  return LatLng(
+    (origin.latitude + dest.lat) / 2,
+    (origin.longitude + dest.lng) / 2,
+  );
+}
+
 /// One map line layer, as data: the points to draw, its colour,
 /// its width, and whether it is the solid road shape or the
 /// dashed direct fallback. Value equality (LatLng compares by
@@ -1812,13 +1833,31 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant MapTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!oldWidget.visible || !widget.visible) return;
     // Returning to the tab after the tiles failed (e.g. the
     // user switched from a network that blocks the tile CDNs to
     // one that does not): retry the tile sources so the map
-    // recovers without an app restart. Only in the failed state
-    // — a healthy map must never reload on every tab switch.
-    if (!oldWidget.visible && widget.visible && _tilesFailed) {
+    // recovers without an app restart.
+    if (_tilesFailed) {
       _retryTileSources();
+      return;
+    }
+    // Returning to the tab with a map the app BELIEVES is fine:
+    // re-validate it. The one-shot probe from style load can
+    // pass on a few small tiles while the viewport tiles never
+    // arrive (Steven's phone, Nov 7, 22:10 — blank map, no
+    // banner, no Retry, because _tilesFailed was never set and
+    // this branch used to do nothing). A passing re-probe
+    // cancels the watchdog and nothing changes; a failing one
+    // re-arms it, so the CartoDB fallback fires in 10 s. Only
+    // on a visible transition — one probe per return, never on
+    // every build. On a fast connection the re-probe passes in
+    // under a second; on a slow one it costs a few tile
+    // downloads and may flip a cache-rendered map to the
+    // fallback when the network cannot serve fresh tiles —
+    // the fallback is a working map, not a blank one.
+    if (_styleMode == _MapStyleMode.meta && _styleLoaded) {
+      _probeMetaTiles(armWatchdogOnFailure: true);
     }
   }
 
@@ -1917,46 +1956,68 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     });
   }
 
-  /// Tile-reachability probe: fetches the one Meta vector tile
-  /// under the current camera. If it arrives, the CDN is
-  /// reachable from this phone — the native map's own tile
-  /// requests can succeed too — so the tile watchdog is
-  /// cancelled and the Meta map stays. If it fails or times
-  /// out, the watchdog is left armed and fires the CartoDB
-  /// fallback at 10 s. A probe result is ignored if the style
-  /// changed meanwhile (theme switch) or the widget is gone.
-  Future<void> _probeMetaTiles() async {
+  /// Centre for the tile probes: the active route's midpoint
+  /// when a route is selected, else the current camera centre
+  /// (see [mapProbeCenter]).
+  LatLng get _probeCenter => mapProbeCenter(
+    origin: _activeRouteOrigin,
+    dest: _activeRoute?.dest,
+    currentCenter: _mapCenter,
+  );
+
+  /// Tile-reachability probe: fetches the Meta vector tiles
+  /// under the probe centre (the active route's midpoint, so
+  /// the probed tiles are the ones the map actually needs) —
+  /// centre tile plus its east and south neighbours, all three
+  /// required. If they arrive, the CDN is reachable from this
+  /// phone — the native map's own tile requests can succeed
+  /// too — so the tile watchdog is cancelled and the Meta map
+  /// stays. If they fail or time out, the watchdog is left
+  /// armed and fires the CartoDB fallback at 10 s — unless
+  /// [armWatchdogOnFailure] (tab-return re-validation) asks
+  /// for a fresh 10 s watchdog, because the first probe's
+  /// watchdog was already cancelled. A probe result is ignored
+  /// if the style changed meanwhile (theme switch) or the
+  /// widget is gone. Returns true when the probe passed.
+  Future<bool> _probeMetaTiles({bool armWatchdogOnFailure = false}) async {
     final styleUrl = _activeStyleUrl;
     final zoom = _mapZoom.floor();
-    final reachable = await probeMetaVectorTile(
-      lat: _mapCenter.latitude,
-      lng: _mapCenter.longitude,
+    final centre = _probeCenter;
+    final reachable = await probeMetaVectorTiles(
+      lat: centre.latitude,
+      lng: centre.longitude,
       z: zoom,
     );
     if (!mounted ||
-        !reachable ||
         _styleMode != _MapStyleMode.meta ||
         _activeStyleUrl != styleUrl) {
-      return;
+      return false;
+    }
+    if (!reachable) {
+      if (armWatchdogOnFailure) _armTileWatchdog();
+      return false;
     }
     _tileWatchdogTimer?.cancel();
     _tileWatchdogTimer = null;
     if (_tilesFailed) setState(() => _tilesFailed = false);
+    return true;
   }
 
   /// Tile-reachability probe for the CartoDB fallback: fetches
-  /// the one fallback tile under the current camera. If it
-  /// arrives, the fallback tiles are reachable — clear the
-  /// failed state. If it fails or times out, both tile sources
-  /// are unreachable and the banner shows. A probe result is
-  /// ignored if the style changed meanwhile (theme switch, or
-  /// a retry back to Meta) or the widget is gone.
+  /// the fallback tiles under the probe centre (centre tile
+  /// plus its east and south neighbours, all three required).
+  /// If they arrive, the fallback tiles are reachable — clear
+  /// the failed state. If they fail or time out, both tile
+  /// sources are unreachable and the banner shows. A probe
+  /// result is ignored if the style changed meanwhile (theme
+  /// switch, or a retry back to Meta) or the widget is gone.
   Future<void> _probeCartoTiles() async {
     final dark = _fallbackDark;
     final zoom = _mapZoom.floor();
-    final reachable = await probeCartoTile(
-      lat: _mapCenter.latitude,
-      lng: _mapCenter.longitude,
+    final centre = _probeCenter;
+    final reachable = await probeCartoTiles(
+      lat: centre.latitude,
+      lng: centre.longitude,
       z: zoom,
       dark: dark,
     );
@@ -4651,6 +4712,33 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
             right: 88,
             child: _tilesFailedBanner(context),
           ),
+        // Manual map reload, top-left: the one action that is
+        // ALWAYS available, even when the app believes the map
+        // is fine. The banner's Retry only exists once
+        // [_tilesFailed] is set — and the probe can pass on a
+        // few small tiles while the viewport never arrives
+        // (Steven's phone, Nov 7, 22:10: blank map, no banner,
+        // no Retry at all), leaving the user stuck with no way
+        // to re-attempt the tiles short of an app restart. This
+        // button calls the same [_retryTileSources] as the
+        // banner: back to Meta, timers re-armed, banner cleared.
+        // Top-left, not the top-right cluster: the cluster is
+        // already 5 buttons tall (it ends 16 px above the stop
+        // card at kMapStopCardTop) and a 6th button would cover
+        // the stop card's close button. Hidden while the banner
+        // shows — the banner occupies this exact spot with its
+        // own Retry.
+        if (!_tilesFailed)
+          Positioned(
+            top: 16,
+            left: 16,
+            child: _MapControlButton(
+              key: const ValueKey('map-tiles-reload'),
+              icon: Icons.refresh,
+              tooltip: 'Reload map',
+              onPressed: _retryTileSources,
+            ),
+          ),
         // Floating map controls, top-right (Steven, Nov 7: the
         // buttons belong at the top). They used to sit bottom-right
         // above the peeked sheet; the top-right is free — no text
@@ -4981,6 +5069,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 /// Round dark control button used for zoom and my-location.
 class _MapControlButton extends StatelessWidget {
   const _MapControlButton({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
