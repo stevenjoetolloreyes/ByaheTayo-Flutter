@@ -40,6 +40,9 @@ Future<void> _pumpApp(WidgetTester tester) async {
     ),
   );
   await tester.pumpAndSettle();
+  // Tap-to-start splash (Nov 6): the app waits for the tap.
+  await tester.tap(find.byKey(const Key('splash-start')));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _openAccount(WidgetTester tester) async {
