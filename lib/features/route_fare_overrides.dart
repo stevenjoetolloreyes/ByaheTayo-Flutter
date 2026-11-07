@@ -22,9 +22,11 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'admin_access.dart';
+import 'bus_stops.dart';
 import 'onboarding/auth_service.dart';
 
 /// Firestore collection for seeded-route fare/direction overrides.
@@ -32,6 +34,12 @@ const routeFareOverridesCollection = 'route_fare_overrides';
 
 /// SharedPreferences key for the local overrides cache.
 const routeFareOverridesCacheKey = 'route_fare_overrides_cache_v1';
+
+/// Bumped after every successful override mutation (save /
+/// delete), so the Fares tab reloads its overrides without a
+/// restart — e.g. after the Map tab's line maker saves a drawn
+/// line. Reads never bump.
+final routeFareOverridesChanged = ValueNotifier<int>(0);
 
 /// Stable key for a built-in route: its From|To pair (the same
 /// convention as map_tab's knownBusFares table). The seven built-in
@@ -45,7 +53,10 @@ class RouteFareOverride {
     required this.routeKey,
     this.fare,
     this.studentFare,
+    this.pwdFare,
+    this.seniorFare,
     this.viaHubs,
+    this.viaWaypoints,
     this.authorUid = '',
     this.authorEmail = '',
     this.updatedAt,
@@ -62,9 +73,22 @@ class RouteFareOverride {
   /// (effective) regular fare.
   final double? studentFare;
 
+  /// PWD fare in pesos, or null to derive 20% off the
+  /// (effective) regular fare. Same pattern as [studentFare].
+  final double? pwdFare;
+
+  /// Senior Citizen fare in pesos, or null to derive 20% off
+  /// the (effective) regular fare. Same pattern as [studentFare].
+  final double? seniorFare;
+
   /// Ordered via-stops replacing the built-in route's own
   /// (built-in routes have none), or null to keep them.
   final List<String>? viaHubs;
+
+  /// Ordered waypoints of a line the admin drew on the map
+  /// (line maker), replacing [viaHubs] for the line when
+  /// non-empty — or null to keep the named via stops.
+  final List<RouteWaypoint>? viaWaypoints;
 
   /// Stamped from the authenticated admin, never from form input.
   final String authorUid;
@@ -75,7 +99,10 @@ class RouteFareOverride {
     String? routeKey,
     double? fare,
     double? studentFare,
+    double? pwdFare,
+    double? seniorFare,
     List<String>? viaHubs,
+    List<RouteWaypoint>? viaWaypoints,
     String? authorUid,
     String? authorEmail,
     DateTime? updatedAt,
@@ -84,7 +111,10 @@ class RouteFareOverride {
       routeKey: routeKey ?? this.routeKey,
       fare: fare ?? this.fare,
       studentFare: studentFare ?? this.studentFare,
+      pwdFare: pwdFare ?? this.pwdFare,
+      seniorFare: seniorFare ?? this.seniorFare,
       viaHubs: viaHubs ?? this.viaHubs,
+      viaWaypoints: viaWaypoints ?? this.viaWaypoints,
       authorUid: authorUid ?? this.authorUid,
       authorEmail: authorEmail ?? this.authorEmail,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -95,7 +125,11 @@ class RouteFareOverride {
     'routeKey': routeKey,
     if (fare != null) 'fare': fare,
     if (studentFare != null) 'studentFare': studentFare,
+    if (pwdFare != null) 'pwdFare': pwdFare,
+    if (seniorFare != null) 'seniorFare': seniorFare,
     if (viaHubs != null && viaHubs!.isNotEmpty) 'viaHubs': viaHubs,
+    if (viaWaypoints != null && viaWaypoints!.isNotEmpty)
+      'viaWaypoints': viaWaypoints!.map((w) => w.toJson()).toList(),
     if (authorUid.isNotEmpty) 'authorUid': authorUid,
     if (authorEmail.isNotEmpty) 'authorEmail': authorEmail,
     if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
@@ -106,6 +140,7 @@ class RouteFareOverride {
     Map<String, dynamic> data,
   ) {
     final via = data['viaHubs'];
+    final waypoints = data['viaWaypoints'];
     // Cached JSON carries the key inside the map; Firestore docs
     // carry it as the document id. Either source wins over ''.
     final storedKey = data['routeKey'] is String
@@ -117,7 +152,19 @@ class RouteFareOverride {
       studentFare: data['studentFare'] is num
           ? (data['studentFare'] as num).toDouble()
           : null,
+      pwdFare: data['pwdFare'] is num
+          ? (data['pwdFare'] as num).toDouble()
+          : null,
+      seniorFare: data['seniorFare'] is num
+          ? (data['seniorFare'] as num).toDouble()
+          : null,
       viaHubs: via is List ? via.whereType<String>().toList() : null,
+      viaWaypoints: waypoints is List
+          ? waypoints
+                .map(RouteWaypoint.fromJson)
+                .whereType<RouteWaypoint>()
+                .toList()
+          : null,
       authorUid: data['authorUid'] is String ? data['authorUid'] : '',
       authorEmail: data['authorEmail'] is String ? data['authorEmail'] : '',
       updatedAt: data['updatedAt'] is String
@@ -142,8 +189,9 @@ class RouteFareOverride {
 }
 
 /// Validates an override object itself. Returns the first problem,
-/// or null when it may be saved. A null fare / student fare is
-/// always fine (it means "not overridden").
+/// or null when it may be saved. A null fare / student fare /
+/// PWD fare / Senior Citizen fare is always fine (it means "not
+/// overridden").
 String? validateRouteFareOverride(RouteFareOverride override) {
   if (override.routeKey.isEmpty) return 'Missing route.';
   if (override.fare != null && override.fare! <= 0) {
@@ -152,7 +200,25 @@ String? validateRouteFareOverride(RouteFareOverride override) {
   if (override.studentFare != null && override.studentFare! <= 0) {
     return 'The student fare must be more than ₱0.';
   }
+  if (override.pwdFare != null && override.pwdFare! <= 0) {
+    return 'The PWD fare must be more than ₱0.';
+  }
+  if (override.seniorFare != null && override.seniorFare! <= 0) {
+    return 'The Senior Citizen fare must be more than ₱0.';
+  }
   return null;
+}
+
+/// True when the override carries no value at all — saving it
+/// would be a no-op, so the caller deletes the stored override
+/// instead (the route resets to its built-in values).
+bool routeFareOverrideIsEmpty(RouteFareOverride override) {
+  return override.fare == null &&
+      override.studentFare == null &&
+      override.pwdFare == null &&
+      override.seniorFare == null &&
+      (override.viaHubs == null || override.viaHubs!.isEmpty) &&
+      (override.viaWaypoints == null || override.viaWaypoints!.isEmpty);
 }
 
 /// Seeded-route override storage. Mutations enforce the admin
@@ -257,6 +323,7 @@ class FirestoreRouteFareOverrideRepository
     if (!current.containsKey(override.routeKey)) {
       await _writeCache({...current, override.routeKey: stamped});
     }
+    routeFareOverridesChanged.value++;
     return saved;
   }
 
@@ -270,6 +337,7 @@ class FirestoreRouteFareOverrideRepository
     final next = Map<String, RouteFareOverride>.of(current)
       ..remove(routeKey);
     await _writeCache(next);
+    routeFareOverridesChanged.value++;
   }
 }
 
@@ -338,6 +406,7 @@ class LocalRouteFareOverrideRepository
     final current = await _readAll();
     current[override.routeKey] = stamped;
     await _writeAll(current);
+    routeFareOverridesChanged.value++;
     return stamped;
   }
 
@@ -349,5 +418,6 @@ class LocalRouteFareOverrideRepository
     final current = await _readAll();
     current.remove(routeKey);
     await _writeAll(current);
+    routeFareOverridesChanged.value++;
   }
 }

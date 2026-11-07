@@ -52,6 +52,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart' hide Marker;
 import 'package:maplibre/maplibre.dart' hide Position;
 import 'package:url_launcher/url_launcher.dart';
 
+import 'admin_access.dart';
+import 'bus_stops.dart';
 import 'community_posts.dart';
 import 'custom_routes.dart';
 import 'fares_tab.dart';
@@ -233,9 +235,15 @@ class RouteInfo {
 
 /// All hubs reachable from [lat]/[lng], nearest first. A hub closer than
 /// 0.5 km to the origin is the origin itself, so it is skipped.
-List<RouteInfo> routesFrom(double lat, double lng, String originName) {
+/// [extraStops] are the admin-added stops, reachable like any hub.
+List<RouteInfo> routesFrom(
+  double lat,
+  double lng,
+  String originName, [
+  List<BusStop> extraStops = const [],
+]) {
   final list = <RouteInfo>[];
-  for (final hub in hubs) {
+  for (final hub in allHubs(extraStops)) {
     final direct = haversineKm(lat, lng, hub.lat, hub.lng);
     if (direct < 0.5) continue;
     list.add(
@@ -1122,30 +1130,35 @@ CustomRoute? matchCustomRoute(
 /// Map points for ordered via-stop hub names (unknown names are
 /// skipped — never invented). Intermediate points only: the
 /// caller supplies the origin and destination separately.
-List<LatLng> viaPointsForHubNames(List<String> names) {
+/// [busStops] are the admin-added stops the names may resolve to.
+List<LatLng> viaPointsForHubNames(
+  List<String> names, [
+  List<BusStop> busStops = const [],
+]) {
   final points = <LatLng>[];
   for (final name in names) {
-    final hub = hubByName(name);
+    final hub = hubByName(name, busStops);
     if (hub != null) points.add(LatLng(hub.lat, hub.lng));
   }
   return points;
 }
 
 /// Via points for the OSRM fetch of a route: a custom route's own
-/// via-stops (excluding its endpoints), else a seeded route's
-/// admin-override via-stops, else none (the terminal Quezon Ave
-/// waypoint is added inside _fetchRoadPath when no via points are
-/// given).
-List<LatLng> routeViaPoints(RouteInfo route, RouteFareOverride? override) {
-  final custom = route.customRoute;
-  if (custom != null) {
-    final points = customRouteLinePoints(custom);
-    if (points.length < 3) return const [];
-    return points.sublist(1, points.length - 1);
-  }
-  final viaHubs = override?.viaHubs;
-  if (viaHubs == null || viaHubs.isEmpty) return const [];
-  return viaPointsForHubNames(viaHubs);
+/// effective waypoints (a drawn line wins over its named via
+/// stops), else a seeded route's admin-override effective
+/// waypoints, else none (the terminal Quezon Ave waypoint is
+/// added inside _fetchRoadPath when no via points are given).
+List<LatLng> routeViaPoints(
+  RouteInfo route,
+  RouteFareOverride? override, [
+  List<BusStop> busStops = const [],
+]) {
+  final waypoints = effectiveRouteWaypoints(
+    customRoute: route.customRoute,
+    override: override,
+    busStops: busStops,
+  );
+  return waypoints.map((w) => w.point).toList();
 }
 
 /// The fares the Map ETA • FARE sheet shows for a route — the
@@ -1160,8 +1173,10 @@ List<LatLng> routeViaPoints(RouteInfo route, RouteFareOverride? override) {
 ///   computed number.
 ///
 /// A blank student fare derives 20% off the effective regular
-/// fare ([discountedFareOf]), exactly like the Fares tab.
-({double? regular, double? discounted}) resolveMapSheetFares({
+/// fare ([discountedFareOf]), exactly like the Fares tab. The
+/// same precedence holds for the PWD and Senior Citizen fares.
+({double? regular, double? discounted, double? pwd, double? senior})
+resolveMapSheetFares({
   CustomRoute? customRoute,
   RouteFareOverride? override,
   required String from,
@@ -1173,7 +1188,13 @@ List<LatLng> routeViaPoints(RouteInfo route, RouteFareOverride? override) {
   final discounted = customRoute?.studentFare ??
       override?.studentFare ??
       (regular == null ? null : discountedFareOf(regular));
-  return (regular: regular, discounted: discounted);
+  final pwd = customRoute?.pwdFare ??
+      override?.pwdFare ??
+      (regular == null ? null : discountedFareOf(regular));
+  final senior = customRoute?.seniorFare ??
+      override?.seniorFare ??
+      (regular == null ? null : discountedFareOf(regular));
+  return (regular: regular, discounted: discounted, pwd: pwd, senior: senior);
 }
 
 /// Preview label for a route card, following the vehicle selection.
@@ -1337,6 +1358,7 @@ class MapTab extends StatefulWidget {
     this.currentUser,
     this.customRouteRepository,
     this.fareOverrideRepository,
+    this.busStopRepository,
   });
 
   final AuthUser? currentUser;
@@ -1348,6 +1370,11 @@ class MapTab extends StatefulWidget {
   /// Admin-set fare / student fare / direction overrides for the
   /// built-in routes. Null = no overrides are applied.
   final RouteFareOverrideRepository? fareOverrideRepository;
+
+  /// Admin-added bus stops source. Null = only the 16 built-in
+  /// hubs are known (e.g. tests, or Firebase not configured and
+  /// no local repo).
+  final BusStopRepository? busStopRepository;
 
   @override
   State<MapTab> createState() => _MapTabState();
@@ -1426,6 +1453,25 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // admin-only (repository-side allowlist).
   List<CustomRoute> _customRoutes = [];
   Map<String, RouteFareOverride> _fareOverrides = {};
+  // Admin-added bus stops, loaded in [_ensureRouteData] before
+  // every route selection so a stop added in the Fares tab is a
+  // From/To endpoint and a via stop on the map without a restart.
+  List<BusStop> _busStops = [];
+  // ---- Line maker (admin-only) ----
+  // Draw mode: the admin taps points on the map in order and the
+  // line draws live through them; add-stop mode: one tap places a
+  // new bus stop, then the name form opens. Both hide the sheet
+  // (restored on exit) and suppress the stop card + attribution
+  // chip while active. The draft starts pre-filled from the
+  // active route's current effective direction, so editing a line
+  // never starts from an empty map.
+  bool _lineMakerActive = false;
+  bool _lineMakerAddStop = false;
+  List<RouteWaypoint> _draftPoints = const [];
+  List<LatLng>? _draftRoadPoints;
+  int? _selectedDraftIndex;
+  int _draftRequestId = 0;
+  bool _lineMakerSaving = false;
   // Road-following shape from OSRM (null = still loading or failed;
   // the dashed direct line shows until real geometry arrives).
   List<LatLng>? _roadPoints;
@@ -1477,6 +1523,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     communityMapJump.addListener(_onCommunityJump);
     faresMapJump.addListener(_onFaresJump);
+    mapLineMakerRequest.addListener(_onLineMakerRequest);
     // Preview parity: the map always opens on the default route
     // (Cabugao → Vigan Bus Terminal, the Fares default pair), so
     // the tab shows the clean route + ETA • FARE sheet at once
@@ -1690,21 +1737,26 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   Future<void> _ensureRouteData() async {
     final customRepo = widget.customRouteRepository;
     final overrideRepo = widget.fareOverrideRepository;
-    if (customRepo == null && overrideRepo == null) return;
+    final stopRepo = widget.busStopRepository;
+    if (customRepo == null && overrideRepo == null && stopRepo == null) {
+      return;
+    }
     try {
       final loaded = await Future.wait<dynamic>([
         customRepo?.loadAll() ??
             Future<List<CustomRoute>>.value(const []),
         overrideRepo?.loadAll() ??
             Future<Map<String, RouteFareOverride>>.value(const {}),
+        stopRepo?.loadAll() ?? Future<List<BusStop>>.value(const []),
       ]).timeout(
         const Duration(seconds: 5),
-        onTimeout: () => <dynamic>[_customRoutes, _fareOverrides],
+        onTimeout: () => <dynamic>[_customRoutes, _fareOverrides, _busStops],
       );
       if (!mounted) return;
       setState(() {
         _customRoutes = loaded[0] as List<CustomRoute>;
         _fareOverrides = loaded[1] as Map<String, RouteFareOverride>;
+        _busStops = loaded[2] as List<BusStop>;
       });
     } catch (_) {
       // Keep whatever is in state — the generated route still
@@ -1737,17 +1789,18 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     await _ensureRouteData();
     final custom = matchCustomRoute(_customRoutes, originName, destHub.name);
     if (custom != null) {
-      final route = customRouteToRouteInfo(custom);
+      final route = customRouteToRouteInfo(custom, _busStops);
       return (
         route: route,
         override: null,
-        via: routeViaPoints(route, null),
+        via: routeViaPoints(route, null, _busStops),
       );
     }
     final matches = routesFrom(
       oLat,
       oLng,
       originName,
+      _busStops,
     ).where((r) => r.dest.name == destHub.name);
     final route = matches.isEmpty ? null : matches.first;
     if (route == null) {
@@ -1758,7 +1811,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     return (
       route: route,
       override: override,
-      via: routeViaPoints(route, override),
+      via: routeViaPoints(route, override, _busStops),
     );
   }
 
@@ -1775,10 +1828,17 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     if (jump == null) return;
     faresMapJump.value = null;
     if (!mounted) return;
-    final destMatches = hubs.where((h) => h.name == jump.to);
+    // Load the stops FIRST: a stop added in the Fares tab moments
+    // ago must match below, and the Map tab's in-state list may
+    // predate it. _resolveRoute loads again — harmless (cached).
+    await _ensureRouteData();
+    if (!mounted) return;
+    // Match against the merged hub list: a From/To may be an
+    // admin-added bus stop, not one of the 16 built-in hubs.
+    final destMatches = allHubs(_busStops).where((h) => h.name == jump.to);
     if (destMatches.isEmpty) return;
     final destHub = destMatches.first;
-    final originMatches = hubs.where((h) => h.name == jump.from);
+    final originMatches = allHubs(_busStops).where((h) => h.name == jump.from);
     final double oLat;
     final double oLng;
     final String oName;
@@ -1821,6 +1881,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   void dispose() {
     communityMapJump.removeListener(_onCommunityJump);
     faresMapJump.removeListener(_onFaresJump);
+    mapLineMakerRequest.removeListener(_onLineMakerRequest);
     WidgetsBinding.instance.removeObserver(this);
     _sheetController.removeListener(_onSheetExtentChanged);
     _styleLoadTimer?.cancel();
@@ -2142,6 +2203,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           viaHubNames: _activeRoute!.customRoute?.viaHubs ??
               _activeRouteOverride?.viaHubs ??
               const [],
+          viaWaypoints: effectiveRouteWaypoints(
+            customRoute: _activeRoute!.customRoute,
+            override: _activeRouteOverride,
+            busStops: _busStops,
+          ),
+          extraStops: _busStops,
         );
       }
     });
@@ -2159,12 +2226,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
 
 
-  /// Via points for the active route's own line: a custom route's
-  /// via-stops, else a seeded route's admin-override via-stops,
+  /// Via points for the active route's own line: the effective
+  /// waypoints — a drawn line wins over the named via stops —
   /// otherwise none (the terminal Quezon Ave waypoint is added
   /// inside _fetchRoadPath).
   List<LatLng> _customRouteViaPoints(RouteInfo route) =>
-      routeViaPoints(route, _activeRouteOverride);
+      routeViaPoints(route, _activeRouteOverride, _busStops);
 
 
 
@@ -2183,6 +2250,36 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// (MapLibre styles a whole layer one colour/width, so the
   /// highlight is four layers drawn bottom-to-top, as before).
   List<PolylineLayer> _routePolylineLayers() {
+    // Draw mode: only the draft line shows (amber) — it starts
+    // pre-filled from the active route's direction, so it IS the
+    // route line being edited. Solid = live OSRM shape through
+    // the draft points; dashed = direct line until it arrives.
+    // Add-stop mode keeps the normal route line (the route is
+    // the context for placing the stop).
+    if (_lineMakerActive && !_lineMakerAddStop) {
+      final direct = _draftLinePoints();
+      if (direct.length < 2) return const [];
+      const amber = Color(0xFFF59E0B);
+      final points = _draftRoadPoints ?? direct;
+      final solid = _draftRoadPoints != null;
+      return [
+        PolylineLayer(
+          polylines: [
+            Feature<LineString>(
+              geometry: LineString(
+                points
+                    .expand((p) => [p.longitude, p.latitude])
+                    .toList()
+                    .positions(Coords.xy),
+              ),
+            ),
+          ],
+          color: amber,
+          width: 6,
+          dashArray: solid ? null : const [24, 12],
+        ),
+      ];
+    }
     if (_activeRoute == null || _activeRouteOrigin == null) {
       return const [];
     }
@@ -2261,19 +2358,48 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// location' origin is stop 1 in [_routeStops] already, so it
   /// needs no special case.
   List<Marker> _stopMarkers() {
-    final markers = <Marker>[
-      for (final pin in routeStopPins(_routeStops, _selectedStopIndex))
-        Marker(
-          point: Geographic(lon: pin.lng, lat: pin.lat),
-          size: const Size(44, 44),
-          child: GestureDetector(
-            onTap: () => _selectStop(pin.number - 1),
+    final markers = <Marker>[];
+    // Draw mode: the route pins hide and the draft pins show
+    // instead (amber numbered circles). They carry NO
+    // GestureDetector — taps fall through to the map click
+    // handler, whose 100 m guard opens the tapped point's
+    // actions (see _onLineMakerMapTap). Add-stop mode keeps the
+    // route pins: the route is the context for placing the stop.
+    if (_lineMakerActive && !_lineMakerAddStop) {
+      for (var i = 0; i < _draftPoints.length; i++) {
+        markers.add(
+          Marker(
+            point: Geographic(
+              lon: _draftPoints[i].lng,
+              lat: _draftPoints[i].lat,
+            ),
+            size: const Size(44, 44),
             child: Center(
-              child: _numberedPin(pin.number, selected: pin.selected),
+              child: _numberedPin(
+                i + 1,
+                selected: _selectedDraftIndex == i,
+                draft: true,
+              ),
             ),
           ),
-        ),
-    ];
+        );
+      }
+    } else {
+      for (final pin in routeStopPins(_routeStops, _selectedStopIndex)) {
+        markers.add(
+          Marker(
+            point: Geographic(lon: pin.lng, lat: pin.lat),
+            size: const Size(44, 44),
+            child: GestureDetector(
+              onTap: () => _selectStop(pin.number - 1),
+              child: Center(
+                child: _numberedPin(pin.number, selected: pin.selected),
+              ),
+            ),
+          ),
+        );
+      }
+    }
     // User position: a plain blue-dot circle (MapLibre has no
     // built-in blue dot).
     if (_userPos != null && _locationGranted) {
@@ -2319,6 +2445,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         viaHubNames: route.customRoute?.viaHubs ??
             _activeRouteOverride?.viaHubs ??
             const [],
+        viaWaypoints: effectiveRouteWaypoints(
+          customRoute: route.customRoute,
+          override: _activeRouteOverride,
+          busStops: _busStops,
+        ),
+        extraStops: _busStops,
       );
     });
   }
@@ -2355,15 +2487,585 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     setState(() => _selectedStopIndex = null);
   }
 
+  // ---- Line maker (admin-only) ----
+
+  /// A Fares "+ Add bus stop" tap (or a Draw line request) sets
+  /// [mapLineMakerRequest]; enter the requested mode, then clear
+  /// it so the same request can be made again.
+  void _onLineMakerRequest() {
+    final request = mapLineMakerRequest.value;
+    if (request == null) return;
+    mapLineMakerRequest.value = null;
+    if (!mounted || !isAdminUser(widget.currentUser)) return;
+    if (request.addStop) {
+      _enterAddStopMode();
+    } else if (request.drawLine) {
+      _enterDrawLineMode();
+    }
+  }
+
+  /// Enters draw-line mode for the active route (admin-only,
+  /// sheet header button). Requires an active route: the draft
+  /// starts pre-filled from that route's current effective
+  /// direction, so editing never starts from an empty map. The
+  /// sheet hides (restored on exit) and the stop card dismisses.
+  void _enterDrawLineMode() {
+    if (!isAdminUser(widget.currentUser)) return;
+    final route = _activeRoute;
+    final origin = _activeRouteOrigin;
+    if (route == null || origin == null) {
+      _snack('Pick a route first, then draw its line.');
+      return;
+    }
+    final draft = effectiveRouteWaypoints(
+      customRoute: route.customRoute,
+      override: _activeRouteOverride,
+      busStops: _busStops,
+    );
+    setState(() {
+      _lineMakerActive = true;
+      _lineMakerAddStop = false;
+      _draftPoints = draft;
+      _draftRoadPoints = null;
+      _selectedDraftIndex = null;
+      _selectedStopIndex = null;
+      _sheetHidden = true;
+    });
+    _refreshDraftOsrm();
+  }
+
+  /// Enters add-stop mode (from the Fares "+ Add bus stop" chip):
+  /// one map tap places the new stop, then the name form opens.
+  /// No active route is needed — the stop is placed, not drawn.
+  void _enterAddStopMode() {
+    if (!isAdminUser(widget.currentUser)) return;
+    setState(() {
+      _lineMakerActive = true;
+      _lineMakerAddStop = true;
+      _draftPoints = const [];
+      _draftRoadPoints = null;
+      _selectedDraftIndex = null;
+      _selectedStopIndex = null;
+      _sheetHidden = true;
+    });
+  }
+
+  /// Leaves either line-maker mode and restores the sheet. The
+  /// draft is discarded — nothing is saved unless the admin
+  /// tapped Save line / saved the stop.
+  void _exitLineMaker() {
+    if (!_lineMakerActive) return;
+    setState(() {
+      _lineMakerActive = false;
+      _lineMakerAddStop = false;
+      _draftPoints = const [];
+      _draftRoadPoints = null;
+      _selectedDraftIndex = null;
+      _sheetHidden = false;
+    });
+  }
+
+  /// A map tap while the line maker is active. In add-stop mode
+  /// the tap IS the placement: the name form opens at once. In
+  /// draw mode a tap near an existing draft point (within 100 m)
+  /// opens that point's actions instead of adding a duplicate;
+  /// any other tap appends a point in order and the line
+  /// re-draws live.
+  void _onLineMakerMapTap(Geographic point) {
+    final tapped = LatLng(point.lat, point.lon);
+    if (_lineMakerAddStop) {
+      _showNameBusStopForm(tapped);
+      return;
+    }
+    for (var i = 0; i < _draftPoints.length; i++) {
+      final p = _draftPoints[i];
+      if (haversineKm(p.lat, p.lng, tapped.latitude, tapped.longitude) <=
+          0.1) {
+        _showDraftPointActions(i);
+        return;
+      }
+    }
+    setState(() {
+      _draftPoints = [
+        ..._draftPoints,
+        RouteWaypoint(lat: tapped.latitude, lng: tapped.longitude),
+      ];
+      _selectedDraftIndex = _draftPoints.length - 1;
+    });
+    _refreshDraftOsrm();
+  }
+
+  /// The draft line's direct (dashed) points: origin → draft
+  /// points in order → destination. Empty when no route is
+  /// active (draw mode always has one).
+  List<LatLng> _draftLinePoints() {
+    final route = _activeRoute;
+    final origin = _activeRouteOrigin;
+    if (route == null || origin == null) return const [];
+    return [
+      origin,
+      ..._draftPoints.map((w) => w.point),
+      LatLng(route.dest.lat, route.dest.lng),
+    ];
+  }
+
+  /// Refreshes the draft line's road shape through the draft
+  /// points (origin → draft points in order → destination). A
+  /// stale response is ignored via [_draftRequestId]; on any
+  /// failure the dashed direct line stays.
+  Future<void> _refreshDraftOsrm() async {
+    final route = _activeRoute;
+    final origin = _activeRouteOrigin;
+    if (route == null || origin == null || _draftPoints.isEmpty) {
+      if (_draftRoadPoints != null) {
+        setState(() => _draftRoadPoints = null);
+      }
+      return;
+    }
+    final requestId = ++_draftRequestId;
+    final dest = LatLng(route.dest.lat, route.dest.lng);
+    final result = await fetchOsrmRouteForPoints([
+      origin,
+      ..._draftPoints.map((w) => w.point),
+      dest,
+    ]);
+    if (!mounted || requestId != _draftRequestId || !_lineMakerActive) {
+      return;
+    }
+    if (result == null || result.points.isEmpty) return;
+    setState(() => _draftRoadPoints = result.points);
+  }
+
+  /// Reloads the route data and re-resolves the active route so
+  /// a saved / cleared line is live at once. Keeps the caller in
+  /// draw mode — only the route data refreshes.
+  Future<void> _reloadActiveRoute() async {
+    final route = _activeRoute;
+    final origin = _activeRouteOrigin;
+    if (route == null || origin == null) return;
+    await _ensureRouteData();
+    if (!mounted) return;
+    final resolved = await _resolveRoute(
+      originName: route.originName,
+      oLat: origin.latitude,
+      oLng: origin.longitude,
+      destHub: route.dest,
+    );
+    if (!mounted) return;
+    setState(() {
+      _activeRoute = resolved.route ?? route;
+      _activeRouteOverride = resolved.override;
+      _roadPoints = null;
+      _selectedStopIndex = null;
+      _pendingStopIndex = null;
+    });
+    _refreshRouteStops();
+    if (resolved.route != null) {
+      _fetchRoadPath(
+        origin.latitude,
+        origin.longitude,
+        route.dest,
+        via: resolved.via,
+      );
+    }
+  }
+
+  /// Saves the draft points as the active route's direction.
+  /// Custom route → its own viaWaypoints; seeded route → the
+  /// fare-override doc, merged with the existing override so a
+  /// set fare / student fare is NOT wiped (and an otherwise
+  /// empty override is deleted = reset to built-in). A GPS
+  /// 'Your location' origin cannot be saved — the route has no
+  /// hub-named origin to key the override on.
+  Future<void> _saveDraftLine() async {
+    if (_lineMakerSaving) return;
+    final route = _activeRoute;
+    final origin = _activeRouteOrigin;
+    final author = widget.currentUser;
+    if (route == null || origin == null || author == null) return;
+    if (!isAdminUser(author)) return;
+    final custom = route.customRoute;
+    if (custom == null && route.originName == 'Your location') {
+      _snack('Start from a named place to save a line.');
+      return;
+    }
+    setState(() => _lineMakerSaving = true);
+    try {
+      final waypoints = List<RouteWaypoint>.of(_draftPoints);
+      if (custom != null) {
+        final repo = widget.customRouteRepository;
+        if (repo == null) {
+          _snack('Routes cannot be saved right now.');
+          return;
+        }
+        await repo.update(
+          custom.copyWith(viaWaypoints: waypoints),
+          author,
+          busStops: _busStops,
+        );
+      } else {
+        final repo = widget.fareOverrideRepository;
+        if (repo == null) {
+          _snack('Routes cannot be saved right now.');
+          return;
+        }
+        final key = seededRouteKey(route.originName, route.dest.name);
+        final existing = _activeRouteOverride;
+        final next = (existing ?? RouteFareOverride(routeKey: key))
+            .copyWith(viaWaypoints: waypoints);
+        if (routeFareOverrideIsEmpty(next)) {
+          if (existing != null) await repo.delete(key, author);
+        } else {
+          await repo.save(next, author);
+        }
+      }
+      if (!mounted) return;
+      await _reloadActiveRoute();
+      if (!mounted) return;
+      _snack('Line saved.');
+      _exitLineMaker();
+    } on ArgumentError catch (e) {
+      if (!mounted) return;
+      final message = e.message;
+      _snack(message is String ? message : 'Could not save the line.');
+    } catch (_) {
+      if (!mounted) return;
+      _snack('Could not save the line.');
+    } finally {
+      if (mounted) setState(() => _lineMakerSaving = false);
+    }
+  }
+
+  /// Clears the drawn line: the draft empties AND the saved
+  /// direction resets to built-in at once (custom route →
+  /// viaWaypoints []; seeded route → override's viaWaypoints []
+  /// with the named via stops kept, or the override deleted when
+  /// it would otherwise be empty). The admin stays in draw mode
+  /// to re-draw if they want.
+  Future<void> _clearDraftLine() async {
+    final route = _activeRoute;
+    final author = widget.currentUser;
+    if (route == null || author == null || !isAdminUser(author)) return;
+    if (_lineMakerSaving) return;
+    setState(() => _lineMakerSaving = true);
+    try {
+      final custom = route.customRoute;
+      if (custom != null) {
+        final repo = widget.customRouteRepository;
+        if (repo == null) return;
+        await repo.update(
+          custom.copyWith(viaWaypoints: const <RouteWaypoint>[]),
+          author,
+          busStops: _busStops,
+        );
+      } else {
+        final repo = widget.fareOverrideRepository;
+        if (repo == null) return;
+        final key = seededRouteKey(route.originName, route.dest.name);
+        final existing = _activeRouteOverride;
+        if (existing != null) {
+          final next = existing.copyWith(
+            viaWaypoints: const <RouteWaypoint>[],
+          );
+          if (routeFareOverrideIsEmpty(next)) {
+            await repo.delete(key, author);
+          } else {
+            await repo.save(next, author);
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _draftPoints = const [];
+        _draftRoadPoints = null;
+        _selectedDraftIndex = null;
+      });
+      await _reloadActiveRoute();
+      if (!mounted) return;
+      _snack('Line cleared — back to the built-in direction.');
+    } catch (_) {
+      if (!mounted) return;
+      _snack('Could not clear the line.');
+    } finally {
+      if (mounted) setState(() => _lineMakerSaving = false);
+    }
+  }
+
+  /// Action sheet for one draft point: "Save as bus stop" when
+  /// the point is still unnamed (the tie-in to Feature 1), and
+  /// "Remove point" always.
+  void _showDraftPointActions(int index) {
+    if (index < 0 || index >= _draftPoints.length) return;
+    final point = _draftPoints[index];
+    final name = point.name ?? 'Point ${index + 1}';
+    setState(() => _selectedDraftIndex = index);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.push_pin),
+                title: Text(name),
+                subtitle: Text(
+                  '${point.lat.toStringAsFixed(5)}, '
+                  '${point.lng.toStringAsFixed(5)}',
+                ),
+              ),
+              if (point.name == null)
+                ListTile(
+                  leading: const Icon(Icons.add_location_alt),
+                  title: const Text('Save as bus stop'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _showNameBusStopForm(point.point, draftIndex: index);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Remove point'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  setState(() {
+                    final next = [..._draftPoints]..removeAt(index);
+                    _draftPoints = next;
+                    _selectedDraftIndex = null;
+                  });
+                  _refreshDraftOsrm();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(sheetContext).pop(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Name form for a new bus stop placed on the map: the admin
+  /// names it and picks its region (region chips, same list the
+  /// hubs use). Saving creates the stop (Firestore when
+  /// configured, else local), renames the draft point when this
+  /// came from one, and reloads the stops so the new stop is a
+  /// From/To endpoint and a via stop at once. Cancelling in
+  /// add-stop mode exits the mode — the admin came from the Add
+  /// Route sheet, which still holds its draft.
+  Future<void> _showNameBusStopForm(
+    LatLng point, {
+    int? draftIndex,
+  }) async {
+    final repo = widget.busStopRepository;
+    final author = widget.currentUser;
+    if (repo == null || author == null) {
+      _snack('Bus stops cannot be saved right now.');
+      return;
+    }
+    final nameController = TextEditingController();
+    var region = hubRegions().first;
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('New bus stop'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${point.latitude.toStringAsFixed(5)}, '
+                    '${point.longitude.toStringAsFixed(5)}',
+                    style: TextStyle(
+                      color: Theme.of(
+                        dialogContext,
+                      ).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Stop name',
+                      hintText: 'e.g. Cabugao Public Market',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Region'),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final r in hubRegions())
+                        ChoiceChip(
+                          label: Text(r),
+                          selected: region == r,
+                          onSelected: (_) =>
+                              setDialogState(() => region = r),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Save stop'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (saved != true || !mounted) {
+      if (_lineMakerAddStop) _exitLineMaker();
+      return;
+    }
+    final name = nameController.text.trim();
+    try {
+      final created = await repo.create(
+        BusStop(
+          name: name,
+          region: region,
+          lat: point.latitude,
+          lng: point.longitude,
+          authorUid: author.uid,
+          authorEmail: author.email,
+        ),
+        author,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (draftIndex != null &&
+            draftIndex >= 0 &&
+            draftIndex < _draftPoints.length) {
+          final next = [..._draftPoints];
+          next[draftIndex] = next[draftIndex].copyWith(name: created.name);
+          _draftPoints = next;
+        }
+      });
+      await _ensureRouteData();
+      if (!mounted) return;
+      _snack('Bus stop "${created.name}" added.');
+      if (_lineMakerAddStop) _exitLineMaker();
+    } on ArgumentError catch (e) {
+      if (!mounted) return;
+      final message = e.message;
+      _snack(message is String ? message : 'Could not save the bus stop.');
+    } catch (_) {
+      if (!mounted) return;
+      _snack('Could not save the bus stop.');
+    }
+  }
+
+  /// Label for a draft point in the bottom bar: its saved name,
+  /// else "Point N" in tap order.
+  String _draftPointLabel(int index) {
+    final point = _draftPoints[index];
+    return point.name ?? 'Point ${index + 1}';
+  }
+
+  /// Bottom bar while the line maker is active (the sheet is
+  /// hidden, so this takes its place): the instruction, the
+  /// point count + selected point, and Save line / Clear / Done
+  /// (draw mode) or Cancel (add-stop mode).
+  Widget _lineMakerBar(ColorScheme scheme) {
+    final selected = _selectedDraftIndex;
+    final selectedLabel = selected != null &&
+            selected >= 0 &&
+            selected < _draftPoints.length
+        ? ' • ${_draftPointLabel(selected)}'
+        : '';
+    final pointsLabel = _draftPoints.isEmpty
+        ? ''
+        : ' • ${_draftPoints.length} point${_draftPoints.length == 1 ? '' : 's'}$selectedLabel';
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 16,
+      child: Material(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        elevation: 8,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _lineMakerAddStop
+                    ? 'Tap the map to place the new bus stop'
+                    : 'Tap the map to add points in order$pointsLabel',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Wrap, not Row: on a narrow phone the three
+              // buttons flow to a second line instead of
+              // overflowing the bar.
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (!_lineMakerAddStop) ...[
+                    FilledButton(
+                      onPressed: _lineMakerSaving ? null : _saveDraftLine,
+                      child: const Text('Save line'),
+                    ),
+                    OutlinedButton(
+                      onPressed: _lineMakerSaving ? null : _clearDraftLine,
+                      child: const Text('Clear'),
+                    ),
+                  ],
+                  OutlinedButton(
+                    onPressed: _exitLineMaker,
+                    child: Text(_lineMakerAddStop ? 'Cancel' : 'Done'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   /// Numbered stop pin (emerald circle, white number; deep
-  /// emerald while its card is open).
-  Widget _numberedPin(int number, {required bool selected}) {
+  /// emerald while its card is open). Draft pins are amber
+  /// instead (deep amber while selected) so the line being drawn
+  /// is visibly distinct from the saved route's pins.
+  Widget _numberedPin(
+    int number, {
+    required bool selected,
+    bool draft = false,
+  }) {
     return Container(
       width: 34,
       height: 34,
       decoration: BoxDecoration(
-        color: selected ? kMapPrimary : const Color(0xFF16A34A),
+        color: selected
+            ? (draft ? const Color(0xFFD97706) : kMapPrimary)
+            : (draft ? const Color(0xFFF59E0B) : const Color(0xFF16A34A)),
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: const [
@@ -2703,12 +3405,47 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            '${route.originName} → ${route.dest.name}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+          // Title row: the route name (ellipsized when long) and,
+          // for admins, the line maker entry. "Draw line" draws
+          // the active route's line by tapping the map; it lives
+          // here — the header is where the active route is named
+          // and the draw action is route-scoped — because the
+          // ETA • FARE row cannot take a third element and the
+          // top-right cluster is full (a 6th button would collide
+          // with the stop card at kMapStopCardTop). The title
+          // shrinks instead of overflowing, so the header stays
+          // compact enough to fit the peeked sheet whole.
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${route.originName} → ${route.dest.name}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isAdminUser(widget.currentUser) && !_lineMakerActive)
+                TextButton(
+                  onPressed: _enterDrawLineMode,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF16A34A),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Draw line',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -2891,9 +3628,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               _mapZoom = camera.zoom;
               _bearing.value = camera.bearing;
             } else if (event is MapEventClick) {
-              // A plain map tap dismisses the open stop card (and
-              // restores the normal line).
-              if (_selectedStopIndex != null) {
+              if (_lineMakerActive) {
+                // Draw / add-stop mode: the tap places or
+                // selects a draft point (see _onLineMakerMapTap);
+                // it never dismisses a card (none is open).
+                _onLineMakerMapTap(event.point);
+              } else if (_selectedStopIndex != null) {
+                // A plain map tap dismisses the open stop card
+                // (and restores the normal line).
                 setState(() => _selectedStopIndex = null);
               }
             }
@@ -3037,8 +3779,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
             ),
           ),
         // Basemap attribution: visible whenever the sheet is hidden
-        // (when shown, the ⓘ button above carries it).
-        if (_sheetHidden)
+        // (when shown, the ⓘ button above carries it). Hidden
+        // while the line maker is active — its bottom bar occupies
+        // this spot.
+        if (_sheetHidden && !_lineMakerActive)
           Positioned(
             left: 0,
             right: 0,
@@ -3063,6 +3807,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
             top: kMapStopCardTop,
             child: _stopCard(),
           ),
+        // Line maker bottom bar (admin-only modes): the sheet is
+        // hidden while drawing / placing, so this bar takes its
+        // place at the bottom.
+        if (_lineMakerActive) _lineMakerBar(scheme),
         // Draggable bottom sheet: Peek / Half ONLY (no Full).
         // Wrapped in Offstage (never removed from the tree) so the
         // logo toggle hides it without losing any state: same

@@ -27,20 +27,29 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'admin_access.dart';
+import 'bus_stops.dart';
 import 'fares_tab.dart';
 import 'map_tab.dart';
 import 'onboarding/auth_service.dart';
 import 'osm_routing.dart';
+import 'route_fare_overrides.dart';
 
 /// Firestore collection for admin-added routes.
 const customRoutesCollection = 'custom_routes';
 
 /// SharedPreferences key for the local custom-routes cache.
 const customRoutesCacheKey = 'custom_routes_cache_v1';
+
+/// Bumped after every successful custom-route mutation (create /
+/// update / delete), so the Fares tab reloads its route list
+/// without a restart — e.g. after the Map tab's line maker saves
+/// a drawn line. Reads never bump.
+final customRoutesChanged = ValueNotifier<int>(0);
 
 /// Operators already in the app (operator fares dataset + the
 /// Northern Luzon operator scope). Presets only — the admin can
@@ -79,7 +88,10 @@ class CustomRoute {
     required this.vehicle,
     required this.fare,
     this.studentFare,
+    this.pwdFare,
+    this.seniorFare,
     this.viaHubs = const [],
+    this.viaWaypoints = const [],
     this.authorUid = '',
     this.authorEmail = '',
     this.createdAt,
@@ -108,9 +120,24 @@ class CustomRoute {
   /// student fare is NOT the plain 20% discount.
   final double? studentFare;
 
+  /// PWD fare in pesos, typed by the admin — or null to derive
+  /// 20% off [fare]. Same pattern as [studentFare].
+  final double? pwdFare;
+
+  /// Senior Citizen fare in pesos, typed by the admin — or null
+  /// to derive 20% off [fare]. Same pattern as [studentFare].
+  final double? seniorFare;
+
   /// Ordered via-stops (hub names) the line must pass through.
   /// Empty = the generic From → To line.
   final List<String> viaHubs;
+
+  /// Ordered waypoints of a line the admin drew on the map
+  /// (line maker): raw tapped points, named when the admin
+  /// saved the point as a bus stop. Non-empty wins over
+  /// [viaHubs] for the line — the drawn line IS the direction.
+  /// Empty = use [viaHubs].
+  final List<RouteWaypoint> viaWaypoints;
 
   /// Stamped from the authenticated admin, never from form input.
   final String authorUid;
@@ -126,7 +153,10 @@ class CustomRoute {
     String? vehicle,
     double? fare,
     double? studentFare,
+    double? pwdFare,
+    double? seniorFare,
     List<String>? viaHubs,
+    List<RouteWaypoint>? viaWaypoints,
     String? authorUid,
     String? authorEmail,
     DateTime? createdAt,
@@ -140,7 +170,10 @@ class CustomRoute {
       vehicle: vehicle ?? this.vehicle,
       fare: fare ?? this.fare,
       studentFare: studentFare ?? this.studentFare,
+      pwdFare: pwdFare ?? this.pwdFare,
+      seniorFare: seniorFare ?? this.seniorFare,
       viaHubs: viaHubs ?? this.viaHubs,
+      viaWaypoints: viaWaypoints ?? this.viaWaypoints,
       authorUid: authorUid ?? this.authorUid,
       authorEmail: authorEmail ?? this.authorEmail,
       createdAt: createdAt ?? this.createdAt,
@@ -156,7 +189,11 @@ class CustomRoute {
     'vehicle': vehicle,
     'fare': fare,
     if (studentFare != null) 'studentFare': studentFare,
+    if (pwdFare != null) 'pwdFare': pwdFare,
+    if (seniorFare != null) 'seniorFare': seniorFare,
     'viaHubs': viaHubs,
+    if (viaWaypoints.isNotEmpty)
+      'viaWaypoints': viaWaypoints.map((w) => w.toJson()).toList(),
     if (authorUid.isNotEmpty) 'authorUid': authorUid,
     if (authorEmail.isNotEmpty) 'authorEmail': authorEmail,
     if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
@@ -165,6 +202,7 @@ class CustomRoute {
 
   static CustomRoute fromJson(String id, Map<String, dynamic> data) {
     final via = data['viaHubs'];
+    final waypoints = data['viaWaypoints'];
     // Cached JSON carries the id inside the map; Firestore docs
     // carry it as the document id. Either source wins over ''.
     final storedId = data['id'] is String ? data['id'] as String : '';
@@ -178,7 +216,19 @@ class CustomRoute {
       studentFare: data['studentFare'] is num
           ? (data['studentFare'] as num).toDouble()
           : null,
+      pwdFare: data['pwdFare'] is num
+          ? (data['pwdFare'] as num).toDouble()
+          : null,
+      seniorFare: data['seniorFare'] is num
+          ? (data['seniorFare'] as num).toDouble()
+          : null,
       viaHubs: via is List ? via.whereType<String>().toList() : const [],
+      viaWaypoints: waypoints is List
+          ? waypoints
+                .map(RouteWaypoint.fromJson)
+                .whereType<RouteWaypoint>()
+                .toList()
+          : const [],
       authorUid: data['authorUid'] is String ? data['authorUid'] : '',
       authorEmail:
           data['authorEmail'] is String ? data['authorEmail'] : '',
@@ -192,28 +242,54 @@ class CustomRoute {
   }
 }
 
-/// Hub by name, or null when the name is not one of [hubs].
-Hub? hubByName(String name) {
-  for (final hub in hubs) {
-    if (hub.name == name) return hub;
+/// Hub by name, or null when the name is not one of [hubs] nor
+/// an admin-added stop in [busStops].
+Hub? hubByName(String name, [List<BusStop> busStops = const []]) {
+  return resolveHub(name, busStops);
+}
+
+/// Effective ordered waypoints for a route's line: the drawn
+/// line's raw points win; else the named via stops, resolved
+/// with [busStops]. A custom route's own waypoints win over an
+/// override's (overrides never exist for custom routes, and the
+/// override's via stops only apply to generated routes).
+List<RouteWaypoint> effectiveRouteWaypoints({
+  CustomRoute? customRoute,
+  RouteFareOverride? override,
+  List<BusStop> busStops = const [],
+}) {
+  final drawn = customRoute?.viaWaypoints.isNotEmpty == true
+      ? customRoute!.viaWaypoints
+      : override?.viaWaypoints;
+  if (drawn != null && drawn.isNotEmpty) return List.of(drawn);
+  final names =
+      customRoute?.viaHubs ?? override?.viaHubs ?? const <String>[];
+  final out = <RouteWaypoint>[];
+  for (final name in names) {
+    final hub = hubByName(name, busStops);
+    if (hub != null) {
+      out.add(RouteWaypoint(name: name, lat: hub.lat, lng: hub.lng));
+    }
   }
-  return null;
+  return out;
 }
 
 /// Validates an Add Route form. Returns the first problem, or null
 /// when the route may be saved. Never invents a value: a missing or
-/// invalid field blocks the save.
+/// invalid field blocks the save. [busStops] are the admin-added
+/// stops the endpoints / via stops may name.
 String? validateCustomRoute({
   required String? from,
   required String? to,
   required String operator,
   required String? vehicle,
   required String fareText,
+  List<BusStop> busStops = const [],
 }) {
-  if (from == null || from.isEmpty || hubByName(from) == null) {
+  if (from == null || from.isEmpty || hubByName(from, busStops) == null) {
     return 'Choose a From hub.';
   }
-  if (to == null || to.isEmpty || hubByName(to) == null) {
+  if (to == null || to.isEmpty || hubByName(to, busStops) == null) {
     return 'Choose a To hub.';
   }
   if (from == to) {
@@ -235,26 +311,36 @@ String? validateCustomRoute({
   return null;
 }
 
-/// The line a custom route draws: From → via-stops in order → To,
-/// as coordinates. Unknown hub names are skipped (validation
-/// prevents them on save; this guards old or corrupt data).
-List<LatLng> customRouteLinePoints(CustomRoute route) {
+/// The line a custom route draws: From → effective waypoints in
+/// order → To, as coordinates. A drawn line's raw points win
+/// over the named via stops (see [effectiveRouteWaypoints]).
+/// Unknown hub names are skipped (validation prevents them on
+/// save; this guards old or corrupt data).
+List<LatLng> customRouteLinePoints(
+  CustomRoute route, [
+  List<BusStop> busStops = const [],
+]) {
   final points = <LatLng>[];
-  final from = hubByName(route.from);
+  final from = hubByName(route.from, busStops);
   if (from != null) points.add(LatLng(from.lat, from.lng));
-  for (final name in route.viaHubs) {
-    final hub = hubByName(name);
-    if (hub != null) points.add(LatLng(hub.lat, hub.lng));
+  for (final waypoint in effectiveRouteWaypoints(
+    customRoute: route,
+    busStops: busStops,
+  )) {
+    points.add(waypoint.point);
   }
-  final to = hubByName(route.to);
+  final to = hubByName(route.to, busStops);
   if (to != null) points.add(LatLng(to.lat, to.lng));
   return points;
 }
 
 /// Road distance for a custom route: the app's ×1.22 rule summed
 /// over each leg (From → via… → To).
-double customRouteRoadKm(CustomRoute route) {
-  final points = customRouteLinePoints(route);
+double customRouteRoadKm(
+  CustomRoute route, [
+  List<BusStop> busStops = const [],
+]) {
+  final points = customRouteLinePoints(route, busStops);
   var total = 0.0;
   for (var i = 0; i + 1 < points.length; i++) {
     total += roadKmBetween(
@@ -269,10 +355,13 @@ double customRouteRoadKm(CustomRoute route) {
 
 /// Transit ETA minutes for a custom route, from the app's existing
 /// estimateTripMinutes model over [customRouteRoadKm].
-int customRouteEtaMinutes(CustomRoute route) {
-  final from = hubByName(route.from);
-  final to = hubByName(route.to);
-  final roadKm = customRouteRoadKm(route);
+int customRouteEtaMinutes(
+  CustomRoute route, [
+  List<BusStop> busStops = const [],
+]) {
+  final from = hubByName(route.from, busStops);
+  final to = hubByName(route.to, busStops);
+  final roadKm = customRouteRoadKm(route, busStops);
   final mountain =
       (from != null && isMountainHub(from)) ||
       (to != null && isMountainHub(to));
@@ -326,11 +415,16 @@ int hubPairEtaMinutes({
 /// Map tab recomputes the full on-the-way list once its OSRM
 /// geometry loads (see _refreshRouteStops). Used by the Fares
 /// breakdown sheet, which has no geometry of its own.
+/// [viaWaypoints] (a drawn line) wins over [viaHubNames] for the
+/// intermediate stops; [extraStops] are the admin-added stops
+/// the names may resolve to.
 List<RouteStop> hubPairStops({
   required Hub from,
   required Hub to,
   required double totalKm,
   List<String> viaHubNames = const [],
+  List<RouteWaypoint> viaWaypoints = const [],
+  List<BusStop> extraStops = const [],
 }) {
   return routeStops(
     origin: LatLng(from.lat, from.lng),
@@ -339,16 +433,21 @@ List<RouteStop> hubPairStops({
     roadPoints: null,
     totalKm: totalKm,
     viaHubNames: viaHubNames,
+    viaWaypoints: viaWaypoints,
+    extraStops: extraStops,
   );
 }
 
 /// A custom route as a [RouteInfo] for the Map sheet list, carrying
 /// the custom route so the card and the line can use its operator,
 /// fare, and via-stops instead of the generic hub route.
-RouteInfo customRouteToRouteInfo(CustomRoute route) {
-  final to = hubByName(route.to);
-  final from = hubByName(route.from);
-  final roadKm = customRouteRoadKm(route);
+RouteInfo customRouteToRouteInfo(
+  CustomRoute route, [
+  List<BusStop> busStops = const [],
+]) {
+  final to = hubByName(route.to, busStops);
+  final from = hubByName(route.from, busStops);
+  final roadKm = customRouteRoadKm(route, busStops);
   return RouteInfo(
     originName: route.from,
     dest: to ?? const Hub('Unknown', '', 0, 0),
@@ -369,10 +468,20 @@ abstract class CustomRouteRepository {
 
   /// Creates a route as [author]. Throws [StateError] unless the
   /// author is an admin; throws [ArgumentError] on invalid input.
-  Future<CustomRoute> create(CustomRoute route, AuthUser author);
+  /// [busStops] are the admin-added stops the endpoints / via
+  /// stops may name.
+  Future<CustomRoute> create(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  });
 
   /// Updates a route as [author]. Same admin + validation rules.
-  Future<CustomRoute> update(CustomRoute route, AuthUser author);
+  Future<CustomRoute> update(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  });
 
   /// Deletes a route as [author]. Throws [StateError] unless admin.
   Future<void> delete(CustomRoute route, AuthUser author);
@@ -380,18 +489,29 @@ abstract class CustomRouteRepository {
 
 /// Validates a route object itself (repository-side, same rules as
 /// the form validator, minus the text parsing). A student fare is
-/// optional, but when present it must be more than ₱0.
-String? validateCustomRouteObject(CustomRoute route) {
+/// optional, but when present it must be more than ₱0 — same for
+/// the PWD and Senior Citizen fares.
+String? validateCustomRouteObject(
+  CustomRoute route, {
+  List<BusStop> busStops = const [],
+}) {
   final base = validateCustomRoute(
     from: route.from,
     to: route.to,
     operator: route.operator,
     vehicle: route.vehicle,
     fareText: route.fare.toString(),
+    busStops: busStops,
   );
   if (base != null) return base;
   if (route.studentFare != null && route.studentFare! <= 0) {
     return 'The student fare must be more than ₱0.';
+  }
+  if (route.pwdFare != null && route.pwdFare! <= 0) {
+    return 'The PWD fare must be more than ₱0.';
+  }
+  if (route.seniorFare != null && route.seniorFare! <= 0) {
+    return 'The Senior Citizen fare must be more than ₱0.';
   }
   return null;
 }
@@ -469,11 +589,15 @@ class FirestoreCustomRouteRepository implements CustomRouteRepository {
   }
 
   @override
-  Future<CustomRoute> create(CustomRoute route, AuthUser author) async {
+  Future<CustomRoute> create(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  }) async {
     if (!isAdminUser(author)) {
       throw StateError('Only admins can add routes.');
     }
-    final error = validateCustomRouteObject(route);
+    final error = validateCustomRouteObject(route, busStops: busStops);
     if (error != null) throw ArgumentError(error);
     final ref = await _collection.add(_doc(route, author));
     final snap = await ref.get();
@@ -484,15 +608,20 @@ class FirestoreCustomRouteRepository implements CustomRouteRepository {
     if (current.every((r) => r.id != ref.id)) {
       await _writeCache([created, ...current]);
     }
+    customRoutesChanged.value++;
     return created;
   }
 
   @override
-  Future<CustomRoute> update(CustomRoute route, AuthUser author) async {
+  Future<CustomRoute> update(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  }) async {
     if (!isAdminUser(author)) {
       throw StateError('Only admins can edit routes.');
     }
-    final error = validateCustomRouteObject(route);
+    final error = validateCustomRouteObject(route, busStops: busStops);
     if (error != null) throw ArgumentError(error);
     final id = route.id;
     if (id == null || id.isEmpty) {
@@ -505,7 +634,10 @@ class FirestoreCustomRouteRepository implements CustomRouteRepository {
       'vehicle': route.vehicle,
       'fare': route.fare,
       'studentFare': route.studentFare,
+      'pwdFare': route.pwdFare,
+      'seniorFare': route.seniorFare,
       'viaHubs': route.viaHubs,
+      'viaWaypoints': route.viaWaypoints.map((w) => w.toJson()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     final updated = route.copyWith(updatedAt: DateTime.now());
@@ -513,6 +645,7 @@ class FirestoreCustomRouteRepository implements CustomRouteRepository {
     await _writeCache(
       current.map((r) => r.id == id ? updated : r).toList(),
     );
+    customRoutesChanged.value++;
     return updated;
   }
 
@@ -528,6 +661,7 @@ class FirestoreCustomRouteRepository implements CustomRouteRepository {
     await _collection.doc(id).delete();
     final current = await loadAll();
     await _writeCache(current.where((r) => r.id != id).toList());
+    customRoutesChanged.value++;
   }
 }
 
@@ -574,11 +708,15 @@ class LocalCustomRouteRepository implements CustomRouteRepository {
   Future<List<CustomRoute>> loadAll() => _readAll();
 
   @override
-  Future<CustomRoute> create(CustomRoute route, AuthUser author) async {
+  Future<CustomRoute> create(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  }) async {
     if (!isAdminUser(author)) {
       throw StateError('Only admins can add routes.');
     }
-    final error = validateCustomRouteObject(route);
+    final error = validateCustomRouteObject(route, busStops: busStops);
     if (error != null) throw ArgumentError(error);
     final now = DateTime.now();
     final created = route.copyWith(
@@ -590,15 +728,20 @@ class LocalCustomRouteRepository implements CustomRouteRepository {
     );
     final current = await _readAll();
     await _writeAll([created, ...current]);
+    customRoutesChanged.value++;
     return created;
   }
 
   @override
-  Future<CustomRoute> update(CustomRoute route, AuthUser author) async {
+  Future<CustomRoute> update(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  }) async {
     if (!isAdminUser(author)) {
       throw StateError('Only admins can edit routes.');
     }
-    final error = validateCustomRouteObject(route);
+    final error = validateCustomRouteObject(route, busStops: busStops);
     if (error != null) throw ArgumentError(error);
     final id = route.id;
     if (id == null || id.isEmpty) {
@@ -612,6 +755,7 @@ class LocalCustomRouteRepository implements CustomRouteRepository {
     await _writeAll(
       current.map((r) => r.id == id ? updated : r).toList(),
     );
+    customRoutesChanged.value++;
     return updated;
   }
 
@@ -626,5 +770,6 @@ class LocalCustomRouteRepository implements CustomRouteRepository {
     }
     final current = await _readAll();
     await _writeAll(current.where((r) => r.id != id).toList());
+    customRoutesChanged.value++;
   }
 }

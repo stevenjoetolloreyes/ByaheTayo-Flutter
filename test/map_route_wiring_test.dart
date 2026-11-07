@@ -8,6 +8,7 @@
 // + via-points logic (pure helpers) and the sheet end to end
 // (MapTab pumped with fake repos — the native MapLibre view
 // cannot render in flutter test, but the sheet + controls work).
+import 'package:estudyantego/features/bus_stops.dart';
 import 'package:estudyantego/features/custom_routes.dart';
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/map_tab.dart';
@@ -24,11 +25,19 @@ class _FakeCustomRouteRepository implements CustomRouteRepository {
   Future<List<CustomRoute>> loadAll() async => routes;
 
   @override
-  Future<CustomRoute> create(CustomRoute route, AuthUser author) =>
+  Future<CustomRoute> create(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  }) =>
       throw UnimplementedError();
 
   @override
-  Future<CustomRoute> update(CustomRoute route, AuthUser author) =>
+  Future<CustomRoute> update(
+    CustomRoute route,
+    AuthUser author, {
+    List<BusStop> busStops = const [],
+  }) =>
       throw UnimplementedError();
 
   @override

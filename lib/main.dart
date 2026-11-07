@@ -35,6 +35,8 @@ import 'features/diagnostics/diagnostics.dart';
 import 'features/account_tab.dart';
 import 'features/ad_service.dart';
 import 'features/app_layout.dart';
+import 'features/bus_companies.dart';
+import 'features/bus_stops.dart';
 import 'features/communities_tab.dart';
 import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
@@ -938,6 +940,14 @@ class _HomeShellState extends State<_HomeShell>
               widget.authService.isConfigured
                   ? FirestoreRouteFareOverrideRepository()
                   : LocalRouteFareOverrideRepository(),
+          busStopRepository:
+              widget.authService.isConfigured
+                  ? FirestoreBusStopRepository()
+                  : LocalBusStopRepository(),
+          busCompanyRepository:
+              widget.authService.isConfigured
+                  ? FirestoreBusCompanyRepository()
+                  : LocalBusCompanyRepository(),
         ),
         MapTab(
           currentUser: widget.user,
@@ -949,6 +959,10 @@ class _HomeShellState extends State<_HomeShell>
               widget.authService.isConfigured
                   ? FirestoreRouteFareOverrideRepository()
                   : LocalRouteFareOverrideRepository(),
+          busStopRepository:
+              widget.authService.isConfigured
+                  ? FirestoreBusStopRepository()
+                  : LocalBusStopRepository(),
         ),
         CommunitiesTab(
           onViewOnMap: () => widget.onSelect(3),

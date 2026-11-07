@@ -23,6 +23,7 @@ import 'dart:math' as math;
 
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import 'bus_stops.dart';
 import 'fares_tab.dart';
 
 /// Standard OSM raster tiles (light mode).
@@ -425,6 +426,43 @@ Future<OsrmRoute?> fetchOsrmRoute({
   }
 }
 
+/// OSRM route URL for a drive through raw [points] in order (2+
+/// points). Pure, so the URL is testable. Same endpoint +
+/// options as [osrmRouteUrl], minus the Hub wrapper — used by
+/// the line maker, whose points are map taps, not hubs.
+String osrmRouteUrlForPoints(List<LatLng> points) {
+  String coord(LatLng p) => '${p.longitude},${p.latitude}';
+  return 'https://router.project-osrm.org/route/v1/driving/'
+      '${points.map(coord).join(';')}'
+      '?overview=full&geometries=geojson&steps=true';
+}
+
+/// Fetches the OSRM road route through raw [points] in order.
+/// Returns null on any failure — the caller keeps the dashed
+/// direct line. Never throws. Modelled on [fetchOsrmRoute].
+Future<OsrmRoute?> fetchOsrmRouteForPoints(List<LatLng> points) async {
+  if (points.length < 2) return null;
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+  try {
+    final request = await client.getUrl(
+      Uri.parse(osrmRouteUrlForPoints(points)),
+    );
+    request.headers.set('User-Agent', 'EstudyanteGO/1.0');
+    final response = await request.close().timeout(
+      const Duration(seconds: 20),
+    );
+    final body = await response.transform(utf8.decoder).join();
+    if (response.statusCode != 200) return null;
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) return null;
+    return parseOsrmRoute(decoded);
+  } catch (_) {
+    return null;
+  } finally {
+    client.close();
+  }
+}
+
 /// Nominatim search URL for Catholic churches inside the
 /// Northern Luzon viewbox (west, south, east, north). `bounded=1`
 /// keeps results inside the box; the query is deliberately the
@@ -600,6 +638,12 @@ const routeStopMaxOffRoadKm = 1.0;
 /// even if the geometry is still loading. When there is no road
 /// geometry yet, only origin + destination (+ via-hubs) are
 /// known — no intermediate hub is guessed from a straight line.
+/// [viaWaypoints] (a line the admin drew on the map) wins over
+/// [viaHubNames] for the intermediate stops; unnamed waypoints
+/// are labelled "Point N" in tap order — a positional label,
+/// never an invented place name. [extraStops] are the
+/// admin-added stops the names may resolve to, and which count
+/// as on-the-way stops like any hub.
 List<RouteStop> routeStops({
   required LatLng origin,
   required String originName,
@@ -607,6 +651,8 @@ List<RouteStop> routeStops({
   required List<LatLng>? roadPoints,
   required double totalKm,
   List<String> viaHubNames = const [],
+  List<RouteWaypoint> viaWaypoints = const [],
+  List<BusStop> extraStops = const [],
 }) {
   final stops = <RouteStop>[];
   final pts = roadPoints;
@@ -620,12 +666,32 @@ List<RouteStop> routeStops({
       ? 0
       : distanceAlongPath(pts, math.min(originIdx, idx), math.max(originIdx, idx));
 
-  // Via-hubs of a custom route come first in the admin's order;
-  // their path indices are resolved below like any hub.
-  final viaHubs = <Hub>[];
-  for (final name in viaHubNames) {
-    for (final h in hubs) {
-      if (h.name == name) viaHubs.add(h);
+  // The effective intermediates: a drawn line's waypoints win
+  // over the named via stops. Unnamed waypoints are labelled
+  // "Point N" in tap order — a positional label, never an
+  // invented place name.
+  final viaStops = <({String name, String region, double lat, double lng})>[];
+  if (viaWaypoints.isNotEmpty) {
+    for (var i = 0; i < viaWaypoints.length; i++) {
+      final w = viaWaypoints[i];
+      viaStops.add((
+        name: w.name ?? 'Point ${i + 1}',
+        region: w.name == null ? '' : _regionOf(w.name!, extraStops),
+        lat: w.lat,
+        lng: w.lng,
+      ));
+    }
+  } else {
+    for (final name in viaHubNames) {
+      final hub = resolveHub(name, extraStops);
+      if (hub != null) {
+        viaStops.add((
+          name: hub.name,
+          region: hub.region,
+          lat: hub.lat,
+          lng: hub.lng,
+        ));
+      }
     }
   }
 
@@ -633,9 +699,9 @@ List<RouteStop> routeStops({
   if (pts != null && pts.length >= 2) {
     final lo = math.min(originIdx, destIdx);
     final hi = math.max(originIdx, destIdx);
-    for (final hub in hubs) {
+    for (final hub in allHubs(extraStops)) {
       if (hub.name == dest.name || hub.name == originName) continue;
-      if (viaHubs.any((h) => h.name == hub.name)) continue;
+      if (viaStops.any((s) => s.name == hub.name)) continue;
       final idx = nearestPathIndex(pts, LatLng(hub.lat, hub.lng));
       if (idx <= lo || idx >= hi) continue;
       final off = haversineKm(
@@ -660,17 +726,17 @@ List<RouteStop> routeStops({
     }
     intermediates.sort((a, b) => a.pathIndex.compareTo(b.pathIndex));
   }
-  for (final hub in viaHubs) {
-    if (hub.name == dest.name || hub.name == originName) continue;
+  for (final stop in viaStops) {
+    if (stop.name == dest.name || stop.name == originName) continue;
     final idx = pts == null || pts.isEmpty
         ? 0
-        : nearestPathIndex(pts, LatLng(hub.lat, hub.lng));
+        : nearestPathIndex(pts, LatLng(stop.lat, stop.lng));
     intermediates.add(
       RouteStop(
-        name: hub.name,
-        region: hub.region,
-        lat: hub.lat,
-        lng: hub.lng,
+        name: stop.name,
+        region: stop.region,
+        lat: stop.lat,
+        lng: stop.lng,
         isOrigin: false,
         isDestination: false,
         pathIndex: idx,
@@ -678,16 +744,16 @@ List<RouteStop> routeStops({
       ),
     );
   }
-  // Via-hubs keep the admin's order; geometry hubs are in road
+  // Via stops keep the admin's order; geometry hubs are in road
   // order. When both exist, road order wins for the combined
-  // list (a via-hub off the loaded geometry still appears,
+  // list (a via stop off the loaded geometry still appears,
   // at its nearest point).
   intermediates.sort((a, b) => a.pathIndex.compareTo(b.pathIndex));
 
   stops.add(
     RouteStop(
       name: originName,
-      region: _regionOf(originName),
+      region: _regionOf(originName, extraStops),
       lat: origin.latitude,
       lng: origin.longitude,
       isOrigin: true,
@@ -714,11 +780,9 @@ List<RouteStop> routeStops({
   return stops;
 }
 
-String _regionOf(String originName) {
-  for (final h in hubs) {
-    if (h.name == originName) return h.region;
-  }
-  return '';
+String _regionOf(String originName, [List<BusStop> extraStops = const []]) {
+  final hub = resolveHub(originName, extraStops);
+  return hub?.region ?? '';
 }
 
 /// Splits a road geometry at [index] into the part before the

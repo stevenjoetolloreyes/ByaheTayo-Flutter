@@ -17,6 +17,8 @@ import 'package:geolocator/geolocator.dart';
 import 'add_route_sheet.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
+import 'bus_companies.dart';
+import 'bus_stops.dart';
 import 'custom_routes.dart';
 import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
@@ -104,6 +106,8 @@ class PopularRoute {
     this.operator,
     this.fare,
     this.studentFare,
+    this.pwdFare,
+    this.seniorFare,
     this.fareLabel,
     this.distanceKm,
     this.distanceNote,
@@ -129,6 +133,14 @@ class PopularRoute {
   /// The student fare in pesos, set by an admin — or null to
   /// derive 20% off [fare] (see [effectiveStudentFare]).
   final double? studentFare;
+
+  /// The PWD fare in pesos, set by an admin — or null to
+  /// derive 20% off [fare] (see [effectivePwdFare]).
+  final double? pwdFare;
+
+  /// The Senior Citizen fare in pesos, set by an admin — or
+  /// null to derive 20% off [fare] (see [effectiveSeniorFare]).
+  final double? seniorFare;
 
   /// Label for [fare] when set, e.g. 'Verified bus fare'.
   final String? fareLabel;
@@ -158,6 +170,22 @@ class PopularRoute {
     return studentFare ?? discountedFareOf(fare!);
   }
 
+  /// The PWD fare to show: the admin-set [pwdFare] when present,
+  /// otherwise 20% off [fare] — null when no fare is set. Same
+  /// pattern as [effectiveStudentFare].
+  double? get effectivePwdFare {
+    if (fare == null) return null;
+    return pwdFare ?? discountedFareOf(fare!);
+  }
+
+  /// The Senior Citizen fare to show: the admin-set [seniorFare]
+  /// when present, otherwise 20% off [fare] — null when no fare
+  /// is set. Same pattern as [effectiveStudentFare].
+  double? get effectiveSeniorFare {
+    if (fare == null) return null;
+    return seniorFare ?? discountedFareOf(fare!);
+  }
+
   /// A copy of this route with an admin's [RouteFareOverride]
   /// merged in (built-in routes only — custom routes carry their
   /// own fare/student fare). Null override = unchanged.
@@ -170,6 +198,8 @@ class PopularRoute {
       operator: operator,
       fare: override.fare ?? fare,
       studentFare: override.studentFare ?? studentFare,
+      pwdFare: override.pwdFare ?? pwdFare,
+      seniorFare: override.seniorFare ?? seniorFare,
       fareLabel: override.fare != null ? 'Admin-set fare' : fareLabel,
       distanceKm: distanceKm,
       distanceNote: distanceNote,
@@ -330,9 +360,27 @@ PopularRoute popularRouteFromCustomRoute(CustomRoute route) {
     vehicle: route.vehicle,
     fare: route.fare,
     studentFare: route.studentFare,
+    pwdFare: route.pwdFare,
+    seniorFare: route.seniorFare,
     fareLabel: 'Admin-entered fare',
     viaHubs: route.viaHubs,
     customRouteId: route.id,
+  );
+}
+
+/// Road distance for a route, resolving endpoints against the
+/// merged hub list (built-ins + admin-added stops). Same ×1.22
+/// rule as [PopularRoute.roadKm]; null when an endpoint is
+/// unknown. [PopularRoute.roadKm] stays hubs-only (its tests pin
+/// it); callers that hold stops use this.
+double? popularRouteRoadKm(PopularRoute route, List<BusStop> stops) {
+  if (route.distanceKm != null) return route.distanceKm;
+  final fromHub = hubByName(route.from, stops);
+  final toHub = hubByName(route.to, stops);
+  if (fromHub == null || toHub == null) return null;
+  return math.max(
+    0.1,
+    haversineKm(fromHub.lat, fromHub.lng, toHub.lat, toHub.lng) * 1.22,
   );
 }
 
@@ -707,6 +755,8 @@ class FaresTab extends StatefulWidget {
     this.currentUser,
     this.customRouteRepository,
     this.fareOverrideRepository,
+    this.busStopRepository,
+    this.busCompanyRepository,
     this.onViewOnMap,
   });
 
@@ -718,6 +768,14 @@ class FaresTab extends StatefulWidget {
   /// Admin-set fare / student fare / direction overrides for the
   /// built-in routes. Null = no overrides are applied.
   final RouteFareOverrideRepository? fareOverrideRepository;
+
+  /// Admin-added bus stops source. Null = only the 16 built-in
+  /// hubs are known.
+  final BusStopRepository? busStopRepository;
+
+  /// Admin-added bus companies source. Null = only the preset
+  /// operator chips are shown.
+  final BusCompanyRepository? busCompanyRepository;
 
   /// Opens the Map tab for the current trip. Null when the host
   /// does not wire it (same pattern as StudentTab/CommunitiesTab):
@@ -750,6 +808,27 @@ class _FaresTabState extends State<FaresTab> {
   /// [seededRouteKey] ('From|To'). Empty when none are stored.
   Map<String, RouteFareOverride> _fareOverrides = {};
 
+  /// Admin-added bus stops (Map line maker / "+ Add bus stop"),
+  /// appended after the 16 built-in hubs everywhere hubs appear.
+  List<BusStop> _busStops = [];
+
+  /// Admin-added bus companies ("+ Add company"), appended after
+  /// the preset operator chips in the Add Route sheet.
+  List<BusCompany> _busCompanies = [];
+
+  /// Trip-card From/To choices: the 16 built-in hubs first, then
+  /// the admin-added bus stops (indices 0–15 never shift).
+  List<Hub> get _tripHubs => allHubs(_busStops);
+
+  /// The Add Route form stashed when the admin left the sheet to
+  /// place a new bus stop on the map — the next Add Route / Edit
+  /// Route open pre-fills from it, then clears it. The seeded
+  /// route / existing route being edited are stashed alongside,
+  /// so the sheet reopens in the same mode.
+  AddRouteSheetDraft? _pendingAddRouteDraft;
+  PopularRoute? _pendingSeededRoute;
+  CustomRoute? _pendingExistingRoute;
+
   /// Popular Routes filters (preview chips). The operator filter
   /// only applies while the Bus vehicle chip is active; picking
   /// any other vehicle resets it to All.
@@ -761,6 +840,24 @@ class _FaresTabState extends State<FaresTab> {
   @override
   void initState() {
     super.initState();
+    busStopsChanged.addListener(_onRouteDataChanged);
+    customRoutesChanged.addListener(_onRouteDataChanged);
+    routeFareOverridesChanged.addListener(_onRouteDataChanged);
+    _loadRouteData();
+  }
+
+  @override
+  void dispose() {
+    busStopsChanged.removeListener(_onRouteDataChanged);
+    customRoutesChanged.removeListener(_onRouteDataChanged);
+    routeFareOverridesChanged.removeListener(_onRouteDataChanged);
+    super.dispose();
+  }
+
+  /// A route / override / stop changed elsewhere (the Map tab's
+  /// line maker, another sheet) — reload so this tab shows the
+  /// new data without a restart.
+  void _onRouteDataChanged() {
     _loadRouteData();
   }
 
@@ -777,42 +874,91 @@ class _FaresTabState extends State<FaresTab> {
         setState(() => _fareOverrides = overrides);
       }
     }
+    final stopRepo = widget.busStopRepository;
+    if (stopRepo != null) {
+      final stops = await stopRepo.loadAll();
+      if (mounted) {
+        setState(() {
+          _busStops = stops;
+          // A selected stop may have been deleted — clamp the
+          // Trip-card indices back into the merged list.
+          _originHub = math.max(
+            0,
+            math.min(_originHub, _tripHubs.length - 1),
+          );
+          _destHub = math.max(
+            0,
+            math.min(_destHub, _tripHubs.length - 1),
+          );
+        });
+      }
+    }
+    final companyRepo = widget.busCompanyRepository;
+    if (companyRepo != null) {
+      final companies = await companyRepo.loadAll();
+      if (mounted) setState(() => _busCompanies = companies);
+    }
   }
 
   /// Opens the Add Route form (admin only — the button is hidden
   /// for everyone else, and the repository re-checks on save).
+  /// When [existing] is given, edits that route. A stashed draft
+  /// (the admin returning from placing a bus stop on the map)
+  /// pre-fills the form, then clears. If the admin taps
+  /// "+ Add bus stop", the form is stashed, the map opens in
+  /// add-stop mode, and the next Add Route open pre-fills from it.
   Future<void> _openAddRoute({CustomRoute? existing}) async {
     final user = widget.currentUser;
     final repo = widget.customRouteRepository;
     if (user == null || repo == null || !isAdminUser(user)) return;
+    final draft = _pendingAddRouteDraft;
+    final pendingExisting = _pendingExistingRoute;
     final result = await showModalBottomSheet<AddRouteSheetResult>(
       context: context,
       isScrollControlled: true,
-      builder: (_) =>
-          AddRouteSheet(existing: existing, repository: repo, author: user),
+      builder: (_) => AddRouteSheet(
+        existing: existing ?? pendingExisting,
+        repository: repo,
+        author: user,
+        busStops: _busStops,
+        busCompanies: _busCompanies,
+        companyRepository: widget.busCompanyRepository,
+        initialDraft: draft,
+      ),
     );
-    if (result != null && mounted) {
-      await _loadRouteData();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.deleted
-                ? 'Route deleted.'
-                : existing == null
-                ? 'Route added.'
-                : 'Route updated.',
-          ),
-        ),
-      );
+    _pendingAddRouteDraft = null;
+    _pendingExistingRoute = null;
+    if (result == null || !mounted) return;
+    if (result.addBusStopDraft != null) {
+      _pendingAddRouteDraft = result.addBusStopDraft;
+      _pendingExistingRoute = existing ?? pendingExisting;
+      if (result.companiesChanged) await _loadRouteData();
+      mapLineMakerRequest.value = (drawLine: false, addStop: true);
+      widget.onViewOnMap?.call();
+      return;
     }
+    await _loadRouteData();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.deleted
+              ? 'Route deleted.'
+              : existing == null
+              ? 'Route added.'
+              : 'Route updated.',
+        ),
+      ),
+    );
   }
 
   /// Opens the edit sheet for one Popular Route (admin only —
   /// the entry point is hidden for everyone else, and the
   /// repositories re-check on save). Admin-added routes edit
   /// their custom route; built-in routes edit their stored
-  /// override (fare, student fare, and via stops).
+  /// override (fare, student fare, and via stops). A stashed
+  /// draft (returning from placing a bus stop) pre-fills the
+  /// form, but only for the same seeded route it came from.
   Future<void> _openEditRoute(PopularRoute route) async {
     final user = widget.currentUser;
     if (user == null || !isAdminUser(user)) return;
@@ -827,6 +973,11 @@ class _FaresTabState extends State<FaresTab> {
     }
     final overrideRepo = widget.fareOverrideRepository;
     if (overrideRepo == null) return;
+    final useDraft =
+        _pendingSeededRoute != null &&
+        _pendingSeededRoute!.from == route.from &&
+        _pendingSeededRoute!.to == route.to;
+    final draft = useDraft ? _pendingAddRouteDraft : null;
     final result = await showModalBottomSheet<AddRouteSheetResult>(
       context: context,
       isScrollControlled: true,
@@ -835,21 +986,34 @@ class _FaresTabState extends State<FaresTab> {
         existingOverride: _fareOverrides[seededRouteKey(route.from, route.to)],
         overrideRepository: overrideRepo,
         author: user,
+        busStops: _busStops,
+        busCompanies: _busCompanies,
+        companyRepository: widget.busCompanyRepository,
+        initialDraft: draft,
       ),
     );
-    if (result != null && mounted) {
-      await _loadRouteData();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.deleted
-                ? 'Route reset to its built-in fare.'
-                : 'Route updated.',
-          ),
-        ),
-      );
+    _pendingAddRouteDraft = null;
+    _pendingSeededRoute = null;
+    if (result == null || !mounted) return;
+    if (result.addBusStopDraft != null) {
+      _pendingAddRouteDraft = result.addBusStopDraft;
+      _pendingSeededRoute = route;
+      if (result.companiesChanged) await _loadRouteData();
+      mapLineMakerRequest.value = (drawLine: false, addStop: true);
+      widget.onViewOnMap?.call();
+      return;
     }
+    await _loadRouteData();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.deleted
+              ? 'Route reset to its built-in fare.'
+              : 'Route updated.',
+        ),
+      ),
+    );
   }
 
   /// Popular Routes: the built-in verified / named routes (with
@@ -875,11 +1039,11 @@ class _FaresTabState extends State<FaresTab> {
   /// Loads a hub route into the calculator: hub-origin mode with
   /// From/To set to the route's hubs, so the distance and fare
   /// recompute. Non-hub routes cannot load (their endpoints are
-  /// not hubs) and are left untouched.
+  /// not hubs) and are left untouched. Hubs here are the merged
+  /// list — an admin-added stop is a valid endpoint.
   void _loadRouteIntoCalculator(PopularRoute route) {
-    if (!route.hasHubEndpoints) return;
-    final fromIndex = hubs.indexWhere((h) => h.name == route.from);
-    final toIndex = hubs.indexWhere((h) => h.name == route.to);
+    final fromIndex = _tripHubs.indexWhere((h) => h.name == route.from);
+    final toIndex = _tripHubs.indexWhere((h) => h.name == route.to);
     if (fromIndex < 0 || toIndex < 0) return;
     setState(() {
       _originMode = _OriginMode.hub;
@@ -905,9 +1069,9 @@ class _FaresTabState extends State<FaresTab> {
     final breakdown = rate != null && roadKm != null
         ? fareBreakdownFor(rate, roadKm, _discounted)
         : null;
-    final fromHub = hubByName(route.from);
-    final toHub = hubByName(route.to);
-    final distanceKm = route.roadKm;
+    final fromHub = hubByName(route.from, _busStops);
+    final toHub = hubByName(route.to, _busStops);
+    final distanceKm = popularRouteRoadKm(route, _busStops);
     final distanceNote =
         route.distanceNote ??
         (fromHub != null && toHub != null
@@ -924,17 +1088,33 @@ class _FaresTabState extends State<FaresTab> {
         ? 'Verified fare'
         : 'Admin-set fare';
     // Stops along the way, without road geometry: origin +
-    // destination (+ the admin's via-stops). The Map tab adds the
+    // destination (+ the route's effective direction — a drawn
+    // line wins over the named via stops). The Map tab adds the
     // on-the-way towns once its OSRM line loads — never guessed.
+    final override = route.customRouteId == null
+        ? _fareOverrides[seededRouteKey(route.from, route.to)]
+        : null;
+    final custom = route.customRouteId == null
+        ? null
+        : _customRoutes.where((r) => r.id == route.customRouteId).firstOrNull;
     final stops = fromHub != null && toHub != null && distanceKm != null
         ? hubPairStops(
             from: fromHub,
             to: toHub,
             totalKm: distanceKm,
             viaHubNames: route.viaHubs,
+            viaWaypoints: effectiveRouteWaypoints(
+              customRoute: custom,
+              override: override,
+              busStops: _busStops,
+            ),
+            extraStops: _busStops,
           ).map((s) => (name: s.name, role: s.role)).toList()
         : null;
-    final canViewOnMap = widget.onViewOnMap != null && route.hasHubEndpoints;
+    final hasEndpoints =
+        _tripHubs.any((h) => h.name == route.from) &&
+        _tripHubs.any((h) => h.name == route.to);
+    final canViewOnMap = widget.onViewOnMap != null && hasEndpoints;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -957,6 +1137,10 @@ class _FaresTabState extends State<FaresTab> {
             : 'Fare entered by an admin.',
         routeFareStudent: route.effectiveStudentFare,
         routeFareStudentSet: route.studentFare != null,
+        routeFarePwd: route.effectivePwdFare,
+        routeFarePwdSet: route.pwdFare != null,
+        routeFareSenior: route.effectiveSeniorFare,
+        routeFareSeniorSet: route.seniorFare != null,
         onEditRoute: _isAdmin ? () => _openEditRoute(route) : null,
         distanceKm: distanceKm,
         distanceNote: distanceNote,
@@ -967,7 +1151,7 @@ class _FaresTabState extends State<FaresTab> {
         fareStatus: fareStatus,
         stops: stops,
         breakdown: breakdown,
-        breakdownNote: breakdown == null && route.hasHubEndpoints
+        breakdownNote: breakdown == null && hasEndpoints
             ? 'No calculator breakdown for the current vehicle and trip.'
             : null,
         onViewOnMap: canViewOnMap
@@ -975,6 +1159,230 @@ class _FaresTabState extends State<FaresTab> {
             : null,
       ),
     );
+  }
+
+  /// Manage bus stops (admin only): the list of admin-added
+  /// stops with per-stop Edit (region only — a stop's name and
+  /// coordinates are its identity, and routes reference it by
+  /// name) and Delete. Delete is blocked while any custom route
+  /// (From / To / via stops) or any stored override (via stops)
+  /// references the name — deleting it would orphan those
+  /// routes. A stop selected in the Trip card is not checked:
+  /// the indices are clamped on the next load instead.
+  Future<void> _showManageBusStops() async {
+    final user = widget.currentUser;
+    final repo = widget.busStopRepository;
+    if (user == null || repo == null || !isAdminUser(user)) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom:
+                    MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Manage bus stops',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Stops you added on the map. New stops are added '
+                    'from Add Route → Via stops → Add bus stop.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_busStops.isEmpty)
+                    const Text('No bus stops added yet.')
+                  else
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final stop in _busStops)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.push_pin_outlined),
+                              title: Text(stop.name),
+                              subtitle: Text(
+                                '${stop.region} · '
+                                '${stop.lat.toStringAsFixed(5)}, '
+                                '${stop.lng.toStringAsFixed(5)}',
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Edit region',
+                                    icon: const Icon(Icons.edit_outlined),
+                                    onPressed: () async {
+                                      final updated =
+                                          await _editBusStopRegion(stop);
+                                      if (updated != null && mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Delete stop',
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: () async {
+                                      final deleted =
+                                          await _deleteBusStop(stop);
+                                      if (deleted && mounted) {
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Edit one stop's region (name + coordinates are immutable).
+  /// Returns the updated stop, or null when cancelled / failed.
+  Future<BusStop?> _editBusStopRegion(BusStop stop) async {
+    final user = widget.currentUser;
+    final repo = widget.busStopRepository;
+    if (user == null || repo == null) return null;
+    var region = stop.region;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: Text('Edit ${stop.name}'),
+              content: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final r in hubRegions())
+                    ChoiceChip(
+                      label: Text(r),
+                      selected: region == r,
+                      onSelected: (_) =>
+                          setDialogState(() => region = r),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return null;
+    try {
+      final updated = await repo.update(
+        stop.copyWith(region: region),
+        user,
+      );
+      await _loadRouteData();
+      return updated;
+    } catch (_) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save the stop.')),
+      );
+      return null;
+    }
+  }
+
+  /// Delete one stop, blocked while any route references its
+  /// name. Returns true when the stop was deleted.
+  Future<bool> _deleteBusStop(BusStop stop) async {
+    final user = widget.currentUser;
+    final repo = widget.busStopRepository;
+    if (user == null || repo == null) return false;
+    final referenced =
+        _customRoutes.any(
+          (r) =>
+              r.from == stop.name ||
+              r.to == stop.name ||
+              r.viaHubs.contains(stop.name),
+        ) ||
+        _fareOverrides.values.any(
+          (o) => o.viaHubs?.contains(stop.name) ?? false,
+        );
+    if (referenced) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${stop.name}" is still used by a route — remove it '
+            'from the route first.',
+          ),
+        ),
+      );
+      return false;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this bus stop?'),
+        content: Text(
+          '"${stop.name}" will be removed from the From/To and '
+          'via-stops pickers. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return false;
+    try {
+      await repo.delete(stop, user);
+      await _loadRouteData();
+      return true;
+    } catch (_) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete the stop.')),
+      );
+      return false;
+    }
   }
 
   FareRate? get _rate {
@@ -993,15 +1401,15 @@ class _FaresTabState extends State<FaresTab> {
       fromLat = _deviceLat;
       fromLng = _deviceLng;
     } else {
-      fromLat = hubs[_originHub].lat;
-      fromLng = hubs[_originHub].lng;
+      fromLat = _tripHubs[_originHub].lat;
+      fromLng = _tripHubs[_originHub].lng;
     }
     if (fromLat == null || fromLng == null) return null;
     return haversineKm(
       fromLat,
       fromLng,
-      hubs[_destHub].lat,
-      hubs[_destHub].lng,
+      _tripHubs[_destHub].lat,
+      _tripHubs[_destHub].lng,
     );
   }
 
@@ -1143,11 +1551,11 @@ class _FaresTabState extends State<FaresTab> {
                           ),
                         ),
                         items: [
-                          for (var i = 0; i < hubs.length; i++)
+                          for (var i = 0; i < _tripHubs.length; i++)
                             DropdownMenuItem(
                               value: i,
                               child: Text(
-                                '${hubs[i].name} · ${hubs[i].region}',
+                                '${_tripHubs[i].name} · ${_tripHubs[i].region}',
                               ),
                             ),
                         ],
@@ -1187,10 +1595,12 @@ class _FaresTabState extends State<FaresTab> {
                         ),
                       ),
                       items: [
-                        for (var i = 0; i < hubs.length; i++)
+                        for (var i = 0; i < _tripHubs.length; i++)
                           DropdownMenuItem(
                             value: i,
-                            child: Text('${hubs[i].name} · ${hubs[i].region}'),
+                            child: Text(
+                              '${_tripHubs[i].name} · ${_tripHubs[i].region}',
+                            ),
                           ),
                       ],
                       onChanged: (value) {
@@ -1225,8 +1635,8 @@ class _FaresTabState extends State<FaresTab> {
                         onPressed: () => _jumpToMap(
                           from: _originMode == _OriginMode.location
                               ? 'My location'
-                              : hubs[_originHub].name,
-                          to: hubs[_destHub].name,
+                              : _tripHubs[_originHub].name,
+                          to: _tripHubs[_destHub].name,
                         ),
                         icon: const Icon(Icons.map_outlined),
                         label: const Text('Find routes'),
@@ -1359,6 +1769,12 @@ class _FaresTabState extends State<FaresTab> {
                 onPressed: () => _openAddRoute(),
                 icon: const Icon(Icons.add),
                 label: const Text('Add Route'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _showManageBusStops,
+                icon: const Icon(Icons.push_pin_outlined),
+                label: const Text('Manage bus stops'),
               ),
             ],
           ],
@@ -1646,6 +2062,10 @@ class _FareBreakdownSheet extends StatelessWidget {
     required this.routeFareNote,
     this.routeFareStudent,
     this.routeFareStudentSet = false,
+    this.routeFarePwd,
+    this.routeFarePwdSet = false,
+    this.routeFareSenior,
+    this.routeFareSeniorSet = false,
     required this.distanceKm,
     required this.distanceNote,
     required this.etaMinutes,
@@ -1678,6 +2098,22 @@ class _FareBreakdownSheet extends StatelessWidget {
   /// True when [routeFareStudent] was set by an admin (not
   /// derived) — the detail line says so instead of "20% off".
   final bool routeFareStudentSet;
+
+  /// The PWD fare to show — the admin-set value when present,
+  /// otherwise 20% off [routeFare]; null when no fare is set.
+  /// Same pattern as [routeFareStudent].
+  final double? routeFarePwd;
+
+  /// True when [routeFarePwd] was set by an admin (not derived).
+  final bool routeFarePwdSet;
+
+  /// The Senior Citizen fare to show — the admin-set value when
+  /// present, otherwise 20% off [routeFare]; null when no fare
+  /// is set. Same pattern as [routeFareStudent].
+  final double? routeFareSenior;
+
+  /// True when [routeFareSenior] was set by an admin (not derived).
+  final bool routeFareSeniorSet;
 
   final double? distanceKm;
   final String? distanceNote;
@@ -1821,13 +2257,21 @@ class _FareBreakdownSheet extends StatelessWidget {
                   ),
                   _SheetRow(
                     label: 'PWD discount',
-                    detail: '20% off with a valid PWD ID',
-                    amount: peso(discountedFareOf(routeFare)),
+                    detail: routeFarePwdSet
+                        ? 'Set by an admin'
+                        : '20% off with a valid PWD ID',
+                    amount: peso(
+                      routeFarePwd ?? discountedFareOf(routeFare),
+                    ),
                   ),
                   _SheetRow(
                     label: 'Senior Citizen discount',
-                    detail: '20% off with a valid senior citizen ID',
-                    amount: peso(discountedFareOf(routeFare)),
+                    detail: routeFareSeniorSet
+                        ? 'Set by an admin'
+                        : '20% off with a valid senior citizen ID',
+                    amount: peso(
+                      routeFareSenior ?? discountedFareOf(routeFare),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s8),
                   Text(
