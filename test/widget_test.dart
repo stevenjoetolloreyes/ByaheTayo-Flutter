@@ -25,9 +25,8 @@ const _labels = [
 Future<void> _pumpApp(WidgetTester tester) async {
   SharedPreferences.setMockInitialValues({'byahetayo_onboarding_done': true});
   await tester.pumpWidget(const EstudyanteGOApp());
-  await tester.pumpAndSettle();
-  // Tap-to-start splash (Nov 6): the app waits for the tap.
-  await tester.tap(find.byKey(const Key('splash-start')));
+  // Anime splash (Nov 7): one master animation drives the whole
+  // ~4.9 s intro, so a single settle carries it to the handoff.
   await tester.pumpAndSettle();
 }
 
@@ -51,6 +50,18 @@ void main() {
     // verified on Steven's phone.
     expect(find.text('Map unavailable on this platform'), findsOneWidget);
     expect(find.byIcon(Icons.my_location), findsOneWidget);
+    // Nov 7 (Steven): the control cluster sits top-right, not
+    // bottom-right — the Positioned ancestor of the my-location
+    // button pins to the top corner.
+    final cluster = find.ancestor(
+      of: find.byIcon(Icons.my_location),
+      matching: find.byType(Positioned),
+    );
+    expect(cluster, findsOneWidget);
+    final positioned = tester.widget<Positioned>(cluster);
+    expect(positioned.top, 16);
+    expect(positioned.right, 16);
+    expect(positioned.bottom, isNull);
   });
 
   testWidgets('Wide layout shows collapsible sidebar with all 6 destinations', (

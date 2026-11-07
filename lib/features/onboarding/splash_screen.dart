@@ -1,26 +1,54 @@
-// EstudyanteGO splash screen.
+// EstudyanteGO splash screen — anime intro (Nov 7).
 //
-// Modern Minimalist entry theme: solid themed background (no
-// gradient), the existing EstudyanteGO logo asset + wordmark, the
-// "Your Student Companion" tagline, and a subtle one-shot loading
-// bar. The screen resolves the next destination (onboarding, sign-in,
-// or dashboard) while it shows, waits for a short minimum display
-// time so the brand moment reads, then waits for the user's tap
-// ("I-tap para magsimula" — preview tap-to-start, Nov 6) and hands
-// off exactly once via [onDestination]. The progress animation is
-// finite (one 1.2s run),
-// so widget tests can settle it.
+// A faithful port of the Claude HTML splash (EstudyanteGO__1__3_cn09.html),
+// adapted to the real app's emerald palette and real brand assets:
+// same sequence — white flash + speed-lines burst + whoosh; logo zoom
+// 3.4 -> 0.9 -> 1.08 -> 0.97 -> 1.0 with blur; impact shake + 3-note
+// sting; tagline "Kasama mo sa araw-araw na eskwela"; loading bar 2 s
+// with a tick each 25%; "Handa na!" at 100%; fade out ~4.9 s — then
+// the splash hands off on its own. NO tap-to-start (the HTML's start
+// overlay existed only for web audio autoplay policy; native audio
+// plays without it, so it is not ported). The HTML's 4-tab mini app
+// shell is not ported either — this file is the splash only.
 //
-// The splash follows the app's selected theme ([themeMode]) so there
-// is no flash of the wrong theme at startup; it has no theme
-// switcher of its own (the switcher lives on Welcome and the auth
-// screens).
+// Adaptations (per the brief, not improvisation):
+// - Palette: emerald (#0c1410 / #16a34a / #34d399) instead of the
+//   spec's navy / yellow / teal. Speed-lines and road dashes use the
+//   accent #34d399 (brand #16a34a in light mode); the bar gradient is
+//   accent -> brand.
+// - Brand: the real E logo asset + the real "EstudyanteGO" wordmark
+//   (Estudyante + green GO), NOT the spec's "Estudyante + GO badge".
+//   The logo + wordmark zoom as one brand block.
+// - Tagline "Kasama mo sa araw-araw na eskwela" replaces
+//   "Your Student Companion".
+// - No mascot (it was main-app-only in the HTML).
+// - Sounds are synthesized in Dart (splash_sound.dart) — no audio
+//   files. Best-effort: visuals never depend on audio.
+// - The ROAD motif is included (bottom strip + animated dashed line,
+//   1.1 s loop), adapted to emerald.
+//
+// Timing is driven by ONE master controller (4650 ms) so the whole
+// intro is a single finite timeline: every phase is an interval of
+// it, and the road's drive phase derives from it too. That keeps
+// widget tests able to settle it (no infinite animation runs while
+// the splash is up). The exit fade is a separate 250 ms controller
+// started once the destination is resolved, so a slow resolve holds
+// the splash on "Handa na!" instead of fading to a blank screen.
+//
+// Reduced motion (MediaQuery.disableAnimations): the flourishes
+// (flash, speed-lines, zoom, shake, fades) render at their end state
+// and the road stands still; the loading timing and handoff are
+// unchanged, matching the reference's reduced-motion behavior.
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../diagnostics/diagnostics.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
+import 'splash_sound.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({
@@ -45,24 +73,36 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  bool _handedOff = false;
+    with TickerProviderStateMixin {
+  /// The whole intro: loading completes at 4650 ms ("Handa na!").
+  static const int _totalMs = 4650;
 
-  /// True once the next destination is resolved AND the minimum
-  /// brand moment has elapsed: the splash then waits for the tap
-  /// instead of handing off on its own (preview tap-to-start,
-  /// Nov 6 — "I-tap para magsimula").
-  bool _ready = false;
+  /// Exit fade after the destination is resolved.
+  static const int _fadeMs = 250;
+
+  /// Master timeline for the intro.
+  late final AnimationController _sequence;
+
+  /// Exit fade, started once resolve + sequence are both done.
+  late final AnimationController _fade;
+
+  bool _handedOff = false;
   AppStartDestination? _destination;
+
+  bool _impactFired = false;
+  int _lastTickBucket = -1;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _sequence = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..forward();
+      duration: const Duration(milliseconds: _totalMs),
+    )..addListener(_onSequenceTick);
+    _fade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: _fadeMs),
+    );
     // Splash stage start (recorded, never blocking, never throwing).
     ErrorLogService.instance.record(
       category: ErrorCategory.startup,
@@ -70,7 +110,33 @@ class _SplashScreenState extends State<SplashScreen>
       startupStage: StartupStage.splash.name,
       severity: ErrorSeverity.info,
     );
+    SplashSound.whoosh();
+    _runSequence();
     _go();
+  }
+
+  Future<void> _runSequence() async {
+    try {
+      await _sequence.forward();
+    } catch (_) {
+      // Disposed mid-sequence: the splash is gone, nothing to do.
+    }
+  }
+
+  /// Fires the timeline sounds: the impact sting at 1550 ms and a
+  /// tick at each 25% of the loading bar (700 / 760 / 820 / 880 Hz).
+  void _onSequenceTick() {
+    final elapsed = _sequence.value * _totalMs;
+    if (!_impactFired && elapsed >= 1550) {
+      _impactFired = true;
+      SplashSound.impact();
+    }
+    final progress = ((elapsed - 2650) / 2000).clamp(0.0, 1.0);
+    final bucket = (progress * 4).floor();
+    if (bucket != _lastTickBucket && progress < 1.0) {
+      _lastTickBucket = bucket;
+      SplashSound.tick(700 + bucket * 60);
+    }
   }
 
   Future<void> _go() async {
@@ -83,7 +149,7 @@ class _SplashScreenState extends State<SplashScreen>
     try {
       final results = await Future.wait([
         widget.resolve(),
-        Future<void>.delayed(const Duration(milliseconds: 1200)),
+        Future<void>.delayed(const Duration(milliseconds: _totalMs)),
       ]);
       destination = results.first as AppStartDestination;
     } catch (error, stack) {
@@ -98,18 +164,21 @@ class _SplashScreenState extends State<SplashScreen>
       } catch (_) {
         // Diagnostics failure must never block the fallback.
       }
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await Future<void>.delayed(const Duration(milliseconds: _totalMs));
       destination = AppStartDestination.onboarding;
     }
     if (!mounted || _handedOff) return;
-    setState(() {
-      _destination = destination;
-      _ready = true;
-    });
+    _destination = destination;
+    try {
+      await _fade.forward();
+    } catch (_) {
+      // Disposed mid-fade: the splash is gone, nothing to do.
+    }
+    if (!mounted || _handedOff) return;
+    await _start();
   }
 
-  /// The tap that starts the app. Exactly once, like the old
-  /// automatic handoff.
+  /// Hands the app off to the resolved destination. Exactly once.
   Future<void> _start() async {
     final destination = _destination;
     if (_handedOff || destination == null) return;
@@ -129,126 +198,402 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
-    _controller.dispose();
+    _sequence.removeListener(_onSequenceTick);
+    _sequence.dispose();
+    _fade.dispose();
     super.dispose();
+  }
+
+  static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  /// Progress of [startMs]..[endMs] within the master timeline,
+  /// warped by [curve], clamped to 0..1.
+  double _phase(double elapsedMs, double startMs, double endMs,
+      [Curve curve = Curves.linear]) {
+    final p = ((elapsedMs - startMs) / (endMs - startMs)).clamp(0.0, 1.0);
+    return curve.transform(p);
   }
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
     final brightness = entryEffectiveBrightness(widget.themeMode, context);
     final colors = entryColorsFor(brightness);
+    final size = MediaQuery.sizeOf(context);
+    final isDark = brightness == Brightness.dark;
+    // Emerald adaptations of the spec's yellow / teal accents.
+    final accent = isDark
+        ? const Color(0xFF34D399)
+        : const Color(0xFF16A34A);
+    final roadBase =
+        Color.lerp(colors.background, colors.primary, 0.08) ??
+            colors.background;
+    final glowCenter =
+        Color.lerp(colors.background, colors.primary, 0.15) ??
+            colors.background;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: entryOverlayStyle(brightness),
       child: Theme(
         data: entryThemeData(brightness),
         child: Scaffold(
           backgroundColor: colors.background,
-          body: SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 48),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, child) {
-                        // Reduced motion: no scale-in, the logo
-                        // simply appears.
-                        final reduceMotion = MediaQuery.of(context)
-                            .disableAnimations;
-                        final scale = reduceMotion
-                            ? 1.0
-                            : 0.92 +
-                                0.08 *
-                                    _controller.value.clamp(0.0, 1.0);
-                        return Transform.scale(scale: scale, child: child);
-                      },
-                      child: Image.asset(
-                        'assets/images/estudyantego_logo.png',
-                        width: 120,
-                        height: 120,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text.rich(
-                      TextSpan(
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          color: colors.primaryText,
+          body: AnimatedBuilder(
+            animation: Listenable.merge([_sequence, _fade]),
+            builder: (context, _) {
+              final elapsed = _sequence.value * _totalMs;
+
+              // Flash: white 1 -> 0 over 0.35 s, ease-out.
+              final flash = reduceMotion
+                  ? 0.0
+                  : 1.0 - _phase(elapsed, 0, 350, Curves.easeOut);
+
+              // Speed-lines burst (0.05–1.05 s): scale .3 -> 2.4,
+              // rotate 0 -> 10 deg, opacity 0 -> .85 (12%) -> .35
+              // (55%) -> 0.
+              final speedP = reduceMotion
+                  ? 1.0
+                  : _phase(elapsed, 50, 1050, Curves.easeOut);
+              final speedScale = _lerp(0.3, 2.4, speedP);
+              final speedRotate = speedP * 10 * math.pi / 180;
+              final double speedOpacity;
+              if (reduceMotion) {
+                speedOpacity = 0.0;
+              } else if (speedP < 0.12) {
+                speedOpacity = 0.85 * speedP / 0.12;
+              } else if (speedP < 0.55) {
+                speedOpacity =
+                    0.85 - 0.5 * (speedP - 0.12) / (0.55 - 0.12);
+              } else {
+                speedOpacity = 0.35 * (1 - (speedP - 0.55) / 0.45);
+              }
+
+              // Logo zoom (0.45–1.55 s): scale 3.4 -> .9 -> 1.08 ->
+              // .97 -> 1.0, opacity 0 -> 1 by 55%, blur 16 -> 0 by
+              // 55%. Timing: cubic-bezier(.17,.89,.32,1.28).
+              const zoomCurve = Cubic(0.17, 0.89, 0.32, 1.28);
+              final zoomP = reduceMotion
+                  ? 1.0
+                  : _phase(elapsed, 450, 1550, zoomCurve);
+              final double zoomScale;
+              final double zoomOpacity;
+              final double zoomBlur;
+              if (zoomP < 0.55) {
+                final k = zoomP / 0.55;
+                zoomScale = _lerp(3.4, 0.9, k);
+                zoomOpacity = k;
+                zoomBlur = 16 * (1 - k);
+              } else if (zoomP < 0.72) {
+                zoomScale = _lerp(0.9, 1.08, (zoomP - 0.55) / 0.17);
+                zoomOpacity = 1.0;
+                zoomBlur = 0.0;
+              } else if (zoomP < 0.86) {
+                zoomScale = _lerp(1.08, 0.97, (zoomP - 0.72) / 0.14);
+                zoomOpacity = 1.0;
+                zoomBlur = 0.0;
+              } else {
+                zoomScale = _lerp(0.97, 1.0, (zoomP - 0.86) / 0.14);
+                zoomOpacity = 1.0;
+                zoomBlur = 0.0;
+              }
+
+              // Impact shake (1.55–1.90 s) on the whole content.
+              final shakeP = reduceMotion
+                  ? 1.0
+                  : _phase(elapsed, 1550, 1900, Curves.ease);
+              const shakeStops = [
+                Offset(0, 0),
+                Offset(-7, 2),
+                Offset(6, -3),
+                Offset(-5, 0),
+                Offset(3, 2),
+                Offset(0, 0),
+              ];
+              final shakeIndex = (shakeP * 5).floor().clamp(0, 4);
+              final shakeFrac = (shakeP * 5) - shakeIndex;
+              final shakeOffset = Offset(
+                _lerp(shakeStops[shakeIndex].dx, shakeStops[shakeIndex + 1].dx,
+                    shakeFrac),
+                _lerp(shakeStops[shakeIndex].dy, shakeStops[shakeIndex + 1].dy,
+                    shakeFrac),
+              );
+
+              // Tagline fade-up (2.05–2.55 s).
+              final tagP = reduceMotion
+                  ? 1.0
+                  : _phase(elapsed, 2050, 2550, Curves.ease);
+              final taglineOpacity = tagP;
+              final taglineDy = 10 * (1 - tagP);
+
+              // Loading wrap fades in from 2.65 s; the bar fills
+              // 0 -> 100% over 2 s (2.65–4.65 s).
+              final loadOpacity = reduceMotion
+                  ? 1.0
+                  : _phase(elapsed, 2650, 3050, Curves.ease);
+              final loadProgress =
+                  ((elapsed - 2650) / 2000).clamp(0.0, 1.0);
+              final loadDone = loadProgress >= 1.0;
+
+              // Road drive phase: 1.1 s loop, derived from the master
+              // timeline (no infinite controller, so tests can settle).
+              final roadPhase = reduceMotion
+                  ? 0.0
+                  : (elapsed % 1100) / 1100;
+
+              return Opacity(
+                opacity: 1.0 - _fade.value,
+                child: ClipRect(
+                  child: Stack(
+                    children: [
+                      // Stage: subtle emerald radial glow, like the
+                      // reference's navy radial.
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: RadialGradient(
+                              center: const Alignment(0, -0.7),
+                              radius: 1.2,
+                              colors: [glowCenter, colors.background],
+                            ),
+                          ),
                         ),
-                        children: [
-                          const TextSpan(text: 'Estudyante'),
-                          TextSpan(
-                            text: 'GO',
-                            style: TextStyle(color: colors.primary),
-                          ),
-                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your Student Companion',
-                      style: TextStyle(
-                        color: colors.secondaryText,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                    AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, _) {
-                        return LinearProgressIndicator(
-                          value: _controller.value.clamp(0.0, 1.0),
-                          backgroundColor: colors.border,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            colors.primary,
+                      // ROAD motif: bottom strip + animated dashed line.
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: -size.height * 0.10,
+                        height: size.height * 0.46,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: roadBase,
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.35),
+                              ],
+                            ),
+                            border: Border(
+                              top: BorderSide(
+                                color: Colors.white.withOpacity(0.06),
+                                width: 2,
+                              ),
+                            ),
                           ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, _) {
-                        return Text(
-                          _ready
-                              ? 'Ready'
-                              : 'Naglo-load… ${(_controller.value * 100).round()}%',
-                          style: TextStyle(
-                            color: colors.secondaryText,
-                            fontSize: 13,
+                          child: CustomPaint(
+                            painter: _RoadDashesPainter(
+                              phase: roadPhase,
+                              color: accent.withOpacity(0.5),
+                            ),
                           ),
-                        );
-                      },
-                    ),
-                    // Tap-to-start (preview parity, Nov 6): the app
-                    // waits here until the user taps — it never
-                    // jumps ahead on its own.
-                    if (_ready) ...[
-                      const SizedBox(height: 24),
-                      FilledButton(
-                        key: const Key('splash-start'),
-                        onPressed: _start,
-                        child: const Text('I-tap para magsimula'),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Buksan ang EstudyanteGO',
-                        style: TextStyle(
-                          color: colors.secondaryText,
-                          fontSize: 13,
                         ),
                       ),
+                      // Speed-lines burst.
+                      if (speedOpacity > 0)
+                        Positioned.fill(
+                          child: Opacity(
+                            opacity: speedOpacity,
+                            child: Transform.scale(
+                              scale: speedScale,
+                              child: Transform.rotate(
+                                angle: speedRotate,
+                                child: CustomPaint(
+                                  painter: _SpeedlinesPainter(
+                                    color: accent.withOpacity(0.35),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Content: brand block, tagline, loading bar.
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 48),
+                          child: Transform.translate(
+                            offset: shakeOffset,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Transform.scale(
+                                  scale: zoomScale,
+                                  child: Opacity(
+                                    opacity: zoomOpacity,
+                                    child: ImageFiltered(
+                                      imageFilter: ui.ImageFilter.blur(
+                                        sigmaX: zoomBlur,
+                                        sigmaY: zoomBlur,
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Image.asset(
+                                            'assets/images/estudyantego_logo.png',
+                                            width: 120,
+                                            height: 120,
+                                          ),
+                                          const SizedBox(height: 20),
+                                          Text.rich(
+                                            TextSpan(
+                                              style: TextStyle(
+                                                fontSize: 30,
+                                                fontWeight: FontWeight.w800,
+                                                color: colors.primaryText,
+                                              ),
+                                              children: [
+                                                const TextSpan(
+                                                  text: 'Estudyante',
+                                                ),
+                                                TextSpan(
+                                                  text: 'GO',
+                                                  style: TextStyle(
+                                                    color: colors.primary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Opacity(
+                                  opacity: taglineOpacity,
+                                  child: Transform.translate(
+                                    offset: Offset(0, taglineDy),
+                                    child: Text(
+                                      'Kasama mo sa araw-araw na eskwela',
+                                      style: TextStyle(
+                                        color: colors.secondaryText,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 48),
+                                Opacity(
+                                  opacity: loadOpacity,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      LinearProgressIndicator(
+                                        value: loadProgress,
+                                        backgroundColor: colors.border,
+                                        valueColor:
+                                            const AlwaysStoppedAnimation<Color>(
+                                          Color(0xFF34D399),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            loadDone
+                                                ? 'Handa na!'
+                                                : 'Naglo-load…',
+                                            style: TextStyle(
+                                              color: colors.secondaryText,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${(loadProgress * 100).round()}%',
+                                            style: TextStyle(
+                                              color: colors.secondaryText,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // White flash at the very start.
+                      if (flash > 0)
+                        Positioned.fill(
+                          child: Opacity(
+                            opacity: flash,
+                            child: Container(color: Colors.white),
+                          ),
+                        ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+/// Speed-lines burst: 26 wedges (2 deg every 14 deg) radiating from
+/// the center — the reference's repeating conic gradient.
+class _SpeedlinesPainter extends CustomPainter {
+  const _SpeedlinesPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.max(size.width, size.height) * 0.75;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    for (var i = 0; i < 26; i++) {
+      final start = i * 14 * math.pi / 180;
+      final sweep = 2 * math.pi / 180;
+      final path = Path()
+        ..moveTo(center.dx, center.dy)
+        ..arcTo(
+          Rect.fromCircle(center: center, radius: radius),
+          start,
+          sweep,
+          false,
+        )
+        ..close();
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SpeedlinesPainter old) => old.color != color;
+}
+
+/// Road dashes: 28 px dash / 28 px gap, 4 px tall, 18 px from the
+/// road's top edge, sliding left by [phase] of one 56 px period.
+class _RoadDashesPainter extends CustomPainter {
+  const _RoadDashesPainter({required this.phase, required this.color});
+
+  final double phase;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    var x = -56 * phase;
+    while (x < size.width) {
+      canvas.drawRect(Rect.fromLTWH(x, 18, 28, 4), paint);
+      x += 56;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RoadDashesPainter old) =>
+      old.phase != phase || old.color != color;
 }

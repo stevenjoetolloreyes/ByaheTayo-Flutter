@@ -17,8 +17,8 @@ Future<void> _pumpApp(WidgetTester tester) async {
   addTearDown(tester.view.resetDevicePixelRatio);
   SharedPreferences.setMockInitialValues({'byahetayo_onboarding_done': true});
   await tester.pumpWidget(const EstudyanteGOApp());
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const Key('splash-start')));
+  // Anime splash (Nov 7): one master animation drives the whole
+  // ~4.9 s intro, so a single settle carries it to the handoff.
   await tester.pumpAndSettle();
 }
 

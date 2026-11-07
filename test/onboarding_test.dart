@@ -339,7 +339,7 @@ void main() {
   });
 
   group('SplashScreen', () {
-    testWidgets('renders branding and hands off exactly once on tap',
+    testWidgets('renders branding and hands off exactly once on its own',
         (WidgetTester tester) async {
       AppStartDestination? handed;
       var calls = 0;
@@ -352,17 +352,23 @@ void main() {
           },
         ),
       ));
+      // Anime intro (Nov 7): the real E logo + wordmark, the new
+      // Taglish tagline, and NO enter button at any point — the
+      // splash hands off on its own after the ~4.9 s sequence.
       expect(find.text('EstudyanteGO'), findsOneWidget);
-      expect(find.text('Your Student Companion'), findsOneWidget);
+      expect(find.text('Kasama mo sa araw-araw na eskwela'), findsOneWidget);
+      expect(find.text('Your Student Companion'), findsNothing);
+      expect(find.text('I-tap para magsimula'), findsNothing);
+      expect(find.text('Buksan ang EstudyanteGO'), findsNothing);
+      expect(find.text('Handa na!'), findsNothing);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
-      await tester.pumpAndSettle();
-      // Tap-to-start (Nov 6): resolving alone does NOT hand off —
-      // the app waits for the tap.
       expect(handed, isNull);
-      expect(find.text('I-tap para magsimula'), findsOneWidget);
-      expect(find.text('Buksan ang EstudyanteGO'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('splash-start')));
+      // Settling carries the splash through the whole intro
+      // (flash -> zoom -> shake -> tagline -> loading bar) plus the
+      // exit fade; the handoff then fires exactly once.
       await tester.pumpAndSettle();
+      expect(find.text('Handa na!'), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
       expect(handed, AppStartDestination.dashboard);
       expect(calls, 1);
     });

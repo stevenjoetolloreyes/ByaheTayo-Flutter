@@ -57,6 +57,9 @@ dependencies:
   file_picker: ^13.3.2
   home_widget: ^0.10.0
   maplibre: ^0.3.7
+  # Anime splash sounds (Nov 7): synthesized tones only — no audio
+  # files. WAV bytes are generated in Dart and played from memory.
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:

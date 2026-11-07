@@ -171,9 +171,8 @@ void main() {
       await tester.pumpWidget(
         const EstudyanteGOApp(initialThemeMode: ThemeMode.dark),
       );
-      await tester.pumpAndSettle();
-      // Tap-to-start splash (Nov 6): the app waits for the tap.
-      await tester.tap(find.byKey(const Key('splash-start')));
+      // Anime splash (Nov 7): one master animation drives the whole
+      // ~4.9 s intro, so a single settle carries it to the handoff.
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('top-nav-item-Student')));
       await tester.pumpAndSettle();

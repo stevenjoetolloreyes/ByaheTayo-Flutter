@@ -1178,12 +1178,13 @@ CameraPosition cameraForMode({
   bearing: bearingForMode(mode, bearing),
 );
 
-/// Bottom offset of the floating map controls (right column + the
-/// 2D/3D/Satellite pill). The collapsed sheet occupies the bottom
-/// ~190dp, so controls float above it; when the sheet is hidden
-/// for a full-map view they drop to just above the screen bottom
-/// (bottom:16 — the phone bottom nav bar sits below the Scaffold
-/// body, so 16 clears it).
+/// Bottom offset of the floating bottom-left attribution ⓘ button.
+/// (It used to position the right-hand control column too, until
+/// Nov 7 moved that cluster to the top-right.) The collapsed sheet
+/// occupies the bottom ~190dp, so the button floats above it; when
+/// the sheet is hidden for a full-map view it drops to just above
+/// the screen bottom (bottom:16 — the phone bottom nav bar sits
+/// below the Scaffold body, so 16 clears it).
 double mapControlsBottomOffset({required bool sheetHidden}) =>
     sheetHidden ? 16 : 190;
 
@@ -2639,11 +2640,15 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
           ),
-        // Floating map controls (above the peeked sheet, or
-        // just above the screen bottom when the sheet is hidden).
+        // Floating map controls, top-right (Steven, Nov 7: the
+        // buttons belong at the top). They used to sit bottom-right
+        // above the peeked sheet; the top-right is free — no text
+        // block or title lives there — so the cluster pins to the
+        // top corner and never collides with the sheet, the stop
+        // card, or the attribution chip.
         Positioned(
           right: 16,
-          bottom: mapControlsBottomOffset(sheetHidden: _sheetHidden),
+          top: 16,
           child: Column(
             children: [
               // Green bus button: hides the bottom sheet completely
