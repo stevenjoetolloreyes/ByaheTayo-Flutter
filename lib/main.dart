@@ -40,9 +40,8 @@ import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/custom_routes.dart';
 import 'features/fares_tab.dart';
-import 'features/friend_cloud_repository.dart';
-import 'features/friends_tab.dart';
 import 'features/map_tab.dart';
+import 'features/study_tab.dart';
 import 'features/top_nav.dart';
 import 'features/onboarding/auth_screen.dart';
 import 'features/onboarding/auth_service.dart';
@@ -336,11 +335,11 @@ ThemeData _darkTheme() {
 }
 
 // ---- Destinations (6 tabs) ----
-// Order (preview port, Nov 6): Student, Friends, Fares, Map,
+// Order (preview parity, Nov 6): Student, Study, Fares, Map,
 // Communities, Account. Student is the DEFAULT tab on open
-// (index 0). Communities sits after Friends: the Community section
-// moved out of the Friends tab into its own destination at the
-// user's request.
+// (index 0). Friends is NOT a tab anymore: it moved into the
+// Account tab's Quick Actions (preview: tapping the tile opens
+// the Friends screen with its content untouched).
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
   final String label;
@@ -350,7 +349,7 @@ class _Destination {
 
 const _destinations = <_Destination>[
   _Destination('Student', Icons.school_outlined, Icons.school),
-  _Destination('Friends', Icons.people_outlined, Icons.people),
+  _Destination('Study', Icons.menu_book_outlined, Icons.menu_book),
   _Destination('Fares', Icons.payments_outlined, Icons.payments),
   _Destination('Map', Icons.map_outlined, Icons.map),
   _Destination('Communities', Icons.groups_outlined, Icons.groups),
@@ -791,8 +790,17 @@ class _HomeShell extends StatefulWidget {
   State<_HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<_HomeShell> {
+class _HomeShellState extends State<_HomeShell>
+    with SingleTickerProviderStateMixin {
   late bool _collapsed = widget.initialSidebarCollapsed;
+
+  /// Tab-switch fade-slide (preview animation pass, Nov 6): the
+  /// controller restarts on every tab change (didUpdateWidget) —
+  /// the IndexedStack itself is never rebuilt or re-keyed, so tab
+  /// state (scroll, input, the Map's active route) survives the
+  /// switch. Fast/subtle (180ms); reduced motion = instant.
+  late final AnimationController _tabFadeController;
+  late final Animation<double> _tabFadeProgress;
 
   /// Shared wallet state, created once per shell: the real Firestore
   /// backend when Firebase is configured, local-only mode otherwise
@@ -823,6 +831,15 @@ class _HomeShellState extends State<_HomeShell> {
   @override
   void initState() {
     super.initState();
+    _tabFadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+    _tabFadeProgress = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _tabFadeController, curve: Curves.easeOut),
+    );
+    // No entrance animation on first launch — only on switches.
+    _tabFadeController.value = 1;
     // Safe Mode skips ads init (nonessential). Otherwise the
     // existing fire-and-forget init is unchanged.
     if (ErrorLogService.instance.safeMode) {
@@ -835,6 +852,24 @@ class _HomeShellState extends State<_HomeShell> {
     } else {
       unawaited(_adService.initialize());
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex) {
+      if (MediaQuery.of(context).disableAnimations) {
+        _tabFadeController.value = 1;
+      } else {
+        _tabFadeController.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabFadeController.dispose();
+    super.dispose();
   }
 
   Future<void> _toggleSidebar() async {
@@ -852,7 +887,7 @@ class _HomeShellState extends State<_HomeShell> {
     // Phones: wordmark header + icon-only top nav (no bottom nav).
     // Tablets / wide screens: collapsible left sidebar (unchanged).
     // One codebase, both form factors. The IndexedStack order
-    // follows _destinations: Student, Friends, Fares, Map,
+    // follows _destinations: Student, Study, Fares, Map,
     // Communities, Account — Student (index 0) is the default tab.
     final wide = MediaQuery.sizeOf(context).width >= 600;
     final body = IndexedStack(
@@ -869,14 +904,7 @@ class _HomeShellState extends State<_HomeShell> {
             adService: _adService,
           ),
         ),
-        FriendsTab(
-          cloudRepository: widget.authService.isConfigured
-              ? FirestoreFriendCloudRepository()
-              : null,
-          cloudUserId: widget.user?.uid,
-          cloudUserName:
-              widget.user?.displayName ?? widget.user?.email,
-        ),
+        const StudyTab(),
         FaresTab(
           onViewOnMap: () => widget.onSelect(3),
           currentUser: widget.user,
@@ -918,6 +946,24 @@ class _HomeShellState extends State<_HomeShell> {
       ],
     );
 
+    // Tab-switch fade-slide (preview animation pass, Nov 6): the
+    // IndexedStack is the animation's `child`, so it is never
+    // rebuilt on a switch — tab state is preserved.
+    final animatedBody = AnimatedBuilder(
+      animation: _tabFadeProgress,
+      builder: (context, child) {
+        final progress = _tabFadeProgress.value;
+        return Opacity(
+          opacity: 0.35 + 0.65 * progress,
+          child: Transform.translate(
+            offset: Offset(0, 8 * (1 - progress)),
+            child: child,
+          ),
+        );
+      },
+      child: body,
+    );
+
     if (wide) {
       return Scaffold(
         appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
@@ -936,7 +982,7 @@ class _HomeShellState extends State<_HomeShell> {
               ),
               // Expanded content stays responsive while the sidebar
               // animates; no overflow, no layout shift of the content.
-              Expanded(child: body),
+              Expanded(child: animatedBody),
             ],
           ),
         ),
@@ -962,7 +1008,7 @@ class _HomeShellState extends State<_HomeShell> {
                   TopNavDestination(d.label, d.icon, d.selectedIcon),
               ],
             ),
-            Expanded(child: body),
+            Expanded(child: animatedBody),
           ],
         ),
       ),
