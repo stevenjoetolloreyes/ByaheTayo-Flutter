@@ -34,6 +34,7 @@ import 'admin_access.dart';
 import 'fares_tab.dart';
 import 'map_tab.dart';
 import 'onboarding/auth_service.dart';
+import 'osm_routing.dart';
 
 /// Firestore collection for admin-added routes.
 const customRoutesCollection = 'custom_routes';
@@ -269,6 +270,62 @@ int customRouteEtaMinutes(CustomRoute route) {
     mountain: mountain,
     sameRegion: sameRegion,
     mode: TravelMode.transit,
+  );
+}
+
+/// Transit ETA minutes for any road distance, using the same
+/// estimateTripMinutes model the Map tab uses. Use when neither
+/// endpoint is a known hub (e.g. a named terminal that is not in
+/// the hub list) — no hub-dependent rule can apply, so the
+/// defaults are non-mountain / not same-region.
+int transitEtaMinutes({required double roadKm}) {
+  return estimateTripMinutes(
+    roadKm: roadKm,
+    mountain: false,
+    sameRegion: false,
+    mode: TravelMode.transit,
+  );
+}
+
+/// Transit ETA minutes for any hub pair over a road distance
+/// (preview parity: the Fares breakdown sheet shows an ETA next to
+/// the distance, using the same estimateTripMinutes model the Map
+/// tab uses — mountain / same-region rules from the two hubs).
+/// A null [from] (GPS origin) counts as non-mountain and not
+/// same-region, exactly like the custom-route helper.
+int hubPairEtaMinutes({
+  Hub? from,
+  required Hub to,
+  required double roadKm,
+}) {
+  return estimateTripMinutes(
+    roadKm: roadKm,
+    mountain:
+        (from != null && isMountainHub(from)) || isMountainHub(to),
+    sameRegion: from != null && from.region == to.region,
+    mode: TravelMode.transit,
+  );
+}
+
+/// Stops along the way for a hub pair, WITHOUT road geometry: the
+/// origin, the destination, and a custom route's own via-hubs in
+/// the admin's order. No intermediate hub is ever guessed — the
+/// Map tab recomputes the full on-the-way list once its OSRM
+/// geometry loads (see _refreshRouteStops). Used by the Fares
+/// breakdown sheet, which has no geometry of its own.
+List<RouteStop> hubPairStops({
+  required Hub from,
+  required Hub to,
+  required double totalKm,
+  List<String> viaHubNames = const [],
+}) {
+  return routeStops(
+    origin: LatLng(from.lat, from.lng),
+    originName: from.name,
+    dest: to,
+    roadPoints: null,
+    totalKm: totalKm,
+    viaHubNames: viaHubNames,
   );
 }
 
