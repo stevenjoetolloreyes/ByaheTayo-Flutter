@@ -3,7 +3,9 @@
      centered E logo. Shown while the Flutter engine starts, before
      the first frame — replaces the plain default background. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="#0c1410" />
+    <item>
+        <color android:color="#0c1410" />
+    </item>
 
     <item>
         <bitmap
