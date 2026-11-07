@@ -31,6 +31,17 @@ IconData? _toggleIcon(WidgetTester tester) {
   return (button.icon as Icon).icon;
 }
 
+/// Boots the full app past the tap-to-start splash (Nov 6).
+Future<void> _bootApp(
+  WidgetTester tester, {
+  Widget app = const EstudyanteGOApp(),
+}) async {
+  await tester.pumpWidget(app);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('splash-start')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(() {
     // The app boots through the first-time gate; these sidebar tests
@@ -42,8 +53,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const EstudyanteGOApp());
-    await tester.pumpAndSettle();
+    await _bootApp(tester);
 
     expect(_sidebarWidth(tester), 220);
     expect(find.text('EstudyanteGO'), findsOneWidget);
@@ -56,8 +66,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const EstudyanteGOApp());
-    await tester.pumpAndSettle();
+    await _bootApp(tester);
 
     // 'Fares' is unselected, so it only exists as a sidebar label.
     expect(find.text('Fares'), findsOneWidget);
@@ -82,8 +91,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const EstudyanteGOApp());
-    await tester.pumpAndSettle();
+    await _bootApp(tester);
 
     await tester.tap(find.byKey(const Key('sidebar-item-Fares')));
     await tester.pumpAndSettle();
@@ -125,10 +133,10 @@ void main() {
 
     // Widget honors the restored initial value (main() loads the pref and
     // passes it in).
-    await tester.pumpWidget(
-      const EstudyanteGOApp(initialSidebarCollapsed: true),
+    await _bootApp(
+      tester,
+      app: const EstudyanteGOApp(initialSidebarCollapsed: true),
     );
-    await tester.pumpAndSettle();
     expect(_sidebarWidth(tester), 80);
   });
 
@@ -136,8 +144,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const EstudyanteGOApp());
-    await tester.pumpAndSettle();
+    await _bootApp(tester);
 
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
@@ -149,13 +156,14 @@ void main() {
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(800, 1280));
-    await tester.pumpWidget(const EstudyanteGOApp());
-    await tester.pumpAndSettle();
+    await _bootApp(tester);
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
 
+    // Resize only: pumpWidget reuses the live tree, so a second
+    // _bootApp would find no splash to tap. The app is already
+    // running — the resize re-lays it out at landscape size.
     await _setSurface(tester, const Size(1280, 800));
-    await tester.pumpWidget(const EstudyanteGOApp());
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sidebar-toggle')));
     await tester.pumpAndSettle();
@@ -165,8 +173,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(390, 844));
-    await tester.pumpWidget(const EstudyanteGOApp());
-    await tester.pumpAndSettle();
+    await _bootApp(tester);
 
     expect(find.byType(TopNavBar), findsOneWidget);
     expect(find.byKey(const Key('sidebar-container')), findsNothing);
