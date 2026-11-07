@@ -320,6 +320,22 @@ IconData _fileKindIcon(String kind) {
   }
 }
 
+/// File-type label for the details dialog ('PDF', 'Document', ...).
+String _fileKindLabel(String kind) {
+  switch (kind) {
+    case 'pdf':
+      return 'PDF';
+    case 'doc':
+      return 'Document';
+    case 'ppt':
+      return 'Slides';
+    case 'img':
+      return 'Image';
+    default:
+      return 'File';
+  }
+}
+
 /// GWA standing band (preview legend): 1.00–1.50 Excellent,
 /// 1.75–2.25 Good, 2.50–3.00 Passing, 5.00 Failed. Values between
 /// the printed bands take the nearest better-or-equal band edge.
@@ -348,6 +364,8 @@ class _StudyTabState extends State<StudyTab> {
   int _semester = 1;
   String _reviewMode = 'quiz';
   String _fileFilter = 'all';
+  /// Folder tapped in the Files panel, or null for all folders.
+  String? _selectedFolder;
   String _noteQuery = '';
 
   List<Subject> _subjects = [];
@@ -796,12 +814,12 @@ class _StudyTabState extends State<StudyTab> {
   /// elevation shadow (the app's shared CardTheme is #202B25 in
   /// dark mode — the preview's Study surfaces are #13211a etc.).
   Widget _studyCard(_StudyTokens tokens, Widget child,
-      {double radius = 15, EdgeInsetsGeometry? padding}) {
+      {double radius = 15, EdgeInsetsGeometry? padding, Color? borderColor}) {
     return Container(
       decoration: BoxDecoration(
         color: tokens.surface,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: tokens.line),
+        border: Border.all(color: borderColor ?? tokens.line),
       ),
       padding: padding,
       child: child,
@@ -1182,9 +1200,10 @@ class _StudyTabState extends State<StudyTab> {
   Widget _filesPanel(BuildContext context, _StudyTokens tokens,
       {required Key key}) {
     final used = _files.fold<int>(0, (sum, f) => sum + f.sizeBytes);
-    final filtered = _fileFilter == 'all'
-        ? _files
-        : _files.where((f) => f.kind == _fileFilter).toList();
+    final filtered = _files
+        .where((f) => _fileFilter == 'all' || f.kind == _fileFilter)
+        .where((f) => _selectedFolder == null || f.folder == _selectedFolder)
+        .toList();
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1255,13 +1274,15 @@ class _StudyTabState extends State<StudyTab> {
         if (filtered.isEmpty)
           _emptyCard(
             tokens,
-            'No files yet.',
+            _selectedFolder == null
+                ? 'No files yet.'
+                : 'No files in $_selectedFolder yet.',
             'Add a PDF, document, slides, or image to keep it here.',
           )
         else
           for (var i = 0; i < filtered.length; i++) ...[
             if (i > 0) const SizedBox(height: 8),
-            _fileRow(tokens, filtered[i]),
+            _fileRow(context, tokens, filtered[i]),
           ],
       ],
     );
@@ -1334,48 +1355,134 @@ class _StudyTabState extends State<StudyTab> {
   }
 
   /// Preview folder card: amber folder icon, file count below.
+  /// Tapping filters the file list to that folder (tap again to
+  /// clear); the active folder gets a brand border.
   Widget _folderCard(_StudyTokens tokens, String folder) {
+    final active = _selectedFolder == folder;
     return _studyCard(
       tokens,
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Icon(Icons.folder, color: tokens.amber),
-            const SizedBox(height: AppSpacing.s4),
-            Text(folder,
-                style: TextStyle(
-                    fontWeight: FontWeight.w700, color: tokens.text)),
-            Text(
-              '${_files.where((f) => f.folder == folder).length} files',
-              style: TextStyle(fontSize: 12.5, color: tokens.muted),
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () =>
+              setState(() => _selectedFolder = active ? null : folder),
+          borderRadius: BorderRadius.circular(15),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                Icon(Icons.folder, color: tokens.amber),
+                const SizedBox(height: AppSpacing.s4),
+                Text(folder,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, color: tokens.text)),
+                Text(
+                  '${_files.where((f) => f.folder == folder).length} files',
+                  style: TextStyle(fontSize: 12.5, color: tokens.muted),
+                ),
+              ],
             ),
-          ],
+          ),
+        ),
+      ),
+      borderColor: active ? tokens.brand : null,
+    );
+  }
+
+  /// Preview file row: tinted file-type icon tile, name, size ·
+  /// folder; delete stays. Tapping the row (ripple, same pattern
+  /// as _entryCard) opens the file details — the trash button
+  /// still deletes, and never opens the details.
+  Widget _fileRow(BuildContext context, _StudyTokens tokens, StudyFile file) {
+    return _studyCard(
+      tokens,
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showFileDetails(context, tokens, file),
+          borderRadius: BorderRadius.circular(15),
+          child: ListTile(
+            leading: _fileTile(tokens, file.kind),
+            title: Text(file.name, style: TextStyle(color: tokens.text)),
+            subtitle: Text(
+              '${_formatBytes(file.sizeBytes)} · ${file.folder}',
+              style: TextStyle(color: tokens.muted),
+            ),
+            trailing: IconButton(
+              tooltip: 'Remove file',
+              icon: Icon(Icons.delete_outline, color: tokens.muted),
+              onPressed: () async {
+                setState(() => _files.removeWhere((f) => f.id == file.id));
+                await _saveFiles();
+              },
+            ),
+          ),
         ),
       ),
     );
   }
 
-  /// Preview file row: tinted file-type icon tile, name, size ·
-  /// folder; delete stays.
-  Widget _fileRow(_StudyTokens tokens, StudyFile file) {
-    return _studyCard(
-      tokens,
-      ListTile(
-        leading: _fileTile(tokens, file.kind),
-        title: Text(file.name, style: TextStyle(color: tokens.text)),
-        subtitle: Text(
-          '${_formatBytes(file.sizeBytes)} · ${file.folder}',
-          style: TextStyle(color: tokens.muted),
+  /// File details: metadata only (name, type, size, folder, added
+  /// date) — files store no content, so there is nothing to open.
+  /// Entrance is a fade + gentle scale whose duration follows
+  /// _animDuration (zero under reduced motion).
+  Future<void> _showFileDetails(
+      BuildContext context, _StudyTokens tokens, StudyFile file) {
+    return showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close file details',
+      transitionDuration: _animDuration(context),
+      pageBuilder: (context, animation, secondaryAnimation) => AlertDialog(
+        title: Text(file.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailRow(tokens, 'Type', _fileKindLabel(file.kind)),
+            _detailRow(tokens, 'Size', _formatBytes(file.sizeBytes)),
+            _detailRow(tokens, 'Folder', file.folder),
+            _detailRow(tokens, 'Added',
+                '${_monthDay(file.added)}, ${file.added.year}'),
+          ],
         ),
-        trailing: IconButton(
-          tooltip: 'Remove file',
-          icon: Icon(Icons.delete_outline, color: tokens.muted),
-          onPressed: () async {
-            setState(() => _files.removeWhere((f) => f.id == file.id));
-            await _saveFiles();
-          },
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.96, end: 1).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          ),
+          child: child,
         ),
+      ),
+    );
+  }
+
+  /// One label/value row in the file details dialog.
+  Widget _detailRow(_StudyTokens tokens, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 56,
+            child: Text(label,
+                style: TextStyle(color: tokens.muted, fontSize: 13)),
+          ),
+          Expanded(
+            child:
+                Text(value, style: TextStyle(color: tokens.text, fontSize: 13)),
+          ),
+        ],
       ),
     );
   }

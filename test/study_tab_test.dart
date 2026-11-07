@@ -34,6 +34,10 @@ const _quizJson =
     '{"type":"mcq","question":"What is 3+3?","options":["5","6"],"correctIndex":1,"answer":"6","explanation":""}'
     '],"difficulty":"medium","randomize":false}]';
 
+const _filesJson =
+    '[{"id":"f1","name":"Lecture 1.pdf","sizeBytes":2048,"kind":"pdf","folder":"Lectures","added":"2026-11-05T00:00:00.000"},'
+    '{"id":"f2","name":"Activity 1.docx","sizeBytes":512,"kind":"doc","folder":"Activities","added":"2026-11-06T00:00:00.000"}]';
+
 Future<void> _pumpTab(
   WidgetTester tester, {
   Map<String, Object>? prefs,
@@ -110,6 +114,95 @@ void main() {
     for (final filter in ['All', 'PDF', 'Docs', 'Slides', 'Images']) {
       expect(find.text(filter), findsOneWidget);
     }
+  });
+
+  testWidgets('tapping a file row opens its details (metadata only)',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    expect(find.text('Activity 1.docx'), findsOneWidget);
+    await tester.tap(find.text('Lecture 1.pdf'));
+    await tester.pumpAndSettle();
+    // Name shows twice: row title + dialog title.
+    expect(find.text('Lecture 1.pdf'), findsNWidgets(2));
+    // Dialog rows: type / size / folder / added. 'PDF' also labels
+    // a filter pill, so scope the dialog assertions to the dialog.
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('PDF'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('2.0 KB'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Lectures'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Nov 5, 2026'), findsOneWidget);
+    // Metadata only — no viewer, no content.
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nov 5, 2026'), findsNothing);
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+  });
+
+  testWidgets('tapping a folder filters the file list to that folder',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    expect(find.text('Activity 1.docx'), findsOneWidget);
+    await tester.tap(find.text('Activities'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsNothing);
+    expect(find.text('Activity 1.docx'), findsOneWidget);
+    // Tapping the active folder again clears the filter.
+    await tester.tap(find.text('Activities'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    expect(find.text('Activity 1.docx'), findsOneWidget);
+    // A folder with no files shows its own honest empty state.
+    await tester.tap(find.text('Reviewers'));
+    await tester.pumpAndSettle();
+    expect(find.text('No files in Reviewers yet.'), findsOneWidget);
+    await tester.tap(find.text('Reviewers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+  });
+
+  testWidgets('tapping a file trash deletes it without opening details',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    // Rows sort most-recent-first, so target f1's own trash (not
+    // the first trash on screen, which is f2's). The row sits low
+    // in the list, so scroll it clear of the floating FAB first.
+    final f1Row = find.ancestor(
+      of: find.text('Lecture 1.pdf'),
+      matching: find.byType(ListTile),
+    );
+    final f1Trash = find.descendant(
+      of: f1Row,
+      matching: find.byIcon(Icons.delete_outline),
+    );
+    await tester.ensureVisible(f1Trash);
+    await tester.pumpAndSettle();
+    await tester.tap(f1Trash);
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsNothing);
+    expect(find.text('Activity 1.docx'), findsOneWidget);
+    expect(find.text('Close'), findsNothing);
   });
 
   testWidgets('Notes panel lists real notes, searchable',
