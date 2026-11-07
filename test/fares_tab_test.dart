@@ -1,5 +1,5 @@
 // Tests for the Fares tab: formula, distance, peso format, and the
-// tab rendering + computing from a typed distance.
+// tab rendering (Trip distance + Popular Routes).
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,20 +54,26 @@ void main() {
     });
   });
 
-  testWidgets('Fares tab auto-computes hub-to-hub distance', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: FaresTab())),
-    );
-    expect(find.text('Traditional jeepney'), findsOneWidget);
-    // No distance yet: the guidance state shows.
-    expect(find.textContaining('Starting location needed'),
-        findsOneWidget);
-    // Switch to hub origin: Cabugao -> Vigan Bus Terminal
-    // auto-computes (no manual distance field anymore).
-    // 31.6 km, traditional jeepney 14 + ceil(27.6)×2 = ₱70.
-    await tester.tap(find.text('Choose a hub'));
-    await tester.pump();
-    expect(find.text('31.6 km'), findsOneWidget);
-    expect(find.textContaining('₱70'), findsWidgets);
-  });
+  testWidgets(
+    'Fares tab computes hub-to-hub distance, no calculator sections',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: FaresTab())),
+      );
+      // Nov 7 (Steven): the calculator, Added routes, and Posted
+      // operator fares sections were removed — none of their text
+      // may appear anymore.
+      expect(find.text('Sasakyan'), findsNothing);
+      expect(find.text('Added routes'), findsNothing);
+      expect(find.text('Posted operator fares'), findsNothing);
+      expect(find.text('Traditional jeepney'), findsNothing);
+      // The Trip card still auto-computes: switch to hub origin,
+      // Cabugao -> Vigan Bus Terminal is 31.6 km.
+      await tester.tap(find.text('Choose a hub'));
+      await tester.pump();
+      expect(find.text('31.6 km'), findsOneWidget);
+      // Popular Routes still render below the Trip card.
+      expect(find.text('Popular Routes'), findsOneWidget);
+    },
+  );
 }

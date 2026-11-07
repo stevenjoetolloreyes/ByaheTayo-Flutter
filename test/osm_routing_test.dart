@@ -299,14 +299,19 @@ void main() {
   });
 
   group('cartoFallbackStyleJson', () {
-    test('is a valid MapLibre raster style for CartoDB Dark Matter', () {
-      final decoded =
-          jsonDecode(cartoFallbackStyleJson()) as Map<String, dynamic>;
+    test('dark is a valid MapLibre raster style for Dark Matter', () {
+      final decoded = jsonDecode(cartoFallbackStyleJson(dark: true))
+          as Map<String, dynamic>;
       expect(decoded['version'], 8);
+      expect(decoded['name'], contains('Dark Matter'));
       final sources = decoded['sources'] as Map<String, dynamic>;
       expect(sources.keys, ['carto-dark']);
       final source = sources['carto-dark'] as Map<String, dynamic>;
       expect(source['type'], 'raster');
+      expect(
+        source['attribution'],
+        '© OpenStreetMap contributors © CARTO',
+      );
       final tiles = source['tiles'] as List;
       expect(tiles.single, contains('basemaps.cartocdn.com/dark_all'));
       // No flutter_map {r} placeholder: MapLibre only expands {z}/{x}/{y}.
@@ -314,6 +319,55 @@ void main() {
       final layers = decoded['layers'] as List;
       expect(layers.length, 1);
       expect((layers.single as Map)['type'], 'raster');
+      expect((layers.single as Map)['source'], 'carto-dark');
+    });
+
+    test('light is a valid MapLibre raster style for Positron', () {
+      final decoded = jsonDecode(cartoFallbackStyleJson(dark: false))
+          as Map<String, dynamic>;
+      expect(decoded['version'], 8);
+      expect(decoded['name'], contains('Positron'));
+      final sources = decoded['sources'] as Map<String, dynamic>;
+      expect(sources.keys, ['carto-light']);
+      final source = sources['carto-light'] as Map<String, dynamic>;
+      expect(source['type'], 'raster');
+      expect(source['attribution'], '© OpenStreetMap contributors');
+      final tiles = source['tiles'] as List;
+      expect(tiles.single, contains('basemaps.cartocdn.com/light_all'));
+      expect(tiles.single, isNot(contains('{r}')));
+      final layers = decoded['layers'] as List;
+      expect(layers.length, 1);
+      expect((layers.single as Map)['type'], 'raster');
+      expect((layers.single as Map)['source'], 'carto-light');
+    });
+  });
+
+  group('metaVectorTileUrl / metaTileXy', () {
+    test('tile URL follows the Meta vtp endpoint', () {
+      expect(
+        metaVectorTileUrl(z: 8, x: 213, y: 115),
+        'https://external.xx.fbcdn.net/maps/vtp/s1/88/8/213/115/',
+      );
+      expect(
+        metaVectorTileUrlTemplate,
+        contains('external.xx.fbcdn.net/maps/vtp/s1/88'),
+      );
+    });
+
+    test('tile coordinates cover Cabugao at zoom 8', () {
+      // Cabugao (17.78916, 120.45838) at zoom 8 sits in tile 213/115.
+      final tile = metaTileXy(lat: 17.78916, lng: 120.45838, z: 8);
+      expect(tile.x, 213);
+      expect(tile.y, 115);
+    });
+
+    test('zoom clamps to the Meta tiles range (0–16)', () {
+      final hi = metaTileXy(lat: 16.9, lng: 121.05, z: 20);
+      final at16 = metaTileXy(lat: 16.9, lng: 121.05, z: 16);
+      expect(hi, at16);
+      final lo = metaTileXy(lat: 16.9, lng: 121.05, z: -3);
+      final at0 = metaTileXy(lat: 16.9, lng: 121.05, z: 0);
+      expect(lo, at0);
     });
   });
 

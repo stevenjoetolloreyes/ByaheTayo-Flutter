@@ -4,7 +4,8 @@
 // (replacing the Google Routes API), Nominatim place lookup
 // (replacing Google Places where a lookup is needed), the map
 // style URLs (Meta's Canterbury vector style by default, CartoDB
-// Dark Matter raster as the fallback), and the pure route-stop
+// raster as the theme-aware fallback — Dark Matter in dark mode,
+// Positron in light mode), and the pure route-stop
 // math (stops along the way, distances along the real road
 // geometry, segment split).
 //
@@ -44,6 +45,12 @@ const cartoDarkTileUrl =
 /// placeholder, for the MapLibre fallback style document.
 const cartoDarkRasterTileUrl =
     'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
+
+/// CartoDB Positron (light) tiles, for the MapLibre fallback
+/// style document in light mode — the light twin of
+/// [cartoDarkRasterTileUrl].
+const cartoLightRasterTileUrl =
+    'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
 
 /// CARTO attribution page, opened from the attribution chip in
 /// dark mode (the tiles are CARTO's Dark Matter rendering of OSM
@@ -98,26 +105,110 @@ String metaMapStyleUrl({required bool dark}) =>
 /// the chip shows this as plain text (see map_tab.dart).
 const metaMapAttributionText = '© Meta';
 
-/// MapLibre style document for the CartoDB Dark Matter raster
-/// fallback: a single raster source + layer. If the Meta style
-/// fails to load, the map switches to this document via setStyle
-/// — same dark look (OSM data rendered by CARTO), so the route
-/// line and pins keep working on a raster basemap.
-String cartoFallbackStyleJson() => jsonEncode({
-  'version': 8,
-  'name': 'CartoDB Dark Matter (fallback)',
-  'sources': {
-    'carto-dark': {
-      'type': 'raster',
-      'tiles': [cartoDarkRasterTileUrl],
-      'tileSize': 256,
-      'attribution': mapAttributionText(dark: true),
+/// MapLibre style document for the CartoDB raster fallback: a
+/// single raster source + layer. If the Meta style fails to load
+/// — or loads but its tiles never render (Steven's white map,
+/// Nov 7) — the map switches to this document via setStyle.
+/// Theme-aware: dark mode gets Dark Matter (same dark look as
+/// the preview's map), light mode gets Positron (the light
+/// twin), so the fallback never flips the theme. The route line
+/// and pins keep working on a raster basemap either way.
+String cartoFallbackStyleJson({required bool dark}) {
+  final sourceId = dark ? 'carto-dark' : 'carto-light';
+  final tiles = dark ? cartoDarkRasterTileUrl : cartoLightRasterTileUrl;
+  final name = dark
+      ? 'CartoDB Dark Matter (fallback)'
+      : 'CartoDB Positron (fallback)';
+  return jsonEncode({
+    'version': 8,
+    'name': name,
+    'sources': {
+      sourceId: {
+        'type': 'raster',
+        'tiles': [tiles],
+        'tileSize': 256,
+        'attribution': mapAttributionText(dark: dark),
+      },
     },
-  },
-  'layers': [
-    {'id': 'carto-dark', 'type': 'raster', 'source': 'carto-dark'},
-  ],
-});
+    'layers': [
+      {'id': sourceId, 'type': 'raster', 'source': sourceId},
+    ],
+  });
+}
+
+/// Meta vector tile endpoint — the same tiles the Canterbury
+/// styles fetch: verified live Nov 7 (HTTP 200, protobuf).
+/// The tile probe below fetches this exact URL, so a probe
+/// success means the native map's own tile requests can
+/// succeed too.
+const metaVectorTileUrlTemplate =
+    'https://external.xx.fbcdn.net/maps/vtp/s1/88/{z}/{x}/{y}/';
+
+/// One Meta vector tile URL for slippy coordinates ([z], [x],
+/// [y]). Pure, so the URL is testable.
+String metaVectorTileUrl({
+  required int z,
+  required int x,
+  required int y,
+}) =>
+    'https://external.xx.fbcdn.net/maps/vtp/s1/88/$z/$x/$y/';
+
+/// Slippy-map tile coordinates covering ([lat], [lng]) at zoom
+/// [z] (standard Web Mercator math). Pure, so the tile math is
+/// testable. [z] is clamped to the Meta tiles' range (0–16).
+({int x, int y}) metaTileXy({
+  required double lat,
+  required double lng,
+  required int z,
+}) {
+  final zoom = z.clamp(0, 16);
+  final n = 1 << zoom;
+  final x = ((lng + 180) / 360 * n).floor().clamp(0, n - 1);
+  final latRad = lat * math.pi / 180;
+  final y = ((1 -
+              math.log(math.tan(latRad) + 1 / math.cos(latRad)) /
+                  math.pi) /
+          2 *
+          n)
+      .floor()
+      .clamp(0, n - 1);
+  return (x: x, y: y);
+}
+
+/// Probes whether the Meta vector tile CDN is reachable from
+/// this device right now: GETs the single vector tile covering
+/// ([lat], [lng]) at zoom [z]. True on HTTP 200 with a
+/// non-empty body, false on any failure or timeout (8 s —
+/// inside the tile watchdog's 10 s window, so a slow-but-
+/// successful probe still cancels the watchdog in time).
+/// Never throws. Modelled on [fetchOsrmRoute]: one HTTP GET,
+/// no invented data.
+Future<bool> probeMetaVectorTile({
+  required double lat,
+  required double lng,
+  required int z,
+}) async {
+  final tile = metaTileXy(lat: lat, lng: lng, z: z);
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+  try {
+    final request = await client.getUrl(
+      Uri.parse(metaVectorTileUrl(z: z, x: tile.x, y: tile.y)),
+    );
+    request.headers.set('User-Agent', 'EstudyanteGO/1.0');
+    final response = await request.close().timeout(
+      const Duration(seconds: 8),
+    );
+    if (response.statusCode != 200) return false;
+    final bytes = await response
+        .fold<List<int>>(<int>[], (a, b) => a..addAll(b))
+        .timeout(const Duration(seconds: 8));
+    return bytes.isNotEmpty;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close();
+  }
+}
 
 /// One route from OSRM: the road-following geometry (GeoJSON
 /// [lng, lat] pairs, converted here), the routed length and

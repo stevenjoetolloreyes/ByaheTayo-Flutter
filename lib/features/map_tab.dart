@@ -1304,6 +1304,16 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   bool _styleLoaded = false;
   // Fallback timer for a Meta style that never loads.
   Timer? _styleLoadTimer;
+  // Tile watchdog for a Meta style that LOADS but whose tiles
+  // never render (Steven's phone, Nov 7, 15:24, light theme:
+  // pins visible, basemap white, no route line). The 8 s timer
+  // above only covers a style that never loads; once the style
+  // reports loaded, this 10 s timer is the backup — it fires
+  // the same CartoDB fallback unless the tile probe (below)
+  // shows the tiles are reachable first. Armed only for the
+  // initial load window after each style switch, never on
+  // camera moves.
+  Timer? _tileWatchdogTimer;
   // Flight generation: a newer _flyTo retargets the camera, and
   // the older flight's 1900 ms fallback must not yank it back.
   int _flyGeneration = 0;
@@ -1402,31 +1412,93 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _activeStyleUrl = desired;
     _styleMode = _MapStyleMode.meta;
     _styleLoaded = false;
+    _tileWatchdogTimer?.cancel(); // Old style's watchdog is moot.
     final controller = _mapController;
     if (controller == null) return; // First build: initStyle covers it.
     _armStyleFallbackTimer();
     controller.setStyle(desired);
   }
 
+  /// Theme brightness of the style currently loading (or live):
+  /// the theme didChangeDependencies last switched for, falling
+  /// back to the live theme before the first switch.
+  bool get _fallbackDark =>
+      _lastStyleDark ?? Theme.of(context).brightness == Brightness.dark;
+
+  /// Switches the live basemap to the theme-aware CartoDB raster
+  /// fallback (dark → Dark Matter, light → Positron) and updates
+  /// the attribution chip. Called by the 8 s style-load timer
+  /// (style never loads) and the 10 s tile watchdog (style loads
+  /// but tiles never render). No-op once the fallback is live or
+  /// the map is gone.
+  void _switchToCartoFallback() {
+    if (!mounted || _styleMode != _MapStyleMode.meta) return;
+    final controller = _mapController;
+    if (controller == null) return;
+    _styleLoadTimer?.cancel();
+    _tileWatchdogTimer?.cancel();
+    _styleMode = _MapStyleMode.cartoFallback;
+    _activeStyleUrl = _cartoFallbackSentinel;
+    controller.setStyle(cartoFallbackStyleJson(dark: _fallbackDark));
+    setState(() {}); // Attribution chip switches to OSM + CARTO.
+  }
+
   /// Starts (or restarts) the fallback timer for the Meta style
   /// currently loading: if it never reports loaded within 8 s,
-  /// the map switches to the CartoDB Dark Matter raster style
-  /// (same dark look) instead of sitting on a blank map.
+  /// the map switches to the CartoDB raster fallback (theme-aware)
+  /// instead of sitting on a blank map.
   void _armStyleFallbackTimer() {
     _styleLoadTimer?.cancel();
     _styleLoadTimer = Timer(const Duration(seconds: 8), () {
-      if (!mounted ||
-          _styleMode != _MapStyleMode.meta ||
-          _styleLoaded) {
-        return;
-      }
-      final controller = _mapController;
-      if (controller == null) return;
-      _styleMode = _MapStyleMode.cartoFallback;
-      _activeStyleUrl = _cartoFallbackSentinel;
-      controller.setStyle(cartoFallbackStyleJson());
-      setState(() {}); // Attribution chip switches to OSM + CARTO.
+      if (_styleLoaded) return;
+      _switchToCartoFallback();
     });
+  }
+
+  /// Arms the tile watchdog for the Meta style that just loaded:
+  /// if its tiles still have not rendered 10 s later, the map
+  /// switches to the CartoDB raster fallback. This is the hole
+  /// the 8 s timer does not cover — a style that loads but whose
+  /// tiles never arrive (Steven's phone, Nov 7, 15:24).
+  ///
+  /// Plain time-based on purpose: the maplibre 0.3.7 plugin has
+  /// NO tiles-rendered signal on Android — MapEventIdle is only
+  /// emitted by the iOS implementation, and Android emits only
+  /// MapEventCameraIdle, which fires when the camera stops
+  /// moving and says nothing about tiles (it fires on a white
+  /// map too). So the watchdog fires on time alone unless the
+  /// tile probe below cancels it first.
+  void _armTileWatchdog() {
+    _tileWatchdogTimer?.cancel();
+    _tileWatchdogTimer = Timer(const Duration(seconds: 10), () {
+      _switchToCartoFallback();
+    });
+  }
+
+  /// Tile-reachability probe: fetches the one Meta vector tile
+  /// under the current camera. If it arrives, the CDN is
+  /// reachable from this phone — the native map's own tile
+  /// requests can succeed too — so the tile watchdog is
+  /// cancelled and the Meta map stays. If it fails or times
+  /// out, the watchdog is left armed and fires the CartoDB
+  /// fallback at 10 s. A probe result is ignored if the style
+  /// changed meanwhile (theme switch) or the widget is gone.
+  Future<void> _probeMetaTiles() async {
+    final styleUrl = _activeStyleUrl;
+    final zoom = _mapZoom.floor();
+    final reachable = await probeMetaVectorTile(
+      lat: _mapCenter.latitude,
+      lng: _mapCenter.longitude,
+      z: zoom,
+    );
+    if (!mounted ||
+        !reachable ||
+        _styleMode != _MapStyleMode.meta ||
+        _activeStyleUrl != styleUrl) {
+      return;
+    }
+    _tileWatchdogTimer?.cancel();
+    _tileWatchdogTimer = null;
   }
 
   /// The native map is ready: the fallback timer starts for the
@@ -1442,9 +1514,15 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
   /// A style finished loading (Meta, or the CartoDB fallback):
   /// the fallback timer is no longer needed for this style.
+  /// For the Meta style, the tile watchdog + probe start here:
+  /// the style document arrived, but the tiles may still be
+  /// stuck (Steven's white map, Nov 7).
   void _onStyleLoaded(StyleController _) {
     _styleLoadTimer?.cancel();
     _styleLoaded = true;
+    if (_styleMode != _MapStyleMode.meta) return;
+    _armTileWatchdog();
+    _probeMetaTiles();
   }
 
   /// Sheet snap tracking: when the extent crosses the Peek/Half
@@ -1568,6 +1646,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _sheetController.removeListener(_onSheetExtentChanged);
     _styleLoadTimer?.cancel();
+    _tileWatchdogTimer?.cancel();
     _sheetController.dispose();
     _sheetFocusNode.dispose();
     _bearing.dispose();
@@ -2604,8 +2683,9 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           options: MapOptions(
             // Theme-driven style: Meta's Canterbury vector style
             // (dark / light), the same map the preview renders.
-            // If it fails to load, the fallback timer switches
-            // to the CartoDB Dark Matter raster style.
+            // If it fails to load — or loads but its tiles never
+            // render — the timers switch to the theme-aware
+            // CartoDB raster fallback style.
             initStyle: metaMapStyleUrl(
               dark: scheme.brightness == Brightness.dark,
             ),
