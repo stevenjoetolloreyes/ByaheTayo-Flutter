@@ -42,6 +42,7 @@ import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/custom_routes.dart';
 import 'features/fares_tab.dart';
+import 'features/ios_components.dart';
 import 'features/route_fare_overrides.dart';
 import 'features/map_tab.dart';
 import 'features/study_tab.dart';
@@ -298,6 +299,89 @@ ThemeData _lightTheme() {
         side: BorderSide(color: Color(0xFFE2E8F0)),
       ),
     ),
+    // iOS-style component shaping (Nov 7): dialogs, sheets, fields
+    // and buttons get the iOS look (large rounded corners, no
+    // shadows, rounded filled fields) while keeping the app's
+    // colors, fonts, and behaviour. Cupertino widgets themselves
+    // get their theme from cupertinoOverrideTheme below.
+    dialogTheme: const DialogThemeData(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.all(Radius.circular(AppLayout.dialogRadius)),
+      ),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: Colors.white,
+      modalBackgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      showDragHandle: true,
+      dragHandleColor: Color(0xFFCBD5E1),
+    ),
+    inputDecorationTheme: const InputDecorationTheme(
+      filled: true,
+      fillColor: Color(0xFFF8FAFC),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: _primary, width: 1.5),
+      ),
+      hintStyle: TextStyle(color: _textSecondary),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      trackOutlineWidth: const WidgetStatePropertyAll(0),
+      thumbColor: const WidgetStatePropertyAll(Colors.white),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? _primary
+            : const Color(0xFFE2E8F0),
+      ),
+    ),
+    // iOS-style components (Nov 7): Cupertino widgets read this
+    // override (emerald + Inter) instead of the default iOS blue /
+    // SF Pro. CupertinoTheme.of falls back to it when no CupertinoTheme
+    // ancestor exists. (MaterialApp has no cupertinoOverrideTheme
+    // parameter — it lives on ThemeData.)
+    cupertinoOverrideTheme:
+        iosCupertinoTheme(Brightness.light).noDefault(),
   );
 }
 
@@ -355,6 +439,82 @@ ThemeData _darkTheme() {
         side: BorderSide(color: _previewDarkBorder),
       ),
     ),
+    // iOS-style component shaping (Nov 7) — same as the light theme,
+    // in the dark emerald tokens. See _lightTheme for the rationale.
+    dialogTheme: const DialogThemeData(
+      backgroundColor: _previewDarkCard,
+      shape: RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.all(Radius.circular(AppLayout.dialogRadius)),
+      ),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: _previewDarkCard,
+      modalBackgroundColor: _previewDarkCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      showDragHandle: true,
+      dragHandleColor: _previewDarkBorder,
+    ),
+    inputDecorationTheme: const InputDecorationTheme(
+      filled: true,
+      fillColor: _previewDarkElevated,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: _previewDarkBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: _previewDarkBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: _primary, width: 1.5),
+      ),
+      hintStyle: TextStyle(color: _previewDarkSubtext),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      trackOutlineWidth: const WidgetStatePropertyAll(0),
+      thumbColor: const WidgetStatePropertyAll(Colors.white),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? _primary
+            : _previewDarkBorder,
+      ),
+    ),
+    // iOS-style components (Nov 7): see _lightTheme — same emerald
+    // Cupertino override, dark brightness.
+    cupertinoOverrideTheme: iosCupertinoTheme(Brightness.dark).noDefault(),
   );
 }
 

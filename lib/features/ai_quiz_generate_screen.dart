@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import 'ai_quiz_input.dart';
 import 'ai_quiz_service.dart';
+import 'ios_components.dart';
 import 'student/student_data.dart';
 
 class AiQuizGenerateScreen extends StatefulWidget {
@@ -156,28 +157,20 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   /// explicit 'regenerate' tap (which still goes through the
   /// large-request confirm below before any call).
   Future<String?> _showReuseDialog() {
-    return showDialog<String>(
+    return showIosAlert<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Walang bagong AI call — ginamit ulit yung huling quiz',
-        ),
-        content: const Text(
-          'Same material, same bilang, same difficulty at question '
+      title: 'Walang bagong AI call — ginamit ulit yung huling quiz',
+      message: 'Same material, same bilang, same difficulty at question '
           'types na ito — ito na yung huling quiz na nagawa mo. '
           'Gusto mo bang gamitin ulit yun nang walang bagong AI call?',
+      actions: const [
+        IosAlertAction<String>('Gamitin yung dati', value: 'reuse'),
+        IosAlertAction<String>(
+          'Generate ulit (gagamit ng quota)',
+          value: 'regenerate',
+          isDefault: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'reuse'),
-            child: const Text('Gamitin yung dati'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, 'regenerate'),
-            child: const Text('Generate ulit (gagamit ng quota)'),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -187,29 +180,23 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
   /// The app cannot know Google's server-side remaining quota, so
   /// no remaining-calls number is shown here — that would be fake.
   Future<bool> _showLargeConfirmDialog() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showIosAlert<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Malaking request ito'),
-        content: const Text(
-          'Isa itong AI call, at malaki ang kakainin nitong tokens '
+      title: 'Malaking request ito',
+      message: 'Isa itong AI call, at malaki ang kakainin nitong tokens '
           '— mas maraming questions o mas mahabang material, mas '
           'mahaba ang output. Ang free tier ay mga 20 requests lang '
           'kada araw, kaya sayang kung mauubos ito sa paulit-ulit '
           'na pag-generate ng same material. Sigurado ka bang '
           'ituloy mo ito?',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>(
+          'Generate pa rin',
+          value: true,
+          isDefault: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Generate pa rin'),
-          ),
-        ],
-      ),
+      ],
     );
     return confirmed ?? false;
   }
@@ -423,15 +410,15 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
             const SizedBox(height: 12),
             const Text('Difficulty'),
             const SizedBox(height: 4),
-            SegmentedButton<String>(
+            IosSegmentedControl<String>(
               segments: const [
-                ButtonSegment(value: 'easy', label: Text('Easy')),
-                ButtonSegment(value: 'medium', label: Text('Medium')),
-                ButtonSegment(value: 'hard', label: Text('Hard')),
+                IosSegment(value: 'easy', label: 'Easy'),
+                IosSegment(value: 'medium', label: 'Medium'),
+                IosSegment(value: 'hard', label: 'Hard'),
               ],
-              selected: {_difficulty},
-              onSelectionChanged: (selected) =>
-                  setState(() => _difficulty = selected.first),
+              groupValue: _difficulty,
+              onValueChanged: (value) =>
+                  setState(() => _difficulty = value),
             ),
             const SizedBox(height: 12),
             const Text('Question types'),
@@ -466,17 +453,17 @@ class _AiQuizGenerateScreenState extends State<AiQuizGenerateScreen> {
             const SizedBox(height: 12),
             const Text('Number of questions'),
             const SizedBox(height: 4),
-            SegmentedButton<int>(
+            IosSegmentedControl<int>(
               segments: const [
-                ButtonSegment(value: 5, label: Text('5')),
-                ButtonSegment(value: 10, label: Text('10')),
-                ButtonSegment(value: 20, label: Text('20')),
-                ButtonSegment(value: 30, label: Text('30')),
-                ButtonSegment(value: 50, label: Text('50')),
+                IosSegment(value: 5, label: '5'),
+                IosSegment(value: 10, label: '10'),
+                IosSegment(value: 20, label: '20'),
+                IosSegment(value: 30, label: '30'),
+                IosSegment(value: 50, label: '50'),
               ],
-              selected: _customCount ? <int>{} : {_count},
-              onSelectionChanged: (selected) => setState(() {
-                _count = selected.first;
+              groupValue: _customCount ? null : _count,
+              onValueChanged: (value) => setState(() {
+                _count = value;
                 _customCount = false;
               }),
             ),

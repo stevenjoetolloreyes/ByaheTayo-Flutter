@@ -20,6 +20,7 @@ import 'app_layout.dart';
 import 'bus_companies.dart';
 import 'bus_stops.dart';
 import 'custom_routes.dart';
+import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
 import 'route_fare_overrides.dart';
@@ -1201,7 +1202,10 @@ class _FaresTabState extends State<FaresTab> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        // iOS-style sheet top radius (Nov 7) — matches the
+        // bottomSheetTheme's 24, so this sheet looks the same
+        // as every other sheet in the app.
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => _FareBreakdownSheet(
         from: route.from,
@@ -1433,25 +1437,19 @@ class _FaresTabState extends State<FaresTab> {
       );
       return false;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showIosAlert<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete this bus stop?'),
-        content: Text(
-          '"${stop.name}" will be removed from the From/To and '
+      title: 'Delete this bus stop?',
+      message: '"${stop.name}" will be removed from the From/To and '
           'via-stops pickers. This cannot be undone.',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>(
+          'Delete',
+          value: true,
+          isDestructive: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      ],
     );
     if (confirmed != true || !mounted) return false;
     try {
@@ -1499,27 +1497,21 @@ class _FaresTabState extends State<FaresTab> {
       );
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showIosAlert<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Reset all directions?'),
-        content: Text(
-          'This clears the saved direction on '
+      title: 'Reset all directions?',
+      message: 'This clears the saved direction on '
           '${plan.affectedCount} route(s) — every drawn line and '
           'every named via stop. Fares stay as they are. You can '
           'draw new lines on the Map afterwards.',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>(
+          'Reset all',
+          value: true,
+          isDestructive: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Reset all'),
-          ),
-        ],
-      ),
+      ],
     );
     if (confirmed != true || !mounted) return;
     try {
@@ -1662,20 +1654,20 @@ class _FaresTabState extends State<FaresTab> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     sectionTitle('Trip'),
-                    SegmentedButton<_OriginMode>(
+                    IosSegmentedControl<_OriginMode>(
                       segments: const [
-                        ButtonSegment(
+                        IosSegment(
                           value: _OriginMode.location,
-                          label: Text('My location'),
+                          label: 'My location',
                         ),
-                        ButtonSegment(
+                        IosSegment(
                           value: _OriginMode.hub,
-                          label: Text('Choose a hub'),
+                          label: 'Choose a hub',
                         ),
                       ],
-                      selected: {_originMode},
-                      onSelectionChanged: (selection) {
-                        setState(() => _originMode = selection.first);
+                      groupValue: _originMode,
+                      onValueChanged: (value) {
+                        setState(() => _originMode = value);
                       },
                     ),
                     const SizedBox(height: AppLayout.cardGap),

@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_layout.dart';
+import '../ios_components.dart';
 import 'student_data.dart';
 
 const _expenseCategories = [
@@ -631,14 +632,14 @@ class _TxnFormState extends State<_TxnForm> {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: AppLayout.cardGap),
-          SegmentedButton<String>(
+          IosSegmentedControl<String>(
             segments: const [
-              ButtonSegment(value: 'expense', label: Text('Expense')),
-              ButtonSegment(value: 'income', label: Text('Income')),
+              IosSegment(value: 'expense', label: 'Expense'),
+              IosSegment(value: 'income', label: 'Income'),
             ],
-            selected: {_kind},
-            onSelectionChanged: (s) => setState(() {
-              _kind = s.first;
+            groupValue: _kind,
+            onValueChanged: (value) => setState(() {
+              _kind = value;
               _fixCategory();
             }),
           ),

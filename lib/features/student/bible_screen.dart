@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_layout.dart';
+import '../ios_components.dart';
 import 'bible_widget_service.dart';
 import 'share_card.dart';
 import 'student_data.dart';
@@ -198,15 +199,15 @@ class _BibleScreenState extends State<BibleScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: SegmentedButton<String>(
+            child: IosSegmentedControl<String>(
               segments: const [
-                ButtonSegment(value: 'daily', label: Text('Daily')),
-                ButtonSegment(value: 'verses', label: Text('Verses')),
-                ButtonSegment(value: 'journal', label: Text('Journal')),
-                ButtonSegment(value: 'plan', label: Text('Plan')),
+                IosSegment(value: 'daily', label: 'Daily'),
+                IosSegment(value: 'verses', label: 'Verses'),
+                IosSegment(value: 'journal', label: 'Journal'),
+                IosSegment(value: 'plan', label: 'Plan'),
               ],
-              selected: {_tab},
-              onSelectionChanged: (s) => setState(() => _tab = s.first),
+              groupValue: _tab,
+              onValueChanged: (value) => setState(() => _tab = value),
             ),
           ),
           Expanded(
@@ -534,13 +535,13 @@ class _JournalFormState extends State<_JournalForm> {
           const Text('New journal entry',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: AppLayout.cardGap),
-          SegmentedButton<String>(
+          IosSegmentedControl<String>(
             segments: const [
-              ButtonSegment(value: 'devotional', label: Text('Devotional')),
-              ButtonSegment(value: 'prayer', label: Text('Prayer')),
+              IosSegment(value: 'devotional', label: 'Devotional'),
+              IosSegment(value: 'prayer', label: 'Prayer'),
             ],
-            selected: {_kind},
-            onSelectionChanged: (s) => setState(() => _kind = s.first),
+            groupValue: _kind,
+            onValueChanged: (value) => setState(() => _kind = value),
           ),
           const SizedBox(height: AppSpacing.s8),
           TextField(

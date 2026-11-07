@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../ai_quiz_generate_screen.dart';
 import '../ai_quiz_service.dart';
 import '../app_layout.dart';
+import '../ios_components.dart';
 import 'student_data.dart';
 
 class NotesScreen extends StatefulWidget {
@@ -213,14 +214,14 @@ class _NotesScreenState extends State<NotesScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: SegmentedButton<String>(
+            child: IosSegmentedControl<String>(
               segments: const [
-                ButtonSegment(value: 'notes', label: Text('Notes')),
-                ButtonSegment(value: 'cards', label: Text('Flashcards')),
-                ButtonSegment(value: 'quizzes', label: Text('Quizzes')),
+                IosSegment(value: 'notes', label: 'Notes'),
+                IosSegment(value: 'cards', label: 'Flashcards'),
+                IosSegment(value: 'quizzes', label: 'Quizzes'),
               ],
-              selected: {_tab},
-              onSelectionChanged: (s) => setState(() => _tab = s.first),
+              groupValue: _tab,
+              onValueChanged: (value) => setState(() => _tab = value),
             ),
           ),
           if (_tab == 'notes')
@@ -1200,17 +1201,17 @@ class _QuizEditorState extends State<_QuizEditor> {
           const SizedBox(height: AppSpacing.s8),
           const Text('Difficulty', style: AppText.sectionTitle),
           const SizedBox(height: 4),
-          SegmentedButton<String>(
+          IosSegmentedControl<String>(
             segments: const [
-              ButtonSegment(value: 'easy', label: Text('Easy')),
-              ButtonSegment(value: 'medium', label: Text('Medium')),
-              ButtonSegment(value: 'hard', label: Text('Hard')),
+              IosSegment(value: 'easy', label: 'Easy'),
+              IosSegment(value: 'medium', label: 'Medium'),
+              IosSegment(value: 'hard', label: 'Hard'),
             ],
-            selected: {_difficulty},
-            onSelectionChanged: (sel) =>
-                setState(() => _difficulty = sel.first),
+            groupValue: _difficulty,
+            onValueChanged: (value) =>
+                setState(() => _difficulty = value),
           ),
-          SwitchListTile(
+          IosSwitchRow(
             title: const Text('Randomize questions'),
             subtitle: const Text(
                 'Shuffle question order (and MCQ options) for each attempt.'),
@@ -1416,13 +1417,14 @@ class _QuestionFormState extends State<_QuestionForm> {
                 ),
               const Text('Pick the radio of the correct option.'),
             ] else if (_type == 'tf') ...[
-              SegmentedButton<int>(
+              IosSegmentedControl<int>(
                 segments: const [
-                  ButtonSegment(value: 0, label: Text('True')),
-                  ButtonSegment(value: 1, label: Text('False')),
+                  IosSegment(value: 0, label: 'True'),
+                  IosSegment(value: 1, label: 'False'),
                 ],
-                selected: {_correct},
-                onSelectionChanged: (s) => setState(() => _correct = s.first),
+                groupValue: _correct,
+                onValueChanged: (value) =>
+                    setState(() => _correct = value),
               ),
             ] else if (_type == 'enum') ...[
               TextField(

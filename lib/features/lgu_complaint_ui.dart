@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_layout.dart';
 import 'community_posts.dart';
+import 'ios_components.dart';
 import 'lgu_complaints.dart';
 import 'vehicle_categories.dart';
 
@@ -493,24 +494,18 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
   }
 
   Future<void> _confirmSent() async {
-    final yes = await showDialog<bool>(
+    final yes = await showIosAlert<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Did you send it?'),
-        content: const Text(
-          'Tap Yes only if you already sent this complaint to the LGU.',
+      title: 'Did you send it?',
+      message: 'Tap Yes only if you already sent this complaint to the LGU.',
+      actions: const [
+        IosAlertAction<bool>('No', value: false),
+        IosAlertAction<bool>(
+          'Yes, I sent it',
+          value: true,
+          isDefault: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('No'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes, I sent it'),
-          ),
-        ],
-      ),
+      ],
     );
     if (yes != true || !mounted) return;
     setState(() {
@@ -703,7 +698,7 @@ class _LguAdminScreenState extends State<LguAdminScreen> {
                     labelText: 'Verification source (optional)',
                   ),
                 ),
-                SwitchListTile(
+                IosSwitchRow(
                   contentPadding: EdgeInsets.zero,
                   value: verified,
                   onChanged: (v) => setDialogState(() => verified = v),
@@ -770,22 +765,18 @@ class _LguAdminScreenState extends State<LguAdminScreen> {
   }
 
   Future<void> _deleteEntry(LguEntry entry) async {
-    final yes = await showDialog<bool>(
+    final yes = await showIosAlert<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete this LGU entry?'),
-        content: Text('${entry.lguName} (${entry.municipality})'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: 'Delete this LGU entry?',
+      message: '${entry.lguName} (${entry.municipality})',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>(
+          'Delete',
+          value: true,
+          isDestructive: true,
+        ),
+      ],
     );
     if (yes != true || !mounted) return;
     setState(() => _entries.removeWhere((e) => e.id == entry.id));

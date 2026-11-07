@@ -24,6 +24,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../ios_components.dart';
 import 'error_log_entry.dart';
 import 'error_log_service.dart';
 import 'error_log_store.dart';
@@ -145,22 +146,14 @@ class _ErrorDiagnosticsScreenState extends State<ErrorDiagnosticsScreen> {
   }
 
   Future<bool> _confirm(String title, String message) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showIosAlert<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
+      title: title,
+      message: message,
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>('Confirm', value: true, isDefault: true),
+      ],
     );
     return confirmed ?? false;
   }
@@ -317,7 +310,7 @@ class _ErrorDiagnosticsScreenState extends State<ErrorDiagnosticsScreen> {
                     ),
                   ],
                 ),
-                SwitchListTile(
+                IosSwitchRow(
                   title: const Text('Safe Mode'),
                   subtitle: const Text(
                     'Skips only nonessential services: App Check, ads, '

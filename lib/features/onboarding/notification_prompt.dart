@@ -6,6 +6,7 @@
 // can change anytime in system settings.
 import 'package:flutter/material.dart';
 
+import '../ios_components.dart';
 import 'permission_service.dart';
 
 /// Shows the explanation dialog and, when the user taps Allow, requests
@@ -14,27 +15,17 @@ Future<bool> showNotificationPermissionPrompt(
   BuildContext context,
   PermissionService service,
 ) async {
-  final allow = await showDialog<bool>(
+  final allow = await showIosAlert<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      title: const Text('Stay updated?'),
-      content: const Text(
-        'EstudyanteGO can send you notifications about community updates '
+    title: 'Stay updated?',
+    message: 'EstudyanteGO can send you notifications about community updates '
         'and service alerts. You can change this anytime in your device '
         'settings.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Not now'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Allow'),
-        ),
-      ],
-    ),
+    actions: const [
+      IosAlertAction<bool>('Not now', value: false),
+      IosAlertAction<bool>('Allow', value: true, isDefault: true),
+    ],
   );
   if (allow != true) return false;
   final status = await service.requestNotification();

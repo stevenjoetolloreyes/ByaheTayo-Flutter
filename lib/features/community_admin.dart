@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'app_layout.dart';
 import 'community_post_repository.dart';
 import 'community_posts.dart';
+import 'ios_components.dart';
 import 'vehicle_categories.dart';
 
 class CommunityAdminScreen extends StatefulWidget {
@@ -321,28 +322,22 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
     CommunityPost post, {
     required bool local,
   }) {
-    return showDialog<bool>(
+    return showIosAlert<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete this post?'),
-        content: Text(
-          local
-              ? 'This removes "${post.displayTitle}" from this device. '
-                  'This cannot be undone.'
-              : 'This removes "${post.displayTitle}" for all users. '
-                  'This cannot be undone.',
+      title: 'Delete this post?',
+      message: local
+          ? 'This removes "${post.displayTitle}" from this device. '
+              'This cannot be undone.'
+          : 'This removes "${post.displayTitle}" for all users. '
+              'This cannot be undone.',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>(
+          'Delete',
+          value: true,
+          isDestructive: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      ],
     );
   }
 

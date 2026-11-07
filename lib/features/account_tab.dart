@@ -22,6 +22,7 @@ import 'credits_repository.dart';
 import 'friend_cloud_repository.dart';
 import 'friends_tab.dart';
 import 'ios_glass.dart';
+import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/permission_service.dart';
@@ -228,18 +229,10 @@ class _AccountTabState extends State<AccountTab> {
   }
 
   void _showInfoDialog(String title, String body) {
-    showDialog<void>(
+    showIosMessage(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+      title: title,
+      message: body,
     );
   }
 
@@ -451,26 +444,17 @@ class _AccountTabState extends State<AccountTab> {
         return;
       case NotificationPermissionStatus.denied:
       case NotificationPermissionStatus.unknown:
-        final allow = await showDialog<bool>(
+        final allow = await showIosAlert<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Allow notifications?'),
-            content: const Text(
+          title: 'Allow notifications?',
+          message:
               'EstudyanteGO can send you notifications about community '
               'updates and service alerts. You can change this anytime '
               'in your device settings.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Not now'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Allow'),
-              ),
-            ],
-          ),
+          actions: const [
+            IosAlertAction<bool>('Not now', value: false),
+            IosAlertAction<bool>('Allow', value: true, isDefault: true),
+          ],
         );
         if (allow == true) {
           await widget.permissionService.requestNotification();

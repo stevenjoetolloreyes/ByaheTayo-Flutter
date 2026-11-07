@@ -39,7 +39,6 @@ class TopNavBar extends StatelessWidget {
   final List<TopNavDestination> destinations;
 
   static const _deepEmerald = Color(0xFF14532D);
-  static const _indicatorWidth = 28.0;
 
   @override
   Widget build(BuildContext context) {
@@ -65,41 +64,18 @@ class TopNavBar extends StatelessWidget {
               constraints.maxWidth / destinations.length;
           return SizedBox(
             height: 52,
-            child: Stack(
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    for (int i = 0; i < destinations.length; i++)
-                      _navItem(
-                        context,
-                        destinations[i],
-                        i == clampedIndex,
-                        activeColor,
-                        inactiveColor,
-                        itemWidth,
-                        () => onSelect(i),
-                      ),
-                  ],
-                ),
-                // Sliding indicator: one bar that animates under the
-                // active tab instead of appearing per-item. Its
-                // position follows the same equal-share width, so it
-                // stays centered under the active icon.
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  left: clampedIndex * itemWidth +
-                      (itemWidth - _indicatorWidth) / 2,
-                  bottom: 0,
-                  width: _indicatorWidth,
-                  height: 3,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: activeColor,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                for (int i = 0; i < destinations.length; i++)
+                  _navItem(
+                    context,
+                    destinations[i],
+                    i == clampedIndex,
+                    activeColor,
+                    inactiveColor,
+                    itemWidth,
+                    () => onSelect(i),
                   ),
-                ),
               ],
             ),
           );
@@ -140,8 +116,11 @@ class TopNavBar extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
+                    // iOS-style active state (Nov 7): the pill alone
+                    // marks the active tab — the sliding bottom bar
+                    // is gone. Same 52dp height, same equal shares.
                     color: selected
-                        ? activeColor.withValues(alpha: 0.12)
+                        ? activeColor.withValues(alpha: 0.16)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                   ),

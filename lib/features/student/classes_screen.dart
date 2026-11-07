@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_layout.dart';
+import '../ios_components.dart';
 import 'student_data.dart';
 
 const _subjectColors = [
@@ -170,13 +171,13 @@ class _ClassesScreenState extends State<ClassesScreen> {
               ),
             ),
           const SizedBox(height: AppLayout.headerGap),
-          SegmentedButton<String>(
+          IosSegmentedControl<String>(
             segments: const [
-              ButtonSegment(value: 'today', label: Text('Today')),
-              ButtonSegment(value: 'week', label: Text('Week')),
+              IosSegment(value: 'today', label: 'Today'),
+              IosSegment(value: 'week', label: 'Week'),
             ],
-            selected: {_view},
-            onSelectionChanged: (s) => setState(() => _view = s.first),
+            groupValue: _view,
+            onValueChanged: (value) => setState(() => _view = value),
           ),
           const SizedBox(height: AppLayout.cardGap),
           if (_view == 'today') ...[
@@ -575,13 +576,13 @@ class _ItemFormState extends State<_ItemForm> {
               controller: _title,
               decoration: const InputDecoration(labelText: 'Title')),
           const SizedBox(height: AppSpacing.s8),
-          SegmentedButton<String>(
+          IosSegmentedControl<String>(
             segments: const [
-              ButtonSegment(value: 'assignment', label: Text('Assignment')),
-              ButtonSegment(value: 'exam', label: Text('Exam')),
+              IosSegment(value: 'assignment', label: 'Assignment'),
+              IosSegment(value: 'exam', label: 'Exam'),
             ],
-            selected: {_kind},
-            onSelectionChanged: (s) => setState(() => _kind = s.first),
+            groupValue: _kind,
+            onValueChanged: (value) => setState(() => _kind = value),
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,

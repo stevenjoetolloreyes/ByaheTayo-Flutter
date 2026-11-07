@@ -1,5 +1,6 @@
 import 'package:estudyantego/features/community_admin.dart';
 import 'package:estudyantego/features/community_posts.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -129,7 +130,10 @@ void main() {
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     expect(find.text('Delete this post?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    // iOS-style confirm (Nov 7): the Delete action is a
+    // CupertinoDialogAction now, not a FilledButton. Same tap,
+    // same result.
+    await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Delete'));
     await tester.pumpAndSettle();
     expect(changed, isNotNull);
     expect(changed, isEmpty);

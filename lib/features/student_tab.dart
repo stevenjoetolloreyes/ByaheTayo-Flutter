@@ -29,6 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ad_service.dart';
 import 'app_layout.dart';
 import 'credits_repository.dart';
+import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'ph_holidays.dart';
@@ -1434,14 +1435,14 @@ class _StudentTabState extends State<StudentTab> {
       children: [
         _row('Total Subjects', '${_subjects.length}'),
         const SizedBox(height: AppSpacing.s4),
-        SegmentedButton<String>(
+        IosSegmentedControl<String>(
           segments: const [
-            ButtonSegment(value: 'today', label: Text('Today')),
-            ButtonSegment(value: 'week', label: Text('This Week')),
-            ButtonSegment(value: 'all', label: Text('All Classes')),
+            IosSegment(value: 'today', label: 'Today'),
+            IosSegment(value: 'week', label: 'This Week'),
+            IosSegment(value: 'all', label: 'All Classes'),
           ],
-          selected: {_classesTab},
-          onSelectionChanged: (s) => setState(() => _classesTab = s.first),
+          groupValue: _classesTab,
+          onValueChanged: (value) => setState(() => _classesTab = value),
         ),
         const SizedBox(height: AppSpacing.s8),
         tabBody,

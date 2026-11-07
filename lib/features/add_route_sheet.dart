@@ -28,6 +28,7 @@ import 'bus_companies.dart';
 import 'bus_stops.dart';
 import 'custom_routes.dart';
 import 'fares_tab.dart';
+import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'route_fare_overrides.dart';
 
@@ -557,25 +558,19 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
   Future<void> _delete() async {
     final existing = widget.existing;
     if (existing == null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showIosAlert<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete this route?'),
-        content: Text(
-          '${existing.from} → ${existing.to} will be removed from '
+      title: 'Delete this route?',
+      message: '${existing.from} → ${existing.to} will be removed from '
           'Popular Routes. This cannot be undone.',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>(
+          'Delete',
+          value: true,
+          isDestructive: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      ],
     );
     if (confirmed != true || !mounted) return;
     setState(() => _deleting = true);

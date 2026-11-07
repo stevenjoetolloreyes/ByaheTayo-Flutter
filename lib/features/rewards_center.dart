@@ -20,6 +20,7 @@
 import 'package:flutter/material.dart';
 
 import 'credits_repository.dart';
+import 'ios_components.dart';
 
 /// Shared one-button redeem-all flow: confirmation dialog, then the
 /// repository call, then a result dialog. [pointsBalance] is the
@@ -33,63 +34,37 @@ Future<void> handleRedeem(
 }) async {
   final redeem = onRedeem;
   if (redeem == null) {
-    await showDialog<void>(
+    await showIosMessage(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Redeem points'),
-        content: const Text(
-          'Sign in to redeem your points for credits.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+      title: 'Redeem points',
+      message: 'Sign in to redeem your points for credits.',
     );
     return;
   }
   if (pointsBalance <= 0) {
-    await showDialog<void>(
+    await showIosMessage(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Redeem points'),
-        content: const Text(
-          'You have 0 points to redeem. Earn points with the 7-Day '
+      title: 'Redeem points',
+      message: 'You have 0 points to redeem. Earn points with the 7-Day '
           'Sign-in first.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
     );
     return;
   }
   final units = pointsToMinorUnits(pointsBalance);
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showIosAlert<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Redeem all points?'),
-      content: Text(
-        'Convert ALL $pointsBalance points into '
+    title: 'Redeem all points?',
+    message: 'Convert ALL $pointsBalance points into '
         '${formatMinorUnits(units)} credits? '
         'You can redeem once per day.',
+    actions: const [
+      IosAlertAction<bool>('Cancel', value: false),
+      IosAlertAction<bool>(
+        'Redeem all',
+        value: true,
+        isDefault: true,
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Redeem all'),
-        ),
-      ],
-    ),
+    ],
   );
   if (confirmed != true) return;
   final outcome = await redeem();
@@ -108,18 +83,10 @@ Future<void> handleRedeem(
     RedeemStatus.unavailable =>
       'Sign in to redeem your points for credits.',
   };
-  await showDialog<void>(
+  await showIosMessage(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Redeem points'),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
-    ),
+    title: 'Redeem points',
+    message: message,
   );
 }
 

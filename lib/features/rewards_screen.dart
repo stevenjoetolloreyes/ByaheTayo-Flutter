@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 
 import 'ad_service.dart';
 import 'credits_repository.dart';
+import 'ios_components.dart';
 import 'rewards_center.dart';
 
 class RewardsScreen extends StatelessWidget {
@@ -97,18 +98,10 @@ class RewardsScreen extends StatelessWidget {
         'No ad available right now. Try again later. '
             'No credits granted.',
     };
-    await showDialog<void>(
+    await showIosMessage(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Watch Ads & Earn Credits'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+      title: 'Watch Ads & Earn Credits',
+      message: message,
     );
   }
 
