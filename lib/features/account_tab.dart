@@ -19,6 +19,8 @@ import 'ad_service.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
 import 'credits_repository.dart';
+import 'friend_cloud_repository.dart';
+import 'friends_tab.dart';
 import 'ios_glass.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
@@ -326,6 +328,33 @@ class _AccountTabState extends State<AccountTab> {
   }
 
   void _openProfile() => _requireAccount(() => widget.onEditProfile?.call());
+
+  /// Friends moved out of the top nav into Quick Actions (preview
+  /// parity, Nov 6): tapping the tile opens the Friends screen
+  /// with its content untouched. Cloud args match the old tab
+  /// wiring in main.dart — signed-in users get cloud sync, signed-out
+  /// users get the same local-only Friends screen.
+  void _openFriends() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        // FriendsTab was a tab (shell Scaffold above it) and has no
+        // Scaffold of its own — a pushed screen needs one, for the
+        // Material ancestor its TextField requires and for the back
+        // button. Same shape as RewardsScreen.
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Friends')),
+          body: FriendsTab(
+            cloudRepository: widget.authService.isConfigured
+                ? FirestoreFriendCloudRepository()
+                : null,
+            cloudUserId: widget.user?.uid,
+            cloudUserName:
+                widget.user?.displayName ?? widget.user?.email,
+          ),
+        ),
+      ),
+    );
+  }
 
   void _openStudentId() {
     _requireAccount(() {
@@ -1432,8 +1461,10 @@ class _AccountTabState extends State<AccountTab> {
   }
 
   /// Quick Actions (approved preview): "Quick Actions" + "Explore
-  /// shortcuts" title row above four bordered tiles. Same four
-  /// actions, same taps as before.
+  /// shortcuts" title row above five bordered tiles. Friends is the
+  /// fifth tile (preview parity, Nov 6 — it moved out of the top
+  /// nav); the grid wraps it onto a second row. Same taps as before
+  /// for the other four.
   Widget _quickActionsCard(bool glass) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1493,6 +1524,12 @@ class _AccountTabState extends State<AccountTab> {
               Icons.card_giftcard_outlined,
               'Rewards',
               _openRewards,
+              glass,
+            ),
+            _quickTile(
+              Icons.people_outlined,
+              'Friends',
+              _openFriends,
               glass,
             ),
           ],
