@@ -61,6 +61,27 @@ const kFaresAccent = Color(0xFF16A34A);
 /// [computeFare] uses for a discounted fare.
 double discountedFareOf(double fare) => (fare * 0.8 * 4).round() / 4;
 
+/// Fares → Map jump (preview parity: "Find routes" / "Show
+/// direction on Map" open the Map tab WITH the selected route,
+/// not just the tab). Set to the route's From/To before switching
+/// tabs; MapTab consumes it once and clears it — the same pattern
+/// as [communityMapJump] in community_posts.dart. `from` may be
+/// 'My location' when the calculator's origin is the GPS position;
+/// the Map tab resolves that to the device location (else the home
+/// hub), exactly like its hub-tap flow.
+final faresMapJump = ValueNotifier<({String from, String to})?>(null);
+
+/// Web formatTripTime, mirrored here so the Fares sheet can show an
+/// ETA without importing map_tab.dart (which imports this file):
+/// "45 min" / "1 hr 10 min". Keep in sync with map_tab.dart.
+String formatTripTimeShort(int minutes) {
+  final hours = minutes ~/ 60;
+  final mins = minutes % 60;
+  if (hours == 0) return '$mins min';
+  if (mins == 0) return '$hours hr';
+  return '$hours hr $mins min';
+}
+
 /// One route in the "Popular Routes" list (preview design, ported
 /// Nov 6, 2026). Only REAL routes are listed here:
 ///
@@ -90,6 +111,7 @@ class PopularRoute {
     this.fareLabel,
     this.distanceKm,
     this.distanceNote,
+    this.viaHubs = const [],
   });
 
   /// Endpoint names as shown on the card. Hub names (members of
@@ -117,6 +139,10 @@ class PopularRoute {
 
   /// Where [distanceKm] came from, when it is a stored value.
   final String? distanceNote;
+
+  /// Ordered via-stops of an admin-added custom route (the admin's
+  /// own line). Empty for built-in routes.
+  final List<String> viaHubs;
 
   bool get isBus => vehicle == 'Bus';
 
@@ -277,6 +303,7 @@ PopularRoute popularRouteFromCustomRoute(CustomRoute route) {
     vehicle: route.vehicle,
     fare: route.fare,
     fareLabel: 'Admin-entered fare',
+    viaHubs: route.viaHubs,
   );
 }
 
@@ -662,9 +689,9 @@ class FaresTab extends StatefulWidget {
 
   /// Opens the Map tab for the current trip. Null when the host
   /// does not wire it (same pattern as StudentTab/CommunitiesTab):
-  /// the "Find routes" and "View on Map" buttons are hidden then,
-  /// so there is never a dead button. main.dart is the only place
-  /// that can wire this (it owns tab switching).
+  /// the "Find routes" and "Show direction on Map" buttons are
+  /// hidden then, so there is never a dead button. main.dart is the
+  /// only place that can wire this (it owns tab switching).
   final VoidCallback? onViewOnMap;
 
   @override
@@ -816,6 +843,14 @@ class _FaresTabState extends State<FaresTab> {
     });
   }
 
+  /// Sets the Fares → Map jump, then switches to the Map tab.
+  /// The Map tab draws the route and shows its ETA • FARE sheet;
+  /// without the jump it would open with no route at all.
+  void _jumpToMap({required String from, required String to}) {
+    faresMapJump.value = (from: from, to: to);
+    widget.onViewOnMap?.call();
+  }
+
   /// Tapping a Popular Route loads it into the calculator (hub
   /// routes only) and opens the fare breakdown sheet for it.
   void _openRouteSheet(PopularRoute route) {
@@ -832,6 +867,27 @@ class _FaresTabState extends State<FaresTab> {
         (fromHub != null && toHub != null
             ? 'Straight-line distance + 22% road allowance.'
             : null);
+    final etaMinutes = distanceKm != null
+        ? (toHub != null
+              ? hubPairEtaMinutes(from: fromHub, to: toHub, roadKm: distanceKm)
+              : transitEtaMinutes(roadKm: distanceKm))
+        : null;
+    final fareStatus = route.fare == null
+        ? 'Fare not set'
+        : route.fareLabel == 'Verified bus fare'
+            ? 'Verified fare'
+            : 'Admin-set fare';
+    // Stops along the way, without road geometry: origin +
+    // destination (+ the admin's via-stops). The Map tab adds the
+    // on-the-way towns once its OSRM line loads — never guessed.
+    final stops = fromHub != null && toHub != null && distanceKm != null
+        ? hubPairStops(
+            from: fromHub,
+            to: toHub,
+            totalKm: distanceKm,
+            viaHubNames: route.viaHubs,
+          ).map((s) => (name: s.name, role: s.role)).toList()
+        : null;
     final canViewOnMap =
         widget.onViewOnMap != null && route.hasHubEndpoints;
     showModalBottomSheet<void>(
@@ -856,11 +912,19 @@ class _FaresTabState extends State<FaresTab> {
                 : 'Fare entered by an admin.',
         distanceKm: distanceKm,
         distanceNote: distanceNote,
+        etaMinutes: etaMinutes,
+        etaNote: etaMinutes == null
+            ? null
+            : 'Estimate — straight-line distance + 22% road allowance.',
+        fareStatus: fareStatus,
+        stops: stops,
         breakdown: breakdown,
         breakdownNote: breakdown == null && route.hasHubEndpoints
             ? 'No calculator breakdown for the current vehicle and trip.'
             : null,
-        onViewOnMap: canViewOnMap ? widget.onViewOnMap : null,
+        onViewOnMap: canViewOnMap
+            ? () => _jumpToMap(from: route.from, to: route.to)
+            : null,
       ),
     );
   }
@@ -875,6 +939,16 @@ class _FaresTabState extends State<FaresTab> {
     final fromLabel = _originMode == _OriginMode.location
         ? 'My location'
         : hubs[_originHub].name;
+    final fromHub =
+        _originMode == _OriginMode.location ? null : hubs[_originHub];
+    final toHub = hubs[_destHub];
+    final etaMinutes =
+        hubPairEtaMinutes(from: fromHub, to: toHub, roadKm: roadKm);
+    final stops = fromHub == null
+        ? null
+        : hubPairStops(from: fromHub, to: toHub, totalKm: roadKm)
+            .map((s) => (name: s.name, role: s.role))
+            .toList();
     final canViewOnMap =
         widget.onViewOnMap != null &&
         _originMode == _OriginMode.hub;
@@ -897,9 +971,18 @@ class _FaresTabState extends State<FaresTab> {
         routeFareNote: null,
         distanceKm: roadKm,
         distanceNote: 'Straight-line distance + 22% road allowance.',
+        etaMinutes: etaMinutes,
+        etaNote: 'Estimate — straight-line distance + 22% road allowance.',
+        fareStatus: null,
+        stops: stops,
         breakdown: breakdown,
         breakdownNote: null,
-        onViewOnMap: canViewOnMap ? widget.onViewOnMap : null,
+        onViewOnMap: canViewOnMap
+            ? () => _jumpToMap(
+                  from: hubs[_originHub].name,
+                  to: hubs[_destHub].name,
+                )
+            : null,
       ),
     );
   }
@@ -1149,7 +1232,12 @@ class _FaresTabState extends State<FaresTab> {
                     if (widget.onViewOnMap != null) ...[
                       const SizedBox(height: AppLayout.cardGap),
                       FilledButton.icon(
-                        onPressed: widget.onViewOnMap,
+                        onPressed: () => _jumpToMap(
+                          from: _originMode == _OriginMode.location
+                              ? 'My location'
+                              : hubs[_originHub].name,
+                          to: hubs[_destHub].name,
+                        ),
                         icon: const Icon(Icons.map_outlined),
                         label: const Text('Find routes'),
                       ),
@@ -1844,6 +1932,10 @@ class _FareBreakdownSheet extends StatelessWidget {
     required this.routeFareNote,
     required this.distanceKm,
     required this.distanceNote,
+    required this.etaMinutes,
+    required this.etaNote,
+    required this.fareStatus,
+    required this.stops,
     required this.breakdown,
     required this.breakdownNote,
     required this.onViewOnMap,
@@ -1863,6 +1955,22 @@ class _FareBreakdownSheet extends StatelessWidget {
   final String? routeFareNote;
   final double? distanceKm;
   final String? distanceNote;
+
+  /// Transit ETA in minutes (same estimateTripMinutes model as the
+  /// Map tab), or null when no distance is known.
+  final int? etaMinutes;
+  final String? etaNote;
+
+  /// 'Verified fare' / 'Admin-set fare' / 'Fare not set' for a
+  /// tapped Popular Route; null for the calculator sheet.
+  final String? fareStatus;
+
+  /// Stops along the way as (name, role) pairs — origin + destination
+  /// (+ an admin route's via-stops); null when the endpoints are not
+  /// both known hubs. Intermediate on-the-way towns appear on the
+  /// Map tab once its OSRM line loads; they are never guessed here.
+  final List<({String name, String role})>? stops;
+
   final FareBreakdown? breakdown;
   final String? breakdownNote;
   final VoidCallback? onViewOnMap;
@@ -1939,6 +2047,22 @@ class _FareBreakdownSheet extends StatelessWidget {
                   amount: '${distanceKm.toStringAsFixed(1)} km',
                 ),
               ],
+              if (etaMinutes != null) ...[
+                const SizedBox(height: AppSpacing.s8),
+                _SheetRow(
+                  label: 'ETA',
+                  detail: etaNote,
+                  amount: formatTripTimeShort(etaMinutes!),
+                ),
+              ],
+              if (fareStatus != null) ...[
+                const SizedBox(height: AppSpacing.s8),
+                _SheetRow(
+                  label: 'Fare status',
+                  amount: fareStatus!,
+                  bold: true,
+                ),
+              ],
               if (showRouteFare) ...[
                 const SizedBox(height: AppSpacing.s16),
                 const Text('Route fare', style: kFaresCardHeading),
@@ -1950,15 +2074,34 @@ class _FareBreakdownSheet extends StatelessWidget {
                     bold: true,
                   ),
                   _SheetRow(
-                    label: '20% off (Student / Senior / PWD)',
+                    label: 'Student discount',
+                    detail: '20% off with a valid student ID',
                     amount: peso(discountedFareOf(routeFare)),
                   ),
-                  if (routeFareNote != null)
+                  _SheetRow(
+                    label: 'PWD discount',
+                    detail: '20% off with a valid PWD ID',
+                    amount: peso(discountedFareOf(routeFare)),
+                  ),
+                  _SheetRow(
+                    label: 'Senior Citizen discount',
+                    detail: '20% off with a valid senior citizen ID',
+                    amount: peso(discountedFareOf(routeFare)),
+                  ),
+                  const SizedBox(height: AppSpacing.s8),
+                  Text(
+                    'The discounted fare applies to students, PWD, and senior citizens with a valid ID.',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  if (routeFareNote != null) ...[
+                    const SizedBox(height: AppSpacing.s4),
                     Text(
                       routeFareNote!,
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
+                  ],
                 ] else ...[
                   const Text(
                     'Fare not set',
@@ -2040,6 +2183,43 @@ class _FareBreakdownSheet extends StatelessWidget {
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
+              if (stops != null && stops!.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.s16),
+                const Text('Stops along the way',
+                    style: kFaresCardHeading),
+                const SizedBox(height: AppSpacing.s8),
+                for (var i = 0; i < stops!.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          child: Text(
+                            '${i + 1}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            stops![i].name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Text(
+                          stops![i].role,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                  color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
               if (onViewOnMap != null) ...[
                 const SizedBox(height: AppSpacing.s16),
                 FilledButton.icon(
@@ -2048,7 +2228,7 @@ class _FareBreakdownSheet extends StatelessWidget {
                     onViewOnMap!();
                   },
                   icon: const Icon(Icons.map_outlined),
-                  label: const Text('View on Map'),
+                  label: const Text('Show direction on Map'),
                 ),
               ],
             ],
