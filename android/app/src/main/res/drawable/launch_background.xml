@@ -7,7 +7,10 @@
         <color android:color="#0c1410" />
     </item>
 
-    <item>
+    <item
+        android:width="160dp"
+        android:height="160dp"
+        android:gravity="center">
         <bitmap
             android:gravity="center"
             android:src="@drawable/launch_image" />
