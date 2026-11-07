@@ -16,7 +16,6 @@
 //   license this app does not have. Book/chapter navigation and
 //   search work within this bundled set only.
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -186,6 +185,97 @@ class AssignmentItem {
       );
 }
 
+/// One recorded grade for a subject (Study tab → Grades, Nov 6,
+/// 2026). The app had subjects but no grade storage at all, so the
+/// preview's GWA panel had nothing real to compute from — this
+/// additive record is the minimum that makes Grades real. Grades
+/// are the user's own entries (1.00–5.00, Philippine scale);
+/// nothing is seeded, so a fresh install shows GWA "—" and
+/// "No grade yet" per subject instead of the preview's sample
+/// 1.58 / 8 subjects.
+class GradeRecord {
+  GradeRecord({
+    required this.subjectId,
+    required this.grade,
+    required this.units,
+    required this.semester,
+  });
+
+  final String subjectId;
+
+  /// Philippine grade, 1.00 (best) to 5.00 (failed).
+  final double grade;
+
+  /// Units the grade counts for in the GWA weighting.
+  final int units;
+
+  /// 1 = 1st Semester, 2 = 2nd Semester.
+  final int semester;
+
+  Map<String, dynamic> toJson() => {
+        'subjectId': subjectId,
+        'grade': grade,
+        'units': units,
+        'semester': semester,
+      };
+
+  static GradeRecord fromJson(Map<String, dynamic> j) => GradeRecord(
+        subjectId: j['subjectId'] as String,
+        grade: (j['grade'] as num).toDouble(),
+        units: (j['units'] as num?)?.toInt() ?? 3,
+        semester: (j['semester'] as num?)?.toInt() ?? 1,
+      );
+}
+
+/// One study file the user added (Study tab → Files). Only
+/// metadata is stored — name, size, type, folder — never the file
+/// bytes; the file itself stays where the user picked it. Nothing
+/// is seeded: the preview's Lectures / Activities / Reviewers
+/// folders start at 0 files and the storage bar at 0 B of 5 GB.
+class StudyFile {
+  StudyFile({
+    required this.id,
+    required this.name,
+    required this.sizeBytes,
+    required this.kind,
+    required this.folder,
+    required this.added,
+  });
+
+  final String id;
+  final String name;
+
+  /// File size in bytes (0 when the picker could not report it).
+  final int sizeBytes;
+
+  /// 'pdf' | 'doc' | 'ppt' | 'img' | 'other'.
+  final String kind;
+
+  /// 'Lectures' | 'Activities' | 'Reviewers'.
+  final String folder;
+
+  final DateTime added;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'sizeBytes': sizeBytes,
+        'kind': kind,
+        'folder': folder,
+        'added': added.toIso8601String(),
+      };
+
+  static StudyFile fromJson(Map<String, dynamic> j) => StudyFile(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? 'Untitled file',
+        sizeBytes: (j['sizeBytes'] as num?)?.toInt() ?? 0,
+        kind: j['kind'] as String? ?? 'other',
+        folder: j['folder'] as String? ?? 'Lectures',
+        added: DateTime.tryParse(j['added'] as String? ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+      );
+}
+
 class Note {
   Note({
     required this.id,
@@ -228,7 +318,6 @@ class Flashcard {
     required this.front,
     required this.back,
     required this.subject,
-    this.studyStatus = '',
   });
 
   final String id;
@@ -236,69 +325,25 @@ class Flashcard {
   final String back;
   final String subject;
 
-  /// Session study mark from the study mode: '' (unmarked),
-  /// 'remembered', or 'needsReview'. Optional and backward
-  /// compatible: cards saved before this field existed load as ''.
-  final String studyStatus;
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'front': front,
-        'back': back,
-        'subject': subject,
-        'studyStatus': studyStatus,
-      };
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'front': front, 'back': back, 'subject': subject};
 
   static Flashcard fromJson(Map<String, dynamic> j) => Flashcard(
         id: j['id'] as String,
         front: j['front'] as String,
         back: j['back'] as String,
         subject: j['subject'] as String? ?? '',
-        studyStatus: j['studyStatus'] as String? ?? '',
       );
 }
 
-/// Clamp a requested AI question count to the supported range.
-/// Counts above 10 are accepted as requests, not guarantees: the
-/// model may return fewer valid questions, and the UI must show
-/// only the valid questions actually returned.
-int clampQuizQuestionCount(int count) => count.clamp(1, 50);
-
-/// One-line performance summary derived honestly from a percentage
-/// only — never a per-topic claim, since attempts carry no topic
-/// breakdown.
-String performanceSummaryForPct(int pct) {
-  if (pct >= 90) return 'Excellent';
-  if (pct >= 70) return 'Good';
-  if (pct >= 50) return 'Fair';
-  return 'Needs review';
-}
-
-/// Question types:
-/// - 'mcq': options + correctIndex (unchanged).
-/// - 'tf': options ['True', 'False'] + correctIndex (unchanged).
-/// - 'id': [answer] is the single correct text (unchanged).
-/// - 'enum' (Enumeration): [answer] holds the correct answers, one
-///   per line. The runner collects one answer per line. Scored by
-///   exact set match — order does not matter, partial sets score 0.
-/// - 'match' (Matching Type): [options] are the left items and
-///   [answer] holds the matching right items, one per line, in left
-///   order. The runner collects one right item per left item, in
-///   left order. Scored per pair for review, but the question is
-///   worth 1 point only when every pair matches.
-/// - 'fill' (Fill in the Blanks): the question text contains ____
-///   blanks and [answer] holds the blank answers, one per line, in
-///   blank order. Scored only when every blank matches
-///   (case-insensitive, trimmed).
 class QuizQuestion {
   QuizQuestion({
-    required this.type, // 'mcq' | 'tf' | 'id' | 'enum' | 'match' | 'fill'
+    required this.type, // 'mcq' | 'tf' | 'id'
     required this.question,
     required this.options,
     required this.correctIndex,
     required this.answer,
     required this.explanation,
-    this.learningTip = '',
   });
 
   final String type;
@@ -308,10 +353,6 @@ class QuizQuestion {
   final String answer;
   final String explanation;
 
-  /// Short memory aid shown on the results screen, if set. Empty
-  /// means "no tip" — never a fabricated tip.
-  final String learningTip;
-
   Map<String, dynamic> toJson() => {
         'type': type,
         'question': question,
@@ -319,7 +360,6 @@ class QuizQuestion {
         'correctIndex': correctIndex,
         'answer': answer,
         'explanation': explanation,
-        'learningTip': learningTip,
       };
 
   static QuizQuestion fromJson(Map<String, dynamic> j) => QuizQuestion(
@@ -329,116 +369,7 @@ class QuizQuestion {
         correctIndex: j['correctIndex'] as int? ?? 0,
         answer: j['answer'] as String? ?? '',
         explanation: j['explanation'] as String? ?? '',
-        learningTip: j['learningTip'] as String? ?? '',
       );
-}
-
-/// One answer per line, trimmed, empties dropped.
-List<String> answerLines(String value) => value
-    .split('\n')
-    .map((e) => e.trim())
-    .where((e) => e.isNotEmpty)
-    .toList();
-
-/// The expected lines for a line-based question ('enum' | 'match' |
-/// 'fill'): the stored [answer] split the same way.
-List<String> expectedAnswerLines(QuizQuestion q) => answerLines(q.answer);
-
-/// Per-pair correctness for a 'match' question, in left order.
-/// Empty for every other type.
-List<bool> matchPairResults(QuizQuestion q, String typed) {
-  if (q.type != 'match') return [];
-  final given = answerLines(typed);
-  final expected = expectedAnswerLines(q);
-  return List.generate(expected.length, (i) {
-    if (i >= given.length) return false;
-    return given[i].toLowerCase() == expected[i].toLowerCase();
-  });
-}
-
-/// Single source of truth for "is this answer correct?" Shared by
-/// [scoreQuiz] and the runner's results screen, so the two can
-/// never disagree. [selected] is the mcq/tf index (-1 = unanswered);
-/// [typed] is the free-text answer (id/enum/match/fill).
-bool isQuestionCorrect(
-  QuizQuestion q, {
-  int selected = -1,
-  String typed = '',
-}) {
-  switch (q.type) {
-    case 'id':
-      final given = typed.trim().toLowerCase();
-      return given.isNotEmpty && given == q.answer.trim().toLowerCase();
-    case 'enum':
-      final given = answerLines(typed).map((e) => e.toLowerCase()).toSet();
-      final expected =
-          expectedAnswerLines(q).map((e) => e.toLowerCase()).toSet();
-      return given.isNotEmpty && given.length == expected.length &&
-          given.containsAll(expected);
-    case 'match':
-    case 'fill':
-      final given = answerLines(typed);
-      final expected = expectedAnswerLines(q);
-      if (given.length != expected.length || expected.isEmpty) return false;
-      for (var i = 0; i < expected.length; i++) {
-        if (given[i].toLowerCase() != expected[i].toLowerCase()) {
-          return false;
-        }
-      }
-      return true;
-    default:
-      return selected == q.correctIndex;
-  }
-}
-
-/// Display text for the answer the user gave, or '(no answer)'.
-String questionGivenAnswer(
-  QuizQuestion q, {
-  int selected = -1,
-  String typed = '',
-}) {
-  switch (q.type) {
-    case 'id':
-    case 'enum':
-    case 'match':
-    case 'fill':
-      return typed.trim().isEmpty ? '(no answer)' : typed.trim();
-    default:
-      if (selected < 0 || selected >= q.options.length) return '(no answer)';
-      return q.options[selected];
-  }
-}
-
-/// Display text for the correct answer.
-String questionCorrectAnswer(QuizQuestion q) {
-  switch (q.type) {
-    case 'id':
-    case 'enum':
-    case 'match':
-    case 'fill':
-      return q.answer;
-    default:
-      if (q.correctIndex < 0 || q.correctIndex >= q.options.length) return '';
-      return q.options[q.correctIndex];
-  }
-}
-
-/// Allowed difficulty values. Anything else (including quizzes
-/// saved before difficulty existed) normalizes to 'medium'.
-const quizDifficulties = ['easy', 'medium', 'hard'];
-
-String normalizeDifficulty(String? value) =>
-    quizDifficulties.contains(value) ? value! : 'medium';
-
-String quizDifficultyLabel(String difficulty) {
-  switch (difficulty) {
-    case 'easy':
-      return 'Easy';
-    case 'hard':
-      return 'Hard';
-    default:
-      return 'Medium';
-  }
 }
 
 class Quiz {
@@ -448,9 +379,7 @@ class Quiz {
     required this.subject,
     required this.timeLimitSec,
     required this.questions,
-    String? difficulty,
-    this.randomize = false,
-  }) : difficulty = normalizeDifficulty(difficulty);
+  });
 
   final String id;
   final String title;
@@ -458,22 +387,12 @@ class Quiz {
   final int timeLimitSec;
   final List<QuizQuestion> questions;
 
-  /// 'easy' | 'medium' | 'hard'. Defaults to 'medium' for quizzes
-  /// saved before this field existed.
-  final String difficulty;
-
-  /// When true, the runner shuffles question order (and MCQ option
-  /// order) for each attempt. False keeps the author's order.
-  final bool randomize;
-
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
         'subject': subject,
         'timeLimitSec': timeLimitSec,
         'questions': questions.map((q) => q.toJson()).toList(),
-        'difficulty': difficulty,
-        'randomize': randomize,
       };
 
   static Quiz fromJson(Map<String, dynamic> j) => Quiz(
@@ -484,50 +403,7 @@ class Quiz {
         questions: (j['questions'] as List)
             .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
             .toList(),
-        difficulty: j['difficulty'] as String?,
-        randomize: j['randomize'] as bool? ?? false,
       );
-}
-
-/// Returns the quiz as one attempt should take it. When
-/// [Quiz.randomize] is false, the original quiz is returned
-/// untouched. Otherwise questions are shuffled and, for MCQ
-/// questions, options are shuffled with [correctIndex] remapped by
-/// index (never by option text, so duplicate option texts stay
-/// correct). The shuffle is deterministic for a given [seed], so a
-/// results screen built from the returned quiz always matches what
-/// was taken — the runner keeps this quiz for taking AND review.
-Quiz shuffleQuizForAttempt(Quiz quiz, {required int seed}) {
-  if (!quiz.randomize) return quiz;
-  final random = math.Random(seed);
-  final questionOrder =
-      List.generate(quiz.questions.length, (i) => i)..shuffle(random);
-  final questions = questionOrder.map((qi) {
-    final q = quiz.questions[qi];
-    if (q.type != 'mcq' || q.options.length < 2) return q;
-    final optionOrder =
-        List.generate(q.options.length, (i) => i)..shuffle(random);
-    final options = optionOrder.map((oi) => q.options[oi]).toList();
-    final correctIndex = optionOrder.indexOf(q.correctIndex);
-    return QuizQuestion(
-      type: q.type,
-      question: q.question,
-      options: options,
-      correctIndex: correctIndex,
-      answer: options[correctIndex],
-      explanation: q.explanation,
-      learningTip: q.learningTip,
-    );
-  }).toList();
-  return Quiz(
-    id: quiz.id,
-    title: quiz.title,
-    subject: quiz.subject,
-    timeLimitSec: quiz.timeLimitSec,
-    questions: questions,
-    difficulty: quiz.difficulty,
-    randomize: quiz.randomize,
-  );
 }
 
 class QuizAttempt {
@@ -537,59 +413,13 @@ class QuizAttempt {
     required this.score,
     required this.total,
     required this.date,
-    this.quizId = '',
-    this.startedAt,
-    this.finishedAt,
-    this.correctFlags = const [],
-    this.givenAnswers = const [],
   });
 
   final String id;
   final String quizTitle;
   final int score;
   final int total;
-
-  /// When the attempt finished (also its history date). Attempts
-  /// saved before timing existed have only [date].
   final DateTime date;
-
-  /// The quiz this attempt belongs to, when known. Empty for
-  /// attempts saved before this field existed.
-  final String quizId;
-
-  /// Attempt start / finish. Both null for pre-timing attempts,
-  /// in which case [durationSec] is 0 rather than a guess.
-  final DateTime? startedAt;
-  final DateTime? finishedAt;
-
-  /// Per-question correctness, in the order the questions were
-  /// taken (shuffled order included). Empty for pre-review attempts.
-  /// The questions themselves still live on the saved quiz, so a
-  /// history entry can show explanations again only while that quiz
-  /// still exists; otherwise the history row shows score only.
-  final List<bool> correctFlags;
-
-  /// The answer given per question, in taken order: the chosen
-  /// option text for mcq/tf, the typed text (lines joined) for
-  /// id/enum/match/fill, '' when unanswered. Empty for pre-review
-  /// attempts. Stored so Quiz History can show the real answer
-  /// given — never reconstructed or guessed later.
-  final List<String> givenAnswers;
-
-  /// Whole seconds between start and finish, or 0 when unknown.
-  int get durationSec {
-    final start = startedAt;
-    final finish = finishedAt;
-    if (start == null || finish == null) return 0;
-    final seconds = finish.difference(start).inSeconds;
-    return seconds < 0 ? 0 : seconds;
-  }
-
-  /// Rounded percentage, or 0 for an empty quiz.
-  int get percentage => total > 0 ? ((score * 100) / total).round() : 0;
-
-  int get correctCount => score;
-  int get incorrectCount => total - score < 0 ? 0 : total - score;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -597,11 +427,6 @@ class QuizAttempt {
         'score': score,
         'total': total,
         'date': date.toIso8601String(),
-        'quizId': quizId,
-        if (startedAt != null) 'startedAt': startedAt!.toIso8601String(),
-        if (finishedAt != null) 'finishedAt': finishedAt!.toIso8601String(),
-        'correctFlags': correctFlags,
-        'givenAnswers': givenAnswers,
       };
 
   static QuizAttempt fromJson(Map<String, dynamic> j) => QuizAttempt(
@@ -610,103 +435,7 @@ class QuizAttempt {
         score: j['score'] as int,
         total: j['total'] as int,
         date: DateTime.parse(j['date'] as String),
-        quizId: j['quizId'] as String? ?? '',
-        startedAt: j['startedAt'] is String
-            ? DateTime.tryParse(j['startedAt'] as String)
-            : null,
-        finishedAt: j['finishedAt'] is String
-            ? DateTime.tryParse(j['finishedAt'] as String)
-            : null,
-        correctFlags: (j['correctFlags'] as List? ?? [])
-            .map((e) => e == true)
-            .toList(),
-        givenAnswers: (j['givenAnswers'] as List? ?? [])
-            .map((e) => e.toString())
-            .toList(),
       );
-}
-
-/// One day of weekly study performance. All values come from real
-/// attempts; a day with no attempts has averagePct 0 and is never
-/// presented as a score.
-class QuizAnalyticsDay {
-  const QuizAnalyticsDay({
-    required this.dateKey,
-    required this.attempts,
-    required this.averagePct,
-  });
-
-  final String dateKey; // yyyy-MM-dd, device-local calendar day.
-  final int attempts;
-  final int averagePct;
-}
-
-/// Study analytics computed ONLY from real attempts. Empty input
-/// yields zeros and seven empty days — never fabricated numbers.
-class QuizAnalytics {
-  const QuizAnalytics({
-    required this.totalAttempts,
-    required this.averagePct,
-    required this.highestPct,
-    required this.weekly,
-    required this.distinctQuizzesAttempted,
-  });
-
-  final int totalAttempts;
-  final int averagePct;
-  final int highestPct;
-  final List<QuizAnalyticsDay> weekly;
-
-  /// Distinct quizzes attempted (by quizId, falling back to title).
-  final int distinctQuizzesAttempted;
-}
-
-String _dayKey(DateTime d) =>
-    '${d.year}-${d.month.toString().padLeft(2, '0')}-'
-    '${d.day.toString().padLeft(2, '0')}';
-
-QuizAnalytics computeQuizAnalytics(
-  List<QuizAttempt> attempts, {
-  DateTime? now,
-}) {
-  final today = now ?? DateTime.now();
-  final day0 = DateTime(today.year, today.month, today.day);
-  final scored = attempts.where((a) => a.total > 0).toList();
-  var sum = 0;
-  var highest = 0;
-  for (final a in scored) {
-    sum += a.percentage;
-    if (a.percentage > highest) highest = a.percentage;
-  }
-  final weekly = <QuizAnalyticsDay>[];
-  for (var i = 6; i >= 0; i--) {
-    final day = day0.subtract(Duration(days: i));
-    final key = _dayKey(day);
-    final dayAttempts =
-        scored.where((a) => _dayKey(a.date) == key).toList();
-    var daySum = 0;
-    for (final a in dayAttempts) {
-      daySum += a.percentage;
-    }
-    weekly.add(QuizAnalyticsDay(
-      dateKey: key,
-      attempts: dayAttempts.length,
-      averagePct: dayAttempts.isEmpty
-          ? 0
-          : (daySum / dayAttempts.length).round(),
-    ));
-  }
-  final distinct = <String>{};
-  for (final a in attempts) {
-    distinct.add(a.quizId.isNotEmpty ? a.quizId : a.quizTitle);
-  }
-  return QuizAnalytics(
-    totalAttempts: attempts.length,
-    averagePct: scored.isEmpty ? 0 : (sum / scored.length).round(),
-    highestPct: highest,
-    weekly: weekly,
-    distinctQuizzesAttempted: distinct.length,
-  );
 }
 
 class AttendanceRecord {
@@ -840,6 +569,8 @@ class StudentStorage {
   static const flashcardsKey = 'byahetayo_student_flashcards';
   static const quizzesKey = 'byahetayo_student_quizzes';
   static const attemptsKey = 'byahetayo_student_quiz_attempts';
+  static const gradesKey = 'byahetayo_student_grades';
+  static const studyFilesKey = 'byahetayo_student_files';
   static const attendanceKey = 'byahetayo_student_attendance';
   static const attendanceGoalKey = 'byahetayo_student_attendance_goal';
   static const quoteFavsKey = 'byahetayo_student_quote_favs';
@@ -1068,20 +799,18 @@ attendanceStats(List<AttendanceRecord> records) {
 }
 
 /// Score a quiz: MCQ/TF by selected index, identification by
-/// case-insensitive trimmed text match, enumeration by exact set
-/// match, matching/fill-in-the-blanks by per-line match in order
-/// (see [isQuestionCorrect]). [selected] and [typed] are indexed by
-/// question position, exactly like the runner's lists.
+/// case-insensitive trimmed text match.
 int scoreQuiz(Quiz quiz, List<int> selected, List<String> typed) {
   var score = 0;
   for (var i = 0; i < quiz.questions.length; i++) {
     final q = quiz.questions[i];
-    if (isQuestionCorrect(
-      q,
-      selected: i < selected.length ? selected[i] : -1,
-      typed: i < typed.length ? typed[i] : '',
-    )) {
-      score++;
+    if (q.type == 'id') {
+      final given = i < typed.length ? typed[i].trim().toLowerCase() : '';
+      if (given.isNotEmpty && given == q.answer.trim().toLowerCase()) {
+        score++;
+      }
+    } else {
+      if (i < selected.length && selected[i] == q.correctIndex) score++;
     }
   }
   return score;
