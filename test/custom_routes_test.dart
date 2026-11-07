@@ -133,13 +133,28 @@ void main() {
       final route = _route(
         from: 'Vigan Bus Terminal',
         to: 'San Juan, Ilocos Sur',
-        viaHubs: const ['Magsingal'],
+        viaHubs: const ['No Such Town'],
       );
-      // Magsingal is not a hub, so it is skipped: the line is
-      // From → To. Via stops must be hub names to draw.
+      // 'No Such Town' is not a place, so it is skipped: the line
+      // is From → To. Via stops must be real place names to draw.
       final points = customRouteLinePoints(route);
       expect(points.length, 2);
       expect(points.first, const LatLng(17.56641, 120.38590));
+      expect(points.last, const LatLng(17.73979, 120.45719));
+    });
+
+    test('line points include a bundled place as a via stop', () {
+      // Magsingal (Ilocos Sur) is in the bundled Philippines
+      // list now, so it draws as a via stop.
+      final route = _route(
+        from: 'Vigan Bus Terminal',
+        to: 'San Juan, Ilocos Sur',
+        viaHubs: const ['Magsingal'],
+      );
+      final points = customRouteLinePoints(route);
+      expect(points.length, 3);
+      expect(points.first, const LatLng(17.56641, 120.38590));
+      expect(points[1], const LatLng(17.6849231, 120.4247755));
       expect(points.last, const LatLng(17.73979, 120.45719));
     });
 

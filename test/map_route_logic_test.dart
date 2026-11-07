@@ -1,6 +1,7 @@
 // Unit tests for the Map tab's pure route logic (no GoogleMap needed).
 import 'dart:convert';
 
+import 'package:estudyantego/features/bus_stops.dart';
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/map_tab.dart';
 import 'package:estudyantego/features/osm_routing.dart';
@@ -77,12 +78,21 @@ void main() {
     }
   });
 
-  test('groupRoutesByDirection splits Cabugao routes 3 north / 12 south',
-      () {
+  test('groupRoutesByDirection splits Cabugao routes north / south', () {
     final routes = routesFrom(17.78916, 120.45838, 'Cabugao');
     final grouped = groupRoutesByDirection(routes);
-    expect(grouped[Direction.northbound]!.length, 3);
-    expect(grouped[Direction.southbound]!.length, 12);
+    // The bundled Philippines list adds destinations in every
+    // direction, so the split is derived from the data (dest lat >=
+    // origin lat is northbound) instead of pinned to the old
+    // 16-hub counts (3 north / 12 south).
+    final north = allHubs([]).where(
+      (h) => h.name != 'Cabugao' && h.lat >= 17.78916,
+    ).length;
+    final south = allHubs([]).where(
+      (h) => h.name != 'Cabugao' && h.lat < 17.78916,
+    ).length;
+    expect(grouped[Direction.northbound]!.length, north);
+    expect(grouped[Direction.southbound]!.length, south);
     expect(
       grouped[Direction.northbound]!.map((r) => r.dest.name),
       containsAll(['Sinait', 'Laoag City', 'Laoag Terminal']),

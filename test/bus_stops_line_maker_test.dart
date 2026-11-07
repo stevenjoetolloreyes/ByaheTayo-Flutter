@@ -16,7 +16,9 @@ import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/map_tab.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:estudyantego/features/osm_routing.dart';
+import 'package:estudyantego/features/philippine_places.dart';
 import 'package:estudyantego/features/route_fare_overrides.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -267,13 +269,15 @@ void main() {
   });
 
   group('allHubs / resolveHub', () {
-    test('built-in hubs keep their indices; stops append after them', () {
+    test('built-in hubs keep their indices; stops append after them, '
+        'then the bundled Philippines list', () {
       final merged = allHubs([_stop()]);
-      expect(merged.length, hubs.length + 1);
+      expect(merged.length, hubs.length + 1 + philippinePlaces.length);
       expect(merged[2].name, 'Cabugao');
       expect(merged[14].name, _viganTerminal);
-      expect(merged.last.name, 'Cabugao Public Market');
-      expect(merged.last.region, 'Ilocos Sur');
+      expect(merged[16].name, 'Cabugao Public Market');
+      expect(merged[16].region, 'Ilocos Sur');
+      expect(merged.last.name, philippinePlaces.last.name);
     });
 
     test('a new stop resolves by name; unknown names stay null', () {
@@ -663,8 +667,25 @@ void main() {
       expect(find.text('PWD fare (₱)'), findsOneWidget);
       expect(find.text('Senior fare (₱)'), findsOneWidget);
       expect(find.text('Add company'), findsOneWidget);
-      // The new stop is a From/To choice.
-      expect(find.text('Cabugao Public Market'), findsWidgets);
+      // The new stop is a From/To choice — via the searchable
+      // picker (the old via-stops chip wall is gone).
+      await tester.tap(find.text('Choose a place').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(CupertinoTextField),
+        'Cabugao Public Market',
+      );
+      await tester.pump();
+      // The search field itself holds the query text, so scope the
+      // finder to the list row.
+      final row = find.widgetWithText(ListTile, 'Cabugao Public Market');
+      expect(row, findsOneWidget);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Cabugao Public Market · Ilocos Sur'),
+        findsOneWidget,
+      );
     });
   });
 

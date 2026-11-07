@@ -2,10 +2,12 @@
 // the override model + repositories, the effective student fare,
 // and the admin-only edit flow in the Fares tab. Firestore is not
 // touched here — the local repositories cover the same rules.
+import 'package:estudyantego/features/add_route_sheet.dart';
 import 'package:estudyantego/features/custom_routes.dart';
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:estudyantego/features/route_fare_overrides.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -392,15 +394,18 @@ void main() {
             ?.text,
         '',
       );
-      // From/To are read-only for a built-in route.
-      expect(
-        tester
-            .widget<DropdownButtonFormField<String>>(
-              find.byType(DropdownButtonFormField<String>).first,
-            )
-            .onChanged,
-        isNull,
+      // From/To are read-only for a built-in route: tapping the
+      // From field opens no picker in seeded mode. The breakdown
+      // sheet behind shows the same text, so scope the tap to the
+      // edit sheet itself.
+      final fromField = find.descendant(
+        of: find.byType(AddRouteSheet),
+        matching: find.text('Cabugao · Ilocos Sur'),
       );
+      expect(fromField, findsOneWidget);
+      await tester.tap(fromField);
+      await tester.pumpAndSettle();
+      expect(find.text('Search a place…'), findsNothing);
     });
 
     testWidgets('saving fare + student fare updates the card',
@@ -455,13 +460,27 @@ void main() {
         (tester) async {
       await pumpTab(tester, _admin);
       await openEditSheet(tester, 'Cabugao → Vigan Bus Terminal');
-      final viaChip = find.widgetWithText(
-        FilterChip,
+      // Via stops are picked by search now (the old chip wall
+      // listed every hub; the merged list is ~180 places).
+      // The chip sits near the bottom of the sheet — scroll it into
+      // view before tapping, or the tap misses.
+      await tester.ensureVisible(find.text('Add via stop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add via stop'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(CupertinoTextField),
         'San Juan, Ilocos Sur',
       );
-      await tester.ensureVisible(viaChip);
-      await tester.tap(viaChip);
       await tester.pump();
+      // The search field itself holds the query text, so scope the
+      // finder to the list row.
+      final row = find.widgetWithText(ListTile, 'San Juan, Ilocos Sur');
+      expect(row, findsOneWidget);
+      await tester.tap(row);
+      await tester.pump();
+      await tester.tap(find.text('Done · 1'));
+      await tester.pumpAndSettle();
       await tapSave(tester);
       final stored = await overrideRepo.loadAll();
       expect(

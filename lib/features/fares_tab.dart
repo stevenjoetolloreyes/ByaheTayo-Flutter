@@ -23,6 +23,7 @@ import 'custom_routes.dart';
 import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
+import 'place_picker.dart';
 import 'route_fare_overrides.dart';
 
 // Fares-local ChatGPT design tokens (Premium Dark + Emerald Green,
@@ -1625,6 +1626,62 @@ class _FaresTabState extends State<FaresTab> {
     }
   }
 
+  /// Opens the searchable place picker for a Trip-card endpoint
+  /// and stores the picked place's index into [_tripHubs]. The
+  /// merged list is ~180 places now (16 hubs + admin stops +
+  /// the bundled Philippines list), far past what the old
+  /// dropdown menu could show.
+  Future<void> _pickTripPlace({
+    required String label,
+    required int current,
+    required ValueChanged<int> onPicked,
+  }) async {
+    final picked = await showPlacePicker(
+      context: context,
+      places: _tripHubs,
+      stopsCount: _busStops.length,
+      selected: _tripHubs[current],
+      title: label,
+    );
+    if (picked == null || !mounted) return;
+    final index = _tripHubs.indexWhere((h) => h.name == picked.name);
+    if (index >= 0) onPicked(index);
+  }
+
+  /// A Trip-card place field: looks like the old dropdown field
+  /// (label + value + chevron) but opens the searchable picker.
+  Widget _tripPlaceField({
+    required String label,
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
+    final hub = _tripHubs[value];
+    return InkWell(
+      onTap: () => _pickTripPlace(
+        label: label,
+        current: value,
+        onPicked: onChanged,
+      ),
+      borderRadius: BorderRadius.circular(kFaresInputRadius),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(kFaresInputRadius),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text('${hub.name} · ${hub.region}'),
+            ),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -1702,31 +1759,10 @@ class _FaresTabState extends State<FaresTab> {
                         ],
                       ),
                     ] else ...[
-                      DropdownButtonFormField<int>(
+                      _tripPlaceField(
+                        label: 'From',
                         value: _originHub,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: 'From',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(
-                              kFaresInputRadius,
-                            ),
-                          ),
-                        ),
-                        items: [
-                          for (var i = 0; i < _tripHubs.length; i++)
-                            DropdownMenuItem(
-                              value: i,
-                              child: Text(
-                                '${_tripHubs[i].name} · ${_tripHubs[i].region}',
-                              ),
-                            ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _originHub = value);
-                          }
-                        },
+                        onChanged: (v) => setState(() => _originHub = v),
                       ),
                     ],
                     if (_originMode == _OriginMode.hub) ...[
@@ -1746,31 +1782,10 @@ class _FaresTabState extends State<FaresTab> {
                       ),
                     ],
                     const SizedBox(height: AppLayout.cardGap),
-                    DropdownButtonFormField<int>(
+                    _tripPlaceField(
+                      label: 'To',
                       value: _destHub,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: 'To',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            kFaresInputRadius,
-                          ),
-                        ),
-                      ),
-                      items: [
-                        for (var i = 0; i < _tripHubs.length; i++)
-                          DropdownMenuItem(
-                            value: i,
-                            child: Text(
-                              '${_tripHubs[i].name} · ${_tripHubs[i].region}',
-                            ),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _destHub = value);
-                        }
-                      },
+                      onChanged: (v) => setState(() => _destHub = v),
                     ),
                     const SizedBox(height: AppLayout.cardGap),
 

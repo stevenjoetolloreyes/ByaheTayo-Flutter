@@ -31,6 +31,11 @@ void main() {
     // Vigan Bus Terminal.
     await tester.tap(find.text('Choose a hub'));
     await tester.pump();
+    // The Trip card's picker fields are taller than the old
+    // dropdowns, so Find routes sits just below the fold on a
+    // 390×844 phone — scroll it into view before tapping.
+    await tester.ensureVisible(find.text('Find routes'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Find routes'));
     await tester.pumpAndSettle();
 

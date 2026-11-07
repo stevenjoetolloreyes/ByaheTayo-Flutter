@@ -37,6 +37,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_access.dart';
 import 'fares_tab.dart';
 import 'onboarding/auth_service.dart';
+import 'philippine_places.dart';
 
 /// Firestore collection for admin-added bus stops.
 const busStopsCollection = 'bus_stops';
@@ -209,19 +210,37 @@ Hub busStopAsHub(BusStop stop) =>
     Hub(stop.name, stop.region, stop.lat, stop.lng);
 
 /// Every place a picker can offer: the 16 built-in hubs first,
-/// then the admin-added stops in creation order. Appended last
-/// so the built-in hub indices never shift.
-List<Hub> allHubs(List<BusStop> stops) =>
-    [...hubs, ...stops.map(busStopAsHub)];
+/// then the admin-added stops in creation order, then the bundled
+/// Philippines list (major cities + provincial capitals + major
+/// municipalities — see philippine_places.dart). Appended last
+/// so the built-in hub indices (0–15) AND the admin-stop indices
+/// never shift. The bundled places make the Fares From/To
+/// pickers cover the whole Philippines (Steven, Nov 7: "ang
+/// liit" — the 16 hubs alone were too small a list); they also
+/// resolve through the Fares → Map jump and [routesFrom], so a
+/// trip between two bundled places draws its line and estimates
+/// its fare with the existing LTFRB calculator (a "Fare not
+/// set" route — never an invented fare).
+List<Hub> allHubs(List<BusStop> stops) => [
+  ...hubs,
+  ...stops.map(busStopAsHub),
+  ...philippinePlaces,
+];
 
-/// Hub by name, built-in first, then admin stops. Null when the
-/// name is neither — never invented.
+/// Hub by name, built-in first, then admin stops, then bundled
+/// places. Null when the name is neither — never invented.
+/// Hubs win on a name clash (e.g. 'San Fernando City' is the
+/// La Union hub; the Pampanga city is stored as
+/// 'San Fernando City (Pampanga)').
 Hub? resolveHub(String name, List<BusStop> stops) {
   for (final hub in hubs) {
     if (hub.name == name) return hub;
   }
   for (final stop in stops) {
     if (stop.name == name) return busStopAsHub(stop);
+  }
+  for (final place in philippinePlaces) {
+    if (place.name == name) return place;
   }
   return null;
 }

@@ -30,6 +30,7 @@ import 'custom_routes.dart';
 import 'fares_tab.dart';
 import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
+import 'place_picker.dart';
 import 'route_fare_overrides.dart';
 
 /// The Add Route form's values, stashed when the admin leaves
@@ -229,6 +230,91 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
   /// route): From/To/operator/vehicle are read-only, and saving
   /// goes through the override repository.
   bool get _seededMode => widget.overrideRepository != null;
+
+  /// Opens the searchable place picker for an endpoint and stores
+  /// the picked place's name. The merged list is ~180 places now
+  /// (16 hubs + admin stops + the bundled Philippines list), far
+  /// past what the old dropdown menu could show.
+  Future<void> _pickEndpoint({required bool isFrom}) async {
+    final current = isFrom ? _from : _to;
+    final picked = await showPlacePicker(
+      context: context,
+      places: _allHubs,
+      stopsCount: widget.busStops.length,
+      selected: current == null
+          ? null
+          : _allHubs.where((h) => h.name == current).firstOrNull,
+      title: isFrom ? 'From' : 'To',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isFrom) {
+        _from = picked.name;
+        _viaHubs.remove(picked.name);
+      } else {
+        _to = picked.name;
+        _viaHubs.remove(picked.name);
+      }
+    });
+  }
+
+  /// An endpoint field: looks like the old dropdown field (label
+  /// + value + chevron) but opens the searchable picker.
+  /// Read-only in seeded mode (From/To never change there).
+  Widget _endpointField({
+    required String label,
+    required String? value,
+    required bool isFrom,
+  }) {
+    final hub = value == null
+        ? null
+        : _allHubs.where((h) => h.name == value).firstOrNull;
+    final enabled = !_seededMode;
+    return InkWell(
+      onTap: enabled ? () => _pickEndpoint(isFrom: isFrom) : null,
+      borderRadius: BorderRadius.circular(4),
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                hub == null
+                    ? 'Choose a place'
+                    : '${hub.name} · ${hub.region}',
+                style: hub == null || !enabled
+                    ? TextStyle(color: Theme.of(context).hintColor)
+                    : null,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Opens the searchable multi-select picker for via stops. The
+  /// old chip wall listed every hub; the merged list is ~180
+  /// places now, so via stops are picked by search, in tap order
+  /// (the order is the route's direction). From/To stay excluded,
+  /// as before.
+  Future<void> _pickViaStops() async {
+    final picked = await showPlaceMultiPicker(
+      context: context,
+      places: _allHubs,
+      stopsCount: widget.busStops.length,
+      selected: List.of(_viaHubs),
+      title: 'Via stops',
+      excludedNames: {_from, _to}.nonNulls.toSet(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _viaHubs
+        ..clear()
+        ..addAll(picked);
+    });
+  }
 
   static String _fareText(double? value) {
     if (value == null) return '';
@@ -592,9 +678,6 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final viaChoices = _allHubs
-        .where((h) => h.name != _from && h.name != _to)
-        .toList();
     final busy = _saving || _deleting;
     return Padding(
       padding: EdgeInsets.only(
@@ -627,35 +710,9 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
               style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _from,
-              decoration: const InputDecoration(labelText: 'From *'),
-              items: [
-                for (final hub in _allHubs)
-                  DropdownMenuItem(value: hub.name, child: Text(hub.name)),
-              ],
-              onChanged: _seededMode
-                  ? null
-                  : (v) => setState(() {
-                      _from = v;
-                      _viaHubs.remove(v);
-                    }),
-            ),
+            _endpointField(label: 'From *', value: _from, isFrom: true),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _to,
-              decoration: const InputDecoration(labelText: 'To *'),
-              items: [
-                for (final hub in _allHubs)
-                  DropdownMenuItem(value: hub.name, child: Text(hub.name)),
-              ],
-              onChanged: _seededMode
-                  ? null
-                  : (v) => setState(() {
-                      _to = v;
-                      _viaHubs.remove(v);
-                    }),
-            ),
+            _endpointField(label: 'To *', value: _to, isFrom: false),
             const SizedBox(height: 12),
             TextField(
               controller: _operatorController,
@@ -828,18 +885,15 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
             Wrap(
               spacing: 8,
               children: [
-                for (final hub in viaChoices)
-                  FilterChip(
-                    label: Text(hub.name),
-                    selected: _viaHubs.contains(hub.name),
-                    onSelected: (on) => setState(() {
-                      if (on) {
-                        _viaHubs.add(hub.name);
-                      } else {
-                        _viaHubs.remove(hub.name);
-                      }
-                    }),
-                  ),
+                // Via stops are picked by search now: the old chip
+                // wall listed every hub, and the merged list is
+                // ~180 places. Tap in order — the numbers in the
+                // picker are the route's direction.
+                ActionChip(
+                  avatar: const Icon(Icons.add, size: 18),
+                  label: const Text('Add via stop'),
+                  onPressed: busy ? null : _pickViaStops,
+                ),
                 // A stop that is not in the list yet: tap the map
                 // to place it, name it, and come back here — the
                 // form values are stashed and restored, so
