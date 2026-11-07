@@ -329,7 +329,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Fare breakdown'), findsOneWidget);
       expect(find.text('Verified bus fare'), findsOneWidget);
-      expect(find.text('₱48'), findsOneWidget);
+      // ₱48 three times now: one row per discount group (Student,
+      // PWD, Senior Citizen — preview parity, Nov 6).
+      expect(find.text('₱48'), findsNWidgets(3));
       // Tapping loaded the route into the calculator, so the real
       // LTFRB breakdown for the current vehicle is shown too.
       expect(find.text('Calculator estimate'), findsOneWidget);
@@ -411,6 +413,80 @@ void main() {
       await tester.tap(find.text('Find routes'));
       await tester.pump();
       expect(opened, 1);
+    });
+
+    testWidgets(
+        'Find routes sets the Fares → Map jump before switching tabs',
+        (tester) async {
+      faresMapJump.value = null;
+      var opened = 0;
+      await pumpTab(tester, onViewOnMap: () => opened++);
+      // Hub origin: the default origin hub is Cabugao and the
+      // default destination is Vigan Bus Terminal.
+      await tester.tap(find.text('Choose a hub'));
+      await tester.pump();
+      await tester.tap(find.text('Find routes'));
+      await tester.pump();
+      expect(opened, 1);
+      expect(faresMapJump.value?.from, 'Cabugao');
+      expect(faresMapJump.value?.to, 'Vigan Bus Terminal');
+      faresMapJump.value = null;
+    });
+
+    testWidgets(
+        'verified route sheet shows ETA, fare status, separate discounts, stops',
+        (tester) async {
+      // onViewOnMap wired: the sheet's 'Show direction on Map'
+      // button only renders when the host provides it.
+      await pumpTab(tester, onViewOnMap: () {});
+      await tester.ensureVisible(
+        find.text('Cabugao → Vigan Bus Terminal'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cabugao → Vigan Bus Terminal'));
+      await tester.pumpAndSettle();
+      expect(find.text('Fare breakdown'), findsOneWidget);
+      // Preview parity (Nov 6): ETA next to the distance, fare
+      // status, and one row per discount group.
+      expect(find.text('ETA'), findsOneWidget);
+      expect(find.text('Fare status'), findsOneWidget);
+      expect(find.text('Verified fare'), findsWidgets);
+      expect(find.text('Student discount'), findsOneWidget);
+      expect(find.text('PWD discount'), findsOneWidget);
+      expect(find.text('Senior Citizen discount'), findsOneWidget);
+      expect(find.text('₱48'), findsWidgets);
+      expect(
+        find.text(
+          'The discounted fare applies to students, PWD, and senior citizens with a valid ID.',
+        ),
+        findsOneWidget,
+      );
+      // Stops along the way: origin + destination, no invented
+      // intermediate towns (the Map tab adds those from OSRM).
+      expect(find.text('Stops along the way'), findsOneWidget);
+      expect(find.text('Start'), findsOneWidget);
+      expect(find.text('End'), findsOneWidget);
+      expect(find.text('Show direction on Map'), findsOneWidget);
+    });
+
+    testWidgets('no-fare route sheet shows Fare not set status + ETA',
+        (tester) async {
+      // onViewOnMap wired: the sheet's 'Show direction on Map'
+      // button only renders when the host provides it.
+      await pumpTab(tester, onViewOnMap: () {});
+      await tester.ensureVisible(
+        find.text('Bantay GMW Terminal → Tuguegarao GMW Terminal'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.text('Bantay GMW Terminal → Tuguegarao GMW Terminal'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Fare breakdown'), findsOneWidget);
+      expect(find.text('Fare status'), findsOneWidget);
+      expect(find.text('Fare not set'), findsWidgets);
+      expect(find.text('ETA'), findsOneWidget);
+      expect(find.text('401.0 km'), findsOneWidget);
     });
   });
 }
