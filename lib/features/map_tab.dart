@@ -1336,6 +1336,199 @@ List<MapStopPin> routeStopPins(
   ];
 }
 
+/// Paint order for the stop pins on the map (pure): the
+/// intermediate stops first, then the Start pin, then the End
+/// pin last — so the route's endpoints always paint ON TOP.
+/// A saved waypoint sitting almost exactly on the origin (e.g.
+/// Steven's Point 1, tapped next to Cabugao) used to hide the
+/// Start pin underneath it; the End pin is the other end of the
+/// "Start to End" span Steven asked for (Nov 7, 19:39), so it
+/// paints last too. The pin NUMBERS never change — only the
+/// paint order does — so taps still select the right stop.
+List<MapStopPin> orderStopPinsForMarkers(List<MapStopPin> pins) {
+  if (pins.length <= 2) return List.of(pins);
+  return [
+    ...pins.sublist(1, pins.length - 1),
+    pins.first,
+    pins.last,
+  ];
+}
+
+/// Padding for a route fit so the whole route lands in the map
+/// area VISIBLE above the draggable sheet (pure): the sheet
+/// covers [sheetFraction] of the screen height from the bottom,
+/// so the fit's bottom inset must clear it on top of the 80 px
+/// base margin. The old fit used EdgeInsets.all(80) against the
+/// FULL viewport — with the sheet at Half (0.55) the route's
+/// southern end landed behind the sheet, so the End pin was
+/// off-screen even though the fit had run (Steven's 19:36
+/// screenshot: pins 2 and 4 visible near Cabugao, End pin 5
+/// hidden below the sheet edge).
+EdgeInsets routeFitPadding({
+  required double screenHeight,
+  required double sheetFraction,
+}) =>
+    EdgeInsets.fromLTRB(80, 80, 80, 80 + screenHeight * sheetFraction);
+
+/// One map line layer, as data: the points to draw, its colour,
+/// its width, and whether it is the solid road shape or the
+/// dashed direct fallback. Value equality (LatLng compares by
+/// value) lets the state memoize the layer list: while the spec
+/// is unchanged the previous PolylineLayer list instance is
+/// returned untouched, so the maplibre plugin's layer
+/// reconciler sees no change and never re-adds a layer.
+class MapLineLayerSpec {
+  const MapLineLayerSpec({
+    required this.points,
+    required this.color,
+    required this.solid,
+    this.width = 6,
+  });
+
+  /// Points of the line, in draw order.
+  final List<LatLng> points;
+
+  /// Line colour (green = saved route, amber = draft being drawn).
+  final Color color;
+
+  /// True = solid road shape; false = dashed direct line.
+  final bool solid;
+
+  /// Line width in logical pixels (int: PolylineLayer takes int).
+  final int width;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MapLineLayerSpec &&
+      listEquals(points, other.points) &&
+      color == other.color &&
+      solid == other.solid &&
+      width == other.width;
+
+  @override
+  int get hashCode =>
+      Object.hash(Object.hashAll(points), color, solid, width);
+}
+
+/// The map's line layers, as pure data — slot 0 is ALWAYS the
+/// saved route line (green), and the draft line (amber) is an
+/// extra slot that exists ONLY while the admin is actively
+/// drawing AND has tapped at least one point. Stable slots
+/// matter: the maplibre plugin reconciles layers by index, and
+/// the old code REPLACED slot 0's content on every draw-mode
+/// enter/exit (amber draft in, green route back out) and rebuilt
+/// a fresh layer list on every rebuild — the plugin's
+/// remove+add is un-awaited, so the pair raced and orphaned
+/// stale native layers: the green dashed direct line and the
+/// amber draft line Steven saw lingering on his phone
+/// (Nov 7, 19:17) after the mode was closed and the road shape
+/// had arrived. With stable slots, entering/exiting draw mode
+/// only grows/shrinks the list at the trailing slot, and the
+/// route line never changes identity.
+///
+/// No amber line is ever drawn from an empty draft: with zero
+/// tapped points there is nothing the admin drew, so a straight
+/// origin→destination amber line would invent a line the admin
+/// never tapped. A pre-filled draft (saved drawn waypoints /
+/// named via stops — the same points the route line uses) counts
+/// as tapped points, so a route with a saved direction still
+/// shows its draft on enter.
+///
+/// The stop-highlight branch (tapped stop → destination lights
+/// up) is preserved exactly: the same four layers, same widths,
+/// same colours — only expressed as specs. It never runs in
+/// draw mode (entering draw mode clears the selection).
+List<MapLineLayerSpec> mapLineLayers({
+  required List<LatLng> routePoints,
+  required bool routeSolid,
+  required int? selectedStopIndex,
+  required List<RouteStop> routeStops,
+  required List<LatLng>? roadPoints,
+  required bool drawMode,
+  required List<RouteWaypoint> draftWaypoints,
+  required LatLng draftOrigin,
+  required LatLng draftDest,
+  required List<LatLng>? draftRoadPoints,
+}) {
+  const green = Color(0xFF16A34A);
+  const amber = Color(0xFFF59E0B);
+  final layers = <MapLineLayerSpec>[];
+  // Slot 0: the saved route line, always present when a route
+  // is active — including in draw mode, as the reference under
+  // the draft being drawn.
+  if (drawMode) {
+    layers.add(
+      MapLineLayerSpec(
+        points: routePoints,
+        color: green,
+        solid: routeSolid,
+      ),
+    );
+  } else if (selectedStopIndex != null &&
+      routeStops.isNotEmpty &&
+      roadPoints != null &&
+      roadPoints.length >= 2) {
+    final stop = routeStops[
+        selectedStopIndex.clamp(0, routeStops.length - 1)];
+    final split = splitPathAt(roadPoints, stop.pathIndex);
+    layers.addAll([
+      // Earlier part: dimmed to 0.15.
+      MapLineLayerSpec(
+        points: split.before,
+        color: green.withValues(alpha: 0.15),
+        solid: true,
+      ),
+      // Remaining part: soft glow + white casing + wide
+      // light-green core.
+      MapLineLayerSpec(
+        points: split.after,
+        color: green.withValues(alpha: 0.25),
+        solid: true,
+        width: 16,
+      ),
+      MapLineLayerSpec(
+        points: split.after,
+        color: Colors.white,
+        solid: true,
+        width: 11,
+      ),
+      MapLineLayerSpec(
+        points: split.after,
+        color: const Color(0xFF4ADE80),
+        solid: true,
+        width: 7,
+      ),
+    ]);
+  } else {
+    layers.add(
+      MapLineLayerSpec(
+        points: routePoints,
+        color: green,
+        solid: routeSolid,
+      ),
+    );
+  }
+  // Trailing slot, draw mode only and only once the admin has
+  // tapped (or the draft was pre-filled from a saved direction):
+  // the amber draft line. An empty draft draws NOTHING.
+  if (drawMode && draftWaypoints.isNotEmpty) {
+    final direct = [
+      draftOrigin,
+      ...draftWaypoints.map((w) => w.point),
+      draftDest,
+    ];
+    final points = draftRoadPoints ?? direct;
+    layers.add(
+      MapLineLayerSpec(
+        points: points,
+        color: amber,
+        solid: draftRoadPoints != null,
+      ),
+    );
+  }
+  return layers;
+}
+
 /// Whether the native MapLibre map can render on this platform:
 /// Android, iOS, and web have federated implementations; desktop
 /// (and the Linux test host) do not — the plugin's own stub throws
@@ -1469,6 +1662,13 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   bool _lineMakerAddStop = false;
   List<RouteWaypoint> _draftPoints = const [];
   List<LatLng>? _draftRoadPoints;
+  // Memoized line-layer spec + the PolylineLayer list built from
+  // it (see _routePolylineLayers). Returning the identical list
+  // while the spec is unchanged keeps the maplibre plugin from
+  // re-adding layers on every rebuild — the churn that orphaned
+  // stale green/amber lines on Steven's phone (Nov 7, 19:17).
+  List<MapLineLayerSpec>? _lineLayerSpecs;
+  List<PolylineLayer> _lineLayers = const [];
   int? _selectedDraftIndex;
   int _draftRequestId = 0;
   bool _lineMakerSaving = false;
@@ -1871,7 +2071,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _refreshRouteStops();
     _resetSheetScroll();
     if (route != null) {
-      _fitActiveRoute();
+      // Fit for the Half sheet below: the sheet snaps to Half
+      // right after, so the fit must already clear it — else
+      // the End pin lands behind the sheet (Steven, Nov 7,
+      // 19:36: End pin off-screen at Half).
+      _fitActiveRoute(sheetFraction: 0.55);
       _fetchRoadPath(oLat, oLng, destHub, via: resolved.via);
       _snapSheet(_SheetSnap.half);
     }
@@ -1957,8 +2161,15 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
   /// Fits the map to a southwest/northeast box. Native fitBounds
   /// has no maxZoom, so a short hop (two nearby hubs) is clamped
-  /// back to zoom 15 afterwards, like before.
-  Future<void> _fitBounds(LatLng sw, LatLng ne) async {
+  /// back to zoom 15 afterwards, like before. [padding] insets
+  /// the bounds in the viewport — the route fit passes the
+  /// sheet-aware padding from [routeFitPadding] so the bounds
+  /// land in the visible area above the sheet, not behind it.
+  Future<void> _fitBounds(
+    LatLng sw,
+    LatLng ne, {
+    EdgeInsets padding = const EdgeInsets.all(80),
+  }) async {
     final controller = _mapController;
     if (controller == null) return;
     try {
@@ -1969,7 +2180,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           latitudeSouth: math.min(sw.latitude, ne.latitude),
           latitudeNorth: math.max(sw.latitude, ne.latitude),
         ),
-        padding: const EdgeInsets.all(80),
+        padding: padding,
         nativeDuration: const Duration(milliseconds: 1400),
       );
       final camera = controller.getCamera();
@@ -1987,14 +2198,24 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   }
 
   /// Fits the map to the active route's endpoints (origin +
-  /// destination, padded so the bounds never degenerate). Used by
-  /// _selectHub / _onFaresJump and once when the native map is
-  /// created, when a route selected before creation can finally
-  /// fit.
-  void _fitActiveRoute() {
+  /// destination, padded so the bounds never degenerate) in the
+  /// area VISIBLE above the draggable sheet — the bottom inset
+  /// clears the sheet (see [routeFitPadding]), so the Start and
+  /// End pins both land on screen instead of the End hiding
+  /// behind the sheet at Half. Used by _selectHub / _onFaresJump
+  /// and once when the native map is created, when a route
+  /// selected before creation can finally fit. [sheetFraction]
+  /// is the fraction the sheet WILL be at when the fit lands
+  /// (the jump snaps to Half right after fitting); null = the
+  /// sheet's current snap (Peek 0.20 / Half 0.55, same values
+  /// as [_snapSheet]).
+  void _fitActiveRoute({double? sheetFraction}) {
     final route = _activeRoute;
     final origin = _activeRouteOrigin;
     if (route == null || origin == null) return;
+    final fraction =
+        sheetFraction ??
+        (_sheetSnap == _SheetSnap.half ? 0.55 : 0.20);
     _fitBounds(
       LatLng(
         math.min(origin.latitude, route.dest.lat) - 0.01,
@@ -2003,6 +2224,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       LatLng(
         math.max(origin.latitude, route.dest.lat) + 0.01,
         math.max(origin.longitude, route.dest.lng) + 0.01,
+      ),
+      padding: routeFitPadding(
+        screenHeight: MediaQuery.of(context).size.height,
+        sheetFraction: fraction,
       ),
     );
   }
@@ -2249,103 +2474,66 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// standard-green line. One [PolylineLayer] per visual style
   /// (MapLibre styles a whole layer one colour/width, so the
   /// highlight is four layers drawn bottom-to-top, as before).
+  /// Line layers for the map, via the stable-slot spec in
+  /// [mapLineLayers] (see its doc comment for why the slots are
+  /// stable). The returned list instance is cached while the
+  /// spec is unchanged, so the maplibre plugin's layer
+  /// reconciler sees identical layers and skips its remove+add
+  /// cycle on rebuilds where nothing moved — the churn that
+  /// orphaned stale green/amber lines on Steven's phone
+  /// (Nov 7, 19:17). Entering/exiting draw mode only
+  /// grows/shrinks the list at the trailing (draft) slot.
   List<PolylineLayer> _routePolylineLayers() {
-    // Draw mode: only the draft line shows (amber) — it starts
-    // pre-filled from the active route's direction, so it IS the
-    // route line being edited. Solid = live OSRM shape through
-    // the draft points; dashed = direct line until it arrives.
-    // Add-stop mode keeps the normal route line (the route is
-    // the context for placing the stop).
-    if (_lineMakerActive && !_lineMakerAddStop) {
-      final direct = _draftLinePoints();
-      if (direct.length < 2) return const [];
-      const amber = Color(0xFFF59E0B);
-      final points = _draftRoadPoints ?? direct;
-      final solid = _draftRoadPoints != null;
-      return [
+    if (_activeRoute == null || _activeRouteOrigin == null) {
+      _lineLayerSpecs = null;
+      _lineLayers = const [];
+      return const [];
+    }
+    final route = _activeRoute!;
+    final origin = _activeRouteOrigin!;
+    final dest = LatLng(route.dest.lat, route.dest.lng);
+    // No road shape yet: the dashed fallback follows the custom
+    // route's own via-stops instead of a straight origin→dest
+    // line, so a Partas line already differs from a Dominion line.
+    final via = _customRouteViaPoints(route);
+    final routePoints = _roadPoints ?? [origin, ...via, dest];
+    final drawMode = _lineMakerActive && !_lineMakerAddStop;
+    final specs = mapLineLayers(
+      routePoints: routePoints,
+      routeSolid: _roadPoints != null,
+      selectedStopIndex: _selectedStopIndex,
+      routeStops: _routeStops,
+      roadPoints: _roadPoints,
+      drawMode: drawMode,
+      draftWaypoints: _draftPoints,
+      draftOrigin: origin,
+      draftDest: dest,
+      draftRoadPoints: _draftRoadPoints,
+    );
+    if (_lineLayerSpecs != null &&
+        listEquals(_lineLayerSpecs, specs)) {
+      return _lineLayers;
+    }
+    _lineLayerSpecs = specs;
+    _lineLayers = [
+      for (final spec in specs)
         PolylineLayer(
           polylines: [
             Feature<LineString>(
               geometry: LineString(
-                points
+                spec.points
                     .expand((p) => [p.longitude, p.latitude])
                     .toList()
                     .positions(Coords.xy),
               ),
             ),
           ],
-          color: amber,
-          width: 6,
-          dashArray: solid ? null : const [24, 12],
+          color: spec.color,
+          width: spec.width,
+          dashArray: spec.solid ? null : const [24, 12],
         ),
-      ];
-    }
-    if (_activeRoute == null || _activeRouteOrigin == null) {
-      return const [];
-    }
-    const green = Color(0xFF16A34A);
-    final dest = LatLng(_activeRoute!.dest.lat, _activeRoute!.dest.lng);
-    final List<LatLng> points;
-    final bool solid;
-    // No road shape yet: the dashed fallback follows the custom
-    // route's own via-stops instead of a straight origin→dest
-    // line, so a Partas line already differs from a Dominion line.
-    final via = _customRouteViaPoints(_activeRoute!);
-    points = _roadPoints ?? [_activeRouteOrigin!, ...via, dest];
-    solid = _roadPoints != null;
-    Feature<LineString> line(List<LatLng> pts) => Feature<LineString>(
-      geometry: LineString(
-        pts
-            .expand((p) => [p.longitude, p.latitude])
-            .toList()
-            .positions(Coords.xy),
-      ),
-    );
-    // Route segment highlight: the tapped stop → destination
-    // lights up, the earlier part dims.
-    if (_selectedStopIndex != null &&
-        _routeStops.isNotEmpty &&
-        _roadPoints != null &&
-        _roadPoints!.length >= 2) {
-      final stop = _routeStops[
-          _selectedStopIndex!.clamp(0, _routeStops.length - 1)];
-      final split = splitPathAt(_roadPoints!, stop.pathIndex);
-      final before = split.before;
-      final after = split.after;
-      return [
-        // Earlier part: dimmed to 0.15.
-        PolylineLayer(
-          polylines: [line(before)],
-          color: green.withValues(alpha: 0.15),
-          width: 6,
-        ),
-        // Remaining part: soft glow + white casing + wide
-        // light-green core.
-        PolylineLayer(
-          polylines: [line(after)],
-          color: green.withValues(alpha: 0.25),
-          width: 16,
-        ),
-        PolylineLayer(
-          polylines: [line(after)],
-          color: Colors.white,
-          width: 11,
-        ),
-        PolylineLayer(
-          polylines: [line(after)],
-          color: const Color(0xFF4ADE80),
-          width: 7,
-        ),
-      ];
-    }
-    return [
-      PolylineLayer(
-        polylines: [line(points)],
-        color: green,
-        width: 6,
-        dashArray: solid ? null : const [24, 12],
-      ),
     ];
+    return _lineLayers;
   }
 
   /// Map markers — clean, like the preview: ONLY the active
@@ -2385,7 +2573,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         );
       }
     } else {
-      for (final pin in routeStopPins(_routeStops, _selectedStopIndex)) {
+      // Start + End paint last (on top) — see
+      // [orderStopPinsForMarkers]: a waypoint tapped near the
+      // origin must not hide the Start pin underneath it.
+      for (final pin in orderStopPinsForMarkers(
+        routeStopPins(_routeStops, _selectedStopIndex),
+      )) {
         markers.add(
           Marker(
             point: Geographic(lon: pin.lng, lat: pin.lat),
@@ -2507,8 +2700,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// Enters draw-line mode for the active route (admin-only,
   /// sheet header button). Requires an active route: the draft
   /// starts pre-filled from that route's current effective
-  /// direction, so editing never starts from an empty map. The
-  /// sheet hides (restored on exit) and the stop card dismisses.
+  /// direction. When the route has no saved direction the draft
+  /// is empty and NO amber line is drawn until the admin taps —
+  /// the green route line stays visible as the reference (a
+  /// straight origin→destination amber line would invent a line
+  /// the admin never tapped). The sheet hides (restored on
+  /// exit) and the stop card dismisses.
   void _enterDrawLineMode() {
     if (!isAdminUser(widget.currentUser)) return;
     final route = _activeRoute;
@@ -2593,20 +2790,6 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _selectedDraftIndex = _draftPoints.length - 1;
     });
     _refreshDraftOsrm();
-  }
-
-  /// The draft line's direct (dashed) points: origin → draft
-  /// points in order → destination. Empty when no route is
-  /// active (draw mode always has one).
-  List<LatLng> _draftLinePoints() {
-    final route = _activeRoute;
-    final origin = _activeRouteOrigin;
-    if (route == null || origin == null) return const [];
-    return [
-      origin,
-      ..._draftPoints.map((w) => w.point),
-      LatLng(route.dest.lat, route.dest.lng),
-    ];
   }
 
   /// Refreshes the draft line's road shape through the draft
