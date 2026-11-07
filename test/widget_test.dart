@@ -5,7 +5,7 @@
 // The app now boots through the first-time gate (splash -> dashboard
 // when onboarding is already done), so these tests set the onboarding
 // flag in mock prefs and settle past the 1.2s splash. Student is the
-// default tab on open; the top nav order is Student, Friends, Fares,
+// default tab on open; the top nav order is Student, Study, Fares,
 // Map, Communities, Account.
 import 'package:estudyantego/features/top_nav.dart';
 import 'package:estudyantego/main.dart';
@@ -16,7 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _labels = [
   'Student',
-  'Friends',
+  'Study',
   'Fares',
   'Map',
   'Communities',
@@ -26,6 +26,9 @@ const _labels = [
 Future<void> _pumpApp(WidgetTester tester) async {
   SharedPreferences.setMockInitialValues({'byahetayo_onboarding_done': true});
   await tester.pumpWidget(const EstudyanteGOApp());
+  await tester.pumpAndSettle();
+  // Tap-to-start splash (Nov 6): the app waits for the tap.
+  await tester.tap(find.byKey(const Key('splash-start')));
   await tester.pumpAndSettle();
 }
 
@@ -112,7 +115,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
 
-    // Communities sits after Friends: switching shows the moved section.
+    // Communities sits after Study: switching shows the moved section.
     // (The section title sits below the share card, so the finder needs
     // skipOffstage: false in this phone viewport even though the tab
     // is selected and the content is in the tree.)
@@ -120,5 +123,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Community', skipOffstage: false), findsOneWidget);
     expect(find.text('Share info', skipOffstage: true), findsOneWidget);
+  });
+
+  testWidgets('Study is the second tab; Friends is not a tab anymore', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+
+    await _pumpApp(tester);
+
+    // Preview parity (Nov 6): Student, Study, Fares, Map,
+    // Communities, Account — Friends moved to Account Quick Actions.
+    expect(
+      find.byKey(const Key('top-nav-item-Study')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('top-nav-item-Friends')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('top-nav-item-Study')));
+    await tester.pumpAndSettle();
+    expect(find.text('Study', skipOffstage: true), findsWidgets);
+    expect(find.text('GENERAL WEIGHTED AVERAGE'), findsOneWidget);
+    expect(find.text('Grades'), findsOneWidget);
+    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Notes'), findsOneWidget);
+    expect(find.text('Review'), findsOneWidget);
   });
 }
