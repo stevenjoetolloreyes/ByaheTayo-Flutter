@@ -5,9 +5,10 @@
 // "Your Student Companion" tagline, and a subtle one-shot loading
 // bar. The screen resolves the next destination (onboarding, sign-in,
 // or dashboard) while it shows, waits for a short minimum display
-// time so the brand moment reads, then hands off exactly once via
-// [onDestination]. The progress animation is finite (one 1.2s run),
-// so widget tests can settle it.
+// time so the brand moment reads, then waits for the user's tap
+// ("I-tap para magsimula" — preview tap-to-start, Nov 6) and hands
+// off exactly once via [onDestination]. The progress animation is
+// finite (one 1.2s run), so widget tests can settle it.
 //
 // The splash follows the app's selected theme ([themeMode]) so there
 // is no flash of the wrong theme at startup; it has no theme
@@ -16,7 +17,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../diagnostics/diagnostics.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
 
@@ -47,6 +47,13 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _controller;
   bool _handedOff = false;
 
+  /// True once the next destination is resolved AND the minimum
+  /// brand moment has elapsed: the splash then waits for the tap
+  /// instead of handing off on its own (preview tap-to-start,
+  /// Nov 6 — "I-tap para magsimula").
+  bool _ready = false;
+  AppStartDestination? _destination;
+
   @override
   void initState() {
     super.initState();
@@ -54,56 +61,27 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..forward();
-    // Splash stage start (recorded, never blocking, never throwing).
-    ErrorLogService.instance.record(
-      category: ErrorCategory.startup,
-      message: 'Splash init.',
-      startupStage: StartupStage.splash.name,
-      severity: ErrorSeverity.info,
-    );
     _go();
   }
 
   Future<void> _go() async {
-    // Previously unguarded: a resolve() throw left the splash frozen
-    // forever (no handoff, no error shown). Now the failure is
-    // recorded and the app falls back to onboarding — the safe
-    // first-launch destination — instead of freezing. Onboarding
-    // progress in prefs is never cleared by this fallback.
-    AppStartDestination destination;
-    try {
-      final results = await Future.wait([
-        widget.resolve(),
-        Future<void>.delayed(const Duration(milliseconds: 1200)),
-      ]);
-      destination = results.first as AppStartDestination;
-    } catch (error, stack) {
-      try {
-        await ErrorLogService.instance.record(
-          category: ErrorCategory.startup,
-          message: 'Splash resolve failed, falling back to onboarding: $error',
-          stackTrace: stack.toString(),
-          startupStage: StartupStage.splash.name,
-          severity: ErrorSeverity.error,
-        );
-      } catch (_) {
-        // Diagnostics failure must never block the fallback.
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      destination = AppStartDestination.onboarding;
-    }
+    final results = await Future.wait([
+      widget.resolve(),
+      Future<void>.delayed(const Duration(milliseconds: 1200)),
+    ]);
     if (!mounted || _handedOff) return;
+    setState(() {
+      _destination = results.first as AppStartDestination;
+      _ready = true;
+    });
+  }
+
+  /// The tap that starts the app. Exactly once, like the old
+  /// automatic handoff.
+  void _start() {
+    final destination = _destination;
+    if (_handedOff || destination == null) return;
     _handedOff = true;
-    try {
-      await ErrorLogService.instance.record(
-        category: ErrorCategory.startup,
-        message: 'Splash completed, destination: ${destination.name}.',
-        startupStage: StartupStage.splash.name,
-        severity: ErrorSeverity.info,
-      );
-    } catch (_) {
-      // Diagnostics failure must never block the handoff.
-    }
     widget.onDestination(destination);
   }
 
@@ -133,8 +111,15 @@ class _SplashScreenState extends State<SplashScreen>
                     AnimatedBuilder(
                       animation: _controller,
                       builder: (context, child) {
-                        final scale =
-                            0.92 + 0.08 * _controller.value.clamp(0.0, 1.0);
+                        // Reduced motion: no scale-in, the logo
+                        // simply appears.
+                        final reduceMotion = MediaQuery.of(context)
+                            .disableAnimations;
+                        final scale = reduceMotion
+                            ? 1.0
+                            : 0.92 +
+                                0.08 *
+                                    _controller.value.clamp(0.0, 1.0);
                         return Transform.scale(scale: scale, child: child);
                       },
                       child: Image.asset(
@@ -182,13 +167,39 @@ class _SplashScreenState extends State<SplashScreen>
                       },
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      'Loading…',
-                      style: TextStyle(
-                        color: colors.secondaryText,
-                        fontSize: 13,
-                      ),
+                    AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, _) {
+                        return Text(
+                          _ready
+                              ? 'Ready'
+                              : 'Naglo-load… ${(_controller.value * 100).round()}%',
+                          style: TextStyle(
+                            color: colors.secondaryText,
+                            fontSize: 13,
+                          ),
+                        );
+                      },
                     ),
+                    // Tap-to-start (preview parity, Nov 6): the app
+                    // waits here until the user taps — it never
+                    // jumps ahead on its own.
+                    if (_ready) ...[
+                      const SizedBox(height: 24),
+                      FilledButton(
+                        key: const Key('splash-start'),
+                        onPressed: _start,
+                        child: const Text('I-tap para magsimula'),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Buksan ang EstudyanteGO',
+                        style: TextStyle(
+                          color: colors.secondaryText,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
