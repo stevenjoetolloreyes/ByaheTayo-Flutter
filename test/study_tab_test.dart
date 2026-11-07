@@ -1,11 +1,18 @@
-// Tests for the Study tab (preview parity, Nov 6, 2026): pill
-// sub-navigation Grades / Files / Notes / Review over the app's
-// REAL data — no sample GWA, no sample subjects, no sample files.
+// Tests for the Study tab (preview parity, Nov 6, 2026; color +
+// design port from the preview's Study tab, Nov 7, 2026): bottom
+// pill nav Grades / Files / Notes / Review, per-panel title +
+// heart/star chips, Quiz | Summary pills, blue/green/amber quiz
+// deck cards, gradient GWA card — over the app's REAL data. No
+// sample GWA, no sample subjects, no sample files, no sample
+// quizzes, no sample heart count.
 //
 // Rules pinned here: a fresh install shows GWA "—" and honest
 // empty states; a recorded grade computes a real weighted GWA;
 // files start at 0 files / 0 B of 5 GB; notes and quizzes come
-// from the same StudentStorage the Student tab already uses.
+// from the same StudentStorage the Student tab already uses;
+// the ❤️ chip is the favorited-notes count (0 with none) and the
+// ⭐ chip is the real points balance (0 pts with no wallet
+// controller wired, as in widget tests).
 import 'dart:convert';
 
 import 'package:estudyantego/features/study_tab.dart';
@@ -19,6 +26,13 @@ const _gradeJson =
     '[{"subjectId":"s1","grade":1.5,"units":3,"semester":1}]';
 const _noteJson =
     '[{"id":"n1","title":"My note","subject":"Math","body":"hello","favorite":false,"updated":"2026-11-06T00:00:00.000"}]';
+const _favNoteJson =
+    '[{"id":"n1","title":"Fav note","subject":"Math","body":"hello","favorite":true,"updated":"2026-11-06T00:00:00.000"}]';
+const _quizJson =
+    '[{"id":"q1","title":"My first quiz","subject":"Math","timeLimitSec":0,"questions":['
+    '{"type":"mcq","question":"What is 2+2?","options":["3","4"],"correctIndex":1,"answer":"4","explanation":""},'
+    '{"type":"mcq","question":"What is 3+3?","options":["5","6"],"correctIndex":1,"answer":"6","explanation":""}'
+    '],"difficulty":"medium","randomize":false}]';
 
 Future<void> _pumpTab(
   WidgetTester tester, {
@@ -31,14 +45,20 @@ Future<void> _pumpTab(
   await tester.pumpAndSettle();
 }
 
+Future<void> _tapNav(WidgetTester tester, String panel) async {
+  await tester.tap(find.byKey(ValueKey('study-nav-$panel')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('Grades is the default panel with honest empty states',
       (tester) async {
     await _pumpTab(tester);
-    expect(find.text('Study'), findsOneWidget);
-    for (final label in ['Grades', 'Files', 'Notes', 'Review']) {
-      expect(find.text(label), findsWidgets);
-    }
+    // Per-panel title (the preview's page title) + bottom nav.
+    expect(find.text('Grades'), findsNWidgets(2)); // title + nav
+    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Notes'), findsOneWidget);
+    expect(find.text('Review'), findsOneWidget);
     // No sample GWA: fresh install shows "—", never the preview's
     // sample 1.58.
     expect(find.text('—'), findsWidgets);
@@ -47,6 +67,17 @@ void main() {
     expect(find.text('GENERAL WEIGHTED AVERAGE'), findsOneWidget);
     expect(find.text('1.00 – 1.50 Excellent'), findsOneWidget);
     expect(find.text('5.00 Failed'), findsOneWidget);
+    // Chips: no favorites, no wallet controller → honest zeros.
+    expect(find.text('0 pts'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('study-hearts-chip')),
+        matching: find.text('0'),
+      ),
+      findsOneWidget,
+    );
+    // The + FAB is present on the default panel.
+    expect(find.byIcon(Icons.add), findsOneWidget);
   });
 
   testWidgets('a recorded grade computes a real weighted GWA',
@@ -68,8 +99,7 @@ void main() {
   testWidgets('Files panel starts empty: 0 files, 0 B of 5 GB',
       (tester) async {
     await _pumpTab(tester);
-    await tester.tap(find.text('Files'));
-    await tester.pumpAndSettle();
+    await _tapNav(tester, 'files');
     expect(find.text('Study files'), findsOneWidget);
     expect(find.text('0 B of 5 GB used'), findsOneWidget);
     for (final folder in ['Lectures', 'Activities', 'Reviewers']) {
@@ -87,10 +117,13 @@ void main() {
     await _pumpTab(tester, prefs: {
       'byahetayo_student_notes': _noteJson,
     });
-    await tester.tap(find.text('Notes'));
-    await tester.pumpAndSettle();
+    await _tapNav(tester, 'notes');
     expect(find.text('Search notes'), findsOneWidget);
     expect(find.text('My note'), findsOneWidget);
+    // Preview note card: body excerpt, subject tag, "Nov 6" date.
+    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('Math'), findsOneWidget);
+    expect(find.text('Nov 6'), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextField, 'Search notes'),
       'zzz-no-match',
@@ -103,8 +136,9 @@ void main() {
   testWidgets('Review panel shows real study entry points, empty states',
       (tester) async {
     await _pumpTab(tester);
-    await tester.tap(find.text('Review'));
-    await tester.pumpAndSettle();
+    await _tapNav(tester, 'review');
+    // Per-panel title + nav both read "Review".
+    expect(find.text('Review'), findsNWidgets(2));
     expect(find.text('Pick how to study'), findsOneWidget);
     expect(find.text('Flashcards'), findsOneWidget);
     expect(find.text('Quiz'), findsWidgets);
@@ -118,6 +152,54 @@ void main() {
     expect(find.text('Quizzes completed'), findsOneWidget);
     expect(find.text('Average score'), findsOneWidget);
     expect(find.text('No quiz attempts yet.'), findsOneWidget);
+  });
+
+  testWidgets('Review deck card shows a real quiz, never sample decks',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_quizzes': _quizJson,
+    });
+    await _tapNav(tester, 'review');
+    expect(find.text('My first quiz'), findsOneWidget);
+    expect(find.text('MULTIPLE CHOICE'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('questions'), findsOneWidget);
+    expect(find.text('Math'), findsOneWidget);
+    expect(find.text('No quizzes yet.'), findsNothing);
+    // The preview's sample decks are never hardcoded.
+    expect(find.text('11 Nursing Theorists and Their Theories'),
+        findsNothing);
+    expect(find.text('Audit Principles and Process'), findsNothing);
+    expect(find.text('Computer Programming Fundamentals'), findsNothing);
+  });
+
+  testWidgets('heart chip counts favorited notes, honestly',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_notes': _favNoteJson,
+    });
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('study-hearts-chip')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('15'), findsNothing);
+  });
+
+  testWidgets('Grades FAB points at the Student tab with no subjects',
+      (tester) async {
+    await _pumpTab(tester);
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
+    expect(
+      find.text(
+        'Add subjects from the Student tab → Classes & Timetable first.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
   });
 
   testWidgets('grade form validates the 1.00–5.00 range', (tester) async {

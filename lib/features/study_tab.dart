@@ -1,14 +1,18 @@
-// Study tab — second tab in the top nav (preview parity, Nov 6, 2026).
+// Study tab — second tab in the top nav (preview parity, Nov 6, 2026;
+// color + design port from the preview's Study tab, Nov 7, 2026).
 //
-// The preview's Study tab carries Grades, Files, Notes and Review
-// behind its own pill sub-navigation. The shape is the preview's;
-// the CONTENT is the app's own real data only:
+// The DESIGN is the preview's (fares-phone-preview Study CSS, dark
+// default + light theme): per-panel title + heart/star chips, Quiz |
+// Summary pills, blue/green/amber quiz deck cards, gradient GWA
+// card, tinted file-type tiles, note cards with subject tags, a
+// green + FAB, and a floating bottom pill nav (Grades | Files |
+// Notes | Review). The CONTENT is the app's own real data only —
+// the preview's sample quizzes, grades, files, notes and its ❤️ 15
+// are never hardcoded here:
 //
 // * Grades — the user's subjects (StudentStorage) + their own
-//   recorded grades (GradeRecord, new in student_data.dart). The
-//   preview's GWA 1.58 / 8 subjects are SAMPLE from a separate
-//   study-app preview and are never hardcoded here: a fresh install
-//   shows GWA "—" and "No grade yet" until the user records one.
+//   recorded grades (GradeRecord). A fresh install shows GWA "—"
+//   and "No grade yet" until the user records one.
 // * Files — file metadata the user added (StudyFile: name, size,
 //   type, folder). Nothing is seeded: folders start at 0 files and
 //   the storage bar at 0 B of 5 GB. Only metadata is stored, never
@@ -18,16 +22,60 @@
 // * Review — the real quizzes + attempts (StudentStorage) and the
 //   real study entry points: Flashcards, Quiz, and AI Quiz. The
 //   preview's Drag & Drop and Identification modes have no app
-//   equivalent and are NOT faked with a substitute (see the
-//   integration report's deviations).
+//   equivalent and are NOT faked with a substitute.
 //
-// No schema changes: grades + files are new additive
-// SharedPreferences keys; existing records are untouched.
+// Real-data mappings for the preview's chips (the preview's ❤️ 15
+// is a hardcoded sample):
+// * ❤️ = the user's favorited-notes count (Note.favorite, toggled
+//   in NotesScreen). 0 with no favorites — never invented.
+// * ⭐ = the real points balance from the shell's
+//   PointsWalletController (wired in main.dart; null in widget
+//   tests, where the chip honestly shows 0 pts).
+//
+// Deviations from the preview, with reasons:
+// * Quiz deck cards show the quiz's subject where the preview
+//   shows a date ("Oct 16"): Quiz stores no creation date, and
+//   the last-attempt date would mean something else, so it is
+//   not shown as a date.
+// * The preview's FAB opens a "What do you want to make?" sheet;
+//   the app has no such sheet, so the FAB goes straight to the
+//   panel's real create flow (Grades → grade form, Files → file
+//   picker, Notes → Notes, Review → AI Quiz).
+// * The preview's Review screen has no "Pick how to study" entry
+//   cards; the app keeps Flashcards / Quiz / AI Quiz below the
+//   deck list — they are the only way to take a quiz or open
+//   flashcards, so dropping them would remove real functionality.
+// * The header title follows the active panel (Grades / Files /
+//   Notes / Review). The preview's static markup only shows the
+//   default 'Review' title; the switch is inferred from its
+//   #stTitle script hook (unverified).
+// * Light-theme deck gradient stops are derived from the preview's
+//   light hues at the dark theme's alphas (the inspection reported
+//   light hues but not light gradient stops); the light border
+//   color is derived from the light text color at 0.08 (the
+//   preview's light theme does not override --line). The GWA
+//   gradient card keeps the dark gradient in light theme (white
+//   text on the brand gradient stays readable; no light variant
+//   was reported).
+// * The "Add file" header button and the "Open notes" button are
+//   gone — the panel-aware FAB is now the create entry (same
+//   destination). Subject rows drop the 'No code' placeholder
+//   (the preview shows code + name only when a code exists).
+// * The bottom pill nav's four buttons share the pill width
+//   equally (Expanded) and the pill caps at 400px with 16px
+//   side margins. The preview's pill is content-sized, but its
+//   buttons overflow a 390px phone by ~100px (widget_test, Nov 7)
+//   — equal widths keep the 13px labels and guarantee the fit
+//   on narrow phones instead of shrinking the text.
+//
+// No schema changes: grades + files are additive SharedPreferences
+// keys; existing records are untouched.
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'ai_quiz_generate_screen.dart';
 import 'app_layout.dart';
+import 'points_wallet_repository.dart';
 import 'student/notes_screen.dart';
 import 'student/student_data.dart';
 
@@ -35,6 +83,193 @@ import 'student/student_data.dart';
 const _studyFilesQuotaBytes = 5 * 1024 * 1024 * 1024;
 
 const _studyFolders = ['Lectures', 'Activities', 'Reviewers'];
+
+/// One deck accent: the hue color plus the two gradient stops
+/// (CSS 155deg: top-left toward bottom-right).
+typedef _DeckHue = ({Color hue, Color from, Color to});
+
+/// Preview Study tokens (fares-phone-preview Study CSS vars).
+/// Dark is the preview's default; light is its light theme. The
+/// page background itself comes from the app theme (#0c1410 dark),
+/// which already matches the preview.
+class _StudyTokens {
+  const _StudyTokens({
+    required this.surface,
+    required this.surface2,
+    required this.surface3,
+    required this.text,
+    required this.muted,
+    required this.faint,
+    required this.line,
+    required this.brand,
+    required this.brandDeep,
+    required this.brandSoft,
+    required this.accent,
+    required this.gold,
+    required this.sheetBg,
+    required this.ok,
+    required this.bad,
+    required this.blue,
+    required this.green,
+    required this.amber,
+    required this.violet,
+    required this.heart,
+    required this.deckHues,
+  });
+
+  static const dark = _StudyTokens(
+    surface: Color(0xFF13211A),
+    surface2: Color(0xFF1A2C22),
+    surface3: Color(0xFF223829),
+    text: Color(0xFFEEF5F1),
+    muted: Color(0xFF9DB4A8),
+    faint: Color(0xFF6F8A7C),
+    line: Color.fromRGBO(238, 245, 241, 0.09),
+    brand: Color(0xFF16A34A),
+    brandDeep: Color(0xFF14532D),
+    brandSoft: Color.fromRGBO(22, 163, 74, 0.16),
+    accent: Color(0xFF34D399),
+    gold: Color(0xFFF5C04E),
+    sheetBg: Color(0xFF101D16),
+    ok: Color(0xFF4ADE80),
+    bad: Color(0xFFFF8296),
+    blue: Color(0xFF6DB1F7),
+    green: Color(0xFF4ADE80),
+    amber: Color(0xFFF7B955),
+    violet: Color(0xFFBDA8FF),
+    heart: Color(0xFFFB4D6D),
+    deckHues: [
+      (
+        hue: Color(0xFF6DB1F7),
+        from: Color.fromRGBO(47, 127, 224, 0.26),
+        to: Color.fromRGBO(47, 127, 224, 0.08),
+      ),
+      (
+        hue: Color(0xFF4ADE80),
+        from: Color.fromRGBO(22, 163, 74, 0.26),
+        to: Color.fromRGBO(22, 163, 74, 0.08),
+      ),
+      (
+        hue: Color(0xFFF7B955),
+        from: Color.fromRGBO(245, 165, 36, 0.24),
+        to: Color.fromRGBO(245, 165, 36, 0.07),
+      ),
+    ],
+  );
+
+  static const light = _StudyTokens(
+    surface: Color(0xFFFFFFFF),
+    surface2: Color(0xFFEEF4F0),
+    surface3: Color(0xFFE2EDE6),
+    text: Color(0xFF10231A),
+    muted: Color(0xFF55705F),
+    faint: Color(0xFF82998A),
+    line: Color.fromRGBO(16, 35, 26, 0.08),
+    brand: Color(0xFF087C4B),
+    brandDeep: Color(0xFF064E36),
+    brandSoft: Color.fromRGBO(8, 124, 75, 0.1),
+    accent: Color(0xFF087C4B),
+    gold: Color(0xFFB97F10),
+    sheetBg: Color(0xFFFFFFFF),
+    ok: Color(0xFF12805C),
+    bad: Color(0xFFD43A54),
+    blue: Color(0xFF1F6AD0),
+    green: Color(0xFF12805C),
+    amber: Color(0xFFB97F10),
+    violet: Color(0xFF7C5CD6),
+    heart: Color(0xFFFB4D6D),
+    deckHues: [
+      (
+        hue: Color(0xFF1F6AD0),
+        from: Color.fromRGBO(31, 106, 208, 0.26),
+        to: Color.fromRGBO(31, 106, 208, 0.08),
+      ),
+      (
+        hue: Color(0xFF12805C),
+        from: Color.fromRGBO(18, 128, 92, 0.26),
+        to: Color.fromRGBO(18, 128, 92, 0.08),
+      ),
+      (
+        hue: Color(0xFFB97F10),
+        from: Color.fromRGBO(185, 127, 16, 0.24),
+        to: Color.fromRGBO(185, 127, 16, 0.07),
+      ),
+    ],
+  );
+
+  static _StudyTokens of(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? dark : light;
+
+  final Color surface;
+  final Color surface2;
+  final Color surface3;
+  final Color text;
+  final Color muted;
+  final Color faint;
+  final Color line;
+  final Color brand;
+  final Color brandDeep;
+  final Color brandSoft;
+  final Color accent;
+  final Color gold;
+  final Color sheetBg;
+  final Color ok;
+  final Color bad;
+  final Color blue;
+  final Color green;
+  final Color amber;
+  final Color violet;
+  final Color heart;
+  final List<_DeckHue> deckHues;
+}
+
+/// Grade-pill backgrounds (translucent; same in both themes).
+const _gradeExcellentBg = Color.fromRGBO(47, 191, 113, 0.16);
+const _gradeGoodBg = Color.fromRGBO(47, 127, 224, 0.16);
+const _gradePassingBg = Color.fromRGBO(245, 165, 36, 0.15);
+const _gradeFailedBg = Color.fromRGBO(244, 80, 106, 0.15);
+
+/// File-type icon tile backgrounds (translucent; same in both themes).
+const _tilePdfBg = Color.fromRGBO(244, 80, 106, 0.14);
+const _tileDocBg = Color.fromRGBO(47, 127, 224, 0.15);
+const _tilePptBg = Color.fromRGBO(245, 165, 36, 0.14);
+const _tileImgBg = Color.fromRGBO(47, 191, 113, 0.14);
+
+/// Note-tag backgrounds (translucent; same in both themes).
+const _tagBlueBg = Color.fromRGBO(47, 127, 224, 0.14);
+const _tagGreenBg = Color.fromRGBO(47, 191, 113, 0.13);
+const _tagAmberBg = Color.fromRGBO(245, 165, 36, 0.13);
+const _tagVioletBg = Color.fromRGBO(154, 123, 255, 0.14);
+
+/// Heart-chip background (translucent; same in both themes).
+const _heartChipBg = Color.fromRGBO(251, 77, 109, 0.13);
+
+/// Floating-layer shadows from the preview (same in both themes).
+const _navShadow = BoxShadow(
+  color: Color.fromRGBO(0, 0, 0, 0.4),
+  blurRadius: 34,
+  offset: Offset(0, 14),
+);
+const _fabShadow = BoxShadow(
+  color: Color.fromRGBO(0, 0, 0, 0.4),
+  blurRadius: 28,
+  offset: Offset(0, 12),
+);
+
+const _months = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 String _formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes B';
@@ -44,6 +279,9 @@ String _formatBytes(int bytes) {
   }
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
 }
+
+/// "Nov 4" — the preview's note-card date format.
+String _monthDay(DateTime d) => '${_months[d.month - 1]} ${d.day}';
 
 String _fileKindForExtension(String ext) {
   switch (ext.toLowerCase()) {
@@ -85,6 +323,7 @@ IconData _fileKindIcon(String kind) {
 /// GWA standing band (preview legend): 1.00–1.50 Excellent,
 /// 1.75–2.25 Good, 2.50–3.00 Passing, 5.00 Failed. Values between
 /// the printed bands take the nearest better-or-equal band edge.
+/// Also the band for a single grade's pill.
 String _gwaStanding(double gwa) {
   if (gwa <= 1.50) return 'Excellent';
   if (gwa <= 2.25) return 'Good';
@@ -93,7 +332,12 @@ String _gwaStanding(double gwa) {
 }
 
 class StudyTab extends StatefulWidget {
-  const StudyTab({super.key});
+  const StudyTab({super.key, this.walletController});
+
+  /// The shell's points wallet (same controller the Student and
+  /// Account tabs read). Null in widget tests — the ⭐ chip then
+  /// honestly shows 0 pts.
+  final PointsWalletController? walletController;
 
   @override
   State<StudyTab> createState() => _StudyTabState();
@@ -116,8 +360,34 @@ class _StudyTabState extends State<StudyTab> {
   @override
   void initState() {
     super.initState();
+    widget.walletController?.addListener(_onWalletChanged);
     _load();
   }
+
+  @override
+  void dispose() {
+    widget.walletController?.removeListener(_onWalletChanged);
+    super.dispose();
+  }
+
+  void _onWalletChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Real points balance from the wallet (⭐ chip). 0 when no
+  /// controller is wired (widget tests) — never invented.
+  int get _points => widget.walletController?.balance ?? 0;
+
+  /// Favorited notes (❤️ chip). The preview's 15 is a hardcoded
+  /// sample; the real value is the user's own favorited-note count.
+  int get _favoriteCount => _notes.where((n) => n.favorite).length;
+
+  String get _panelTitle => switch (_panel) {
+        'files' => 'Files',
+        'notes' => 'Notes',
+        'review' => 'Review',
+        _ => 'Grades',
+      };
 
   Future<void> _load() async {
     final subjects =
@@ -354,66 +624,376 @@ class _StudyTabState extends State<StudyTab> {
     await _load();
   }
 
+  /// The + FAB goes straight to the panel's real create flow (the
+  /// preview's "What do you want to make?" sheet has no app
+  /// equivalent). Grades has no "add subject" flow inside Study —
+  /// subjects come from the Student tab — so its FAB opens the
+  /// grade form for the first subject with no grade this semester.
+  Future<void> _onFab() async {
+    if (_panel == 'files') {
+      await _addFile();
+    } else if (_panel == 'notes') {
+      await _open(const NotesScreen());
+    } else if (_panel == 'review') {
+      await _open(const AiQuizGenerateScreen());
+    } else {
+      await _fabGrades();
+    }
+  }
+
+  Future<void> _fabGrades() async {
+    if (_subjects.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Add subjects from the Student tab → Classes & Timetable first.',
+          ),
+        ),
+      );
+      return;
+    }
+    final ungraded = _subjects.where((s) => _gradeFor(s.id) == null);
+    await _openGradeForm(
+        ungraded.isEmpty ? _subjects.first : ungraded.first);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ListView(
-      padding: AppLayout.pagePaddingTab,
+    final tokens = _StudyTokens.of(context);
+    return Stack(
       children: [
-        Text('Study',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800)),
-        const SizedBox(height: AppSpacing.s4),
-        Text(
-          'Grades, files, notes, and review — your real study data.',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: scheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: AppSpacing.s16),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'grades', label: Text('Grades')),
-            ButtonSegment(value: 'files', label: Text('Files')),
-            ButtonSegment(value: 'notes', label: Text('Notes')),
-            ButtonSegment(value: 'review', label: Text('Review')),
+        ListView(
+          // 118px bottom padding clears the floating pill nav +
+          // FAB, exactly like the preview's #screen-study.
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 118),
+          children: [
+            _panelHeader(tokens),
+            const SizedBox(height: AppSpacing.s16),
+            AnimatedSwitcher(
+              duration: _animDuration(context),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: switch (_panel) {
+                'files' =>
+                  _filesPanel(context, tokens, key: const ValueKey('files')),
+                'notes' =>
+                  _notesPanel(context, tokens, key: const ValueKey('notes')),
+                'review' => _reviewPanel(context, tokens,
+                    key: const ValueKey('review')),
+                _ => _gradesPanel(context, tokens,
+                    key: const ValueKey('grades')),
+              },
+            ),
           ],
-          selected: {_panel},
-          onSelectionChanged: (s) => setState(() => _panel = s.first),
         ),
-        const SizedBox(height: AppSpacing.s16),
-        AnimatedSwitcher(
-          duration: _animDuration(context),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.04),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
+        Positioned(
+          right: 18,
+          bottom: 84,
+          child: _fab(tokens),
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 16,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _bottomNav(tokens),
             ),
           ),
-          child: switch (_panel) {
-            'files' => _filesPanel(context, key: const ValueKey('files')),
-            'notes' => _notesPanel(context, key: const ValueKey('notes')),
-            'review' =>
-              _reviewPanel(context, key: const ValueKey('review')),
-            _ => _gradesPanel(context, key: const ValueKey('grades')),
-          },
         ),
       ],
     );
   }
 
+  // ------------------------------------------------------- shared bits
+
+  /// Preview header row: panel title left, ❤️ / ⭐ chips right.
+  /// Title is Plus Jakarta Sans 30px / 800, letter-spacing -0.02em.
+  Widget _panelHeader(_StudyTokens tokens) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            _panelTitle,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.6,
+              color: tokens.text,
+            ),
+          ),
+        ),
+        _chip(
+          key: const ValueKey('study-hearts-chip'),
+          icon: Icons.favorite,
+          iconColor: tokens.heart,
+          background: _heartChipBg,
+          label: '$_favoriteCount',
+          textColor: tokens.bad,
+        ),
+        const SizedBox(width: 8),
+        _chip(
+          key: const ValueKey('study-points-chip'),
+          icon: Icons.star,
+          iconColor: tokens.gold,
+          background: tokens.brandSoft,
+          label: '$_points pts',
+          textColor: tokens.accent,
+        ),
+      ],
+    );
+  }
+
+  /// Preview chip: 12.5px bold, padding 6px 11px, radius 999px.
+  Widget _chip({
+    required Key key,
+    required IconData icon,
+    required Color iconColor,
+    required Color background,
+    required String label,
+    required Color textColor,
+  }) {
+    return Container(
+      key: key,
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: iconColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Preview surface card: Study surface, hairline border, no
+  /// elevation shadow (the app's shared CardTheme is #202B25 in
+  /// dark mode — the preview's Study surfaces are #13211a etc.).
+  Widget _studyCard(_StudyTokens tokens, Widget child,
+      {double radius = 15, EdgeInsetsGeometry? padding}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: tokens.line),
+      ),
+      padding: padding,
+      child: child,
+    );
+  }
+
+  /// Honest empty-state card (same surface language).
+  Widget _emptyCard(_StudyTokens tokens, String title, String subtitle) {
+    return _studyCard(
+      tokens,
+      ListTile(
+        title: Text(title, style: TextStyle(color: tokens.text)),
+        subtitle: Text(subtitle, style: TextStyle(color: tokens.muted)),
+      ),
+    );
+  }
+
+  /// Preview + FAB: 56px circle, brand fill, '+' 20px.
+  Widget _fab(_StudyTokens tokens) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: tokens.brand,
+        boxShadow: const [_fabShadow],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _onFab,
+          child: const Center(
+            child: Icon(Icons.add, size: 20, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Preview bottom pill nav: sheet-bg pill, radius 999, padding
+  /// 6px, gap 4px; inactive buttons muted, active button brand
+  /// fill with white text. Order: Grades | Files | Notes | Review.
+  /// The four buttons share the pill width equally (Expanded):
+  /// the preview's content-sized pill overflows a 390px phone
+  /// by ~100px (widget_test, Nov 7), so equal widths — not
+  /// smaller text — keep the 13px labels and guarantee the fit
+  /// on narrow phones. Deviation from the preview, listed in
+  /// the file header.
+  Widget _bottomNav(_StudyTokens tokens) {
+    const entries = [
+      ('grades', 'Grades', Icons.workspace_premium_outlined),
+      ('files', 'Files', Icons.folder_outlined),
+      ('notes', 'Notes', Icons.note_alt_outlined),
+      ('review', 'Review', Icons.help_outline),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: tokens.sheetBg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tokens.line),
+        boxShadow: const [_navShadow],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          for (var i = 0; i < entries.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: _navButton(
+                tokens,
+                value: entries[i].$1,
+                label: entries[i].$2,
+                icon: entries[i].$3,
+                active: _panel == entries[i].$1,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Preview nav button: 44px tall, 13px bold, icon 15px;
+  /// active gets the brand fill + 14px side padding.
+  Widget _navButton(
+    _StudyTokens tokens, {
+    required String value,
+    required String label,
+    required IconData icon,
+    required bool active,
+  }) {
+    final color = active ? Colors.white : tokens.muted;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('study-nav-$value'),
+        onTap: () => setState(() => _panel = value),
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          height: 44,
+          padding:
+              EdgeInsets.symmetric(horizontal: active ? 14 : 10),
+          decoration: BoxDecoration(
+            color: active ? tokens.brand : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 15, color: color),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Preview segmented control (.st-seg): surface-2 container,
+  /// radius 15px, padding 4px, gap 4px; the active button is
+  /// surface-3 with accent text — NOT a solid green fill.
+  Widget _studySeg(
+    _StudyTokens tokens, {
+    required List<(String, String)> options,
+    required String selected,
+    required ValueChanged<String> onSelected,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: tokens.surface2,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: tokens.line),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => onSelected(options[i].$1),
+                  borderRadius: BorderRadius.circular(11),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 9, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: options[i].$1 == selected
+                          ? tokens.surface3
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Text(
+                      options[i].$2,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: options[i].$1 == selected
+                            ? tokens.accent
+                            : tokens.muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // ---------------------------------------------------------- Grades
 
-  Widget _gradesPanel(BuildContext context, {required Key key}) {
+  Widget _gradesPanel(BuildContext context, _StudyTokens tokens,
+      {required Key key}) {
     final gwa = _gwa;
     return Column(
       key: key,
@@ -421,120 +1001,186 @@ class _StudyTabState extends State<StudyTab> {
       children: [
         Text(
           'Your standing for A.Y. 2026–2027, computed from the subjects below.',
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: TextStyle(fontSize: 13.5, color: tokens.muted),
         ),
         const SizedBox(height: AppSpacing.s12),
-        SegmentedButton<int>(
-          segments: const [
-            ButtonSegment(value: 1, label: Text('1st Semester')),
-            ButtonSegment(value: 2, label: Text('2nd Semester')),
-          ],
-          selected: {_semester},
-          onSelectionChanged: (s) => setState(() => _semester = s.first),
+        _studySeg(
+          tokens,
+          options: const [('1', '1st Semester'), ('2', '2nd Semester')],
+          selected: '$_semester',
+          onSelected: (v) => setState(() => _semester = int.parse(v)),
         ),
         const SizedBox(height: AppSpacing.s16),
-        Card(
-          child: Padding(
-            padding: AppLayout.cardPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'GENERAL WEIGHTED AVERAGE',
-                  style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: AppSpacing.s8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      gwa == null ? '—' : gwa.toStringAsFixed(2),
-                      style: const TextStyle(
-                          fontSize: 40, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(width: AppSpacing.s12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            gwa == null ? '—' : _gwaStanding(gwa),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            gwa == null
-                                ? '—'
-                                : '$_gwaUnits units · $_gradedCount '
-                                    'graded',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+        Container(
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            gradient: LinearGradient(
+              // CSS 140deg: top-left toward bottom-right.
+              begin: Alignment(-0.643, -0.766),
+              end: Alignment(0.643, 0.766),
+              stops: [0.0, 0.55, 1.0],
+              colors: [
+                Color(0xFF14532D),
+                Color(0xFF16A34A),
+                Color(0xFF34D399),
               ],
             ),
+          ),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'GENERAL WEIGHTED AVERAGE',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.4,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    gwa == null ? '—' : gwa.toStringAsFixed(2),
+                    style: const TextStyle(
+                        fontSize: 44,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white),
+                  ),
+                  const SizedBox(width: AppSpacing.s12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          gwa == null ? '—' : _gwaStanding(gwa),
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white),
+                        ),
+                        Text(
+                          gwa == null
+                              ? '—'
+                              : '$_gwaUnits units · $_gradedCount '
+                                  'graded',
+                          style: const TextStyle(
+                              fontSize: 12.5, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.s12),
         if (_subjects.isEmpty)
-          const Card(
-            child: ListTile(
-              title: Text('No subjects yet.'),
-              subtitle: Text(
-                  'Add subjects from the Student tab → Classes & Timetable, then record grades here.'),
-            ),
+          _emptyCard(
+            tokens,
+            'No subjects yet.',
+            'Add subjects from the Student tab → Classes & Timetable, then record grades here.',
           )
         else
-          for (final subject in _subjects)
-            Card(
-              child: ListTile(
-                title: Text(subject.name),
-                subtitle: Text(
-                    subject.code.isEmpty ? 'No code' : subject.code),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _gradeFor(subject.id) == null
-                          ? 'No grade yet'
-                          : _gradeFor(subject.id)!
-                              .grade
-                              .toStringAsFixed(2),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(width: AppSpacing.s8),
-                    TextButton(
-                      onPressed: () => _openGradeForm(subject),
-                      child: Text(_gradeFor(subject.id) == null
-                          ? 'Add grade'
-                          : 'Edit'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          for (var i = 0; i < _subjects.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _subjectRow(tokens, _subjects[i]),
+          ],
         const SizedBox(height: AppSpacing.s12),
         Wrap(
           spacing: 12,
           runSpacing: 4,
-          children: const [
-            _LegendDot(Color(0xFF4ADE80), '1.00 – 1.50 Excellent'),
-            _LegendDot(Color(0xFF6DB1F7), '1.75 – 2.25 Good'),
-            _LegendDot(Color(0xFFF7B955), '2.50 – 3.00 Passing'),
-            _LegendDot(Color(0xFFFF8296), '5.00 Failed'),
+          children: [
+            _LegendDot(tokens.ok, '1.00 – 1.50 Excellent'),
+            _LegendDot(tokens.blue, '1.75 – 2.25 Good'),
+            _LegendDot(tokens.amber, '2.50 – 3.00 Passing'),
+            _LegendDot(tokens.bad, '5.00 Failed'),
           ],
         ),
       ],
     );
   }
 
+  /// Preview subject row: code 11px / 800 in blue, name 14px,
+  /// grade as a band-colored pill; Add grade / Edit stays.
+  Widget _subjectRow(_StudyTokens tokens, Subject subject) {
+    final grade = _gradeFor(subject.id);
+    return _studyCard(
+      tokens,
+      Padding(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (subject.code.isNotEmpty)
+                    Text(
+                      subject.code,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: tokens.blue,
+                      ),
+                    ),
+                  Text(
+                    subject.name,
+                    style: TextStyle(fontSize: 14, color: tokens.text),
+                  ),
+                ],
+              ),
+            ),
+            if (grade == null)
+              Text(
+                'No grade yet',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: tokens.muted),
+              )
+            else
+              _gradePill(tokens, grade.grade),
+            const SizedBox(width: AppSpacing.s8),
+            TextButton(
+              onPressed: () => _openGradeForm(subject),
+              child: Text(grade == null ? 'Add grade' : 'Edit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Preview grade pill: band-tinted background, band-hue text.
+  Widget _gradePill(_StudyTokens tokens, double grade) {
+    final (Color, Color) colors = switch (_gwaStanding(grade)) {
+      'Excellent' => (_gradeExcellentBg, tokens.ok),
+      'Good' => (_gradeGoodBg, tokens.blue),
+      'Passing' => (_gradePassingBg, tokens.amber),
+      _ => (_gradeFailedBg, tokens.bad),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.$1,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        grade.toStringAsFixed(2),
+        style: TextStyle(fontWeight: FontWeight.w700, color: colors.$2),
+      ),
+    );
+  }
+
   // ------------------------------------------------------------ Files
 
-  Widget _filesPanel(BuildContext context, {required Key key}) {
+  Widget _filesPanel(BuildContext context, _StudyTokens tokens,
+      {required Key key}) {
     final used = _files.fold<int>(0, (sum, f) => sum + f.sizeBytes);
     final filtered = _fileFilter == 'all'
         ? _files
@@ -543,137 +1189,221 @@ class _StudyTabState extends State<StudyTab> {
       key: key,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Card(
-          child: Padding(
-            padding: AppLayout.cardPadding,
+        _studyCard(
+          tokens,
+          Padding(
+            padding: const EdgeInsets.all(15),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Study files',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    Text('Study files',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: tokens.text)),
                     Text(
                       '${_formatBytes(used)} of 5 GB used',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: TextStyle(
+                          fontSize: 12.5, color: tokens.muted),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.s8),
-                LinearProgressIndicator(
-                  value: (used / _studyFilesQuotaBytes).clamp(0.0, 1.0),
-                ),
+                _storageBar(tokens, used),
               ],
             ),
           ),
+          radius: 17,
         ),
         const SizedBox(height: AppSpacing.s12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              for (final entry in const [
-                ('all', 'All'),
-                ('pdf', 'PDF'),
-                ('doc', 'Docs'),
-                ('ppt', 'Slides'),
-                ('img', 'Images'),
-              ])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(entry.$2),
-                    selected: _fileFilter == entry.$1,
-                    onSelected: (_) =>
-                        setState(() => _fileFilter = entry.$1),
-                  ),
-                ),
+              for (var i = 0; i < _fileFilters.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                _filterPill(
+                    tokens, _fileFilters[i].$1, _fileFilters[i].$2),
+              ],
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.s16),
-        const Text('FOLDERS',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        Text('FOLDERS',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: tokens.muted)),
         const SizedBox(height: AppSpacing.s8),
         Row(
           children: [
-            for (final folder in _studyFolders)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          const Icon(Icons.folder_outlined),
-                          const SizedBox(height: AppSpacing.s4),
-                          Text(folder,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700)),
-                          Text(
-                            '${_files.where((f) => f.folder == folder).length} files',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            for (var i = 0; i < _studyFolders.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(child: _folderCard(tokens, _studyFolders[i])),
+            ],
           ],
         ),
         const SizedBox(height: AppSpacing.s16),
-        Row(
-          children: [
-            const Expanded(
-              child: Text('RECENT FILES',
-                  style:
-                      TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-            ),
-            TextButton.icon(
-              onPressed: _addFile,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add file'),
-            ),
-          ],
-        ),
+        Text('RECENT FILES',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: tokens.muted)),
         const SizedBox(height: AppSpacing.s8),
         if (filtered.isEmpty)
-          const Card(
-            child: ListTile(
-              title: Text('No files yet.'),
-              subtitle: Text(
-                  'Add a PDF, document, slides, or image to keep it here.'),
-            ),
+          _emptyCard(
+            tokens,
+            'No files yet.',
+            'Add a PDF, document, slides, or image to keep it here.',
           )
         else
-          for (final file in filtered)
-            Card(
-              child: ListTile(
-                leading: Icon(_fileKindIcon(file.kind)),
-                title: Text(file.name),
-                subtitle: Text(
-                    '${_formatBytes(file.sizeBytes)} · ${file.folder}'),
-                trailing: IconButton(
-                  tooltip: 'Remove file',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () async {
-                    setState(() =>
-                        _files.removeWhere((f) => f.id == file.id));
-                    await _saveFiles();
-                  },
+          for (var i = 0; i < filtered.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _fileRow(tokens, filtered[i]),
+          ],
+      ],
+    );
+  }
+
+  static const _fileFilters = [
+    ('all', 'All'),
+    ('pdf', 'PDF'),
+    ('doc', 'Docs'),
+    ('ppt', 'Slides'),
+    ('img', 'Images'),
+  ];
+
+  /// Preview storage bar: surface-3 track, gradient fill
+  /// #14532d → #34d399.
+  Widget _storageBar(_StudyTokens tokens, int used) {
+    final fraction = (used / _studyFilesQuotaBytes).clamp(0.0, 1.0);
+    return Container(
+      height: 8,
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: tokens.surface3,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: fraction <= 0
+          ? null
+          : FractionallySizedBox(
+              widthFactor: fraction,
+              child: Container(
+                decoration: const BoxDecoration(
+                  borderRadius: BorderRadius.all(Radius.circular(999)),
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF14532D), Color(0xFF34D399)],
+                  ),
                 ),
               ),
             ),
-      ],
+    );
+  }
+
+  /// Preview filter pill: inactive surface-2 + muted text, active
+  /// brand fill + white text.
+  Widget _filterPill(_StudyTokens tokens, String value, String label) {
+    final active = _fileFilter == value;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _fileFilter = value),
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? tokens.brand : tokens.surface2,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+                color: active ? tokens.brand : tokens.line),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: active ? Colors.white : tokens.muted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Preview folder card: amber folder icon, file count below.
+  Widget _folderCard(_StudyTokens tokens, String folder) {
+    return _studyCard(
+      tokens,
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Icon(Icons.folder, color: tokens.amber),
+            const SizedBox(height: AppSpacing.s4),
+            Text(folder,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: tokens.text)),
+            Text(
+              '${_files.where((f) => f.folder == folder).length} files',
+              style: TextStyle(fontSize: 12.5, color: tokens.muted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Preview file row: tinted file-type icon tile, name, size ·
+  /// folder; delete stays.
+  Widget _fileRow(_StudyTokens tokens, StudyFile file) {
+    return _studyCard(
+      tokens,
+      ListTile(
+        leading: _fileTile(tokens, file.kind),
+        title: Text(file.name, style: TextStyle(color: tokens.text)),
+        subtitle: Text(
+          '${_formatBytes(file.sizeBytes)} · ${file.folder}',
+          style: TextStyle(color: tokens.muted),
+        ),
+        trailing: IconButton(
+          tooltip: 'Remove file',
+          icon: Icon(Icons.delete_outline, color: tokens.muted),
+          onPressed: () async {
+            setState(() => _files.removeWhere((f) => f.id == file.id));
+            await _saveFiles();
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Preview file-type icon tile: 40px, tinted background, hue icon.
+  Widget _fileTile(_StudyTokens tokens, String kind) {
+    final (Color, Color) colors = switch (kind) {
+      'pdf' => (_tilePdfBg, tokens.bad),
+      'doc' => (_tileDocBg, tokens.blue),
+      'ppt' => (_tilePptBg, tokens.amber),
+      'img' => (_tileImgBg, tokens.ok),
+      _ => (tokens.surface3, tokens.muted),
+    };
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: colors.$1,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(_fileKindIcon(kind), size: 20, color: colors.$2),
     );
   }
 
   // ------------------------------------------------------------ Notes
 
-  Widget _notesPanel(BuildContext context, {required Key key}) {
+  Widget _notesPanel(BuildContext context, _StudyTokens tokens,
+      {required Key key}) {
     final query = _noteQuery.toLowerCase();
     final filtered = _notes.where((n) {
       if (query.isEmpty) return true;
@@ -688,45 +1418,132 @@ class _StudyTabState extends State<StudyTab> {
           onChanged: (v) => setState(() => _noteQuery = v),
           decoration: InputDecoration(
             hintText: 'Search notes',
-            prefixIcon: const Icon(Icons.search),
+            hintStyle: TextStyle(color: tokens.faint),
+            prefixIcon: Icon(Icons.search, color: tokens.faint),
+            filled: true,
+            fillColor: tokens.surface2,
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16)),
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(color: tokens.line),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(color: tokens.line),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(color: tokens.accent),
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.s12),
         if (filtered.isEmpty)
-          const Card(
-            child: ListTile(
-              title: Text('No notes yet.'),
-              subtitle:
-                  Text('Write your first note to see it here.'),
-            ),
+          _emptyCard(
+            tokens,
+            'No notes yet.',
+            'Write your first note to see it here.',
           )
         else
-          for (final note in filtered)
-            Card(
-              child: ListTile(
-                title: Text(note.title),
-                subtitle: Text(note.subject.isEmpty
-                    ? 'No subject'
-                    : note.subject),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _open(const NotesScreen()),
-              ),
-            ),
-        const SizedBox(height: AppSpacing.s12),
-        FilledButton.icon(
-          onPressed: () => _open(const NotesScreen()),
-          icon: const Icon(Icons.note_outlined),
-          label: const Text('Open notes'),
-        ),
+          for (var i = 0; i < filtered.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _noteCard(tokens, filtered[i]),
+          ],
       ],
     );
   }
 
+  /// Preview note card: title 15px bold, 2-line clamped excerpt,
+  /// footer with subject tag + date ("Nov 4"). Tapping opens
+  /// NotesScreen for full CRUD.
+  Widget _noteCard(_StudyTokens tokens, Note note) {
+    return _studyCard(
+      tokens,
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _open(const NotesScreen()),
+          borderRadius: BorderRadius.circular(17),
+          child: Padding(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  note.title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: tokens.text,
+                  ),
+                ),
+                if (note.body.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    note.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: tokens.muted),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (note.subject.isNotEmpty)
+                      _tagPill(tokens, note.subject),
+                    const Spacer(),
+                    Text(
+                      _monthDay(note.updated),
+                      style:
+                          TextStyle(fontSize: 11.5, color: tokens.faint),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      radius: 17,
+    );
+  }
+
+  /// Preview note tag: tinted pill in the subject's color. The
+  /// color is a deterministic hash of the subject string, so a
+  /// subject keeps its color across restarts.
+  Widget _tagPill(_StudyTokens tokens, String subject) {
+    final (Color, Color) colors = _tagColors(tokens, subject);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.$1,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        subject,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.bold,
+          color: colors.$2,
+        ),
+      ),
+    );
+  }
+
+  (Color, Color) _tagColors(_StudyTokens tokens, String subject) {
+    final slot =
+        subject.codeUnits.fold<int>(0, (sum, c) => sum + c) % 4;
+    return switch (slot) {
+      0 => (_tagBlueBg, tokens.blue),
+      1 => (_tagGreenBg, tokens.ok),
+      2 => (_tagAmberBg, tokens.amber),
+      _ => (_tagVioletBg, tokens.violet),
+    };
+  }
+
   // ----------------------------------------------------------- Review
 
-  Widget _reviewPanel(BuildContext context, {required Key key}) {
+  Widget _reviewPanel(BuildContext context, _StudyTokens tokens,
+      {required Key key}) {
     final avg = _attempts.isEmpty
         ? null
         : _attempts
@@ -737,125 +1554,313 @@ class _StudyTabState extends State<StudyTab> {
       key: key,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'quiz', label: Text('Quiz')),
-            ButtonSegment(value: 'summary', label: Text('Summary')),
-          ],
-          selected: {_reviewMode},
-          onSelectionChanged: (s) => setState(() => _reviewMode = s.first),
+        _studySeg(
+          tokens,
+          options: const [('quiz', 'Quiz'), ('summary', 'Summary')],
+          selected: _reviewMode,
+          onSelected: (s) => setState(() => _reviewMode = s),
         ),
         const SizedBox(height: AppSpacing.s16),
         if (_reviewMode == 'quiz') ...[
-          const Text('Pick how to study',
-              style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: AppSpacing.s8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.style_outlined),
-              title: const Text('Flashcards'),
-              subtitle:
-                  const Text('Flip through questions one at a time'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () =>
-                  _open(const NotesScreen(initialTab: 'cards')),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.quiz_outlined),
-              title: const Text('Quiz'),
-              subtitle: const Text(
-                  'Answer multiple-choice, get scored'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () =>
-                  _open(const NotesScreen(initialTab: 'quizzes')),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.auto_awesome_outlined),
-              title: const Text('AI Quiz'),
-              subtitle: const Text(
-                  'Pick a PDF or photo of your notes and the app takes it from there'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(const AiQuizGenerateScreen()),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.s16),
-          const Text('Your quizzes',
-              style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: AppSpacing.s8),
           if (_quizzes.isEmpty)
-            const Card(
-              child: ListTile(
-                title: Text('No quizzes yet.'),
-                subtitle: Text(
-                    'Create one with AI or add a quiz from your notes.'),
-              ),
+            _emptyCard(
+              tokens,
+              'No quizzes yet.',
+              'Create one with AI or add a quiz from your notes.',
             )
           else
-            for (final quiz in _quizzes)
-              Card(
-                child: ListTile(
-                  title: Text(quiz.title),
-                  subtitle: Text(
-                      '${quiz.questions.length} questions'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () =>
-                      _open(const NotesScreen(initialTab: 'quizzes')),
-                ),
-              ),
-        ] else ...[
-          Card(
-            child: Padding(
-              padding: AppLayout.cardPadding,
-              child: Column(
-                children: [
-                  _summaryRow('Quizzes completed', '${_attempts.length}'),
-                  _summaryRow('Quizzes saved', '${_quizzes.length}'),
-                  _summaryRow(
-                    'Average score',
-                    avg == null ? '—' : '${avg.toStringAsFixed(1)}%',
-                  ),
-                  _summaryRow('Notes saved', '${_notes.length}'),
-                ],
-              ),
-            ),
+            for (var i = 0; i < _quizzes.length; i++) ...[
+              if (i > 0) const SizedBox(height: 12),
+              _deckCard(tokens, _quizzes[i], i),
+            ],
+          // The preview's Review screen has no entry cards; the
+          // app keeps them below the decks — they are the only way
+          // to take a quiz or open flashcards.
+          const SizedBox(height: AppSpacing.s16),
+          Text(
+            'Pick how to study',
+            style: TextStyle(
+                fontWeight: FontWeight.w700, color: tokens.text),
           ),
+          const SizedBox(height: AppSpacing.s8),
+          _entryCard(
+            tokens,
+            icon: Icons.style_outlined,
+            title: 'Flashcards',
+            subtitle: 'Flip through questions one at a time',
+            onTap: () => _open(const NotesScreen(initialTab: 'cards')),
+          ),
+          const SizedBox(height: 8),
+          _entryCard(
+            tokens,
+            icon: Icons.quiz_outlined,
+            title: 'Quiz',
+            subtitle: 'Answer multiple-choice, get scored',
+            onTap: () => _open(const NotesScreen(initialTab: 'quizzes')),
+          ),
+          const SizedBox(height: 8),
+          _entryCard(
+            tokens,
+            icon: Icons.auto_awesome_outlined,
+            title: 'AI Quiz',
+            subtitle:
+                'Pick a PDF or photo of your notes and the app takes it from there',
+            onTap: () => _open(const AiQuizGenerateScreen()),
+          ),
+        ] else ...[
+          _statCard(tokens,
+              icon: Icons.check_circle_outline,
+              title: 'Quizzes completed',
+              value: '${_attempts.length}'),
+          const SizedBox(height: 8),
+          _statCard(tokens,
+              icon: Icons.quiz_outlined,
+              title: 'Quizzes saved',
+              value: '${_quizzes.length}'),
+          const SizedBox(height: 8),
+          _statCard(tokens,
+              icon: Icons.analytics_outlined,
+              title: 'Average score',
+              value: avg == null ? '—' : '${avg.toStringAsFixed(1)}%'),
+          const SizedBox(height: 8),
+          _statCard(tokens,
+              icon: Icons.note_outlined,
+              title: 'Notes saved',
+              value: '${_notes.length}'),
           const SizedBox(height: AppSpacing.s12),
-          const Text('Recent attempts',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          Text(
+            'Recent attempts',
+            style: TextStyle(
+                fontWeight: FontWeight.w700, color: tokens.text),
+          ),
           const SizedBox(height: AppSpacing.s8),
           if (_attempts.isEmpty)
-            const Card(
-              child: ListTile(
-                title: Text('No quiz attempts yet.'),
-                subtitle: Text('Take a quiz to see your results here.'),
-              ),
+            _emptyCard(
+              tokens,
+              'No quiz attempts yet.',
+              'Take a quiz to see your results here.',
             )
           else
-            for (final attempt in _attempts.take(5))
-              Card(
-                child: ListTile(
-                  title: Text(attempt.quizTitle),
-                  subtitle: Text(
-                      '${attempt.score}/${attempt.total}'),
-                ),
-              ),
+            for (var i = 0; i < _attempts.take(5).length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              _attemptCard(tokens, _attempts[i]),
+            ],
         ],
       ],
     );
   }
 
-  Widget _summaryRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Expanded(child: Text(label)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ],
+  /// Preview quiz deck card: tinted gradient, MULTIPLE CHOICE
+  /// label in the deck hue, title, subject (where the preview
+  /// shows a date — Quiz stores no creation date), big question
+  /// count in the deck hue. Deck hues cycle blue → green → amber.
+  /// Tapping opens the quizzes list, as before.
+  Widget _deckCard(_StudyTokens tokens, Quiz quiz, int index) {
+    final hue = tokens.deckHues[index % tokens.deckHues.length];
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            border: Border.all(color: tokens.line),
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              // CSS 155deg: top-left toward bottom-right.
+              begin: const Alignment(-0.423, -0.906),
+              end: const Alignment(0.423, 0.906),
+              colors: [hue.from, hue.to],
+            ),
+          ),
+          child: InkWell(
+            onTap: () => _open(const NotesScreen(initialTab: 'quizzes')),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'MULTIPLE CHOICE',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.4,
+                            color: hue.hue,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          quiz.title,
+                          style: TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.bold,
+                            color: tokens.text,
+                          ),
+                        ),
+                        if (quiz.subject.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            quiz.subject,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: tokens.muted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${quiz.questions.length}',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: hue.hue,
+                        ),
+                      ),
+                      Text(
+                        'questions',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Study entry card (Flashcards / Quiz / AI Quiz): brand-soft
+  /// icon tile, title, subtitle, chevron.
+  Widget _entryCard(
+    _StudyTokens tokens, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return _studyCard(
+      tokens,
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(15),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: tokens.brandSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, size: 20, color: tokens.accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: tokens.text),
+                      ),
+                      Text(
+                        subtitle,
+                        style:
+                            TextStyle(fontSize: 12.5, color: tokens.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: tokens.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Preview summary card: 42px brand-soft icon tile, title,
+  /// value.
+  Widget _statCard(
+    _StudyTokens tokens, {
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return _studyCard(
+      tokens,
+      Padding(
+        padding: const EdgeInsets.all(15),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: tokens.brandSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 22, color: tokens.accent),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: tokens.text,
+                ),
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: tokens.text,
+              ),
+            ),
+          ],
+        ),
+      ),
+      radius: 17,
+    );
+  }
+
+  Widget _attemptCard(_StudyTokens tokens, QuizAttempt attempt) {
+    return _studyCard(
+      tokens,
+      ListTile(
+        title: Text(attempt.quizTitle,
+            style: TextStyle(color: tokens.text)),
+        subtitle: Text(
+          '${attempt.score}/${attempt.total}',
+          style: TextStyle(color: tokens.muted),
+        ),
       ),
     );
   }

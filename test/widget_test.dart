@@ -159,9 +159,12 @@ void main() {
 
     await tester.tap(find.byKey(const Key('top-nav-item-Study')));
     await tester.pumpAndSettle();
-    expect(find.text('Study', skipOffstage: true), findsWidgets);
+    // Ported Study header (Nov 7): the title follows the active
+    // panel (Grades by default) — the preview's #stTitle hook —
+    // so the screen shows "Grades", not "Study". The tab itself
+    // is still "Study" in the top nav (checked above).
+    expect(find.text('Grades'), findsWidgets); // Header + bottom nav.
     expect(find.text('GENERAL WEIGHTED AVERAGE'), findsOneWidget);
-    expect(find.text('Grades'), findsOneWidget);
     expect(find.text('Files'), findsOneWidget);
     expect(find.text('Notes'), findsOneWidget);
     expect(find.text('Review'), findsOneWidget);

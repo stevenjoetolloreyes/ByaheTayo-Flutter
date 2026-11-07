@@ -1552,6 +1552,7 @@ class MapTab extends StatefulWidget {
     this.customRouteRepository,
     this.fareOverrideRepository,
     this.busStopRepository,
+    this.visible = true,
   });
 
   final AuthUser? currentUser;
@@ -1568,6 +1569,14 @@ class MapTab extends StatefulWidget {
   /// hubs are known (e.g. tests, or Firebase not configured and
   /// no local repo).
   final BusStopRepository? busStopRepository;
+
+  /// True while this tab is the selected one (the shell passes
+  /// `selectedIndex == 3`). Used only to retry the tile sources
+  /// when the user returns to a map that failed to load — e.g.
+  /// after switching from a network that blocks the tile CDNs
+  /// to one that does not. Defaults to true so tests and other
+  /// callers keep the old behaviour.
+  final bool visible;
 
   @override
   State<MapTab> createState() => _MapTabState();
@@ -1616,6 +1625,29 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // initial load window after each style switch, never on
   // camera moves.
   Timer? _tileWatchdogTimer;
+  // Fallback-load timer: verifies the CartoDB fallback style
+  // actually loads after a switch. The Meta-style watchdog
+  // above only covers Meta; once the fallback fires, nothing
+  // verified the fallback — if its onStyleLoaded never fires
+  // (e.g. setStyle lost while the map is offstage in the
+  // IndexedStack), _styleLoaded stays true from Meta, the mode
+  // is already cartoFallback (so every later switch is a
+  // no-op), and the app believes it is on the fallback while
+  // the map is still on the broken Meta style, forever. If
+  // this timer fires, both tile sources have failed and the
+  // "couldn't load the map" banner shows.
+  Timer? _fallbackLoadTimer;
+  // True once the CartoDB fallback style has reported loaded
+  // (cleared on every switch to it). Separate from
+  // _styleLoaded, which stays true from the Meta style.
+  bool _fallbackLoaded = false;
+  // True once both tile sources have failed (Meta probe failed
+  // and the CartoDB fallback style never loaded or its tiles
+  // never arrived — Steven's phone, Nov 7, 20:08–20:13: blank
+  // map in both themes, current build, data available). Shows
+  // the "couldn't load the map" banner with a Retry button.
+  // Cleared by any successful tile probe or a style switch.
+  bool _tilesFailed = false;
   // Flight generation: a newer _flyTo retargets the camera, and
   // the older flight's 1900 ms fallback must not yank it back.
   int _flyGeneration = 0;
@@ -1737,6 +1769,19 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   }
 
   @override
+  @override
+  void didUpdateWidget(covariant MapTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Returning to the tab after the tiles failed (e.g. the
+    // user switched from a network that blocks the tile CDNs to
+    // one that does not): retry the tile sources so the map
+    // recovers without an app restart. Only in the failed state
+    // — a healthy map must never reload on every tab switch.
+    if (!oldWidget.visible && widget.visible && _tilesFailed) {
+      _retryTileSources();
+    }
+  }
+
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Theme changes re-run this: switch the basemap style to
@@ -1753,6 +1798,9 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _activeStyleUrl = desired;
     _styleMode = _MapStyleMode.meta;
     _styleLoaded = false;
+    _fallbackLoaded = false;
+    _tilesFailed = false; // A style switch restarts the flow.
+    _fallbackLoadTimer?.cancel();
     _tileWatchdogTimer?.cancel(); // Old style's watchdog is moot.
     final controller = _mapController;
     if (controller == null) return; // First build: initStyle covers it.
@@ -1780,7 +1828,20 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _tileWatchdogTimer?.cancel();
     _styleMode = _MapStyleMode.cartoFallback;
     _activeStyleUrl = _cartoFallbackSentinel;
+    _fallbackLoaded = false;
     controller.setStyle(cartoFallbackStyleJson(dark: _fallbackDark));
+    // The fallback style still has to load: if it never reports
+    // loaded within 8 s, both tile sources have failed — show
+    // the banner instead of sitting on a blank map silently.
+    _fallbackLoadTimer?.cancel();
+    _fallbackLoadTimer = Timer(const Duration(seconds: 8), () {
+      if (!mounted ||
+          _styleMode != _MapStyleMode.cartoFallback ||
+          _fallbackLoaded) {
+        return;
+      }
+      setState(() => _tilesFailed = true);
+    });
     setState(() {}); // Attribution chip switches to OSM + CARTO.
   }
 
@@ -1840,6 +1901,128 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     }
     _tileWatchdogTimer?.cancel();
     _tileWatchdogTimer = null;
+    if (_tilesFailed) setState(() => _tilesFailed = false);
+  }
+
+  /// Tile-reachability probe for the CartoDB fallback: fetches
+  /// the one fallback tile under the current camera. If it
+  /// arrives, the fallback tiles are reachable — clear the
+  /// failed state. If it fails or times out, both tile sources
+  /// are unreachable and the banner shows. A probe result is
+  /// ignored if the style changed meanwhile (theme switch, or
+  /// a retry back to Meta) or the widget is gone.
+  Future<void> _probeCartoTiles() async {
+    final dark = _fallbackDark;
+    final zoom = _mapZoom.floor();
+    final reachable = await probeCartoTile(
+      lat: _mapCenter.latitude,
+      lng: _mapCenter.longitude,
+      z: zoom,
+      dark: dark,
+    );
+    if (!mounted || _styleMode != _MapStyleMode.cartoFallback) {
+      return;
+    }
+    if (!reachable) {
+      setState(() => _tilesFailed = true);
+      return;
+    }
+    if (_tilesFailed) setState(() => _tilesFailed = false);
+  }
+
+  /// Retries the tile sources from scratch: back to the Meta
+  /// style (the primary), timers re-armed, banner cleared. The
+  /// normal flow re-runs from there — style timer, watchdog,
+  /// probe, fallback. Called by the banner's Retry button and
+  /// when the user returns to the tab after a failure.
+  void _retryTileSources() {
+    final controller = _mapController;
+    if (!mounted || controller == null) return;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final metaUrl = metaMapStyleUrl(dark: dark);
+    _styleLoadTimer?.cancel();
+    _tileWatchdogTimer?.cancel();
+    _fallbackLoadTimer?.cancel();
+    _styleMode = _MapStyleMode.meta;
+    _activeStyleUrl = metaUrl;
+    _styleLoaded = false;
+    _fallbackLoaded = false;
+    _lastStyleDark = dark;
+    if (_tilesFailed) {
+      setState(() => _tilesFailed = false);
+    }
+    _armStyleFallbackTimer();
+    controller.setStyle(metaUrl);
+  }
+
+  /// "Couldn't load the map" banner (shown only when
+  /// [_tilesFailed]): a card beside the top-right controls with
+  /// a short message and a Retry button that re-attempts the
+  /// Meta style. English, matching the app's UI language.
+  Widget _tilesFailedBanner(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('map-tiles-failed-banner'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outline),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(0, 0, 0, 0.3),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 20,
+            color: Color(0xFFF7B955),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "Couldn't load the map",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Check your connection, then try again.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            key: const ValueKey('map-tiles-retry'),
+            onPressed: _retryTileSources,
+            style: FilledButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// The native map is ready: the fallback timer starts for the
@@ -1861,7 +2044,16 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   void _onStyleLoaded(StyleController _) {
     _styleLoadTimer?.cancel();
     _styleLoaded = true;
-    if (_styleMode != _MapStyleMode.meta) return;
+    if (_styleMode != _MapStyleMode.meta) {
+      // The CartoDB fallback style loaded: its tiles still have
+      // to arrive — probe one fallback tile under the camera.
+      // A late load (after the 8 s fallback timer fired) still
+      // gets validated here and can clear the banner.
+      _fallbackLoaded = true;
+      _fallbackLoadTimer?.cancel();
+      _probeCartoTiles();
+      return;
+    }
     _armTileWatchdog();
     _probeMetaTiles();
   }
@@ -2090,6 +2282,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _sheetController.removeListener(_onSheetExtentChanged);
     _styleLoadTimer?.cancel();
     _tileWatchdogTimer?.cancel();
+    _fallbackLoadTimer?.cancel();
     _sheetController.dispose();
     _sheetFocusNode.dispose();
     _bearing.dispose();
@@ -3841,6 +4034,20 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               'Map unavailable on this platform',
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
+          ),
+        // "Couldn't load the map" banner: both tile sources
+        // unreachable (Steven's phone, Nov 7, 20:08–20:13: blank
+        // map in both themes, current build, data available).
+        // Shown only after Meta AND the CartoDB fallback have
+        // failed — never during the normal 8–10 s load window.
+        // Retry re-attempts the Meta style. Pinned top-left,
+        // ending before the top-right control cluster (right 88).
+        if (_tilesFailed)
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 88,
+            child: _tilesFailedBanner(context),
           ),
         // Floating map controls, top-right (Steven, Nov 7: the
         // buttons belong at the top). They used to sit bottom-right

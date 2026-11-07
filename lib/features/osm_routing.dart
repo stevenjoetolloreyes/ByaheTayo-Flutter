@@ -211,6 +211,60 @@ Future<bool> probeMetaVectorTile({
   }
 }
 
+/// The one CartoDB raster tile under [z]/[x]/[y] for the
+/// fallback basemap (Dark Matter in dark theme, Positron in
+/// light — the same sources `cartoFallbackStyleJson` declares).
+/// Pure: the fallback-tile probe uses it, and the fallback
+/// style JSON must stay consistent with it.
+String cartoTileUrl({
+  required bool dark,
+  required int z,
+  required int x,
+  required int y,
+}) =>
+    dark
+        ? 'https://basemaps.cartocdn.com/dark_all/$z/$x/$y.png'
+        : 'https://basemaps.cartocdn.com/light_all/$z/$x/$y.png';
+
+/// CartoDB fallback tile-reachability probe (the symmetric
+/// partner of `probeMetaVectorTile`): downloads the one
+/// fallback tile under the camera and reports true when a
+/// non-empty tile arrives (HTTP 200 + body). Used after the
+/// CartoDB fallback style loads — a style document can load
+/// while its tiles never arrive (Steven's phone on WiFi, Nov 7,
+/// 20:08–20:13: Meta AND CartoDB blocked, blank map in both
+/// themes). A failed probe means both tile sources are
+/// unreachable. Never throws. Same 8 s timeouts as the Meta
+/// probe, same caveat: it proves the tile is downloadable, not
+/// that the native renderer drew it.
+Future<bool> probeCartoTile({
+  required double lat,
+  required double lng,
+  required int z,
+  required bool dark,
+}) async {
+  final tile = metaTileXy(lat: lat, lng: lng, z: z);
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+  try {
+    final request = await client.getUrl(
+      Uri.parse(cartoTileUrl(dark: dark, z: z, x: tile.x, y: tile.y)),
+    );
+    request.headers.set('User-Agent', 'EstudyanteGO/1.0');
+    final response = await request.close().timeout(
+      const Duration(seconds: 8),
+    );
+    if (response.statusCode != 200) return false;
+    final bytes = await response
+        .fold<List<int>>(<int>[], (a, b) => a..addAll(b))
+        .timeout(const Duration(seconds: 8));
+    return bytes.isNotEmpty;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close();
+  }
+}
+
 /// One route from OSRM: the road-following geometry (GeoJSON
 /// [lng, lat] pairs, converted here), the routed length and
 /// duration, and turn steps. Null fields mean "not loaded".

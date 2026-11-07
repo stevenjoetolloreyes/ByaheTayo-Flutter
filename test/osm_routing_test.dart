@@ -371,6 +371,41 @@ void main() {
     });
   });
 
+  group('cartoTileUrl', () {
+    test('dark and light tile URLs follow the CartoDB endpoints', () {
+      expect(
+        cartoTileUrl(dark: true, z: 8, x: 213, y: 115),
+        'https://basemaps.cartocdn.com/dark_all/8/213/115.png',
+      );
+      expect(
+        cartoTileUrl(dark: false, z: 8, x: 213, y: 115),
+        'https://basemaps.cartocdn.com/light_all/8/213/115.png',
+      );
+    });
+
+    test('fallback style JSON uses the same tile URLs', () {
+      // The style document's tile template and the probe URL
+      // must stay consistent, or the probe would validate a
+      // different source than the map renders.
+      final dark = jsonDecode(cartoFallbackStyleJson(dark: true))
+          as Map<String, dynamic>;
+      final darkSources = dark['sources'] as Map<String, dynamic>;
+      final darkSource = darkSources['carto-dark'] as Map<String, dynamic>;
+      expect(
+        (darkSource['tiles'] as List).single,
+        'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+      );
+      final light = jsonDecode(cartoFallbackStyleJson(dark: false))
+          as Map<String, dynamic>;
+      final lightSources = light['sources'] as Map<String, dynamic>;
+      final lightSource = lightSources['carto-light'] as Map<String, dynamic>;
+      expect(
+        (lightSource['tiles'] as List).single,
+        'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+      );
+    });
+  });
+
   group('distanceAlongPath / nearestPathIndex', () {
     test('sums segments between indices', () {
       final pts = [

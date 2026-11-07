@@ -928,7 +928,7 @@ class _HomeShellState extends State<_HomeShell>
             adService: _adService,
           ),
         ),
-        const StudyTab(),
+        StudyTab(walletController: _walletController),
         FaresTab(
           onViewOnMap: () => widget.onSelect(3),
           currentUser: widget.user,
@@ -951,6 +951,7 @@ class _HomeShellState extends State<_HomeShell>
         ),
         MapTab(
           currentUser: widget.user,
+          visible: widget.selectedIndex == 3,
           customRouteRepository:
               widget.authService.isConfigured
                   ? FirestoreCustomRouteRepository()
