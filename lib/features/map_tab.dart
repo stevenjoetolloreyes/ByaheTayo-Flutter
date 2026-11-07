@@ -1358,6 +1358,7 @@ class _MapTabState extends State<MapTab>
     _sheetController.addListener(_onSheetExtentChanged);
     WidgetsBinding.instance.addObserver(this);
     communityMapJump.addListener(_onCommunityJump);
+    faresMapJump.addListener(_onFaresJump);
   }
 
   /// Sheet snap tracking: when the extent crosses the Peek/Half
@@ -1422,9 +1423,80 @@ class _MapTabState extends State<MapTab>
     _selectHub(match.first);
   }
 
+  /// A Fares "Find routes" / "Show direction on Map" sets
+  /// [faresMapJump]; draw that hub-to-hub route (direction line +
+  /// ETA • FARE sheet, snapped to Half so the route details show),
+  /// then clear it so the same route can be jumped to again. A
+  /// 'My location' origin resolves to the device position when
+  /// known, else the home hub — the same rule as the hub-tap flow.
+  /// Non-hub names are ignored: the tab opens with no route rather
+  /// than drawing a line to a place the app does not know.
+  void _onFaresJump() {
+    final jump = faresMapJump.value;
+    if (jump == null) return;
+    faresMapJump.value = null;
+    if (!mounted) return;
+    final destMatches = hubs.where((h) => h.name == jump.to);
+    if (destMatches.isEmpty) return;
+    final destHub = destMatches.first;
+    final originMatches = hubs.where((h) => h.name == jump.from);
+    final double oLat;
+    final double oLng;
+    final String oName;
+    if (originMatches.isNotEmpty) {
+      final originHub = originMatches.first;
+      oLat = originHub.lat;
+      oLng = originHub.lng;
+      oName = originHub.name;
+    } else {
+      oLat = _userPos?.latitude ?? hubs[_homeHub].lat;
+      oLng = _userPos?.longitude ?? hubs[_homeHub].lng;
+      oName = _userPos != null ? 'Your location' : hubs[_homeHub].name;
+    }
+    final matches = routesFrom(
+      oLat,
+      oLng,
+      oName,
+    ).where((r) => r.dest.name == destHub.name);
+    final route = matches.isEmpty ? null : matches.first;
+    if (_navigating) {
+      _navSub?.cancel();
+      _navSub = null;
+    }
+    setState(() {
+      _selectedChurch = null;
+      _selectedHub = destHub;
+      _activeRoute = route;
+      _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
+      _roadPoints = null;
+      _routeError = null;
+      _churchPreview = false;
+      _selectedStopIndex = null;
+      _pendingStopIndex = null;
+      _resetNavFields();
+    });
+    _refreshRouteStops();
+    _resetSheetScroll();
+    if (route != null) {
+      _fitBounds(
+        LatLng(
+          math.min(oLat, destHub.lat) - 0.01,
+          math.min(oLng, destHub.lng) - 0.01,
+        ),
+        LatLng(
+          math.max(oLat, destHub.lat) + 0.01,
+          math.max(oLng, destHub.lng) + 0.01,
+        ),
+      );
+      _fetchRoadPath(oLat, oLng, destHub);
+      _snapSheet(_SheetSnap.half);
+    }
+  }
+
   @override
   void dispose() {
     communityMapJump.removeListener(_onCommunityJump);
+    faresMapJump.removeListener(_onFaresJump);
     WidgetsBinding.instance.removeObserver(this);
     _sheetController.removeListener(_onSheetExtentChanged);
     _flyController?.dispose();
@@ -3216,6 +3288,8 @@ class _MapTabState extends State<MapTab>
         ),
         child: const Text(
           '© OpenStreetMap contributors',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(color: Colors.white, fontSize: 11),
         ),
       ),
@@ -3394,18 +3468,26 @@ class _MapTabState extends State<MapTab>
   /// route is active — the route title, the ETA • FARE label, the
   /// VERIFIED FARE badge, and the verified-fare note. Fixed so
   /// scrolling can never push them up or clip them.
+  ///
+  /// Peek collapse (preview §4): at Peek with a route active only
+  /// the route title + ETA • FARE row show — the sheet-title row
+  /// and the verified note stay hidden until Half. The full header
+  /// is taller than the peeked sheet (~144px at 0.20), so showing
+  /// it there overflowed the sheet on phones.
   Widget _sheetFixedHeader(ColorScheme scheme) {
     final route = _activeRoute;
     final verified = route == null
         ? null
         : knownBusFare(route.originName, route.dest.name);
+    final peekRoute = route != null && _sheetSnap == _SheetSnap.peek;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
+          if (!peekRoute)
+            Row(
             children: [
               Expanded(
                 child: Text(
@@ -3479,7 +3561,7 @@ class _MapTabState extends State<MapTab>
                   ),
               ],
             ),
-            if (verified != null)
+            if (verified != null && !peekRoute)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
@@ -4061,7 +4143,11 @@ class _MapTabState extends State<MapTab>
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    _attributionChip(),
+                                    // Flexible + ellipsis: on narrow
+                                    // phones / large text the chip
+                                    // truncates instead of overflowing
+                                    // the handle row.
+                                    Flexible(child: _attributionChip()),
                                   ],
                                 ),
                               ),
