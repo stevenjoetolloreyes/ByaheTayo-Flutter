@@ -339,7 +339,7 @@ void main() {
   });
 
   group('SplashScreen', () {
-    testWidgets('renders branding and hands off exactly once',
+    testWidgets('renders branding and hands off exactly once on tap',
         (WidgetTester tester) async {
       AppStartDestination? handed;
       var calls = 0;
@@ -355,6 +355,13 @@ void main() {
       expect(find.text('EstudyanteGO'), findsOneWidget);
       expect(find.text('Your Student Companion'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      await tester.pumpAndSettle();
+      // Tap-to-start (Nov 6): resolving alone does NOT hand off —
+      // the app waits for the tap.
+      expect(handed, isNull);
+      expect(find.text('I-tap para magsimula'), findsOneWidget);
+      expect(find.text('Buksan ang EstudyanteGO'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('splash-start')));
       await tester.pumpAndSettle();
       expect(handed, AppStartDestination.dashboard);
       expect(calls, 1);
