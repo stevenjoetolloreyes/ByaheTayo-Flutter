@@ -152,4 +152,33 @@ void main() {
     expect(find.text('Notes'), findsOneWidget);
     expect(find.text('Review'), findsOneWidget);
   });
+
+  testWidgets('Top nav spreads evenly across a wide phone', (
+    WidgetTester tester,
+  ) async {
+    // Regression (Nov 7, Steven's photo): the nav used a fixed
+    // 64px-per-tab row (384px total), so on a 430px-wide phone the
+    // six icons clustered on the left with an empty gap on the
+    // right. Now each tab takes exactly one sixth of the width.
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1.0;
+
+    await _pumpApp(tester);
+
+    const width = 430.0;
+    for (var i = 0; i < _labels.length; i++) {
+      final center = tester.getCenter(
+        find.byKey(Key('top-nav-item-${_labels[i]}')),
+      );
+      // Each icon sits at the centre of its equal sixth.
+      expect(center.dx, closeTo((i + 0.5) * width / _labels.length, 2.0));
+    }
+    // The last tab reaches the right edge — no empty gap.
+    final lastRight = tester.getTopRight(
+      find.byKey(const Key('top-nav-item-Account')),
+    );
+    expect(lastRight.dx, closeTo(width, 2.0));
+  });
 }

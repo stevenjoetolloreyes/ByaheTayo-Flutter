@@ -180,13 +180,33 @@ void main() {
     await _pumpApp(tester);
     await _openAccount(tester);
 
+    // The app defaults to dark (preview default, Nov 7), so prove the
+    // switch in both directions: Dark -> Light -> Dark. The dialog
+    // option is scoped to the SimpleDialog — the Account page itself
+    // also shows the current value ("Dark"), so a bare find.text
+    // would match two widgets.
     await _tapVisible(tester, 'Theme Settings');
-    await tester.tap(find.text('Dark'));
+    await tester.tap(find.descendant(
+      of: find.byType(SimpleDialog),
+      matching: find.text('Light'),
+    ));
     await tester.pumpAndSettle();
 
-    final context = tester.element(find.text('Steven Reyes'));
+    var context = tester.element(find.text('Steven Reyes'));
+    expect(Theme.of(context).brightness, Brightness.light);
+    var prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('byahetayo_theme_mode'), 'light');
+
+    await _tapVisible(tester, 'Theme Settings');
+    await tester.tap(find.descendant(
+      of: find.byType(SimpleDialog),
+      matching: find.text('Dark'),
+    ));
+    await tester.pumpAndSettle();
+
+    context = tester.element(find.text('Steven Reyes'));
     expect(Theme.of(context).brightness, Brightness.dark);
-    final prefs = await SharedPreferences.getInstance();
+    prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('byahetayo_theme_mode'), 'dark');
   });
 

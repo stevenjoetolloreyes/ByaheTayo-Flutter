@@ -47,7 +47,7 @@ class AuthScreen extends StatefulWidget {
     this.initialMode = AuthMode.signIn,
     required this.onSignedIn,
     required this.onAccountCreated,
-    this.themeMode = ThemeMode.system,
+    this.themeMode = ThemeMode.dark,
     this.onThemeModeChanged,
     this.onBack,
   });

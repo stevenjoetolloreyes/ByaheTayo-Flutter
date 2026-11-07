@@ -1013,6 +1013,8 @@ void main() {
   });
 
   group('Entry theme (Modern Minimalist redesign)', () {
+    // Dark tokens follow the preview's dark emerald UI (Nov 7):
+    // #0c1410 page background, brand #16a34a primary with white text.
     test('exact spec tokens, light and dark', () {
       expect(EntryColors.light.primary, const Color(0xFF079B61));
       expect(EntryColors.light.primaryDark, const Color(0xFF067A4D));
@@ -1022,9 +1024,9 @@ void main() {
       expect(EntryColors.light.primaryText, const Color(0xFF17211D));
       expect(EntryColors.light.secondaryText, const Color(0xFF64748B));
       expect(EntryColors.light.border, const Color(0xFFE2E8F0));
-      expect(EntryColors.dark.primary, const Color(0xFF12C98A));
+      expect(EntryColors.dark.primary, const Color(0xFF16A34A));
       expect(EntryColors.dark.primaryDark, const Color(0xFF079B61));
-      expect(EntryColors.dark.background, const Color(0xFF101816));
+      expect(EntryColors.dark.background, const Color(0xFF0C1410));
       expect(EntryColors.dark.surface, const Color(0xFF19231F));
       expect(EntryColors.dark.secondarySurface, const Color(0xFF202D27));
       expect(EntryColors.dark.primaryText, const Color(0xFFF5F7F6));
@@ -1063,7 +1065,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
-        const Color(0xFF101816),
+        const Color(0xFF0C1410),
       );
     });
 
@@ -1255,7 +1257,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
-        const Color(0xFF101816),
+        const Color(0xFF0C1410),
       );
     });
 

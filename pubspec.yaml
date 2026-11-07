@@ -85,6 +85,37 @@ flutter:
     - assets/images/estudyantego_logo.png
     - assets/images/google_g_logo.png
 
+  # Preview typography (Nov 7): Plus Jakarta Sans headings + Inter
+  # body — the preview's self-hosted fonts, as real TTF/OTF files
+  # (Flutter cannot use the preview's woff2 files). Inter static
+  # OTFs are from the Inter 4.1 release (extras/otf); Plus Jakarta
+  # Sans static TTFs are from the upstream tokotype repo.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.otf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.otf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.otf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.otf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.otf
+          weight: 800
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
+          weight: 800
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

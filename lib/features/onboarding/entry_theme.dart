@@ -16,8 +16,9 @@
 // System Default option stays selectable in Account settings (the
 // existing settings entry point).
 //
-// Tokens are the spec's exact values. Typography uses the Android
-// system typeface (Roboto on Android) — no font dependency is added.
+// Tokens are the spec's exact values. Typography: Inter body +
+// Plus Jakarta Sans headings (preview typography, Nov 7), bundled
+// in assets/fonts — the same fonts the dashboard themes use.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../app_layout.dart';
@@ -63,17 +64,20 @@ class EntryColors {
     onPrimary: Colors.white,
   );
 
+  // Dark tokens follow the preview's dark emerald UI (Nov 7):
+  // #0c1410 page background, brand #16a34a primary with white text
+  // (the preview's button/badge pattern), dark-green surfaces.
   static const dark = EntryColors(
-    primary: Color(0xFF12C98A),
+    primary: Color(0xFF16A34A),
     primaryDark: Color(0xFF079B61),
-    background: Color(0xFF101816),
+    background: Color(0xFF0C1410),
     surface: Color(0xFF19231F),
     secondarySurface: Color(0xFF202D27),
     primaryText: Color(0xFFF5F7F6),
     secondaryText: Color(0xFFA0ADA6),
     border: Color(0xFF2D3B34),
     error: Color(0xFFFF8A80),
-    onPrimary: Color(0xFF06281C),
+    onPrimary: Colors.white,
   );
 }
 
@@ -117,6 +121,7 @@ ThemeData entryThemeData(Brightness brightness) {
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    fontFamily: 'Inter',
     colorScheme: scheme,
     scaffoldBackgroundColor: colors.background,
     // Rounded inputs, 14dp (spec range 12-16dp).

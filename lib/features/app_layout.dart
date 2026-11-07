@@ -109,40 +109,62 @@ abstract final class AppLayout {
 }
 
 /// ONE typography scale. Sizes/weights/heights only — never colors.
+/// Headings use Plus Jakarta Sans and body text inherits Inter
+/// from the theme (preview typography, Nov 7).
 abstract final class AppText {
   static const TextStyle displayLarge =
-      TextStyle(fontSize: 32, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 32, fontWeight: FontWeight.w800);
   static const TextStyle displayMedium =
-      TextStyle(fontSize: 28, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 28, fontWeight: FontWeight.w800);
 
   /// Onboarding titles (approved: 26sp w800 / 1.2).
   static const TextStyle titleLarge =
-      TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.2);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 26, fontWeight: FontWeight.w800, height: 1.2);
 
   /// Tab page titles ('Friends', 'Know your fare before you go').
   static const TextStyle pageTitle =
-      TextStyle(fontSize: 22, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 22, fontWeight: FontWeight.w800);
 
   /// 24sp strong titles (verify-email heading).
   static const TextStyle titleMedium =
-      TextStyle(fontSize: 24, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 24, fontWeight: FontWeight.w800);
 
   /// AppBar titles + account header titles.
   static const TextStyle titleSmall =
-      TextStyle(fontSize: 20, fontWeight: FontWeight.w700);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 20, fontWeight: FontWeight.w700);
 
   /// Strong 20sp titles (student greeting banner, sheet titles).
   static const TextStyle titleStrong =
-      TextStyle(fontSize: 20, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 20, fontWeight: FontWeight.w800);
 
   static const TextStyle heading =
-      TextStyle(fontSize: 18, fontWeight: FontWeight.w700);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 18, fontWeight: FontWeight.w700);
   static const TextStyle headingStrong =
-      TextStyle(fontSize: 18, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 18, fontWeight: FontWeight.w800);
 
   /// Section titles inside cards ('My Friends', 'Student Hub').
   static const TextStyle sectionTitle =
-      TextStyle(fontSize: 17, fontWeight: FontWeight.w700);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 17, fontWeight: FontWeight.w700);
   static const TextStyle bodyLarge = TextStyle(fontSize: 17);
 
   static const TextStyle body = TextStyle(fontSize: 16);
@@ -172,11 +194,15 @@ abstract final class AppText {
 
   /// Strong body values (stat values).
   static const TextStyle bodyStrong =
-      TextStyle(fontSize: 16, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 16, fontWeight: FontWeight.w800);
 
   /// Large numerals without a line-height (balance amounts).
   static const TextStyle displaySmall =
-      TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 26, fontWeight: FontWeight.w800);
 
   /// Person names in friend/request rows.
   static const TextStyle name =
@@ -197,11 +223,15 @@ abstract final class AppText {
 
   /// Card titles ('Know something that can help commuters?').
   static const TextStyle cardTitle =
-      TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 16, fontWeight: FontWeight.w700);
 
   /// Empty-state titles (friends).
   static const TextStyle emptyTitle =
-      TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
+      TextStyle(
+      fontFamily: 'PlusJakartaSans',
+      fontSize: 16, fontWeight: FontWeight.w700);
 }
 
 /// Card with the shared tab geometry: theme 16dp corners + 16dp

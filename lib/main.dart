@@ -146,7 +146,8 @@ Future<void> main() async {
   // SharedPreferences stage: timeout + fallback to defaults.
   // (The original code awaited getInstance() unguarded; a prefs
   // failure previously left startup hanging. The fallback preserves
-  // the old defaults exactly: sidebar expanded, system theme.)
+  // the old defaults exactly: sidebar expanded, dark theme
+  // (the preview default, Nov 7).)
   final SharedPreferences? prefs;
   if (diagnostics != null) {
     prefs = await diagnostics.runStage<SharedPreferences?>(
@@ -219,7 +220,11 @@ ThemeMode _themeModeFromString(String? value) {
     case 'dark':
       return ThemeMode.dark;
     default:
-      return ThemeMode.system;
+      // Preview default is DARK (Nov 7): no stored preference means
+      // dark, not system. A stored 'light' / 'dark' / 'system' still
+      // wins — the Settings → General → Appearance toggle is the
+      // only thing that writes this key.
+      return ThemeMode.dark;
   }
 }
 
@@ -233,6 +238,17 @@ const _bgLight = Color(0xFFF1F5F9);
 const _textDark = Color(0xFF0F172A);
 const _textSecondary = Color(0xFF64748B);
 
+// Preview tokens (Nov 7): the Fares Phone Preview's dark emerald UI
+// — page background #0c1410, brand #16a34a, accent #34d399. The dark
+// theme below is built from these; the light theme keeps its own
+// approved values and only gains the preview fonts.
+const _previewDarkBg = Color(0xFF0C1410);
+const _previewDarkCard = Color(0xFF202B25);
+const _previewDarkElevated = Color(0xFF252B2D);
+const _previewAccent = Color(0xFF34D399);
+const _previewDarkSubtext = Color(0xFFB0B8B5);
+const _previewDarkBorder = Color(0xFF343B3D);
+
 ThemeData _lightTheme() {
   final scheme = const ColorScheme.light(
     primary: _primary,
@@ -245,6 +261,7 @@ ThemeData _lightTheme() {
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
+    fontFamily: 'Inter',
     scaffoldBackgroundColor: _bgLight,
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.white,
@@ -252,6 +269,7 @@ ThemeData _lightTheme() {
       elevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
+        fontFamily: 'PlusJakartaSans',
         color: _textDark,
         fontSize: 20,
         fontWeight: FontWeight.w700,
@@ -281,39 +299,42 @@ ThemeData _lightTheme() {
 }
 
 ThemeData _darkTheme() {
-  // Dark surfaces follow the user's Dark Mode color system (Nov 2
-  // polish): #121212 page, #1B1F20 secondary, #202729 cards,
+  // Preview dark tokens (Nov 7): #0c1410 page, #202B25 cards,
   // #252B2D elevated, white primary text, #B0B8B5 secondary text,
-  // #343B3D borders. The foreground accents stay light emerald
-  // (#34D399 / #6EE7B7): deep emerald #14532D as foreground on
-  // these surfaces would be unreadable, so it stays on brand
-  // surfaces (banners, selected pills) with white text instead.
+  // #343B3D borders — the same surfaces the Student Hub, Fares and
+  // Account tabs already use for dark mode. Brand #16a34a is the
+  // primary (buttons, selected pills, brand surfaces) with white
+  // text, exactly like the preview; accent #34d399 is the secondary
+  // for bright text highlights on dark surfaces.
   final scheme = const ColorScheme.dark(
-    primary: Color(0xFF34D399),
-    onPrimary: Color(0xFF052E16),
-    secondary: Color(0xFF6EE7B7),
-    surface: Color(0xFF202729),
+    primary: _primary,
+    onPrimary: Colors.white,
+    secondary: _previewAccent,
+    onSecondary: Color(0xFF052E16),
+    surface: _previewDarkCard,
     onSurface: Color(0xFFFFFFFF),
-    surfaceContainerHighest: Color(0xFF252B2D),
-    onSurfaceVariant: Color(0xFFB0B8B5),
-    outline: Color(0xFF343B3D),
+    surfaceContainerHighest: _previewDarkElevated,
+    onSurfaceVariant: _previewDarkSubtext,
+    outline: _previewDarkBorder,
   );
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: const Color(0xFF121212),
+    fontFamily: 'Inter',
+    scaffoldBackgroundColor: _previewDarkBg,
     appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFF1B1F20),
+      backgroundColor: _previewDarkBg,
       foregroundColor: Color(0xFFFFFFFF),
       elevation: 0,
       titleTextStyle: TextStyle(
+        fontFamily: 'PlusJakartaSans',
         color: Color(0xFFFFFFFF),
         fontSize: 20,
         fontWeight: FontWeight.w700,
       ),
     ),
     navigationBarTheme: const NavigationBarThemeData(
-      backgroundColor: Color(0xFF1B1F20),
+      backgroundColor: _previewDarkBg,
       elevation: 0,
       indicatorColor: _indicatorDark,
       iconTheme: WidgetStatePropertyAll(IconThemeData(size: AppLayout.navIconSize)),
@@ -321,14 +342,14 @@ ThemeData _darkTheme() {
         AppText.smallSemiBold,
       ),
     ),
-    // Dark card language: #202729 surface, #343B3D outline, 16dp
-    // corners, no shadow.
+    // Dark card language: #202B25 surface, #343B3D outline, 16dp
+    // corners, no shadow — same as the Student Hub / Fares dark cards.
     cardTheme: const CardThemeData(
-      color: Color(0xFF202729),
+      color: _previewDarkCard,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
-        side: BorderSide(color: Color(0xFF343B3D)),
+        side: BorderSide(color: _previewDarkBorder),
       ),
     ),
   );
@@ -360,7 +381,7 @@ class EstudyanteGOApp extends StatefulWidget {
   const EstudyanteGOApp({
     super.key,
     this.initialSidebarCollapsed = false,
-    this.initialThemeMode = ThemeMode.system,
+    this.initialThemeMode = ThemeMode.dark,
     this.authService,
     this.permissionService,
   });
@@ -1058,6 +1079,13 @@ class _PhoneHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // Preview wordmark: deep emerald → brand on light; bright
+    // accent → brand on dark, so the wordmark stays readable on the
+    // #0c1410 page instead of sinking into it.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final wordmarkColors = isDark
+        ? const [_previewAccent, _primary]
+        : const [_deepEmerald, _primary];
     return Container(
       color: scheme.surface,
       padding: const EdgeInsets.fromLTRB(20, 12, 8, 10),
@@ -1069,14 +1097,15 @@ class _PhoneHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ShaderMask(
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [_deepEmerald, _primary],
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: wordmarkColors,
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                   ).createShader(bounds),
                   child: const Text(
                     'EstudyanteGO',
                     style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
@@ -1089,8 +1118,8 @@ class _PhoneHeader extends StatelessWidget {
                   width: 48,
                   height: 3,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [_deepEmerald, _primary],
+                    gradient: LinearGradient(
+                      colors: wordmarkColors,
                     ),
                     borderRadius: BorderRadius.circular(2),
                   ),

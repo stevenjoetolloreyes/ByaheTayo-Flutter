@@ -27,7 +27,7 @@ class SplashScreen extends StatefulWidget {
     super.key,
     required this.resolve,
     required this.onDestination,
-    this.themeMode = ThemeMode.system,
+    this.themeMode = ThemeMode.dark,
   });
 
   /// Decides where the app goes next (onboarding / sign-in /

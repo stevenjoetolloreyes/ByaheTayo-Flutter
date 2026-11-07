@@ -42,8 +42,9 @@ const kStudentCardRadius = 20.0;
 // Dark Mode palette for the Student Hub (ChatGPT dark tokens,
 // adapted: the elevated surface, secondary text and border keep
 // the Nov 2 polished values, which the ChatGPT system does not
-// specify).
-const kStudentDarkBg = Color(0xFF101714);
+// specify). The page background is the preview's #0c1410 (Nov 7)
+// so the Hub matches the rest of the dark app exactly.
+const kStudentDarkBg = Color(0xFF0C1410);
 const kStudentDarkSecondaryBg = Color(0xFF18221D);
 const kStudentDarkCard = Color(0xFF202B25);
 const kStudentDarkElevated = Color(0xFF252B2D);
@@ -56,14 +57,27 @@ const kStudentDarkAccent = Color(0xFF34D399);
 // AppText scale — used by other tabs — stays untouched).
 // Page title 26 Bold, section heading 20 Semibold, card heading
 // 16 Semibold. Body text keeps the app's established sizes.
-const kStudentPageTitle =
-    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
-const kStudentSectionHeading =
-    TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
-const kStudentCardHeading =
-    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+// Headings use Plus Jakarta Sans (preview typography, Nov 7).
+const kStudentPageTitle = TextStyle(
+  fontFamily: 'PlusJakartaSans',
+  fontSize: 26,
+  fontWeight: FontWeight.w800,
+);
+const kStudentSectionHeading = TextStyle(
+  fontFamily: 'PlusJakartaSans',
+  fontSize: 20,
+  fontWeight: FontWeight.w600,
+);
+const kStudentCardHeading = TextStyle(
+  fontFamily: 'PlusJakartaSans',
+  fontSize: 16,
+  fontWeight: FontWeight.w600,
+);
 
 ThemeData get studentTheme => ThemeData.light().copyWith(
+      // Inter body (preview typography): copyWith has no fontFamily
+      // parameter, so the family is applied through the text theme.
+      textTheme: ThemeData.light().textTheme.apply(fontFamily: 'Inter'),
       scaffoldBackgroundColor: kStudentBg,
       cardColor: kStudentCard,
       colorScheme: const ColorScheme.light(
@@ -90,11 +104,15 @@ ThemeData get studentTheme => ThemeData.light().copyWith(
     );
 
 /// Dark twin of [studentTheme]: same geometry, same Emerald Green
-/// identity, but the ChatGPT dark surfaces — #101714 page,
-/// #202B25 cards, #252B2D elevated surfaces, #F8FAF9 primary text,
-/// #B0B8B5 secondary text, #343B3D borders. The greeting banner
-/// gradient stays deep emerald → accent green in both modes.
+/// identity, but the ChatGPT dark surfaces — #0c1410 page (preview
+/// bg, Nov 7), #202B25 cards, #252B2D elevated surfaces, #F8FAF9
+/// primary text, #B0B8B5 secondary text, #343B3D borders. The
+/// greeting banner gradient stays deep emerald → accent green in
+/// both modes.
 ThemeData get studentDarkTheme => ThemeData.dark().copyWith(
+      // Inter body (preview typography): copyWith has no fontFamily
+      // parameter, so the family is applied through the text theme.
+      textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Inter'),
       scaffoldBackgroundColor: kStudentDarkBg,
       canvasColor: kStudentDarkCard,
       cardColor: kStudentDarkCard,

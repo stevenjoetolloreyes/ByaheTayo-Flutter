@@ -47,13 +47,8 @@ import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:latlong2/latlong.dart' as ll;
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'add_route_sheet.dart';
-import 'admin_access.dart';
 import 'community_posts.dart';
 import 'custom_routes.dart';
 import 'fares_tab.dart';
@@ -1130,13 +1125,11 @@ const String _darkMapStyle = '''
 String? mapStyleForBrightness(Brightness brightness) =>
     brightness == Brightness.dark ? _darkMapStyle : null;
 
-enum _StopView { nearby, all, nearest }
 
 /// Bottom-sheet snaps in the OSM design: Peek (handle + fixed
 /// header only) and Half (~55% of the screen). No Full.
 enum _SheetSnap { peek, half }
 
-enum _AmPm { am, pm }
 
 /// Map view modes for the Map tab. Real Google Maps SDK
 /// functionality only — no simulated 3D graphics, no fake
@@ -1182,12 +1175,9 @@ CameraPosition cameraForMode({
 /// ~190dp, so controls float above it; when the sheet is hidden
 /// for a full-map view they drop to just above the screen bottom
 /// (bottom:16 — the phone bottom nav bar sits below the Scaffold
-/// body, so 16 clears it). During navigation the nav bar owns the
-/// bottom, so the controls keep their sheet-era offset there.
-double mapControlsBottomOffset({
-  required bool sheetHidden,
-  required bool navigating,
-}) => (sheetHidden && !navigating) ? 16 : 190;
+/// body, so 16 clears it).
+double mapControlsBottomOffset({required bool sheetHidden}) =>
+    sheetHidden ? 16 : 190;
 
 /// Tooltip for the logo toggle: what tapping it will do next.
 String sheetToggleTooltip(bool sheetHidden) =>
@@ -1218,7 +1208,6 @@ class _MapTabState extends State<MapTab>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   static const _initialCenter = LatLng(16.9, 121.05);
   static const _initialZoom = 8.0;
-  static const _savedKey = 'byahetayo_saved_routes';
   static const _homeHub = 2; // Cabugao — his home hub (Fares default origin).
 
   // OpenStreetMap controller (flutter_map). The Google Maps SDK
@@ -1231,34 +1220,11 @@ class _MapTabState extends State<MapTab>
   LatLng _mapCenter = _initialCenter;
   double _mapZoom = _initialZoom;
   final _sheetController = DraggableScrollableController();
-  final _searchController = TextEditingController();
-  final _sheetSearchController = TextEditingController();
-  StreamSubscription<Position>? _trackSub;
 
   bool _locationGranted = false;
   bool _locating = false;
   Position? _userPos;
-  Hub? _selectedHub;
-  // Church whose details panel is open in the bottom sheet (null =
-  // the sheet shows Nearby Routes). Set by tapping a church marker
-  // or a churches-list entry; cleared by the panel's close button,
-  // by hiding church markers, by selecting a hub, and by DIRECTIONS
-  // (the route preview card takes over then).
-  ChurchPlace? _selectedChurch;
 
-  // True while the sheet shows a route preview opened from a church
-  // (the church panel's DIRECTIONS flow, which builds a synthetic
-  // Hub destination). While set, the Nearby Routes browsing chrome
-  // — stops row, direction chips, AM/PM row, and the
-  // direction-grouped stops list — is hidden from the sheet, so
-  // only the church route card shows. Set in
-  // _selectChurchDestination; cleared when the preview closes
-  // (card X, a new hub/route selection, swap, navigation end).
-  // Visibility only: it never clears the route, destination,
-  // markers, or polylines. Note the existing behavior clears
-  // _selectedChurch on DIRECTIONS, so this flag — not the selected
-  // church — is the trigger.
-  bool _churchPreview = false;
   // Tapped-location path: the hub-to-hub route whose line is drawn
   // on the map, plus the origin point it starts from.
   RouteInfo? _activeRoute;
@@ -1266,37 +1232,19 @@ class _MapTabState extends State<MapTab>
   // Road-following shape from Google (null = still loading or failed;
   // the dashed direct line shows until real geometry arrives).
   List<LatLng>? _roadPoints;
-  String? _routeError;
   double _routeDurationSec = 0;
   // Google's own route length (km) from routes.distanceMeters.
   // 0 = not loaded yet; the bottom bar then falls back to the
   // app's roadKm estimate for the minutes fraction.
   double _routeDistanceKm = 0;
-  double _navSpeedKmh = -1;
-  DateTime? _lastRerouteAt;
-  DateTime? _lastPreviewRefreshAt;
-  bool _northUp = false;
-  bool _voiceOn = true;
-  int _spokenStepIndex = -1;
-  bool _avoidHighways = false;
-  bool _avoidTolls = false;
-  bool _avoidFerries = false;
-  final FlutterTts _tts = FlutterTts();
   int _roadRequestId = 0;
-  VehicleType _vehicle = VehicleType.bus;
-  // Start Navigation mode.
-  bool _navigating = false;
-  // Map view mode (2D standard default, 3D perspective, Satellite).
-  // Switching modes only changes tiles + camera — it never touches
-  // the route, markers, or polylines.
-  MapViewMode _mapMode = MapViewMode.standard2d;
-  // Bottom-sheet visibility toggle (logo button, main mode only).
+  final VehicleType _vehicle = VehicleType.bus;
+  // Bottom-sheet visibility toggle (logo button).
   // Visibility only: the sheet stays in the tree wrapped in
   // Offstage, so hiding never clears routes, destinations, church
   // selection, markers, polylines, or sheet content — tapping the
   // logo again restores the sheet exactly as it was, same snap
-  // size included. Never used during navigation: nav owns its own
-  // bottom bar and the toggle is main-mode only.
+  // size included.
   bool _sheetHidden = false;
   // Stops on the active route (origin, on-the-way hubs, dest),
   // recomputed whenever the route or its road geometry changes.
@@ -1320,45 +1268,31 @@ class _MapTabState extends State<MapTab>
   // Live bearing for the compass needle only (a ValueNotifier so
   // the needle rebuilds alone, never the whole map).
   final ValueNotifier<double> _bearing = ValueNotifier<double>(0);
-  bool _arrived = false;
-  double _navBearing = 0;
-  List<NavStep>? _navSteps;
-  List<int> _maneuverIdx = const [];
-  int _navStepIndex = 0;
-  StreamSubscription<Position>? _navSub;
-  String _searchQuery = '';
-  String _sheetSearchQuery = '';
-  String? _chip;
   // Catholic churches from Google Places (Churches chip, whole
   // Luzon). Markers show only while the chip is active and not
   // navigating, so they never clutter a route.
-  List<ChurchPlace> _churches = [];
-  bool _churchesLoading = false;
-  _StopView _stopView = _StopView.nearby;
-  String _direction = 'All';
-  _AmPm _amPm = _AmPm.am;
-  bool _tracking = false;
-  bool _destinationMode = false;
-  int _fromIndex = _homeHub; // -1 = My location.
-  int _toIndex = 14; // Vigan Bus Terminal.
-  TravelMode _travelMode = TravelMode.transit;
-  TravelMode _previewMode = TravelMode.transit;
-  Set<String> _savedRoutes = {};
 
   /// Admin-added routes (Add Route), newest first. Visible to
   /// everyone; only admins may add, edit, or delete them.
-  List<CustomRoute> _customRoutes = [];
 
   @override
   void initState() {
     super.initState();
     _refreshLocationGranted();
-    _loadSaved();
-    _loadCustomRoutes();
     _sheetController.addListener(_onSheetExtentChanged);
     WidgetsBinding.instance.addObserver(this);
     communityMapJump.addListener(_onCommunityJump);
     faresMapJump.addListener(_onFaresJump);
+    // Preview parity: the map always opens on the default route
+    // (Cabugao → Vigan Bus Terminal, the Fares default pair), so
+    // the tab shows the clean route + ETA • FARE sheet at once
+    // instead of an empty map. A later Fares / community jump
+    // retargets it as before. Deferred past the first frame so
+    // the map controller is attached for the fit + road fetch.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _activeRoute != null) return;
+      _selectHub(hubs[14]); // Vigan Bus Terminal.
+    });
   }
 
   /// Sheet snap tracking: when the extent crosses the Peek/Half
@@ -1459,21 +1393,12 @@ class _MapTabState extends State<MapTab>
       oName,
     ).where((r) => r.dest.name == destHub.name);
     final route = matches.isEmpty ? null : matches.first;
-    if (_navigating) {
-      _navSub?.cancel();
-      _navSub = null;
-    }
     setState(() {
-      _selectedChurch = null;
-      _selectedHub = destHub;
       _activeRoute = route;
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
-      _routeError = null;
-      _churchPreview = false;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
-      _resetNavFields();
     });
     _refreshRouteStops();
     _resetSheetScroll();
@@ -1504,153 +1429,21 @@ class _MapTabState extends State<MapTab>
     _sheetController.dispose();
     _sheetFocusNode.dispose();
     _bearing.dispose();
-    _searchController.dispose();
-    _sheetSearchController.dispose();
-    _trackSub?.cancel();
-    _navSub?.cancel();
     super.dispose();
   }
 
 
 
 
-  Future<void> _loadSaved() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (mounted) {
-        setState(() {
-          _savedRoutes = prefs.getStringList(_savedKey)?.toSet() ?? {};
-        });
-      }
-    } catch (_) {
-      // No saved routes without storage (e.g. widget tests) — stay empty.
-    }
-  }
 
-  Future<void> _persistSaved() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(_savedKey, _savedRoutes.toList());
-    } catch (_) {
-      // Saving is best-effort; the in-memory set still works this session.
-    }
-  }
 
   // ---- Admin-added routes (Add Route) ----
 
-  bool get _isAdmin => isAdminUser(widget.currentUser);
 
-  Future<void> _loadCustomRoutes() async {
-    final repo = widget.customRouteRepository;
-    if (repo == null) return;
-    final routes = await repo.loadAll();
-    if (mounted) setState(() => _customRoutes = routes);
-  }
 
-  /// Custom routes starting at [originName], as sheet entries with
-  /// their own operator, fare, and via-stops line.
-  List<RouteInfo> _customRoutesFrom(String originName) {
-    return _customRoutes
-        .where((r) => r.from == originName)
-        .map(customRouteToRouteInfo)
-        .toList();
-  }
 
-  /// Selects a custom route: the active line is the route's OWN
-  /// via-stops line (From → via… → To), never the generic hub line.
-  void _selectCustomRoute(RouteInfo route) {
-    final custom = route.customRoute;
-    if (custom == null) return;
-    final origin = hubByName(custom.from);
-    if (origin == null) return;
-    if (_navigating) {
-      _navSub?.cancel();
-      _navSub = null;
-    }
-    setState(() {
-      _selectedChurch = null;
-      _selectedHub = route.dest;
-      _activeRoute = route;
-      _activeRouteOrigin = LatLng(origin.lat, origin.lng);
-      _roadPoints = null;
-      _routeError = null;
-      _churchPreview = false;
-      _selectedStopIndex = null;
-      _pendingStopIndex = null;
-      _resetNavFields();
-    });
-    _refreshRouteStops();
-    _resetSheetScroll();
-    _fetchRoadPath(
-      origin.lat,
-      origin.lng,
-      route.dest,
-      via: _customRouteViaPoints(route),
-    );
-  }
 
-  /// Opens the Add Route form (admin only — the button is hidden
-  /// for everyone else, and the repository re-checks on save).
-  Future<void> _openAddRoute({CustomRoute? existing}) async {
-    final user = widget.currentUser;
-    final repo = widget.customRouteRepository;
-    if (user == null || repo == null || !isAdminUser(user)) return;
-    final saved = await showModalBottomSheet<CustomRoute>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => AddRouteSheet(
-        existing: existing,
-        repository: repo,
-        author: user,
-      ),
-    );
-    if (saved != null && mounted) {
-      await _loadCustomRoutes();
-      _snack(
-        existing == null ? 'Route added.' : 'Route updated.',
-      );
-    }
-  }
 
-  /// Deletes an admin-added route after a confirm dialog. The
-  /// repository re-checks the admin allowlist on delete.
-  Future<void> _deleteCustomRoute(CustomRoute route) async {
-    final user = widget.currentUser;
-    final repo = widget.customRouteRepository;
-    if (user == null || repo == null || !isAdminUser(user)) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete this route?'),
-        content: Text('${route.from} → ${route.to} · ${route.operator}'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    try {
-      await repo.delete(route, user);
-      await _loadCustomRoutes();
-      if (_activeRoute?.customRoute?.id == route.id) {
-        setState(() {
-          _activeRoute = null;
-          _activeRouteOrigin = null;
-          _roadPoints = null;
-        });
-      }
-      _snack('Route deleted.');
-    } catch (e) {
-      _snack('Could not delete the route: $e');
-    }
-  }
 
   void _snack(String message) {
     if (!mounted) return;
@@ -1725,9 +1518,17 @@ class _MapTabState extends State<MapTab>
     }
   }
 
-  /// Animated move ("flyTo"): interpolates centre + zoom over
-  /// ~650 ms with an ease curve, because flutter_map's move()
-  /// jumps instantly. Starting a new flight stops the old one.
+  /// Animated move ("flyTo"): interpolates centre + zoom with an
+  /// ease curve, because flutter_map's move() jumps instantly.
+  /// Starting a new flight stops the old one.
+  ///
+  /// Timing follows the preview (v34): a 1400 ms flight, so the
+  /// zoom is slow enough to be seen on a phone, plus a 1900 ms
+  /// fallback — if the flight has not landed by then (e.g. the
+  /// animation was interrupted), the final camera position is
+  /// forced directly instead of leaving the map where it was.
+  /// The stop card's reveal gate lives in [_selectStop] (min
+  /// 650 ms), so the zoom is always visible before the card opens.
   Future<void> _flyTo(LatLng target, {double zoom = 13}) async {
     _flyController?.stop();
     _flyController?.dispose();
@@ -1735,7 +1536,7 @@ class _MapTabState extends State<MapTab>
     final fromZoom = _mapZoom;
     final controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 650),
+      duration: const Duration(milliseconds: 1400),
     );
     _flyController = controller;
     final curved = CurvedAnimation(
@@ -1760,6 +1561,15 @@ class _MapTabState extends State<MapTab>
         );
       } catch (_) {}
     });
+    // Fallback (preview v34): force the landing if the flight
+    // has not finished 1900 ms after it started. A newer flight
+    // owns the view by then, so this only fires for a stuck one.
+    Future.delayed(const Duration(milliseconds: 1900), () {
+      if (!mounted || _flyController != controller) return;
+      try {
+        _mapController.move(_toLl(target), zoom);
+      } catch (_) {}
+    });
     try {
       await controller.forward();
     } catch (_) {
@@ -1773,15 +1583,6 @@ class _MapTabState extends State<MapTab>
     // Animated: a jump (my-location, hub tap, nav start) keeps
     // the current rotation instead of flattening it.
     await _flyTo(target, zoom: zoom);
-  }
-
-  /// Switches the map-type pill (Standard OSM <-> Esri
-  /// satellite). OSM has no 3D tilt, so switching only swaps the
-  /// tile layer: the active route, destination, markers, and
-  /// polylines are untouched. During navigation only the tiles
-  /// change and the nav camera keeps driving.
-  Future<void> _applyMapMode(MapViewMode mode) async {
-    setState(() => _mapMode = mode);
   }
 
   /// Compass tap: face north again (rotate 0), keeping centre
@@ -1820,59 +1621,6 @@ class _MapTabState extends State<MapTab>
     );
   }
 
-  /// Swaps origin and destination for hub-to-hub preview routes
-  /// (Google-style swap). A live user-location origin cannot swap:
-  /// it is not a hub destination, so the button hides there.
-  void _swapRouteEnds() {
-    final route = _activeRoute;
-    if (route == null) return;
-    Hub? originHub;
-    for (final h in hubs) {
-      if (h.name == route.originName) originHub = h;
-    }
-    final destHub = route.dest;
-    if (originHub == null) return;
-    final matches = routesFrom(
-      destHub.lat,
-      destHub.lng,
-      destHub.name,
-    ).where((r) => r.dest.name == originHub!.name);
-    final swapped = matches.isEmpty ? null : matches.first;
-    if (_navigating) {
-      _navSub?.cancel();
-      _navSub = null;
-    }
-    setState(() {
-      _selectedHub = originHub;
-      _activeRoute = swapped;
-      _activeRouteOrigin = swapped == null
-          ? null
-          : LatLng(destHub.lat, destHub.lng);
-      _roadPoints = null;
-      _routeError = null;
-      _churchPreview = false;
-      _selectedStopIndex = null;
-      _pendingStopIndex = null;
-      _resetNavFields();
-    });
-    _refreshRouteStops();
-    _resetSheetScroll();
-    if (swapped != null) {
-      _fitBounds(
-        LatLng(
-          math.min(destHub.lat, originHub.lat) - 0.01,
-          math.min(destHub.lng, originHub.lng) - 0.01,
-        ),
-        LatLng(
-          math.max(destHub.lat, originHub.lat) + 0.01,
-          math.max(destHub.lng, originHub.lng) + 0.01,
-        ),
-      );
-      _fetchRoadPath(destHub.lat, destHub.lng, originHub);
-    } else {
-      _moveTo(LatLng(originHub.lat, originHub.lng), zoom: 13);
-    }
-  }
 
 
   /// mid-navigation ends that navigation (start again for the new
@@ -1887,21 +1635,12 @@ class _MapTabState extends State<MapTab>
       oName,
     ).where((r) => r.dest.name == hub.name);
     final route = matches.isEmpty ? null : matches.first;
-    if (_navigating) {
-      _navSub?.cancel();
-      _navSub = null;
-    }
     setState(() {
-      _selectedChurch = null;
-      _selectedHub = hub;
       _activeRoute = route;
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
-      _routeError = null;
-      _churchPreview = false;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
-      _resetNavFields();
     });
     _refreshRouteStops();
     _resetSheetScroll();
@@ -1923,257 +1662,10 @@ class _MapTabState extends State<MapTab>
     }
   }
 
-  /// Loads Catholic churches across Northern Luzon from
-  /// Nominatim (bounded viewbox). The sheet always opens
-  /// afterwards: verified bundled churches show even when the
-  /// lookup fails, and the failure reason is shown in the sheet
-  /// instead of a fake list. No API key, no billing.
-  Future<void> _fetchChurches() async {
-    setState(() {
-      _churchesLoading = true;
-      _chip = 'Churches';
-    });
-    final found = await fetchNominatimChurches();
-    if (!mounted) return;
-    setState(() {
-      _churches = dedupePlacesChurches(
-        found
-            .map(
-              (p) => ChurchPlace(
-                name: p.name,
-                lat: p.lat,
-                lng: p.lng,
-                address: p.address,
-              ),
-            )
-            .toList(),
-        verifiedChurches,
-      );
-      _churchesLoading = false;
-    });
-    _showChurchesSheet(
-      placesError: found.isEmpty
-          ? 'Could not reach the OpenStreetMap lookup — showing verified churches only.'
-          : null,
-    );
-  }
 
-  void _showChurchesSheet({String? placesError}) {
-    // Sheet-lifetime search state: the controller lives only while
-    // the sheet is open; the sheet's own rebuilds read its text.
-    final searchController = TextEditingController();
-    var filter = ChurchSourceFilter.all;
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          final visible = visibleChurches(
-            verified: verifiedChurches,
-            places: _churches,
-            query: searchController.text,
-            filter: filter,
-          );
-          final shown = visible.verified.length + visible.places.length;
-          final filtering =
-              searchController.text.trim().isNotEmpty ||
-              filter != ChurchSourceFilter.all;
-          return ListView(
-            shrinkWrap: true,
-            children: [
-              ListTile(
-                title: Text('Catholic Churches · Northern Luzon ($shown)'),
-                subtitle: const Text(
-                  'Verified entries first, then results from Google Places for "Catholic church".',
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: TextField(
-                  controller: searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search churches…',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: searchController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear),
-                            tooltip: 'Clear search',
-                            onPressed: () {
-                              searchController.clear();
-                              setSheetState(() {});
-                            },
-                          ),
-                    border: const OutlineInputBorder(),
-                  ),
-                  onChanged: (_) => setSheetState(() {}),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final entry in const [
-                      (ChurchSourceFilter.all, 'All'),
-                      (ChurchSourceFilter.verified, 'Verified'),
-                      (ChurchSourceFilter.places, 'From Places'),
-                    ])
-                      ChoiceChip(
-                        label: Text(entry.$2),
-                        selected: filter == entry.$1,
-                        onSelected: (_) =>
-                            setSheetState(() => filter = entry.$1),
-                      ),
-                  ],
-                ),
-              ),
-              if (placesError != null)
-                ListTile(
-                  leading: const Icon(Icons.info_outlined),
-                  title: Text(placesError),
-                ),
-              if (visible.verified.isNotEmpty)
-                const ListTile(
-                  title: Text(
-                    'Verified',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              for (final church in visible.verified)
-                ListTile(
-                  leading: const Icon(Icons.church_outlined),
-                  title: Text(church.name),
-                  subtitle: Text(church.address),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _selectChurch(church);
-                  },
-                ),
-              if (visible.places.isNotEmpty)
-                const ListTile(
-                  title: Text(
-                    'From Google Places',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              for (final church in visible.places)
-                ListTile(
-                  leading: const Icon(Icons.church_outlined),
-                  title: Text(church.name),
-                  subtitle: Text(
-                    church.address.isEmpty
-                        ? 'Northern Luzon, Philippines'
-                        : church.address,
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _selectChurch(church);
-                  },
-                ),
-              if (shown == 0)
-                ListTile(
-                  title: Text(
-                    filtering
-                        ? 'No churches match your search.'
-                        : 'No churches to show.',
-                  ),
-                ),
-              ListTile(
-                leading: const Icon(Icons.visibility_off_outlined),
-                title: const Text('Hide church markers'),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _churches = [];
-                    _chip = null;
-                    _selectedChurch = null;
-                  });
-                },
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
-  /// True when [church] is the one whose details panel is open.
-  /// Compared by name + coordinates, not object identity, so two
-  /// listings of one church can never highlight twice.
-  bool _isSelectedChurch(ChurchPlace church) {
-    final selected = _selectedChurch;
-    return selected != null &&
-        selected.name == church.name &&
-        selected.lat == church.lat &&
-        selected.lng == church.lng;
-  }
 
-  /// Marker tap: select the church and open its details panel in
-  /// the bottom sheet (half-expanded so name + buttons show at
-  /// once). During a route preview the panel stays out of the way
-  /// and only the camera flies.
-  void _selectChurch(ChurchPlace church) {
-    if (_activeRoute == null) {
-      setState(() => _selectedChurch = church);
-      try {
-        if (_sheetController.isAttached) {
-          _sheetController.animateTo(
-            0.55,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      } catch (_) {}
-    }
-    _moveTo(LatLng(church.lat, church.lng), zoom: 16);
-  }
 
-  /// DIRECTIONS from the church panel: the church becomes the route
-  /// destination through the existing hub flow. Preview card, road
-  /// shape, Start, voice, and re-route all run unchanged — they
-  /// only ever read dest name + coordinates. The church panel
-  /// closes; the preview card takes over.
-  void _selectChurchDestination(ChurchPlace church) {
-    final oLat = _userPos?.latitude ?? hubs[_homeHub].lat;
-    final oLng = _userPos?.longitude ?? hubs[_homeHub].lng;
-    final oName = _userPos != null ? 'Your location' : hubs[_homeHub].name;
-    final dest = churchDestinationHub(church);
-    final route = RouteInfo(
-      originName: oName,
-      dest: dest,
-      roadKm: roadKmBetween(oLat, oLng, church.lat, church.lng),
-      direction: directionOf(oLat, church.lat),
-    );
-    if (_navigating) {
-      _navSub?.cancel();
-      _navSub = null;
-    }
-    setState(() {
-      _selectedChurch = null;
-      _selectedHub = dest;
-      _activeRoute = route;
-      _activeRouteOrigin = LatLng(oLat, oLng);
-      _roadPoints = null;
-      _routeError = null;
-      _churchPreview = true;
-      _selectedStopIndex = null;
-      _pendingStopIndex = null;
-      _resetNavFields();
-    });
-    _refreshRouteStops();
-    _resetSheetScroll();
-    _fitBounds(
-      LatLng(
-        math.min(oLat, church.lat) - 0.01,
-        math.min(oLng, church.lng) - 0.01,
-      ),
-      LatLng(
-        math.max(oLat, church.lat) + 0.01,
-        math.max(oLng, church.lng) + 0.01,
-      ),
-    );
-    _fetchRoadPath(oLat, oLng, dest);
-  }
 
   /// Photo slot for the church details panel. Shows the real
   /// Places photo when the entry carries photo data and the build
@@ -2184,174 +1676,6 @@ class _MapTabState extends State<MapTab>
   // Nominatim has no photos, so the key is always empty here:
   // the slot shows its honest empty state. churchPhotoUrl stays
   // for the Places-photo shape (unit-tested, unused at runtime).
-  Widget _churchPhotoSlot(ChurchPlace church) =>
-      ChurchPhotoSlot(church: church, apiKey: '');
-
-  /// Church details panel: replaces the Nearby Routes content while
-  /// a church is selected. Collapsed it shows the photo slot, name,
-  /// address, and the three actions; the detail rows below appear
-  /// as the sheet expands (OPEN animates it to full). No rating,
-  /// hours, or contact rows: none are verified, so none are shown.
-  Widget _churchDetailsPanel(ColorScheme scheme, ChurchPlace church) {
-    final verified = verifiedChurches.any(
-      (c) =>
-          c.name == church.name && c.lat == church.lat && c.lng == church.lng,
-    );
-    final pos = _userPos;
-    final straightKm = pos == null
-        ? null
-        : haversineKm(pos.latitude, pos.longitude, church.lat, church.lng);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(kMapCardRadius),
-              ),
-              child: Icon(Icons.church_outlined, color: scheme.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          church.name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (verified)
-                        const Icon(
-                          Icons.verified,
-                          color: kMapSuccess,
-                          size: 20,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    church.address.isEmpty
-                        ? 'Northern Luzon, Philippines'
-                        : church.address,
-                    style: TextStyle(color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: 'Close',
-              onPressed: () => setState(() => _selectedChurch = null),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _churchPhotoSlot(church),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  try {
-                    if (_sheetController.isAttached) {
-                      _sheetController.animateTo(
-                        0.92,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                      );
-                    }
-                  } catch (_) {}
-                },
-                icon: const Icon(Icons.keyboard_arrow_up),
-                label: const Text('OPEN'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _copyChurchAddress(church),
-                icon: const Icon(Icons.link_outlined),
-                label: const Text('ADDRESS'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: () => _selectChurchDestination(church),
-                icon: const Icon(Icons.directions),
-                label: const Text('DIRECTIONS'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ListTile(
-          leading: const Icon(Icons.church_outlined),
-          title: const Text('Denomination'),
-          subtitle: Text(verified ? 'Roman Catholic' : 'Catholic Church'),
-        ),
-        if (straightKm != null)
-          ListTile(
-            leading: const Icon(Icons.straighten),
-            title: const Text('Straight-line distance'),
-            subtitle: Text('${straightKm.toStringAsFixed(1)} km'),
-          ),
-        ListTile(
-          leading: const Icon(Icons.place_outlined),
-          title: const Text('Coordinates'),
-          subtitle: Text(
-            '${church.lat.toStringAsFixed(5)}, '
-            '${church.lng.toStringAsFixed(5)}',
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.info_outlined),
-          title: const Text('Source'),
-          subtitle: Text(verified ? 'Verified listing' : 'Google Places'),
-        ),
-      ],
-    );
-  }
-
-  /// ADDRESS: copies the full address, with a snackbar action to
-  /// open the church in Google Maps.
-  Future<void> _copyChurchAddress(ChurchPlace church) async {
-    final address = church.address.isEmpty
-        ? '${church.name}, Northern Luzon, Philippines'
-        : church.address;
-    await Clipboard.setData(ClipboardData(text: address));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Address copied.'),
-        action: SnackBarAction(
-          label: 'Open in Maps',
-          onPressed: () {
-            launchUrl(
-              Uri.parse(
-                'https://www.openstreetmap.org/'
-                '?mlat=${church.lat}&mlon=${church.lng}'
-                '#map=16/${church.lat}/${church.lng}',
-              ),
-              mode: LaunchMode.externalApplication,
-            );
-          },
-        ),
-      ),
-    );
-  }
 
   /// Fetches the road-following shape for the active route from
   /// OSRM (DRIVE mode, road routing via router.project-osrm.org).
@@ -2359,9 +1683,8 @@ class _MapTabState extends State<MapTab>
   /// Avenida Quezon via-point when the destination is the Vigan
   /// Bus Terminal (see viaWaypointsForDestination). No API key,
   /// no billing. On any failure the dashed direct line simply
-  /// stays and [_routeError] explains why — the route never
-  /// breaks. A stale response (user tapped elsewhere since) is
-  /// ignored via [_roadRequestId].
+  /// stays — the route never breaks. A stale response (user
+  /// tapped elsewhere since) is ignored via [_roadRequestId].
   Future<void> _fetchRoadPath(
     double oLat,
     double oLng,
@@ -2383,30 +1706,13 @@ class _MapTabState extends State<MapTab>
     );
     if (!mounted || requestId != _roadRequestId) return;
     if (result == null || result.points.isEmpty) {
-      setState(
-        () => _routeError =
-            'OSRM routing unavailable — showing the direct line.',
-      );
+      // OSRM routing unavailable — the dashed direct line stays.
       return;
     }
     setState(() {
       _roadPoints = result.points;
-      _routeError = null;
       _routeDurationSec = result.durationSec;
       _routeDistanceKm = result.distanceKm;
-      _navSteps = result.steps
-          .map(
-            (s) => NavStep(
-              instruction: s.instruction,
-              location: s.location,
-              distanceMeters: s.distanceMeters,
-            ),
-          )
-          .toList();
-      _maneuverIdx = result.steps
-          .map((s) => nearestPointIndex(result.points, s.location))
-          .toList();
-      _navStepIndex = 0;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
       if (_activeRoute != null && _activeRouteOrigin != null) {
@@ -2424,344 +1730,17 @@ class _MapTabState extends State<MapTab>
     });
   }
 
-  /// Resets navigation fields only (no stream work — callers that
-  /// need it cancel the subscription themselves first).
-  void _resetNavFields() {
-    _navigating = false;
-    _arrived = false;
-    _navBearing = 0;
-    _navSteps = null;
-    _maneuverIdx = const [];
-    _navStepIndex = 0;
-    _navSpeedKmh = -1;
-    _lastRerouteAt = null;
-    _lastPreviewRefreshAt = null;
-    _northUp = false;
-    _spokenStepIndex = -1;
-    _routeDurationSec = 0;
-    _routeDistanceKm = 0;
-    _previewMode = TravelMode.transit;
-  }
 
-  /// Zooms the nav camera out to fit the whole remaining route
-  /// (Google-style overview). Re-center resumes follow.
-  void _overviewNav() {
-    final user = _userPos;
-    final dest = _activeRoute?.dest;
-    if (user == null || dest == null) return;
-    _fitBounds(
-      LatLng(
-        math.min(user.latitude, dest.lat) - 0.01,
-        math.min(user.longitude, dest.lng) - 0.01,
-      ),
-      LatLng(
-        math.max(user.latitude, dest.lat) + 0.01,
-        math.max(user.longitude, dest.lng) + 0.01,
-      ),
-    );
-  }
 
-  /// Asks before ending navigation from the bottom bar (arrival
-  /// and selection changes still end directly — they already have
-  /// their own dialogs or are explicit user taps).
-  Future<void> _confirmEndNavigation() async {
-    final dest = _activeRoute?.dest;
-    final end = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('End navigation?'),
-        content: Text(
-          dest == null
-              ? 'Stop GPS navigation?'
-              : 'Stop GPS navigation to ${dest.name}?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('End'),
-          ),
-        ],
-      ),
-    );
-    if (end == true) _endNavigation();
-  }
 
-  void _endNavigation() {
-    _navSub?.cancel();
-    _tts.stop();
-    _navSub = null;
-    if (!mounted) return;
-    // Ending navigation also ends a church-preview session: the
-    // browsing chrome returns with the sheet (the route card itself
-    // persists — only the hiding lifts).
-    setState(() {
-      _resetNavFields();
-      _churchPreview = false;
-    });
-    // Navigation's tilt-45 camera is over: restore the current
-    // mode's camera (2D snaps back to top-down).
-    _applyMapMode(_mapMode);
-  }
 
-  /// Enters navigation for the active route: the camera follows the
-  /// user with heading, the user arrow replaces the blue dot, and
-  /// the nav card shows the next real turn + remaining distance.
-  /// Navigation takes over following from the Live Tracking pill.
-  Future<void> _startNavigation() async {
-    final route = _activeRoute;
-    final origin = _activeRouteOrigin;
-    if (route == null || origin == null || _navigating) return;
-    final position = await _ensurePosition();
-    if (position == null || !mounted) return;
-    await _trackSub?.cancel();
-    _trackSub = null;
-    setState(() {
-      _userPos = position;
-      _locationGranted = true;
-      _tracking = false;
-      _navigating = true;
-      _arrived = false;
-      _navStepIndex = 0;
-    });
-    await _moveTo(LatLng(position.latitude, position.longitude), zoom: 17);
-    // If road routing failed earlier, retry now that navigation
-    // needs the shape + steps.
-    if (_roadPoints == null) {
-      _fetchRoadPath(
-        origin.latitude,
-        origin.longitude,
-        route.dest,
-        via: _customRouteViaPoints(route),
-      );
-    }
-    _navSub?.cancel();
-    _navSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    ).listen(_onNavPosition);
-  }
 
-  void _onNavPosition(Position pos) {
-    if (!_navigating || !mounted) return;
-    final user = LatLng(pos.latitude, pos.longitude);
-    final moving = pos.speed > 1;
-    final bearing = moving ? pos.heading : _navBearing;
-    final dest = _activeRoute?.dest;
-    setState(() {
-      _userPos = pos;
-      _navBearing = bearing;
-      _navSpeedKmh = pos.speed >= 0 ? pos.speed * 3.6 : -1;
-      final pts = _roadPoints;
-      if (pts != null && _navSteps != null && _maneuverIdx.isNotEmpty) {
-        final userIdx = nearestPointIndex(pts, user);
-        while (_navStepIndex < _maneuverIdx.length - 1 &&
-            _maneuverIdx[_navStepIndex] <= userIdx) {
-          _navStepIndex++;
-        }
-      }
-    });
-    // The camera follows the snapped position, so the view stays
-    // on the road even when raw GPS drifts a few metres off it.
-    final display = snapToRoute(user, _roadPoints);
-    try {
-      _mapController.moveAndRotate(
-        _toLl(display),
-        17,
-        _northUp ? 0 : bearing,
-      );
-    } catch (_) {}
-    if (_voiceOn &&
-        _navSteps != null &&
-        _navSteps!.isNotEmpty &&
-        _navStepIndex != _spokenStepIndex) {
-      _spokenStepIndex = _navStepIndex;
-      _speakInstruction(
-        _navSteps![_navStepIndex.clamp(0, _navSteps!.length - 1)].instruction,
-      );
-    }
-    if (dest != null && !_arrived) {
-      final d = haversineKm(pos.latitude, pos.longitude, dest.lat, dest.lng);
-      if (d <= 0.15) {
-        _arrived = true;
-        _showArrivalDialog(dest);
-      }
-    }
-    // Re-route when the user is off the line (or the road shape never
-    // loaded): Google re-calculates instead of drawing a long straight
-    // connector. Throttled to once per 30 seconds.
-    if (dest != null && !_arrived && mounted) {
-      final pts = _roadPoints;
-      final double offKm;
-      if (pts == null) {
-        offKm = double.infinity;
-      } else {
-        final idx = nearestPointIndex(pts, user);
-        offKm = haversineKm(
-          user.latitude,
-          user.longitude,
-          pts[idx].latitude,
-          pts[idx].longitude,
-        );
-      }
-      if (needsReroute(
-        offRouteKm: offKm,
-        lastRerouteAt: _lastRerouteAt,
-        now: DateTime.now(),
-      )) {
-        _lastRerouteAt = DateTime.now();
-        _fetchRoadPath(user.latitude, user.longitude, dest);
-      }
-    }
-  }
 
-  /// Speaks one instruction via the platform text-to-speech engine.
-  /// Any failure is swallowed — voice must never break navigation.
-  Future<void> _speakInstruction(String text) async {
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.5);
-      await _tts.speak(text);
-    } catch (_) {}
-  }
 
-  /// Re-centers the nav camera on the user (Google's Re-center pill).
-  void _recenterNav() {
-    final pos = _userPos;
-    if (pos == null) return;
-    // OSM has no tilt: re-centre keeps the heading-up / north-up
-    // rotation only.
-    try {
-      _mapController.moveAndRotate(
-        _toLl(LatLng(pos.latitude, pos.longitude)),
-        17,
-        _northUp ? 0 : _navBearing,
-      );
-    } catch (_) {}
-  }
 
-  void _showArrivalDialog(Hub dest) {
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Your destination'),
-        content: Text('You have arrived at ${dest.name}.'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _endNavigation();
-            },
-            child: const Text('End Navigation'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Future<void> _toggleTracking() async {
-    if (_tracking) {
-      await _trackSub?.cancel();
-      _trackSub = null;
-      setState(() => _tracking = false);
-      return;
-    }
-    final position = await _ensurePosition();
-    if (position == null || !mounted) return;
-    setState(() {
-      _userPos = position;
-      _locationGranted = true;
-      _tracking = true;
-    });
-    await _moveTo(LatLng(position.latitude, position.longitude), zoom: 15);
-    _trackSub =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 20,
-          ),
-        ).listen((pos) {
-          if (!_tracking || !mounted) return;
-          setState(() => _userPos = pos);
-          try {
-            _mapController.move(
-              _toLl(LatLng(pos.latitude, pos.longitude)),
-              _mapZoom,
-            );
-          } catch (_) {}
-          // Live preview: a user-origin preview route refreshes when
-          // the user actually moves (no camera yank — the follow above
-          // already moves the view). Hub-origin routes never refresh:
-          // their origin does not move.
-          final route = _activeRoute;
-          final origin = _activeRouteOrigin;
-          if (!_navigating &&
-              route != null &&
-              route.originName == 'Your location' &&
-              origin != null &&
-              _selectedHub != null) {
-            final moved = haversineKm(
-              pos.latitude,
-              pos.longitude,
-              origin.latitude,
-              origin.longitude,
-            );
-            if (shouldRefreshPreview(
-              movedKm: moved,
-              lastRefreshAt: _lastPreviewRefreshAt,
-              now: DateTime.now(),
-            )) {
-              _lastPreviewRefreshAt = DateTime.now();
-              _refreshPreviewRoute();
-            }
-          }
-        });
-  }
 
-  /// Recomputes a user-origin preview route from the current
-  /// position (no camera move, no sheet change): the preview
-  /// follows the user the way the Google preview's blue dot does.
-  /// Navigation is untouched (it has its own live re-route).
-  void _refreshPreviewRoute() {
-    final hub = _selectedHub;
-    final pos = _userPos;
-    if (hub == null || pos == null || _navigating) return;
-    final matches = routesFrom(
-      pos.latitude,
-      pos.longitude,
-      'Your location',
-    ).where((r) => r.dest.name == hub.name);
-    if (matches.isEmpty) return;
-    setState(() {
-      _activeRoute = matches.first;
-      _activeRouteOrigin = LatLng(pos.latitude, pos.longitude);
-      _roadPoints = null;
-      _navSteps = null;
-      _routeError = null;
-      _selectedStopIndex = null;
-      _pendingStopIndex = null;
-    });
-    _refreshRouteStops();
-    _fetchRoadPath(pos.latitude, pos.longitude, hub);
-  }
 
-  void _refetchActiveRoute() {
-    final origin = _activeRouteOrigin;
-    final route = _activeRoute;
-    if (origin == null || route == null) return;
-    _fetchRoadPath(
-      origin.latitude,
-      origin.longitude,
-      route.dest,
-      via: _customRouteViaPoints(route),
-    );
-  }
 
   /// Via points for the active route's own line: a custom route's
   /// via-stops (excluding its endpoints), otherwise none (the
@@ -2774,150 +1753,12 @@ class _MapTabState extends State<MapTab>
     return points.sublist(1, points.length - 1);
   }
 
-  Future<void> _shareRouteText(String text) async {
-    try {
-      await SharePlus.instance.share(ShareParams(text: text));
-    } catch (_) {
-      if (mounted) _snack('Could not open the share sheet.');
-    }
-  }
 
-  Future<void> _shareActiveRoute() async {
-    final route = _activeRoute;
-    if (route == null) return;
-    // A custom route shares its own admin-entered fare, never the
-    // formula fare for its pair.
-    final fare = route.customRoute?.fare ??
-        resolveTransitFare(
-          from: route.originName,
-          to: route.dest.name,
-          vehicle: _vehicle,
-          roadKm: route.roadKm,
-        );
-    _shareRouteText(
-      'EstudyanteGO route: ${route.originName} → ${route.dest.name} · '
-      '${route.roadKm.toStringAsFixed(1)} km · '
-      '${fare == null ? 'No fare' : peso(fare)} · '
-      '${route.direction == Direction.northbound ? 'Northbound' : 'Southbound'}',
-    );
-  }
 
-  /// Fare segment for the tapped-route summary line: the vehicle-aware
-  /// resolved fare, or 'No fare' when the vehicle has no rate.
-  String _previewSummaryFare() {
-    final route = _activeRoute;
-    if (route == null) return 'No fare';
-    final fare = route.customRoute?.fare ??
-        resolveTransitFare(
-          from: route.originName,
-          to: route.dest.name,
-          vehicle: _vehicle,
-          roadKm: route.roadKm,
-        );
-    return fare == null ? 'No fare' : peso(fare);
-  }
 
-  void _toggleSaved(RouteInfo route) {
-    final key = '${route.originName}>${route.dest.name}';
-    setState(() {
-      if (_savedRoutes.contains(key)) {
-        _savedRoutes.remove(key);
-        _snack('Removed from saved routes.');
-      } else {
-        _savedRoutes.add(key);
-        _snack('This route has been saved.');
-      }
-    });
-    _persistSaved();
-  }
 
-  void _openSavedRoute(String key) {
-    // A saved custom route reopens with its own via-stops line.
-    if (key.startsWith('custom:')) {
-      final id = key.substring('custom:'.length);
-      final match = _customRoutes.where((r) => r.id == id);
-      if (match.isEmpty) return;
-      _selectCustomRoute(customRouteToRouteInfo(match.first));
-      return;
-    }
-    final parts = key.split('>');
-    if (parts.length != 2) return;
-    final fromName = parts[0];
-    final toName = parts[1];
-    final toIndex = hubs.indexWhere((h) => h.name == toName);
-    if (toIndex < 0) return;
-    setState(() {
-      _fromIndex = fromName == 'Your location'
-          ? -1
-          : hubs.indexWhere((h) => h.name == fromName);
-      if (_fromIndex < -1) _fromIndex = _homeHub;
-      _toIndex = toIndex;
-      _destinationMode = true;
-    });
-    _sheetController.animateTo(
-      0.5,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
-  }
 
-  ({double lat, double lng, String name, Hub? hub}) _origin() {
-    if (_fromIndex == -1) {
-      final pos = _userPos;
-      if (pos != null) {
-        return (
-          lat: pos.latitude,
-          lng: pos.longitude,
-          name: 'Your location',
-          hub: null,
-        );
-      }
-      final fallback = hubs[_homeHub];
-      return (
-        lat: fallback.lat,
-        lng: fallback.lng,
-        name: fallback.name,
-        hub: fallback,
-      );
-    }
-    final hub = hubs[_fromIndex];
-    return (lat: hub.lat, lng: hub.lng, name: hub.name, hub: hub);
-  }
 
-  List<RouteInfo> _currentRoutes() {
-    final origin = _userPos != null && _stopView != _StopView.all
-        ? (
-            lat: _userPos!.latitude,
-            lng: _userPos!.longitude,
-            name: 'Your location',
-          )
-        : (
-            lat: hubs[_homeHub].lat,
-            lng: hubs[_homeHub].lng,
-            name: hubs[_homeHub].name,
-          );
-    var routes = routesFrom(origin.lat, origin.lng, origin.name);
-    // Admin-added routes starting here ride along: their own
-    // operator, fare, and via-stops line — never folded into the
-    // generic hub routes. They only match a hub origin (a 'Your
-    // location' origin has no admin route starting there).
-    routes = [...routes, ..._customRoutesFrom(origin.name)];
-    routes.sort((a, b) => a.roadKm.compareTo(b.roadKm));
-    if (_stopView == _StopView.nearest && routes.isNotEmpty) {
-      routes = [routes.first];
-    }
-    if (_stopView == _StopView.all) {
-      routes.sort((a, b) => a.dest.name.compareTo(b.dest.name));
-    }
-    if (_direction != 'All') {
-      final want = _direction == 'Northbound'
-          ? Direction.northbound
-          : Direction.southbound;
-      routes = routes.where((r) => r.direction == want).toList();
-    }
-    routes = filterRoutesByVehicle(routes, _vehicle);
-    return routes;
-  }
 
   /// Points + style for the active-route line. Solid = real road shape
   /// from Google; dashed = direct-line fallback. During navigation the
@@ -2940,24 +1781,15 @@ class _MapTabState extends State<MapTab>
     final dest = LatLng(_activeRoute!.dest.lat, _activeRoute!.dest.lng);
     final List<LatLng> points;
     final bool solid;
-    if (_navigating && _userPos != null) {
-      points = navLinePoints(
-        user: LatLng(_userPos!.latitude, _userPos!.longitude),
-        roadPoints: _roadPoints,
-        dest: dest,
-      );
-      solid = _roadPoints != null;
-    } else {
-      // No road shape yet: the dashed fallback follows the custom
-      // route's own via-stops instead of a straight origin→dest
-      // line, so a Partas line already differs from a Dominion line.
-      final via = _customRouteViaPoints(_activeRoute!);
-      points = _roadPoints ?? [_activeRouteOrigin!, ...via, dest];
-      solid = _roadPoints != null;
-    }
-    // Route segment highlight (not during navigation: the nav
-    // line is trimmed to the live position instead).
-    if (!_navigating &&
+    // No road shape yet: the dashed fallback follows the custom
+    // route's own via-stops instead of a straight origin→dest
+    // line, so a Partas line already differs from a Dominion line.
+    final via = _customRouteViaPoints(_activeRoute!);
+    points = _roadPoints ?? [_activeRouteOrigin!, ...via, dest];
+    solid = _roadPoints != null;
+    // Route segment highlight: the tapped stop → destination
+    // lights up, the earlier part dims.
+    if (
         _selectedStopIndex != null &&
         _routeStops.isNotEmpty &&
         _roadPoints != null &&
@@ -3005,177 +1837,52 @@ class _MapTabState extends State<MapTab>
     ];
   }
 
-  /// OSM markers: hub pins (numbered while on the active route),
-  /// the user dot / nav vehicle cursor, and clustered church
-  /// markers. All markers are widgets now — no BitmapDescriptor
-  /// canvas icons any more.
+  /// OSM markers — clean, like the preview: ONLY the active
+  /// route's numbered stop pins (1..N), each tappable to fly to
+  /// that stop + open its card. No scattered hub pins across the
+  /// region and no church markers: the preview's map shows the
+  /// route line + its stops and nothing else. The user's own blue
+  /// dot (and the vehicle cursor during navigation) stay — they
+  /// are the user's own position, not route clutter. A 'Your
+  /// location' origin is stop 1 in [_routeStops] already, so it
+  /// needs no special case.
   List<fm.Marker> _osmMarkers() {
     final markers = <fm.Marker>[];
-    final stopByHub = <String, int>{
-      for (var i = 0; i < _routeStops.length; i++) _routeStops[i].name: i,
-    };
-    for (final hub in hubs) {
-      // During navigation the other hub pins are clutter (and a tap
-      // on one would cancel navigation): only the destination stays.
-      if (_navigating && hub.name != _selectedHub?.name) continue;
-      // Churches mode shows ONLY churches: hub pins hide while no
-      // route is active (a selected route still needs its pins).
-      if (_chip == 'Churches' && _activeRoute == null) continue;
-      final selected = _selectedHub?.name == hub.name;
-      final stopIndex = stopByHub[hub.name];
+    for (var i = 0; i < _routeStops.length; i++) {
+      final stop = _routeStops[i];
       markers.add(
         fm.Marker(
-          point: _toLl(LatLng(hub.lat, hub.lng)),
+          point: _toLl(LatLng(stop.lat, stop.lng)),
           width: 44,
           height: 44,
           child: GestureDetector(
-            // A numbered stop pin flies to that stop + opens its
-            // card; a plain hub pin selects the hub's route.
-            onTap: () => stopIndex != null
-                ? _selectStop(stopIndex)
-                : _selectHub(hub),
-            child: stopIndex != null
-                ? _numberedPin(
-                    stopIndex + 1,
-                    selected: _selectedStopIndex == stopIndex,
-                  )
-                : Icon(
-                    Icons.place,
-                    color: selected
-                        ? Colors.orange
-                        : const Color(0xFF16A34A),
-                    size: 40,
-                  ),
+            onTap: () => _selectStop(i),
+            child: _numberedPin(
+              i + 1,
+              selected: _selectedStopIndex == i,
+            ),
           ),
         ),
       );
     }
-    // A 'Your location' origin is not a hub, so it gets its own
-    // numbered stop pin (stop 1) when a route is active.
-    if (_routeStops.isNotEmpty) {
-      final first = _routeStops.first;
-      if (!hubs.any((h) => h.name == first.name)) {
-        markers.add(
-          fm.Marker(
-            point: _toLl(LatLng(first.lat, first.lng)),
-            width: 44,
-            height: 44,
-            child: GestureDetector(
-              onTap: () => _selectStop(0),
-              child: _numberedPin(1, selected: _selectedStopIndex == 0),
-            ),
-          ),
-        );
-      }
-    }
-    // User position: a plain blue-dot circle in main mode
-    // (flutter_map has no built-in blue dot), the vehicle cursor
-    // during navigation, rotated with heading.
+    // User position: a plain blue-dot circle (flutter_map has
+    // no built-in blue dot).
     if (_userPos != null && _locationGranted) {
       final pos = LatLng(_userPos!.latitude, _userPos!.longitude);
-      if (_navigating) {
-        markers.add(
-          fm.Marker(
-            point: _toLl(snapToRoute(pos, _roadPoints)),
-            width: 48,
-            height: 48,
-            child: Transform.rotate(
-              angle: _navBearing * math.pi / 180,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFF16A34A),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  vehicleIcon(_vehicle),
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
+      markers.add(
+        fm.Marker(
+          point: _toLl(pos),
+          width: 24,
+          height: 24,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF4285F4),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
             ),
           ),
-        );
-      } else {
-        markers.add(
-          fm.Marker(
-            point: _toLl(pos),
-            width: 24,
-            height: 24,
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF4285F4),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
-              ),
-            ),
-          ),
-        );
-      }
-    }
-    // Catholic church markers, grid-clustered by zoom: verified
-    // bundled churches + Nominatim results. Only while the
-    // Churches chip is active and not navigating, so they never
-    // clutter a route. Tapping one flies the camera there;
-    // tapping a cluster zooms toward it until it splits.
-    if (!_navigating && _chip == 'Churches') {
-      final zoom = _mapZoom;
-      final clusters = clusterChurches([
-        ...verifiedChurches,
-        ..._churches,
-      ], zoom);
-      for (final cluster in clusters) {
-        if (cluster.isSingle) {
-          final church = cluster.churches.first;
-          markers.add(
-            fm.Marker(
-              point: _toLl(LatLng(church.lat, church.lng)),
-              width: 44,
-              height: 44,
-              child: GestureDetector(
-                onTap: () => _selectChurch(church),
-                child: Icon(
-                  Icons.church,
-                  color: _isSelectedChurch(church)
-                      ? const Color(0xFF0284C7)
-                      : const Color(0xFF7C3AED),
-                  size: 36,
-                ),
-              ),
-            ),
-          );
-        } else {
-          final count = cluster.count;
-          markers.add(
-            fm.Marker(
-              point: _toLl(LatLng(cluster.lat, cluster.lng)),
-              width: 44,
-              height: 44,
-              child: GestureDetector(
-                onTap: () => _moveTo(
-                  LatLng(cluster.lat, cluster.lng),
-                  zoom: math.min(zoom + 2, 19.0),
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEA580C),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-      }
+        ),
+      );
     }
     return markers;
   }
@@ -3208,15 +1915,23 @@ class _MapTabState extends State<MapTab>
   /// (smooth zoom to ~15) FIRST, and only then does the stop card
   /// open. Tapping another stop retargets the flight; the stale
   /// landing is ignored via [_pendingStopIndex]. The sheet snaps
-  /// to Peek so the card has room above it.
+  /// to Peek so the card has room above it. Preview v34 reveal
+  /// gate: the card only opens once at least 650 ms have passed
+  /// since the tap, so the zoom is seen before the card covers it.
   Future<void> _selectStop(int index) async {
     if (index < 0 || index >= _routeStops.length) return;
     final stop = _routeStops[index];
     _pendingStopIndex = index;
     _resetSheetScroll();
     _snapSheet(_SheetSnap.peek);
+    final startedAt = DateTime.now();
     await _flyTo(LatLng(stop.lat, stop.lng), zoom: 15);
     if (!mounted || _pendingStopIndex != index) return;
+    final elapsed = DateTime.now().difference(startedAt);
+    if (elapsed < const Duration(milliseconds: 650)) {
+      await Future.delayed(const Duration(milliseconds: 650) - elapsed);
+      if (!mounted || _pendingStopIndex != index) return;
+    }
     setState(() => _selectedStopIndex = index);
   }
 
@@ -3228,26 +1943,6 @@ class _MapTabState extends State<MapTab>
     setState(() => _selectedStopIndex = null);
   }
 
-  /// "Back to Fares": leaves the route preview and returns to
-  /// browsing routes (the sheet's route list). Markers, line, and
-  /// stop card all clear with it.
-  void _clearActiveRoute() {
-    setState(() {
-      _selectedHub = null;
-      _activeRoute = null;
-      _activeRouteOrigin = null;
-      _roadPoints = null;
-      _routeError = null;
-      _routeDistanceKm = 0;
-      _routeDurationSec = 0;
-      _navSteps = null;
-      _churchPreview = false;
-      _selectedStopIndex = null;
-      _pendingStopIndex = null;
-      _routeStops = const [];
-    });
-    _resetSheetScroll();
-  }
 
   /// Numbered stop pin (emerald circle, white number; deep
   /// emerald while its card is open).
@@ -3277,20 +1972,23 @@ class _MapTabState extends State<MapTab>
 
   /// "© OpenStreetMap contributors" — required attribution,
   /// tappable to the OSM copyright page.
-  Widget _attributionChip() {
+  /// Attribution chip — required credit for the tile layer in
+  /// use (OSM in light mode, OSM + CARTO in dark mode), tappable
+  /// to that layer's attribution page.
+  Widget _attributionChip({required bool dark}) {
     return GestureDetector(
-      onTap: () => launchUrl(Uri.parse(osmCopyrightUrl)),
+      onTap: () => launchUrl(Uri.parse(mapAttributionUrl(dark: dark))),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: Colors.black54,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Text(
-          '© OpenStreetMap contributors',
+        child: Text(
+          mapAttributionText(dark: dark),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: Colors.white, fontSize: 11),
+          style: const TextStyle(color: Colors.white, fontSize: 11),
         ),
       ),
     );
@@ -3426,207 +2124,302 @@ class _MapTabState extends State<MapTab>
 
   /// "Stops along the way" for the sheet: one row per route stop.
   /// Tapping a row flies the map to that stop, then opens its card.
+  /// "STOPS ALONG THE WAY" for the sheet: one row per route stop —
+  /// number circle, name, role (Start / Stop / End) at the right,
+  /// like the preview. Tapping a row flies the map to that stop,
+  /// then opens its card. (Distance + KM-to-destination live in
+  /// the stop card, not the row.)
   List<Widget> _stopsSection(ColorScheme scheme) {
     if (_routeStops.isEmpty) return const [];
     return [
-      const SizedBox(height: 12),
-      const Text(
-        'Stops along the way',
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      Text(
+        'STOPS ALONG THE WAY',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+          color: scheme.onSurfaceVariant,
+        ),
       ),
       const SizedBox(height: 8),
       for (var i = 0; i < _routeStops.length; i++)
-        Card(
-          color: _selectedStopIndex == i ? scheme.primaryContainer : null,
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFF16A34A),
-              foregroundColor: Colors.white,
-              child: Text(
-                '${i + 1}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+        Material(
+          color: _selectedStopIndex == i
+              ? scheme.primaryContainer
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _selectStop(i),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF16A34A),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${i + 1}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _routeStops[i].name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _routeStops[i].role,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
-            title: Text(_routeStops[i].name),
-            subtitle: Text(
-              _routeStops[i].region.isEmpty
-                  ? _routeStops[i].role
-                  : '${_routeStops[i].region} · ${_routeStops[i].role}',
-            ),
-            trailing: Text(
-              '${_routeStops[i].kmFromOrigin.toStringAsFixed(1)} km',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            onTap: () => _selectStop(i),
           ),
         ),
     ];
   }
 
   /// Fixed sheet header (below the handle, outside the scrollable
-  /// body): sheet title + Plan a Trip / Add Route, then — while a
-  /// route is active — the route title, the ETA • FARE label, the
-  /// VERIFIED FARE badge, and the verified-fare note. Fixed so
-  /// scrolling can never push them up or clip them.
-  ///
-  /// Peek collapse (preview §4): at Peek with a route active only
-  /// the route title + ETA • FARE row show — the sheet-title row
-  /// and the verified note stay hidden until Half. The full header
-  /// is taller than the peeked sheet (~144px at 0.20), so showing
-  /// it there overflowed the sheet on phones.
+  /// body): the preview's ETA • FARE header — the "ETA • FARE"
+  /// label + VERIFIED FARE badge, then the route title. Fixed so
+  /// scrolling can never push them up or clip them. No sheet
+  /// title, no Plan a Trip, no swap, no Add Route: the preview's
+  /// sheet has none of those (Add Route lives in the Fares tab).
+  /// The header is compact, so it fits the peeked sheet whole.
   Widget _sheetFixedHeader(ColorScheme scheme) {
     final route = _activeRoute;
-    final verified = route == null
-        ? null
-        : knownBusFare(route.originName, route.dest.name);
-    final peekRoute = route != null && _sheetSnap == _SheetSnap.peek;
+    if (route == null) return const SizedBox.shrink();
+    final verified = knownBusFare(route.originName, route.dest.name);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!peekRoute)
-            Row(
+          Row(
             children: [
-              Expanded(
-                child: Text(
-                  _sheetTitle(),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
+              Icon(
+                Icons.access_time,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'ETA • FARE',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              if (verified != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
                   ),
-                ),
-              ),
-              TextButton(
-                onPressed: _toggleDestinationMode,
-                child: Text(
-                  _destinationMode ? 'Back to routes' : 'Plan a Trip',
-                ),
-              ),
-              // Swap origin/destination (hub routes only — the old
-              // preview card's swap, kept in the fixed header).
-              if (route != null &&
-                  hubs.any((h) => h.name == route.originName))
-                IconButton(
-                  icon: const Icon(Icons.swap_vert),
-                  tooltip: 'Swap origin and destination',
-                  onPressed: _swapRouteEnds,
-                ),
-              // Admin-only Add Route: regular users never see it,
-              // and the repository re-checks the allowlist on save.
-              if (_isAdmin)
-                TextButton.icon(
-                  onPressed: () => _openAddRoute(),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Route'),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16A34A),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'VERIFIED FARE',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),
-          if (route != null) ...[
-            Text(
-              '${route.originName} → ${route.dest.name}',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+          const SizedBox(height: 4),
+          Text(
+            '${route.originName} → ${route.dest.name}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${formatTripTime(_previewMinutes(_previewMode))} • ${_previewSummaryFare()}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (verified != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16A34A),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'VERIFIED FARE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            if (verified != null && !peekRoute)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  'User-verified bus fare: ₱$verified (reported Oct 16, 2026).',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  /// Sheet body (scrollable): church panel, destination panel, or
-  /// the route browsing content. The title + route header live in
-  /// [_sheetFixedHeader] above this, outside the scroll.
-  List<Widget> _sheetBodyWidgets({
-    required ColorScheme scheme,
-    required List<RouteInfo> routes,
-    required int allCount,
-    required int northCount,
-    required int southCount,
-  }) {
-    if (_selectedChurch != null && _activeRoute == null) {
-      return [_churchDetailsPanel(scheme, _selectedChurch!)];
+  /// Sheet body (scrollable): the preview's ETA • FARE body —
+  /// fare cards, duration + distance, then the stops list. The
+  /// ETA • FARE header lives in [_sheetFixedHeader] above this,
+  /// outside the scroll. When no route is active (only the brief
+  /// moment before the default route loads), an honest
+  /// placeholder shows instead of an invented route.
+  List<Widget> _sheetBodyWidgets({required ColorScheme scheme}) {
+    final route = _activeRoute;
+    if (route == null) {
+      return const [
+        SizedBox(height: 8),
+        Text(
+          'Pick a route in Fares to see its fare and stops here.',
+          style: TextStyle(fontSize: 14),
+        ),
+      ];
     }
-    if (_destinationMode) return [_destinationPanel(scheme)];
-    return _routeSheetContent(
-      scheme: scheme,
-      routes: routes,
-      allCount: allCount,
-      northCount: northCount,
-      southCount: southCount,
+    return [
+      const SizedBox(height: 4),
+      _fareCards(scheme, route),
+      const SizedBox(height: 12),
+      _durationDistanceCards(scheme, route),
+      const SizedBox(height: 16),
+      ..._stopsSection(scheme),
+    ];
+  }
+
+  /// The preview's fare cards: REGULAR FARE and DISCOUNTED -20%,
+  /// side by side. The regular fare is the user-verified fare
+  /// when the pair has one (Cabugao ↔ Vigan ₱60), otherwise the
+  /// formula fare; the discounted fare is 20% off, rounded to the
+  /// nearest ₱0.25 — the same rule as computeFare. A route with
+  /// no fare at all (Partas Laoag → Cubao, GMW) says so plainly.
+  Widget _fareCards(ColorScheme scheme, RouteInfo route) {
+    final regular = route.customRoute?.fare ??
+        resolveTransitFare(
+          from: route.originName,
+          to: route.dest.name,
+          vehicle: _vehicle,
+          roadKm: route.roadKm,
+        );
+    final discounted =
+        regular == null ? null : (regular * 0.8 * 4).round() / 4;
+    return Row(
+      children: [
+        Expanded(
+          child: _etaFareStatCard(
+            scheme: scheme,
+            label: 'REGULAR FARE',
+            value: regular == null ? 'Fare not set' : peso(regular),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _etaFareStatCard(
+            scheme: scheme,
+            label: 'DISCOUNTED -20%',
+            value: discounted == null ? 'Fare not set' : peso(discounted),
+            highlight: true,
+          ),
+        ),
+      ],
     );
   }
 
-  List<Hub> _searchResults() {
-    final q = _searchQuery.trim().toLowerCase();
-    if (q.isEmpty) return const [];
-    return hubs
-        .where(
-          (h) =>
-              h.name.toLowerCase().contains(q) ||
-              h.region.toLowerCase().contains(q),
-        )
-        .take(6)
-        .toList();
+  /// DURATION + DISTANCE cards, side by side. Distance is the
+  /// live OSRM road length when loaded, else the route estimate;
+  /// duration is the live OSRM duration when loaded, else the
+  /// app's estimateTripTime model — both real, never invented.
+  Widget _durationDistanceCards(ColorScheme scheme, RouteInfo route) {
+    final km = _routeDistanceKm > 0 ? _routeDistanceKm : route.roadKm;
+    final minutes = _routeDurationSec > 0
+        ? (_routeDurationSec / 60).round()
+        : _previewMinutes(TravelMode.transit);
+    return Row(
+      children: [
+        Expanded(
+          child: _etaFareStatCard(
+            scheme: scheme,
+            label: 'DURATION',
+            value: formatTripTime(minutes),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _etaFareStatCard(
+            scheme: scheme,
+            label: 'DISTANCE',
+            value: '${km.toStringAsFixed(1)} km',
+          ),
+        ),
+      ],
+    );
   }
+
+  /// One ETA • FARE stat card: a small muted label above a big
+  /// bold value. The discounted fare value is green.
+  Widget _etaFareStatCard({
+    required ColorScheme scheme,
+    required String label,
+    required String value,
+    bool highlight = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: highlight
+                  ? const Color(0xFF16A34A)
+                  : scheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   @override
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final routes = _currentRoutes();
-    final allRoutes = routesFrom(
-      _userPos?.latitude ?? hubs[_homeHub].lat,
-      _userPos?.longitude ?? hubs[_homeHub].lng,
-      _userPos != null ? 'Your location' : hubs[_homeHub].name,
-    );
-    final northCount = allRoutes
-        .where((r) => r.direction == Direction.northbound)
-        .length;
-    final southCount = allRoutes.length - northCount;
-    final searchResults = _searchResults();
-    final satellite = _mapMode == MapViewMode.satellite;
 
     return Stack(
       children: [
@@ -3641,13 +2434,10 @@ class _MapTabState extends State<MapTab>
             minZoom: 3,
             maxZoom: 19,
             onTap: (_, _) {
-              // A plain map tap dismisses the open stop card and
-              // the open church panel (and restores the normal line).
-              if (_selectedStopIndex != null || _selectedChurch != null) {
-                setState(() {
-                  _selectedStopIndex = null;
-                  _selectedChurch = null;
-                });
+              // A plain map tap dismisses the open stop card (and
+              // restores the normal line).
+              if (_selectedStopIndex != null) {
+                setState(() => _selectedStopIndex = null);
               }
             },
             onPositionChanged: (position, _) {
@@ -3663,7 +2453,16 @@ class _MapTabState extends State<MapTab>
           ),
           children: [
             fm.TileLayer(
-              urlTemplate: tileUrlTemplate(satellite: satellite),
+              // Theme-driven tiles: CartoDB Dark Matter in dark
+              // mode (the preview's dark map look), standard OSM
+              // in light mode. The preview itself renders Meta's
+              // "Canterbury Dark" vector basemap, which flutter_map
+              // cannot render — Dark Matter is its raster
+              // equivalent, same dark background + bright green
+              // route line.
+              urlTemplate: tileUrlTemplate(
+                dark: scheme.brightness == Brightness.dark,
+              ),
               userAgentPackageName: 'com.estudyantego.app',
               maxZoom: 19,
             ),
@@ -3671,220 +2470,28 @@ class _MapTabState extends State<MapTab>
             fm.MarkerLayer(markers: _osmMarkers()),
           ],
         ),
-        // Floating search bar + chips.
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!_navigating && _activeRoute == null)
-                  Material(
-                    elevation: 4,
-                    borderRadius: BorderRadius.circular(28),
-                    // Light search bar on the dark map, exactly like the
-                    // approved iPhone preview (and the Davao reference).
-                    color: Colors.white,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (v) => setState(() => _searchQuery = v),
-                      style: const TextStyle(color: kMapLightText),
-                      decoration: InputDecoration(
-                        hintText: 'Search places, landmarks, or streets',
-                        hintStyle: const TextStyle(color: Colors.black54),
-                        prefixIcon: const Icon(
-                          Icons.menu,
-                          color: Colors.black54,
-                        ),
-                        suffixIcon: _searchQuery.isEmpty
-                            ? null
-                            : IconButton(
-                                icon: const Icon(
-                                  Icons.clear,
-                                  color: Colors.black54,
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(28),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                if (!_navigating &&
-                    _activeRoute == null &&
-                    (searchResults.isNotEmpty ||
-                        _searchQuery.trim().isNotEmpty))
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Material(
-                      elevation: 4,
-                      borderRadius: BorderRadius.circular(kMapCardRadius),
-                      color: Colors.white,
-                      child: searchResults.isEmpty
-                          ? const ListTile(
-                              title: Text(
-                                'No hub found.',
-                                style: TextStyle(color: kMapLightText),
-                              ),
-                              subtitle: Text(
-                                'Only hubs can be searched here for now.',
-                                style: TextStyle(color: Colors.black54),
-                              ),
-                            )
-                          : Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: searchResults
-                                  .map(
-                                    (hub) => ListTile(
-                                      leading: const Icon(
-                                        Icons.place_outlined,
-                                        color: Colors.black54,
-                                      ),
-                                      title: Text(
-                                        hub.name,
-                                        style: const TextStyle(
-                                          color: kMapLightText,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        hub.region,
-                                        style: const TextStyle(
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                      onTap: () {
-                                        _searchController.clear();
-                                        setState(() => _searchQuery = '');
-                                        FocusScope.of(context).unfocus();
-                                        _selectHub(hub);
-                                      },
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                    ),
-                  ),
-                if (!_navigating && _activeRoute == null)
-                  const SizedBox(height: 8),
-                if (!_navigating && _activeRoute == null)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final chip in const [
-                          'Malls',
-                          'Schools',
-                          'Hospitals',
-                          'Churches',
-                        ])
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ActionChip(
-                              label: Text(chip),
-                              backgroundColor: _chip == chip
-                                  ? scheme.primary
-                                  : scheme.surface,
-                              labelStyle: TextStyle(
-                                color: _chip == chip
-                                    ? scheme.onPrimary
-                                    : scheme.onSurface,
-                              ),
-                              side: BorderSide(color: scheme.outline),
-                              onPressed: () {
-                                if (chip == 'Churches') {
-                                  // Toggle: tap = churches-only map,
-                                  // tap again = back to the normal map
-                                  // (hub pins + base POIs return).
-                                  // While loading, ignore taps.
-                                  if (_churchesLoading) return;
-                                  if (_chip == 'Churches') {
-                                    setState(() {
-                                      _churches = [];
-                                      _chip = null;
-                                      _selectedChurch = null;
-                                    });
-                                  } else {
-                                    _fetchChurches();
-                                  }
-                                } else {
-                                  _snack(
-                                    'No verified places data yet for $chip.',
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                if (_navigating) _navBanner(),
-                // Vehicle selector inside navigation: switching
-                // changes the live cursor (Car = the realistic car)
-                // and the shared vehicle state for the preview
-                // cards. The driving route itself does not change:
-                // routing is always DRIVE mode.
-                if (_navigating) const SizedBox(height: 8),
-                if (_navigating)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final v in VehicleType.values)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              avatar: Icon(vehicleIcon(v), size: 18),
-                              label: Text(vehicleLabel(v)),
-                              selected: _vehicle == v,
-                              onSelected: (_) => setState(() => _vehicle = v),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
         // Floating map controls (above the peeked sheet, or
         // just above the screen bottom when the sheet is hidden).
         Positioned(
           right: 16,
-          bottom: mapControlsBottomOffset(
-            sheetHidden: _sheetHidden,
-            navigating: _navigating,
-          ),
+          bottom: mapControlsBottomOffset(sheetHidden: _sheetHidden),
           child: Column(
             children: [
-              // Green bus button (main mode only): hides the
-              // bottom sheet completely for a full-map view; tap
-              // again to bring it back at the current snap. The
-              // button itself stays visible while the sheet is
-              // hidden — it is the way back. Never shown during
-              // navigation: nav owns its bottom bar and must not
-              // be hidden.
-              if (!_navigating) ...[
-                _LogoToggleButton(
-                  tooltip: sheetToggleTooltip(_sheetHidden),
-                  onPressed: () {
-                    setState(() => _sheetHidden = !_sheetHidden);
-                    if (!_sheetHidden) {
-                      _snapSheet(_sheetSnap);
-                      _sheetFocusNode.requestFocus();
-                    }
-                  },
-                ),
+              // Green bus button: hides the bottom sheet completely
+              // for a full-map view; tap again to bring it back at
+              // the current snap. The button itself stays visible
+              // while the sheet is hidden — it is the way back.
+              _LogoToggleButton(
+                tooltip: sheetToggleTooltip(_sheetHidden),
+                onPressed: () {
+                  setState(() => _sheetHidden = !_sheetHidden);
+                  if (!_sheetHidden) {
+                    _snapSheet(_sheetSnap);
+                    _sheetFocusNode.requestFocus();
+                  }
+                },
+              ),
                 const SizedBox(height: 10),
-              ],
               _MapControlButton(
                 icon: Icons.add,
                 tooltip: 'Zoom in',
@@ -3917,271 +2524,232 @@ class _MapTabState extends State<MapTab>
                 busy: _locating,
                 onPressed: _goToMyLocation,
               ),
-              // Compass needle (main mode only: navigation already
-              // has its own north-up toggle). The needle rotates
-              // with the live bearing and always points north on
-              // screen; tapping it faces the map north again.
-              if (!_navigating) ...[
-                const SizedBox(height: 10),
-                ValueListenableBuilder<double>(
-                  valueListenable: _bearing,
-                  builder: (context, bearing, _) => _MapControlButton(
-                    icon: Icons.navigation,
-                    iconRotation: -bearing * math.pi / 180,
-                    tooltip: 'Compass — north up',
-                    onPressed: _resetBearing,
-                  ),
+              // Compass needle. The needle rotates with the live
+              // bearing and always points north on screen; tapping
+              // it faces the map north again.
+              const SizedBox(height: 10),
+              ValueListenableBuilder<double>(
+                valueListenable: _bearing,
+                builder: (context, bearing, _) => _MapControlButton(
+                  icon: Icons.navigation,
+                  iconRotation: -bearing * math.pi / 180,
+                  tooltip: 'Compass — north up',
+                  onPressed: _resetBearing,
                 ),
-              ],
-              if (_navigating) ...[
-                const SizedBox(height: 10),
-                _MapControlButton(
-                  icon: Icons.explore,
-                  tooltip: _northUp ? 'Heading up' : 'North up',
-                  onPressed: () {
-                    setState(() => _northUp = !_northUp);
-                    _recenterNav();
-                  },
                 ),
-                const SizedBox(height: 10),
-                _MapControlButton(
-                  icon: Icons.map,
-                  tooltip: 'Route overview',
-                  onPressed: _overviewNav,
-                ),
-              ],
             ],
           ),
         ),
-        // Floating Standard / Satellite selector (left side, above
-        // the peeked sheet and clear of the nav bottom bar). 3D is
-        // dropped: OSM has no tilt, so the pill is two segments.
-        Positioned(
-          left: 16,
-          bottom: mapControlsBottomOffset(
-            sheetHidden: _sheetHidden,
-            navigating: _navigating,
-          ),
-          child: Material(
-            color: kMapDarkCard,
-            borderRadius: BorderRadius.circular(kMapCardRadius),
-            elevation: 6,
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final mode in [
-                    MapViewMode.standard2d,
-                    MapViewMode.satellite,
-                  ])
-                    _MapModeSegment(
-                      label: mode == MapViewMode.satellite
-                          ? 'Satellite'
-                          : 'Standard',
-                      selected: _mapMode == mode,
-                      onTap: () {
-                        if (_mapMode != mode) _applyMapMode(mode);
-                      },
+        // OSM attribution (ⓘ button, bottom-left above the sheet):
+        // the preview's map carries its attribution as a small
+        // corner button, and the preview has no Standard/Satellite
+        // pill — the pill is gone, so this spot is free. Tapping
+        // opens the OSM copyright page. When the sheet is hidden
+        // the full chip shows centred at the bottom instead.
+        if (!_sheetHidden)
+          Positioned(
+            left: 16,
+            bottom: mapControlsBottomOffset(sheetHidden: _sheetHidden),
+            child: Material(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(999),
+              elevation: 4,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () => launchUrl(
+                  Uri.parse(
+                    mapAttributionUrl(
+                      dark: scheme.brightness == Brightness.dark,
                     ),
-                ],
+                  ),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.info_outline,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
         // OSM attribution: visible whenever the sheet is hidden
-        // (when shown, it lives in the sheet's handle row).
-        if (_sheetHidden && !_navigating)
+        // (when shown, the ⓘ button above carries it).
+        if (_sheetHidden)
           Positioned(
             left: 0,
             right: 0,
             bottom: 16,
-            child: Center(child: _attributionChip()),
+            child: Center(
+              child: _attributionChip(
+                dark: scheme.brightness == Brightness.dark,
+              ),
+            ),
           ),
         // Stop card, above the peeked sheet (the sheet snaps to
         // Peek when a stop is tapped so the card has room).
-        if (!_navigating && _selectedStopIndex != null)
+        if (_selectedStopIndex != null)
           Positioned(
             left: 16,
             right: 16,
             bottom: _sheetHidden ? 16 : 200,
             child: _stopCard(),
           ),
-        // Navigator bottom bar + re-center pill.
-        if (_navigating)
-          Positioned(left: 16, right: 16, bottom: 16, child: _navBottomBar()),
-        if (_navigating)
-          Positioned(
-            right: 16,
-            bottom: 100,
-            child: Material(
-              color: kMapDarkCard,
-              borderRadius: BorderRadius.circular(kMapCardRadius),
-              elevation: 6,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(kMapCardRadius),
-                onTap: _recenterNav,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.navigation, color: Colors.white, size: 18),
-                      SizedBox(width: 6),
-                      Text(
-                        'Re-center',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
         // Draggable bottom sheet: Peek / Half ONLY (no Full).
         // Wrapped in Offstage (never removed from the tree) so the
         // logo toggle hides it without losing any state: same
         // content, same snap size when it comes back. Offstage
         // children take no hit tests, so the hidden sheet never
         // steals map gestures.
-        if (!_navigating)
-          Offstage(
-            offstage: _sheetHidden,
-            child: DraggableScrollableSheet(
-              controller: _sheetController,
-              initialChildSize: 0.20,
-              minChildSize: 0.20,
-              maxChildSize: 0.62,
-              snap: true,
-              snapSizes: const [0.20, 0.55],
-              builder: (context, scrollController) {
-                _sheetScrollController = scrollController;
-                return CallbackShortcuts(
-                  bindings: {
-                    const SingleActivator(LogicalKeyboardKey.arrowUp):
-                        () => _snapSheet(_SheetSnap.half),
-                    const SingleActivator(LogicalKeyboardKey.arrowDown):
-                        () => _snapSheet(_SheetSnap.peek),
-                    const SingleActivator(LogicalKeyboardKey.home):
-                        () => _snapSheet(_SheetSnap.peek),
-                    const SingleActivator(LogicalKeyboardKey.end):
-                        () => _snapSheet(_SheetSnap.half),
-                  },
-                  child: Focus(
-                    focusNode: _sheetFocusNode,
-                    child: GestureDetector(
-                      onTapDown: (_) => _sheetFocusNode.requestFocus(),
-                      child: Material(
-                        color: scheme.surface,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(22),
-                        ),
-                        elevation: 8,
-                        child: Column(
-                          children: [
-                            // Grab bar + snap label + attribution.
-                            // Tap cycles Peek <-> Half; dragging the
-                            // handle drives the sheet (the body
-                            // scroll area drags it too).
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _cycleSheetSnap,
-                              onVerticalDragUpdate: (details) {
-                                if (!_sheetController.isAttached) return;
-                                final height =
-                                    MediaQuery.sizeOf(context).height;
-                                if (height <= 0) return;
-                                final next =
-                                    (_sheetController.size -
-                                            details.delta.dy / height)
-                                        .clamp(0.20, 0.62);
-                                _sheetController.jumpTo(next);
-                              },
-                              onVerticalDragEnd: (_) {
-                                final size = _sheetController.isAttached
-                                    ? _sheetController.size
-                                    : 0.20;
-                                _snapSheet(
-                                  size >= 0.375
-                                      ? _SheetSnap.half
-                                      : _SheetSnap.peek,
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  10,
-                                  20,
-                                  4,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Center(
-                                        child: Container(
-                                          width: 44,
-                                          height: 5,
-                                          decoration: BoxDecoration(
-                                            color: scheme.outline,
-                                            borderRadius:
-                                                BorderRadius.circular(3),
+        Offstage(
+          offstage: _sheetHidden,
+          child: DraggableScrollableSheet(
+            controller: _sheetController,
+            initialChildSize: 0.20,
+            minChildSize: 0.20,
+            maxChildSize: 0.62,
+            snap: true,
+            snapSizes: const [0.20, 0.55],
+            builder: (context, scrollController) {
+              _sheetScrollController = scrollController;
+              return CallbackShortcuts(
+                bindings: {
+                  const SingleActivator(LogicalKeyboardKey.arrowUp):
+                      () => _snapSheet(_SheetSnap.half),
+                  const SingleActivator(LogicalKeyboardKey.arrowDown):
+                      () => _snapSheet(_SheetSnap.peek),
+                  const SingleActivator(LogicalKeyboardKey.home):
+                      () => _snapSheet(_SheetSnap.peek),
+                  const SingleActivator(LogicalKeyboardKey.end):
+                      () => _snapSheet(_SheetSnap.half),
+                },
+                child: Focus(
+                  focusNode: _sheetFocusNode,
+                  child: GestureDetector(
+                    onTapDown: (_) => _sheetFocusNode.requestFocus(),
+                    child: Material(
+                      color: scheme.surface,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(22),
+                      ),
+                      elevation: 8,
+                      child: Column(
+                        children: [
+                          // Grab bar + snap label, CENTERED (the
+                          // preview's sheet handle): the bar and
+                          // the "HALF · DRAG DOWN TO COLLAPSE" /
+                          // "PEEK · DRAG UP TO EXPAND" label sit
+                          // on the sheet's centre line — the old
+                          // row pushed them left because the
+                          // attribution chip shared the row.
+                          // Tap cycles Peek <-> Half; dragging the
+                          // handle drives the sheet (the body
+                          // scroll area drags it too). The OSM
+                          // attribution lives on the map now (the
+                          // ⓘ button, bottom-left above the sheet).
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _cycleSheetSnap,
+                            onVerticalDragUpdate: (details) {
+                              if (!_sheetController.isAttached) return;
+                              final height =
+                                  MediaQuery.sizeOf(context).height;
+                              if (height <= 0) return;
+                              final next =
+                                  (_sheetController.size -
+                                          details.delta.dy / height)
+                                      .clamp(0.20, 0.62);
+                              _sheetController.jumpTo(next);
+                            },
+                            onVerticalDragEnd: (_) {
+                              final size = _sheetController.isAttached
+                                  ? _sheetController.size
+                                  : 0.20;
+                              _snapSheet(
+                                size >= 0.375
+                                    ? _SheetSnap.half
+                                    : _SheetSnap.peek,
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                10,
+                                20,
+                                4,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 5,
+                                    decoration: BoxDecoration(
+                                      color: scheme.outline,
+                                      borderRadius:
+                                          BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          _sheetSnap == _SheetSnap.half
+                                              ? 'HALF · DRAG DOWN TO COLLAPSE'
+                                              : 'PEEK · DRAG UP TO EXPAND',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.5,
+                                            color: scheme.onSurfaceVariant,
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    Text(
-                                      _sheetSnap == _SheetSnap.half
-                                          ? 'Half'
-                                          : 'Peek',
-                                      style: TextStyle(
-                                        fontSize: 12,
+                                      const SizedBox(width: 2),
+                                      Icon(
+                                        _sheetSnap == _SheetSnap.half
+                                            ? Icons.keyboard_arrow_down
+                                            : Icons.keyboard_arrow_up,
+                                        size: 16,
                                         color: scheme.onSurfaceVariant,
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Flexible + ellipsis: on narrow
-                                    // phones / large text the chip
-                                    // truncates instead of overflowing
-                                    // the handle row.
-                                    Flexible(child: _attributionChip()),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Fixed header: title + ETA • FARE +
-                            // VERIFIED FARE badge — never scrolled.
-                            _sheetFixedHeader(scheme),
-                            Expanded(
-                              child: SingleChildScrollView(
-                                controller: scrollController,
-                                padding:
-                                    const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: _sheetBodyWidgets(
-                                    scheme: scheme,
-                                    routes: routes,
-                                    allCount: allRoutes.length,
-                                    northCount: northCount,
-                                    southCount: southCount,
+                                    ],
                                   ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Fixed header: title + ETA • FARE +
+                          // VERIFIED FARE badge — never scrolled.
+                          _sheetFixedHeader(scheme),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              controller: scrollController,
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
+                                children: _sheetBodyWidgets(
+                                  scheme: scheme,
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
+        ),
       ],
     );
   }
@@ -4189,1112 +2757,17 @@ class _MapTabState extends State<MapTab>
   // Entering destination mode ("Plan a Trip") adopts the active
   // route's ends, so From/To match the preview card instead of
   // showing stale defaults (e.g. Sinait on top, Vigan City below).
-  void _toggleDestinationMode() {
-    setState(() {
-      if (!_destinationMode && _activeRoute != null) {
-        final route = _activeRoute!;
-        final toIdx = hubs.indexWhere((h) => h.name == route.dest.name);
-        _toIndex = toIdx < 0 ? 1 : toIdx;
-        if (route.originName == 'Your location') {
-          _fromIndex = -1;
-        } else {
-          final fromIdx = hubs.indexWhere((h) => h.name == route.originName);
-          _fromIndex = fromIdx < 0 ? _homeHub : fromIdx;
-        }
-      }
-      _destinationMode = !_destinationMode;
-    });
-  }
 
-  /// Sheet title follows the stop view: "All routes" when every stop is
-  /// listed (picture-1 directory style), "Nearby Routes" otherwise.
-  String _sheetTitle() {
-    if (_destinationMode) return 'Choose a way to get there';
-    switch (_stopView) {
-      case _StopView.all:
-        return 'All routes';
-      case _StopView.nearest:
-        return 'Nearest route';
-      case _StopView.nearby:
-        return 'Nearby Routes';
-    }
-  }
 
-  List<Widget> _routeSheetContent({
-    required ColorScheme scheme,
-    required List<RouteInfo> routes,
-    required int allCount,
-    required int northCount,
-    required int southCount,
-  }) {
-    final visible = filterRoutesByQuery(routes, _sheetSearchQuery);
-    return [
-      // In-sheet route search (picture-1 style).
-      TextField(
-        controller: _sheetSearchController,
-        onChanged: (v) => setState(() => _sheetSearchQuery = v),
-        decoration: InputDecoration(
-          hintText: 'Search route, e.g. Vigan, Baguio',
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: _sheetSearchQuery.isEmpty
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _sheetSearchController.clear();
-                    setState(() => _sheetSearchQuery = '');
-                  },
-                ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-      ),
-      const SizedBox(height: 12),
-      // Stops, direction, and AM/PM stay here per his Nov 1 correction
-      // ("wag mo ilipat to") — only vehicle + avoid moved to Plan a
-      // Trip. Vehicle selection itself is no longer in this sheet.
-      // In a church-originated preview these three rows hide, so
-      // only the church route card shows below the search bar.
-      if (showBrowsingChrome(_churchPreview)) ...[
-        Wrap(
-          spacing: 8,
-          children: [
-            ChoiceChip(
-              label: const Text('All stops'),
-              selected: _stopView == _StopView.all,
-              onSelected: (_) => setState(() => _stopView = _StopView.all),
-            ),
-            ChoiceChip(
-              label: const Text('Nearest stop'),
-              selected: _stopView == _StopView.nearest,
-              onSelected: (_) => setState(() => _stopView = _StopView.nearest),
-            ),
-            FilterChip(
-              label: const Text('Live Tracking'),
-              selected: _tracking,
-              onSelected: (_) => _toggleTracking(),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Direction filters with live counts.
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final entry in {
-                'All': allCount,
-                'Northbound': northCount,
-                'Southbound': southCount,
-              }.entries)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text('${entry.key} (${entry.value})'),
-                    selected: _direction == entry.key,
-                    onSelected: (_) => setState(() => _direction = entry.key),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        // AM/PM selection + honest schedule note.
-        Row(
-          children: [
-            SegmentedButton<_AmPm>(
-              segments: const [
-                ButtonSegment(value: _AmPm.am, label: Text('AM')),
-                ButtonSegment(value: _AmPm.pm, label: Text('PM')),
-              ],
-              selected: {_amPm},
-              onSelectionChanged: (values) =>
-                  setState(() => _amPm = values.first),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'No verified timetable yet — AM/PM cannot filter '
-                'departures yet.',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ],
-      const SizedBox(height: 12),
-      if (_selectedHub != null)
-        Card(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.place),
-                title: Text(_selectedHub!.name),
-                subtitle: Text(_selectedHub!.region),
-                trailing: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    setState(() {
-                      _selectedHub = null;
-                      _activeRoute = null;
-                      _activeRouteOrigin = null;
-                      _roadPoints = null;
-                      _routeError = null;
-                      _churchPreview = false;
-                      _selectedStopIndex = null;
-                      _pendingStopIndex = null;
-                      _routeStops = const [];
-                    });
-                  },
-                ),
-              ),
-              // The tapped location's flow: origin → destination plus
-              // the real computed numbers. No intermediate stops exist
-              // in EstudyanteGO's data, so the flow is the two endpoints.
-              if (_activeRoute != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${_activeRoute!.originName} → ${_selectedHub!.name} · '
-                        '${_activeRoute!.roadKm.toStringAsFixed(1)} km · '
-                        '${_previewSummaryFare()} · '
-                        '${_activeRoute!.direction == Direction.northbound ? 'Northbound' : 'Southbound'}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _roadPoints == null
-                            ? 'Dashed line = direct line, not the road path.'
-                            : 'Solid line = road path (OpenStreetMap route).',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      if (_routeError != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          _routeError!,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ],
-                      // Mode tabs: every mode's real ETA on the
-                      // OSRM road distance. Tapping a tab
-                      // switches the ETA + arrival shown below.
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final m in TravelMode.values)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ChoiceChip(
-                                  avatar: Icon(modeIcon(m), size: 18),
-                                  label: Text(
-                                    formatTripTime(_previewMinutes(m)),
-                                  ),
-                                  selected: _previewMode == m,
-                                  onSelected: (_) =>
-                                      setState(() => _previewMode = m),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Estimated arrival: About ${estimatedArrivalText(DateTime.now(), _previewMinutes(_previewMode))}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      // Real OSRM steps for this route, when loaded.
-                      // No steps exist without a routing response, so
-                      // the section simply stays hidden until then.
-                      if (_navSteps != null && _navSteps!.isNotEmpty)
-                        ExpansionTile(
-                          title: Text(
-                            'Route details (${_navSteps!.length} steps)',
-                          ),
-                          tilePadding: EdgeInsets.zero,
-                          children: [
-                            for (final s in _navSteps!)
-                              ListTile(
-                                leading: Icon(navArrowIcon(s.instruction)),
-                                title: Text(shortAction(s.instruction)),
-                                trailing: Text(
-                                  formatNavDistance(s.distanceMeters / 1000),
-                                ),
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-              if (_activeRoute != null && !_navigating) ...[
-                // Avoid controls moved Nov 1 to Plan a Trip.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _shareActiveRoute,
-                          icon: const Icon(Icons.share),
-                          label: const Text('Share route'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => _toggleSaved(_activeRoute!),
-                        icon: Icon(
-                          _savedRoutes.contains(
-                                '${_activeRoute!.originName}>${_activeRoute!.dest.name}',
-                              )
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                        ),
-                        label: Text(
-                          _savedRoutes.contains(
-                                '${_activeRoute!.originName}>${_activeRoute!.dest.name}',
-                              )
-                              ? 'Saved'
-                              : 'Save',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
 
-              if (_activeRoute != null && !_navigating)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _startNavigation,
-                          icon: const Icon(Icons.navigation),
-                          label: const Text('Directions'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _clearActiveRoute,
-                          icon: const Icon(Icons.arrow_back),
-                          label: const Text('Back to Fares'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      // Stops along the way (origin, on-the-way hubs, destination):
-      // tapping a row flies the map to that stop, then opens its card.
-      if (_activeRoute != null) ..._stopsSection(scheme),
-      // The direction-grouped stops list (and its empty state) hides
-      // in a church-originated preview, like the rows above.
-      if (showBrowsingChrome(_churchPreview)) ...[
-        if (visible.isEmpty)
-          Card(
-            child: ListTile(
-              title: Text(
-                _vehicle == VehicleType.train
-                    ? 'No available routes for this vehicle type.'
-                    : _sheetSearchQuery.trim().isEmpty
-                    ? 'No routes for this filter.'
-                    : 'No routes found for "$_sheetSearchQuery".',
-              ),
-              subtitle: Text(
-                _vehicle == VehicleType.train
-                    ? 'There is no passenger train service on these routes.'
-                    : 'Try a different search, direction, or stop view.',
-              ),
-              trailing: _vehicle == VehicleType.train
-                  ? TextButton(
-                      onPressed: () =>
-                          setState(() => _vehicle = VehicleType.anyVehicle),
-                      child: const Text('View other vehicles'),
-                    )
-                  : null,
-            ),
-          )
-        else if (_direction == 'All')
-          for (final dir in Direction.values)
-            ..._directionGroup(dir, visible, scheme)
-        else
-          for (final route in visible) _routeCard(route, scheme),
-      ],
-      if (_savedRoutes.isNotEmpty) ...[
-        const SizedBox(height: 16),
-        const Text(
-          'Saved routes',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        for (final key in _savedRoutes)
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.favorite, color: kMapError),
-              title: Text(key.replaceAll('>', ' → ')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _openSavedRoute(key),
-            ),
-          ),
-      ],
-    ];
-  }
 
-  /// One picture-1-style direction section: a header plus its routes.
-  /// Empty groups render nothing, so a one-direction origin shows a
-  /// single section instead of a dangling header.
-  List<Widget> _directionGroup(
-    Direction dir,
-    List<RouteInfo> routes,
-    ColorScheme scheme,
-  ) {
-    final group = groupRoutesByDirection(routes)[dir]!;
-    if (group.isEmpty) return const [];
-    return [
-      Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 4),
-        child: Text(
-          dir == Direction.northbound
-              ? '↑ NORTHBOUND (${group.length})'
-              : '↓ SOUTHBOUND (${group.length})',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-      for (final route in group) _routeCard(route, scheme),
-    ];
-  }
 
-  /// One vehicle card: emerald border + green check when selected.
-  Widget _vehicleCard(VehicleType v, ColorScheme scheme) {
-    final selected = _vehicle == v;
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kMapCardRadius),
-        side: selected
-            ? BorderSide(color: scheme.primary, width: 2)
-            : BorderSide.none,
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kMapCardRadius),
-        onTap: () => setState(() => _vehicle = v),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-              child: Column(
-                children: [
-                  Icon(
-                    vehicleIcon(v),
-                    color: selected ? scheme.primary : scheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    vehicleLabel(v),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                      color: selected ? scheme.primary : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (selected)
-              Positioned(
-                top: 4,
-                right: 4,
-                child: CircleAvatar(
-                  radius: 9,
-                  backgroundColor: scheme.primary,
-                  child: Icon(Icons.check, size: 12, color: scheme.onPrimary),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  /// Vehicle selection, moved Nov 1 into Plan a Trip
-  /// ("Plan a Trip" = _destinationPanel). The state is shared, so the
-  /// same cards still drive the cursor and route filtering — they
-  /// are no longer shown in the main route sheet.
-  Widget _vehicleSelection(ColorScheme scheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Select Vehicle Type',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            for (var i = 0; i < VehicleType.values.length; i++)
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: i == VehicleType.values.length - 1 ? 0 : 6,
-                  ),
-                  child: _vehicleCard(VehicleType.values[i], scheme),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
 
-  Widget _avoidControls() {
-    return Wrap(
-      spacing: 8,
-      children: [
-        FilterChip(
-          label: const Text('Avoid highways'),
-          selected: _avoidHighways,
-          onSelected: (v) {
-            setState(() => _avoidHighways = v);
-            _refetchActiveRoute();
-          },
-        ),
-        FilterChip(
-          label: const Text('Avoid tolls'),
-          selected: _avoidTolls,
-          onSelected: (v) {
-            setState(() => _avoidTolls = v);
-            _refetchActiveRoute();
-          },
-        ),
-        FilterChip(
-          label: const Text('Avoid ferries'),
-          selected: _avoidFerries,
-          onSelected: (v) {
-            setState(() => _avoidFerries = v);
-            _refetchActiveRoute();
-          },
-        ),
-      ],
-    );
-  }
 
-  Widget _routeCard(RouteInfo route, ColorScheme scheme) {
-    final custom = route.customRoute;
-    final key = custom == null
-        ? '${route.originName}>${route.dest.name}'
-        : 'custom:${custom.id ?? '${custom.from}>${custom.to}'}';
-    final saved = _savedRoutes.contains(key);
-    // A custom route shows its own admin-entered fare. Otherwise the
-    // vehicle-aware fare: bus previews use the provincial bus rate,
-    // a user-verified fare wins for its pair, and car/motorcycle/
-    // train previews show no fare instead of an invented one.
-    final fare = custom?.fare ??
-        resolveTransitFare(
-          from: route.originName,
-          to: route.dest.name,
-          vehicle: _vehicle,
-          roadKm: route.roadKm,
-        );
-    final modeLabel = custom == null
-        ? previewModeLabel(_vehicle)
-        : '${custom.operator} · ${custom.vehicle}';
-    return Card(
-      child: ListTile(
-        leading: Icon(
-          _vehicle == VehicleType.car
-              ? Icons.directions_car_outlined
-              : _vehicle == VehicleType.motorcycle
-              ? Icons.two_wheeler_outlined
-              : _vehicle == VehicleType.train
-              ? Icons.train_outlined
-              : Icons.directions_bus_outlined,
-        ),
-        title: Text('${route.originName} → ${route.dest.name}'),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$modeLabel · ${route.roadKm.toStringAsFixed(1)} km · '
-              '${route.direction == Direction.northbound ? 'Northbound' : 'Southbound'}',
-            ),
-            if (custom != null)
-              Text(
-                // The admin sees their own route as "Added by you";
-                // everyone else just sees that it is a custom route.
-                _isAdmin ? 'Added by you · Custom route' : 'Custom route',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (fare != null)
-              Text(
-                peso(fare),
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.primary,
-                ),
-              ),
-            IconButton(
-              icon: Icon(
-                saved ? Icons.favorite : Icons.favorite_border,
-                color: saved ? kMapError : null,
-              ),
-              tooltip: saved ? 'Remove from saved' : 'Save route',
-              onPressed: () => _toggleSaved(route),
-            ),
-            if (custom != null && _isAdmin)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
-                tooltip: 'Route options',
-                onSelected: (v) {
-                  if (v == 'edit') _openAddRoute(existing: custom);
-                  if (v == 'delete') _deleteCustomRoute(custom);
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit route')),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete route'),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        onTap: () => custom == null
-            ? _selectHub(route.dest)
-            : _selectCustomRoute(route),
-      ),
-    );
-  }
 
-  /// Navigator top banner (Google-style): the upcoming turn card
-  /// (teal) + the turn after it (gray), each with its arrow, distance
-  /// and short action — all derived from the real Google steps.
-  Widget _navBanner() {
-    final dest = _activeRoute?.dest;
-    final pts = _roadPoints;
-    final pos = _userPos;
-    if (dest == null || pts == null || pos == null) {
-      return const Material(
-        elevation: 4,
-        borderRadius: BorderRadius.all(Radius.circular(kMapCardRadius)),
-        color: kMapPrimary,
-        child: Padding(
-          padding: EdgeInsets.all(14),
-          child: Text(
-            'Getting your location…',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-          ),
-        ),
-      );
-    }
-    final user = LatLng(pos.latitude, pos.longitude);
-    final userIdx = nearestPointIndex(pts, user);
-    final remaining = pathKmBetween(pts, userIdx, pts.length - 1);
-    final steps = _navSteps;
-    if (steps == null || steps.isEmpty || _maneuverIdx.isEmpty) {
-      return Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(kMapCardRadius),
-        color: kMapPrimary,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Text(
-            'Road directions unavailable — follow the line. '
-            'Remaining: ${remaining.toStringAsFixed(1)} km to ${dest.name}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      );
-    }
-    final i = _navStepIndex.clamp(0, _maneuverIdx.length - 1);
-    final step = steps[i.clamp(0, steps.length - 1)];
-    final toTurn = pathKmBetween(pts, userIdx, _maneuverIdx[i]);
-    final hasNext = i + 1 < _maneuverIdx.length && i + 1 < steps.length;
-    Widget turnCard({
-      required Color bg,
-      required IconData icon,
-      required String distance,
-      required String action,
-    }) {
-      return Expanded(
-        child: Material(
-          color: bg,
-          borderRadius: BorderRadius.circular(kMapCardRadius),
-          elevation: 4,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Icon(icon, color: Colors.white, size: 32),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        distance,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        action,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
 
-    return Row(
-      children: [
-        turnCard(
-          bg: kMapPrimary,
-          icon: navArrowIcon(step.instruction),
-          distance: formatNavDistance(toTurn),
-          action: shortAction(step.instruction),
-        ),
-        if (hasNext) ...[
-          const SizedBox(width: 8),
-          turnCard(
-            bg: const Color(0xFF5B6470),
-            icon: navArrowIcon(steps[i + 1].instruction),
-            distance: formatNavDistance(
-              pathKmBetween(pts, _maneuverIdx[i], _maneuverIdx[i + 1]),
-            ),
-            action: shortAction(steps[i + 1].instruction),
-          ),
-        ],
-      ],
-    );
-  }
 
-  /// Navigator bottom bar (Google-style): End button, remaining time
-  /// + distance + arrival, voice toggle, and live speed.
-  Widget _navBottomBar() {
-    final dest = _activeRoute?.dest;
-    final pts = _roadPoints;
-    final pos = _userPos;
-    var timeText = '--';
-    var subText = '';
-    if (dest != null && pts != null && pos != null) {
-      final user = LatLng(pos.latitude, pos.longitude);
-      final userIdx = nearestPointIndex(pts, user);
-      final remaining = pathKmBetween(pts, userIdx, pts.length - 1);
-      // OSRM when available: remaining (OSRM polyline sum) over
-      // OSRM's own distance, times OSRM's duration.
-      // The x1.22 roadKm estimate is only the fallback.
-      final full = _routeDistanceKm > 0
-          ? _routeDistanceKm
-          : (_activeRoute?.roadKm ?? 0);
-      final mins = remainingMinutes(
-        remainingKm: remaining,
-        fullKm: full,
-        durationSec: _routeDurationSec,
-      );
-      if (mins > 0) {
-        timeText = '$mins min';
-        subText =
-            '${remaining.toStringAsFixed(1)} km • ${estimatedArrivalText(DateTime.now(), mins)}';
-      } else {
-        subText = '${remaining.toStringAsFixed(1)} km to ${dest.name}';
-      }
-    }
-    final speedText = _navSpeedKmh > 0.5
-        ? '${_navSpeedKmh.round()} km/h'
-        : '-- km/h';
-    return Material(
-      color: kMapDarkCard,
-      borderRadius: BorderRadius.circular(kMapCardRadius),
-      elevation: 6,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              tooltip: 'End navigation',
-              onPressed: _confirmEndNavigation,
-            ),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    timeText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 20,
-                    ),
-                  ),
-                  Text(
-                    subText,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: Icon(
-                _voiceOn ? Icons.volume_up : Icons.volume_off,
-                color: Colors.white,
-              ),
-              tooltip: _voiceOn ? 'Mute voice' : 'Unmute voice',
-              onPressed: () {
-                setState(() => _voiceOn = !_voiceOn);
-                if (_voiceOn && _navSteps != null && _navSteps!.isNotEmpty) {
-                  _speakInstruction(
-                    _navSteps![_navStepIndex.clamp(0, _navSteps!.length - 1)]
-                        .instruction,
-                  );
-                } else {
-                  _tts.stop();
-                }
-              },
-            ),
-            const SizedBox(width: 4),
-            Text(
-              speedText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _destinationPanel(ColorScheme scheme) {
-    final origin = _origin();
-    final dest = hubs[_toIndex];
-    final sameHub = origin.hub?.name == dest.name;
-    final direct = haversineKm(origin.lat, origin.lng, dest.lat, dest.lng);
-    final roadKm = math.max(1.0, direct * 1.22);
-    final mountain =
-        (origin.hub != null && isMountainHub(origin.hub!)) ||
-        isMountainHub(dest);
-    final sameRegion = origin.hub != null && origin.hub!.region == dest.region;
-    final minutes = estimateTripMinutes(
-      roadKm: roadKm,
-      mountain: mountain,
-      sameRegion: sameRegion,
-      mode: _travelMode,
-    );
-    // Best-options comparison (Davao reference "Choose a way to get
-    // there"): every mode's real ETA; the quickest gets the FASTEST
-    // badge. Tapping a card selects that mode for the detail below.
-    final modeMinutes = {
-      for (final m in TravelMode.values)
-        m: estimateTripMinutes(
-          roadKm: roadKm,
-          mountain: mountain,
-          sameRegion: sameRegion,
-          mode: m,
-        ),
-    };
-    final fastest = modeMinutes.values.reduce(math.min);
-    // The transit card's fare is the bus fare: a user-verified fare
-    // wins for the pair, otherwise the provincial bus formula fare.
-    final transitFare = resolveTransitFare(
-      from: origin.hub?.name ?? '',
-      to: dest.name,
-      vehicle: VehicleType.bus,
-      roadKm: roadKm,
-    );
-    final transitFareText = transitFare == null ? 'No fare' : peso(transitFare);
-    double? walkKm;
-    if (_fromIndex == -1) {
-      walkKm = 0;
-    } else if (_userPos != null) {
-      walkKm = roadKmBetween(
-        _userPos!.latitude,
-        _userPos!.longitude,
-        origin.lat,
-        origin.lng,
-      );
-    }
-    String fareText;
-    String? fareNote;
-    if (_travelMode == TravelMode.transit) {
-      // Same resolved bus fare as the transit card above, so the
-      // panel and the card never disagree; the note below now
-      // describes the fare actually shown.
-      fareText = transitFareText;
-      final verified = origin.hub != null
-          ? knownBusFares['${origin.hub!.name}|${dest.name}']
-          : null;
-      if (verified != null) {
-        fareNote =
-            'User-verified bus fare: ₱$verified (reported Oct 16, 2026).';
-      }
-    } else {
-      fareText = 'No fare';
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        DropdownButtonFormField<int>(
-          value: _fromIndex,
-          decoration: const InputDecoration(labelText: 'From'),
-          items: [
-            const DropdownMenuItem(value: -1, child: Text('My location')),
-            for (var i = 0; i < hubs.length; i++)
-              DropdownMenuItem(value: i, child: Text(hubs[i].name)),
-          ],
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() => _fromIndex = v);
-            if (v >= 0) _selectHub(hubs[v]);
-          },
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<int>(
-          value: _toIndex,
-          decoration: const InputDecoration(labelText: 'To'),
-          items: [
-            for (var i = 0; i < hubs.length; i++)
-              DropdownMenuItem(value: i, child: Text(hubs[i].name)),
-          ],
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() => _toIndex = v);
-            _selectHub(hubs[v]);
-          },
-        ),
-        const SizedBox(height: 12),
-        // Start sits here, not at the bottom of the detail card:
-        // at half sheet the old spot was below the fold, so the
-        // panel looked like it had no navigate action at all.
-        if (!sameHub) ...[
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () {
-                if (_activeRoute?.dest.name != dest.name) {
-                  _selectHub(dest);
-                }
-                _startNavigation();
-              },
-              icon: const Icon(Icons.navigation),
-              label: const Text('Start Navigation'),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-        // Moved Nov 1 from the main route sheet, per his order:
-        // vehicle + avoid controls now live in Plan a Trip.
-        // Stops, direction, and AM/PM were NOT moved, per his
-        // correction ("wag mo ilipat to") — they stay in the main
-        // route sheet.
-        if (!sameHub) ...[
-          _vehicleSelection(scheme),
-          const SizedBox(height: 12),
-          _avoidControls(),
-          const SizedBox(height: 12),
-        ],
-        if (!sameHub) ...[
-          const Text(
-            'Best options',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          for (final mode in TravelMode.values)
-            Card(
-              child: ListTile(
-                leading: Icon(
-                  mode == TravelMode.transit
-                      ? Icons.directions_bus_outlined
-                      : mode == TravelMode.motorcycle
-                      ? Icons.two_wheeler_outlined
-                      : mode == TravelMode.bicycle
-                      ? Icons.directions_bike_outlined
-                      : Icons.directions_walk_outlined,
-                ),
-                title: Text(mode.label),
-                subtitle: Text(
-                  'About ${formatTripTime(modeMinutes[mode]!)}'
-                  '${mode == TravelMode.transit ? ' · 1 direct ride' : ''}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (modeMinutes[mode] == fastest)
-                      Chip(
-                        label: const Text('FASTEST'),
-                        backgroundColor: scheme.primary,
-                        labelStyle: TextStyle(
-                          color: scheme.onPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    if (modeMinutes[mode] == fastest) const SizedBox(width: 8),
-                    Text(
-                      mode == TravelMode.transit ? transitFareText : 'No fare',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-                selected: _travelMode == mode,
-                onTap: () => setState(() => _travelMode = mode),
-              ),
-            ),
-          const SizedBox(height: 12),
-        ],
-        if (sameHub)
-          const Card(child: ListTile(title: Text('Choose two different hubs.')))
-        else
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${origin.name} → ${dest.name}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _resultRow('Distance', '${roadKm.toStringAsFixed(1)} km'),
-                  _resultRow(
-                    'Estimated time',
-                    'About ${formatTripTime(minutes)}',
-                  ),
-                  _resultRow(
-                    'Estimated arrival',
-                    'About ${estimatedArrivalText(DateTime.now(), minutes)}',
-                  ),
-                  _resultRow('Rides', '1 direct ride'),
-                  _resultRow(
-                    'Walking distance',
-                    walkKm == null
-                        ? '—'
-                        : walkKm == 0
-                        ? 'You are here'
-                        : '${walkKm.toStringAsFixed(1)} km to origin',
-                  ),
-                  _resultRow('Estimated fare', fareText),
-                  if (fareNote != null) ...[
-                    const SizedBox(height: 8),
-                    Text(fareNote, style: const TextStyle(fontSize: 12)),
-                  ],
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Estimated from approximate road distance and a typical '
-                    'pace. Actual routes can vary.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _shareRouteText(
-                            'EstudyanteGO route: ${origin.name} → ${dest.name} · '
-                            '${roadKm.toStringAsFixed(1)} km · '
-                            'About ${formatTripTime(minutes)} · '
-                            'Estimated fare $fareText',
-                          ),
-                          icon: const Icon(Icons.share),
-                          label: const Text('Share'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            final matches = routesFrom(
-                              origin.lat,
-                              origin.lng,
-                              origin.name,
-                            ).where((r) => r.dest.name == dest.name).toList();
-                            if (matches.isNotEmpty) {
-                              _toggleSaved(matches.first);
-                            }
-                          },
-                          icon: Icon(
-                            _savedRoutes.contains('${origin.name}>${dest.name}')
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                          ),
-                          label: const Text('Save'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _resultRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Round dark control button used for zoom and my-location.
@@ -5373,37 +2846,3 @@ class _LogoToggleButton extends StatelessWidget {
   }
 }
 
-/// One segment of the floating 2D / 3D / Satellite selector.
-class _MapModeSegment extends StatelessWidget {
-  const _MapModeSegment({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF16A34A) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.white70,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -74,7 +74,7 @@ class OnboardingScreen extends StatefulWidget {
     super.key,
     required this.onGetStarted,
     required this.onSignIn,
-    this.themeMode = ThemeMode.system,
+    this.themeMode = ThemeMode.dark,
     this.onThemeModeChanged,
     this.initialPage = 0,
   });

@@ -22,21 +22,44 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'fares_tab.dart';
 
-/// Standard OSM raster tiles (the "Standard" map-type pill).
+/// Standard OSM raster tiles (light mode).
 const osmStandardTileUrl =
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-/// Esri World Imagery tiles (the "Satellite" map-type pill).
-const osmSatelliteTileUrl =
-    'https://server.arcgisonline.com/ArcGIS/rest/services/'
-    'World_Imagery/MapServer/tile/{z}/{y}/{x}';
+/// CartoDB Dark Matter raster tiles (dark mode) — the dark tile
+/// layer matching the preview's dark map look. The preview itself
+/// renders Meta's "Canterbury Dark" vector basemap
+/// (external.xx.fbcdn.net/maps/vt/style/dark/), a MapLibre vector
+/// style flutter_map cannot render; Dark Matter is the raster
+/// equivalent (same dark background, light roads/labels), served
+/// from OpenStreetMap data, so the attribution stays OSM + CARTO.
+/// Standard OSM tiles stay in light mode.
+const cartoDarkTileUrl =
+    'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+/// CARTO attribution page, opened from the attribution chip in
+/// dark mode (the tiles are CARTO's Dark Matter rendering of OSM
+/// data).
+const cartoAttributionUrl = 'https://carto.com/attributions';
 
 /// OSM copyright page, opened from the attribution chip.
 const osmCopyrightUrl = 'https://www.openstreetmap.org/copyright';
 
-/// Tile URL template for a map-type pill choice.
-String tileUrlTemplate({required bool satellite}) =>
-    satellite ? osmSatelliteTileUrl : osmStandardTileUrl;
+/// Tile URL template for the current theme: dark mode gets the
+/// CartoDB Dark Matter layer, light mode the standard OSM tiles.
+/// (The old Standard/Satellite pill is gone — no satellite path.)
+String tileUrlTemplate({bool dark = false}) =>
+    dark ? cartoDarkTileUrl : osmStandardTileUrl;
+
+/// Attribution line for the current tile layer (CARTO requires
+/// the © CARTO credit alongside OSM in dark mode).
+String mapAttributionText({required bool dark}) => dark
+    ? '© OpenStreetMap contributors © CARTO'
+    : '© OpenStreetMap contributors';
+
+/// Attribution page for the current tile layer.
+String mapAttributionUrl({required bool dark}) =>
+    dark ? cartoAttributionUrl : osmCopyrightUrl;
 
 /// One route from OSRM: the road-following geometry (GeoJSON
 /// [lng, lat] pairs, converted here), the routed length and

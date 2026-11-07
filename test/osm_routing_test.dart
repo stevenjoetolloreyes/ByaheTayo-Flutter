@@ -252,15 +252,28 @@ void main() {
   });
 
   group('tileUrlTemplate', () {
-    test('standard is OSM, satellite is Esri', () {
+    test('light is standard OSM, dark is CartoDB Dark Matter', () {
       expect(
-        tileUrlTemplate(satellite: false),
+        tileUrlTemplate(),
         contains('tile.openstreetmap.org'),
       );
       expect(
-        tileUrlTemplate(satellite: true),
-        contains('arcgisonline.com'),
+        tileUrlTemplate(dark: true),
+        contains('basemaps.cartocdn.com/dark_all'),
       );
+    });
+
+    test('attribution follows the tile layer', () {
+      expect(mapAttributionText(dark: false), '© OpenStreetMap contributors');
+      expect(
+        mapAttributionText(dark: true),
+        '© OpenStreetMap contributors © CARTO',
+      );
+      expect(
+        mapAttributionUrl(dark: false),
+        contains('openstreetmap.org'),
+      );
+      expect(mapAttributionUrl(dark: true), contains('carto.com'));
     });
   });
 
