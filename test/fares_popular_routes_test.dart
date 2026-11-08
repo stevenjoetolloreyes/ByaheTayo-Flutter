@@ -3,9 +3,18 @@
 // sheet. The calculator itself is unchanged — these tests pin that
 // the breakdown always agrees with computeFare, and that the
 // route list never carries a sample fare.
+//
+// Nov 8, 2026 redesign (Steven: pasted spec, approved with
+// resolutions): Vehicle chips → Region dropdown (all 17 regions)
+// → Additional Filters (Operator / Province / Sort By), with
+// STAGED Apply / Reset. The Fare filter was removed — fare info
+// still shows on the cards and sheets, it is just no longer a
+// filter. Region now resolves to the ADMINISTRATIVE region via
+// the bundled places data (Hub.region is a province for most
+// hubs), and Province follows the selected region.
+import 'package:estudyantego/features/bus_stops.dart';
 import 'package:estudyantego/features/custom_routes.dart';
 import 'package:estudyantego/features/fares_tab.dart';
-import 'package:estudyantego/features/route_fare_overrides.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -137,6 +146,18 @@ void main() {
           isEmpty,
         );
       }
+      // No 'Modern Jeepney' route vehicle type exists in the
+      // data — it is a fare-category label, not a route vehicle —
+      // so it is never offered as a chip.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'Modern Jeepney',
+          operator: 'All',
+        ),
+        isEmpty,
+      );
+      expect(vehicleFilters, ['All', 'Bus', 'Van', 'Jeepney', 'Tricycle']);
     });
 
     test('operator filter matches the preview counts', () {
@@ -207,6 +228,8 @@ void main() {
       final converted = popularRouteFromCustomRoute(custom);
       expect(converted.fare, 60);
       expect(converted.fareLabel, 'Admin-entered fare');
+      // No creation date on the custom route: none is invented.
+      expect(converted.createdAt, isNull);
       final filtered = filterPopularRoutes(
         [...popularRoutes, converted],
         vehicle: 'Bus',
@@ -216,25 +239,132 @@ void main() {
       expect(filtered, contains(converted));
     });
 
-    test('region filter matches either endpoint', () {
-      expect(regionOfRouteEndpoint('Cabugao', []), 'Ilocos Sur');
-      expect(regionOfRouteEndpoint('Vigan Bus Terminal', []), 'Ilocos Sur');
-      expect(regionOfRouteEndpoint('Laoag Terminal', []), 'Ilocos Norte');
-      // Terminal names are not places: no region is invented.
-      expect(regionOfRouteEndpoint('Laoag Partas Terminal', []), isNull);
-      expect(regionOfRouteEndpoint('Cubao Partas Terminal', []), isNull);
+    test('region filter resolves each endpoint to its administrative region', () {
+      // Built-in hubs carry a PROVINCE in Hub.region; the filter
+      // resolves it to the administrative region via the bundled
+      // places — Ilocos Sur / Ilocos Norte → Ilocos Region.
       expect(
-        routeRegions(popularRoutes, []),
-        ['Ilocos Sur', 'Ilocos Norte'],
+        administrativeRegionOfEndpoint('Cabugao', []),
+        'Ilocos Region',
       );
-      // Ilocos Sur touches five routes (Laoag → Vigan via its
-      // Vigan destination); Ilocos Norte touches one.
+      expect(
+        administrativeRegionOfEndpoint('Vigan Bus Terminal', []),
+        'Ilocos Region',
+      );
+      expect(
+        administrativeRegionOfEndpoint('Laoag Terminal', []),
+        'Ilocos Region',
+      );
+      // Hubs whose region is already administrative pass through.
+      expect(
+        administrativeRegionOfEndpoint('Laoag City', []),
+        'Ilocos Region',
+      );
+      expect(
+        administrativeRegionOfEndpoint('Baguio City', []),
+        'Cordillera Administrative Region',
+      );
+      // Province → region through the bundled places.
+      expect(
+        administrativeRegionOfEndpoint('Banaue', []),
+        'Cordillera Administrative Region',
+      );
+      expect(
+        administrativeRegionOfEndpoint('Tuguegarao City', []),
+        'Cagayan Valley',
+      );
+      expect(
+        administrativeRegionOfEndpoint('Dagupan City', []),
+        'Ilocos Region',
+      );
+      // Terminal names are not places: no region is invented.
+      expect(
+        administrativeRegionOfEndpoint('Laoag Partas Terminal', []),
+        isNull,
+      );
+      expect(
+        administrativeRegionOfEndpoint('Cubao Partas Terminal', []),
+        isNull,
+      );
+      // Documented gaps: these provinces have no bundled place,
+      // so their endpoints match only 'All'.
+      expect(
+        administrativeRegionOfEndpoint('San Fernando City', []),
+        isNull,
+      );
+      expect(administrativeRegionOfEndpoint('Bontoc', []), isNull);
+      // All 17 regions are offered, north to south.
+      expect(allAdministrativeRegions.length, 17);
+      expect(allAdministrativeRegions.first, 'Ilocos Region');
+      expect(allAdministrativeRegions.last, 'BARMM');
+    });
+
+    test('region filter matches either endpoint', () {
+      // Ilocos Region touches five routes (all but the two
+      // terminal routes, which have no region).
       expect(
         filterPopularRoutes(
           popularRoutes,
           vehicle: 'All',
           operator: 'All',
-          region: 'Ilocos Sur',
+          region: 'Ilocos Region',
+        ).length,
+        5,
+      );
+      // No route touches Cagayan Valley or CAR — the terminal
+      // names are not the places Tuguegarao City / Baguio City.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          region: 'Cagayan Valley',
+        ),
+        isEmpty,
+      );
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          region: 'Cordillera Administrative Region',
+        ),
+        isEmpty,
+      );
+      final ilocos = filterPopularRoutes(
+        popularRoutes,
+        vehicle: 'All',
+        operator: 'All',
+        region: 'Ilocos Region',
+      );
+      expect(
+        ilocos.map((r) => r.from),
+        isNot(contains('Laoag Partas Terminal')),
+      );
+    });
+
+    test('province filter matches either endpoint', () {
+      expect(provinceOfRouteEndpoint('Cabugao', []), 'Ilocos Sur');
+      expect(
+        provinceOfRouteEndpoint('Vigan Bus Terminal', []),
+        'Ilocos Sur',
+      );
+      expect(provinceOfRouteEndpoint('Laoag Terminal', []), 'Ilocos Norte');
+      // A hub whose region is already administrative has no
+      // province in the data.
+      expect(provinceOfRouteEndpoint('Laoag City', []), isNull);
+      expect(provinceOfRouteEndpoint('Makati', []), isNull);
+      expect(
+        provinceOfRouteEndpoint('Laoag Partas Terminal', []),
+        isNull,
+      );
+      // Ilocos Sur touches five routes; Ilocos Norte one.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          province: 'Ilocos Sur',
         ).length,
         5,
       );
@@ -243,113 +373,147 @@ void main() {
           popularRoutes,
           vehicle: 'All',
           operator: 'All',
-          region: 'Ilocos Norte',
+          province: 'Ilocos Norte',
         ).length,
         1,
       );
-      // The two terminal routes have no region: only 'All' shows
-      // them.
-      final ilocos = filterPopularRoutes(
-        popularRoutes,
-        vehicle: 'All',
-        operator: 'All',
-        region: 'Ilocos Sur',
-      );
-      expect(
-        ilocos.map((r) => r.from),
-        isNot(contains('Laoag Partas Terminal')),
-      );
-    });
-
-    test('fare status reuses the breakdown sheet states', () {
-      for (final route in popularRoutes) {
-        if (route.fareLabel == 'Verified bus fare') {
-          expect(popularRouteFareStatus(route), 'Verified');
-        } else {
-          expect(popularRouteFareStatus(route), 'Not set');
-        }
-      }
-      // An admin override turns a verified fare into Admin-set
-      // (the VERIFIED badge is suppressed for it).
-      final overridden = popularRoutes.first.applyOverride(
-        const RouteFareOverride(
-          routeKey: 'Cabugao|Vigan Bus Terminal',
-          fare: 55,
-        ),
-      );
-      expect(popularRouteFareStatus(overridden), 'Admin-set');
-      // A custom route's own fare is admin-entered, also Admin-set.
-      const custom = CustomRoute(
-        from: 'Cabugao',
-        to: 'Vigan Bus Terminal',
-        operator: 'Partas',
-        vehicle: 'Bus',
-        fare: 60,
-      );
-      expect(
-        popularRouteFareStatus(popularRouteFromCustomRoute(custom)),
-        'Admin-set',
-      );
+      // Cagayan has no route: Tuguegarao is a terminal name, not
+      // the place Tuguegarao City.
       expect(
         filterPopularRoutes(
           popularRoutes,
           vehicle: 'All',
           operator: 'All',
-          fareStatus: 'Verified',
-        ).length,
-        3,
-      );
-      expect(
-        filterPopularRoutes(
-          popularRoutes,
-          vehicle: 'All',
-          operator: 'All',
-          fareStatus: 'Admin-set',
+          province: 'Cagayan',
         ),
         isEmpty,
       );
+    });
+
+    test('province list follows the selected region', () {
+      // Ilocos Region: the bundled provinces, alphabetical.
       expect(
-        filterPopularRoutes(
-          popularRoutes,
-          vehicle: 'All',
-          operator: 'All',
-          fareStatus: 'Not set',
-        ).length,
-        4,
+        provincesInRegion('Ilocos Region'),
+        ['Ilocos Norte', 'Ilocos Sur', 'Pangasinan'],
       );
+      // 'La Union' has no bundled place, so it is never offered.
+      expect(
+        provincesInRegion('Ilocos Region'),
+        isNot(contains('La Union')),
+      );
+      // Cagayan Valley: the bundled provinces only.
+      expect(
+        provincesInRegion('Cagayan Valley'),
+        ['Batanes', 'Cagayan', 'Isabela', 'Nueva Vizcaya'],
+      );
+      // All Regions → every province in the bundled data;
+      // 'Metro Manila' is a region, not a province, so it never
+      // appears.
+      final all = provincesInRegion('All');
+      expect(all, contains('Ilocos Sur'));
+      expect(all, contains('Cebu'));
+      expect(all, contains('Cagayan'));
+      expect(all, contains('Basilan'));
+      expect(all, isNot(contains('Metro Manila')));
+      expect(all, isNot(contains('La Union')));
+      expect(all, isNot(contains('Mountain Province')));
+      // The list is sorted.
+      expect(all, equals([...all]..sort()));
+    });
+
+    test('route operators come from the route data', () {
+      // First-seen order, Bus routes only, no operator invented:
+      // the five hub routes carry no operator.
+      expect(routeOperators(popularRoutes), ['Partas', 'GMW Trans']);
+      expect(routeOperators([]), isEmpty);
+    });
+
+    test('region display labels carry the spec prefixes', () {
+      expect(regionDisplayLabel('All'), 'All Regions');
+      expect(
+        regionDisplayLabel('Ilocos Region'),
+        'Region I – Ilocos Region',
+      );
+      expect(
+        regionDisplayLabel('Cagayan Valley'),
+        'Region II – Cagayan Valley',
+      );
+      expect(
+        regionDisplayLabel('CALABARZON'),
+        'Region IV-A – CALABARZON',
+      );
+      expect(regionDisplayLabel('MIMAROPA'), 'MIMAROPA – Region IV-B');
+      expect(
+        regionDisplayLabel('Metro Manila'),
+        'NCR – National Capital Region',
+      );
+      expect(
+        regionDisplayLabel('Cordillera Administrative Region'),
+        'CAR – Cordillera Administrative Region',
+      );
+      expect(
+        regionDisplayLabel('BARMM'),
+        'BARMM – Bangsamoro Autonomous Region',
+      );
+      // Every region has a label, and the label differs from the
+      // value (the value stays the plain region name for matching).
+      for (final region in allAdministrativeRegions) {
+        expect(regionDisplayLabel(region), isNot(region));
+      }
     });
 
     test('filters combine across categories', () {
-      // Bus + Ilocos Sur + Verified: the three verified routes.
+      // Bus + Ilocos Region: the five regional routes.
       expect(
         filterPopularRoutes(
           popularRoutes,
           vehicle: 'Bus',
           operator: 'All',
-          region: 'Ilocos Sur',
-          fareStatus: 'Verified',
+          region: 'Ilocos Region',
         ).length,
-        3,
+        5,
       );
-      // Ilocos Norte + Verified: the Laoag → Vigan route has no
-      // fare, so nothing matches.
+      // Ilocos Region + Ilocos Norte: the Laoag Terminal route.
       expect(
         filterPopularRoutes(
           popularRoutes,
           vehicle: 'All',
           operator: 'All',
-          region: 'Ilocos Norte',
-          fareStatus: 'Verified',
-        ),
-        isEmpty,
+          region: 'Ilocos Region',
+          province: 'Ilocos Norte',
+        ).length,
+        1,
       );
-      // Partas + Ilocos Sur: the Partas route has no region.
+      // Ilocos Region + Ilocos Sur: five — every Ilocos Region
+      // route touches Ilocos Sur.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          region: 'Ilocos Region',
+          province: 'Ilocos Sur',
+        ).length,
+        5,
+      );
+      // Partas + Ilocos Region: the Partas route has no region.
       expect(
         filterPopularRoutes(
           popularRoutes,
           vehicle: 'Bus',
           operator: 'Partas',
-          region: 'Ilocos Sur',
+          region: 'Ilocos Region',
+        ),
+        isEmpty,
+      );
+      // Cagayan Valley + Cagayan: no route touches either.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          region: 'Cagayan Valley',
+          province: 'Cagayan',
         ),
         isEmpty,
       );
@@ -361,6 +525,89 @@ void main() {
       expect(routesCountLabel(filtered: 1, total: 7), '1 of 7');
       expect(routesCountLabel(filtered: 0, total: 7), '0 of 7');
       expect(routesCountLabel(filtered: 0, total: 1), '0 of 1');
+    });
+  });
+
+  group('sortPopularRoutes', () {
+    test('Most Popular keeps the list order', () {
+      expect(
+        sortPopularRoutes(popularRoutes, 'Most Popular'),
+        orderedEquals(popularRoutes),
+      );
+    });
+
+    test('Lowest Fare is fare ascending, no-fare last', () {
+      final sorted = sortPopularRoutes(popularRoutes, 'Lowest Fare');
+      expect(
+        sorted.map((r) => r.fare).toList(),
+        [20, 20, 60, null, null, null, null],
+      );
+      expect(sorted[0].from, 'Cabugao');
+      expect(sorted[0].to, 'San Juan, Ilocos Sur');
+      expect(sorted[1].from, 'Sinait');
+      expect(sorted[1].to, 'Cabugao');
+      expect(sorted[2].from, 'Cabugao');
+      expect(sorted[2].to, 'Vigan Bus Terminal');
+      // No-fare routes keep their relative order.
+      expect(
+        sorted.sublist(3).map((r) => r.from).toList(),
+        [
+          'Vigan Bus Terminal',
+          'Laoag Terminal',
+          'Laoag Partas Terminal',
+          'Bantay GMW Terminal',
+        ],
+      );
+    });
+
+    test('Newest Routes puts admin-added routes first, seeded keep order', () {
+      final older = popularRouteFromCustomRoute(
+        CustomRoute(
+          from: 'Cabugao',
+          to: 'Vigan Bus Terminal',
+          operator: 'Partas',
+          vehicle: 'Bus',
+          fare: 60,
+          createdAt: DateTime(2026, 11, 1),
+        ),
+      );
+      final newer = popularRouteFromCustomRoute(
+        CustomRoute(
+          from: 'Sinait',
+          to: 'Cabugao',
+          operator: 'Partas',
+          vehicle: 'Bus',
+          fare: 20,
+          createdAt: DateTime(2026, 11, 8),
+        ),
+      );
+      // The creation date survives the conversion — it is the
+      // CustomRoute's own timestamp, never invented here.
+      expect(newer.createdAt, DateTime(2026, 11, 8));
+      expect(older.createdAt, DateTime(2026, 11, 1));
+      final sorted = sortPopularRoutes(
+        [...popularRoutes, older, newer],
+        'Newest Routes',
+      );
+      expect(sorted[0], newer);
+      expect(sorted[1], older);
+      expect(sorted.sublist(2), orderedEquals(popularRoutes));
+    });
+
+    test('Newest Routes with no timestamps keeps the list order', () {
+      // The seeded routes have no creation date, so none is
+      // invented and their order is unchanged.
+      expect(
+        sortPopularRoutes(popularRoutes, 'Newest Routes'),
+        orderedEquals(popularRoutes),
+      );
+    });
+
+    test('unknown sort keeps the list order', () {
+      expect(
+        sortPopularRoutes(popularRoutes, 'Something else'),
+        orderedEquals(popularRoutes),
+      );
     });
   });
 
@@ -377,34 +624,149 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('hero, chips, and Popular Routes render', (tester) async {
+    /// Opens the dropdown under [fieldKey] without picking.
+    Future<void> openDropdown(
+      WidgetTester tester,
+      ValueKey<String> fieldKey,
+    ) async {
+      final field = find.descendant(
+        of: find.byKey(fieldKey),
+        matching: find.byType(DropdownButtonFormField<String>),
+      );
+      await tester.ensureVisible(field);
+      await tester.pumpAndSettle();
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+    }
+
+    /// Scrolls the open dropdown menu until the item labelled
+    /// [itemLabel] is built. The menu lazily builds its items
+    /// (only the visible window exists), so a far-down item —
+    /// 'Cebu' in an 80-province list, 'BARMM' last of 17
+    /// regions — is not in the tree until the menu scrolls. The
+    /// menu can also open scrolled to the bottom (when its field
+    /// sits at the screen's top edge), so this tries down first,
+    /// then up — the item is found in one of the directions.
+    Future<void> scrollMenuToItem(
+      WidgetTester tester,
+      String itemLabel,
+    ) async {
+      final item = find.widgetWithText(
+        DropdownMenuItem<String>,
+        itemLabel,
+      );
+      for (var i = 0; i < 40 && item.evaluate().isEmpty; i++) {
+        await tester.drag(
+          find.byType(Scrollable).last,
+          const Offset(0, -400),
+        );
+        await tester.pump();
+      }
+      for (var i = 0; i < 40 && item.evaluate().isEmpty; i++) {
+        await tester.drag(
+          find.byType(Scrollable).last,
+          const Offset(0, 400),
+        );
+        await tester.pump();
+      }
+    }
+
+    /// Opens the dropdown under [fieldKey] and picks the menu item
+    /// labelled [itemLabel], scrolling the menu first when the
+    /// item is below the visible window.
+    Future<void> pickDropdownItem(
+      WidgetTester tester,
+      ValueKey<String> fieldKey,
+      String itemLabel,
+    ) async {
+      await openDropdown(tester, fieldKey);
+      await scrollMenuToItem(tester, itemLabel);
+      final item = find.widgetWithText(
+        DropdownMenuItem<String>,
+        itemLabel,
+      );
+      await tester.ensureVisible(item);
+      await tester.pumpAndSettle();
+      await tester.tap(item);
+      await tester.pumpAndSettle();
+    }
+
+    /// Closes an open dropdown menu by tapping the scrim.
+    Future<void> closeDropdownMenu(WidgetTester tester) async {
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+    }
+
+    /// Taps [finder] after scrolling it into view — the Fares tab
+    /// scrolls, so a chip or button below the fold would
+    /// otherwise miss (the tap lands outside the viewport).
+    Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+      await tester.tap(finder);
+      await tester.pump();
+    }
+
+    /// Expands the Additional Filters section.
+    Future<void> expandAdditionalFilters(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Additional Filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Additional Filters'));
+      await tester.pumpAndSettle();
+    }
+
+    /// The dropdown under [fieldKey], as a widget, for asserting
+    /// its items and current value.
+    DropdownButtonFormField<String> dropdown(
+      WidgetTester tester,
+      ValueKey<String> fieldKey,
+    ) {
+      return tester.widget<DropdownButtonFormField<String>>(
+        find.descendant(
+          of: find.byKey(fieldKey),
+          matching: find.byType(DropdownButtonFormField<String>),
+        ),
+      );
+    }
+
+    testWidgets('hero, chips, dropdowns, and Popular Routes render', (
+      tester,
+    ) async {
       await pumpTab(tester);
       expect(find.text('Know your fare before you go'), findsOneWidget);
       expect(find.text('Popular Routes'), findsOneWidget);
       expect(find.text('7 routes'), findsOneWidget);
-      // Four filter rows, each carrying its own All chip.
-      expect(find.widgetWithText(ChoiceChip, 'All'), findsNWidgets(4));
+      // Vehicle chips only: the types with routes. No empty
+      // Motorcycle / Car / Train / Modern Jeepney chips.
+      expect(find.widgetWithText(ChoiceChip, 'All'), findsOneWidget);
       for (final label in ['Bus', 'Van', 'Jeepney', 'Tricycle']) {
         expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
       }
-      // The operator row is a proper category now — always
-      // visible, not hidden behind the Bus chip.
-      expect(
-        find.text('Bus operator — Luzon, city & provincial'),
-        findsOneWidget,
-      );
-      // Region + fare rows, with only the regions that have routes.
-      expect(find.text('Region'), findsOneWidget);
-      expect(find.text('Fare'), findsOneWidget);
-      expect(find.widgetWithText(ChoiceChip, 'Ilocos Sur'), findsOneWidget);
-      expect(
-        find.widgetWithText(ChoiceChip, 'Ilocos Norte'),
-        findsOneWidget,
-      );
-      for (final label in ['Verified', 'Admin-set', 'Not set']) {
-        expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+      for (final label in ['Motorcycle', 'Car', 'Train', 'Modern Jeepney']) {
+        expect(find.widgetWithText(ChoiceChip, label), findsNothing);
       }
-      // No filter active, so no Clear filters button.
+      // Region is a dropdown (All Regions), not a chip row.
+      expect(find.text('Region'), findsOneWidget);
+      expect(find.text('All Regions'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Ilocos Sur'), findsNothing);
+      // The Fare filter is gone — fare info still shows on the
+      // cards, it is just no longer a filter.
+      expect(find.text('Fare'), findsNothing);
+      for (final label in ['Verified', 'Admin-set', 'Not set']) {
+        expect(find.widgetWithText(ChoiceChip, label), findsNothing);
+      }
+      // Additional Filters is collapsed by default; the
+      // operator / province / sort dropdowns are not in the tree.
+      expect(find.text('Additional Filters'), findsOneWidget);
+      expect(find.text('Operator'), findsNothing);
+      expect(find.text('Province'), findsNothing);
+      expect(find.text('Sort By'), findsNothing);
+      // Staged Apply / Reset replace Clear filters.
+      expect(
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(OutlinedButton, 'Reset'), findsOneWidget);
       expect(find.text('Clear filters'), findsNothing);
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
       expect(find.text('₱60'), findsOneWidget);
@@ -416,195 +778,391 @@ void main() {
     });
 
     testWidgets(
-      'operator row is always visible; switching vehicle disables it; '
-      'empty states are honest',
+      'Additional Filters is collapsed by default; expanding shows '
+      'Operator, Province, Sort By',
       (tester) async {
         await pumpTab(tester);
-        // The operator row is a proper category now — visible from
-        // the start, not hidden behind the Bus chip.
-        expect(
-          find.text('Bus operator — Luzon, city & provincial'),
-          findsOneWidget,
+        expect(find.text('Operator'), findsNothing);
+        await expandAdditionalFilters(tester);
+        expect(find.text('Operator'), findsOneWidget);
+        expect(find.text('Province'), findsOneWidget);
+        expect(find.text('Sort By'), findsOneWidget);
+        // Operator options come from the route data, not a
+        // hardcoded list: Partas and GMW Trans only. The
+        // operator dropdown only enables once Bus is picked
+        // (operators apply to Bus routes).
+        await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Bus'));
+        await openDropdown(
+          tester,
+          const ValueKey('operator-filter-dropdown'),
         );
-        for (final label in ['Partas', 'GMW Trans', 'GV Florida']) {
-          expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+        for (final label in ['Partas', 'GMW Trans']) {
+          expect(
+            find.widgetWithText(DropdownMenuItem<String>, label),
+            findsOneWidget,
+          );
         }
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
-        await tester.pump();
-        await tester.ensureVisible(
-          find.widgetWithText(ChoiceChip, 'GV Florida'),
+        await closeDropdownMenu(tester);
+        // Province with All Regions: every bundled province.
+        // The menu lazily builds its items, so scroll to each
+        // one before asserting it is offered.
+        await openDropdown(
+          tester,
+          const ValueKey('province-filter-dropdown'),
         );
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(ChoiceChip, 'GV Florida'));
-        await tester.pump();
-        expect(find.text('No GV Florida routes yet.'), findsOneWidget);
-        expect(find.text('0 of 7'), findsOneWidget);
-        await tester.ensureVisible(
-          find.widgetWithText(ChoiceChip, 'GMW Trans'),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(ChoiceChip, 'GMW Trans'));
-        await tester.pump();
-        expect(find.text('1 of 7'), findsOneWidget);
+        await scrollMenuToItem(tester, 'Ilocos Sur');
         expect(
-          find.text('Bantay GMW Terminal → Tuguegarao GMW Terminal'),
+          find.widgetWithText(DropdownMenuItem<String>, 'Ilocos Sur'),
           findsOneWidget,
         );
-        // Switching vehicle resets the operator filter to All and
-        // DISABLES the row (it stays visible — operators only
-        // apply to Bus routes).
-        await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Van'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Van'));
-        await tester.pump();
+        await scrollMenuToItem(tester, 'Cebu');
         expect(
-          find.text('Bus operator — Luzon, city & provincial'),
+          find.widgetWithText(DropdownMenuItem<String>, 'Cebu'),
           findsOneWidget,
         );
         expect(
-          tester
-              .widget<ChoiceChip>(
-                find.widgetWithText(ChoiceChip, 'Partas'),
-              )
-              .onSelected,
-          isNull,
+          find.widgetWithText(DropdownMenuItem<String>, 'Metro Manila'),
+          findsNothing,
         );
-        expect(find.text('No van routes yet.'), findsOneWidget);
-        await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Bus'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
-        await tester.pump();
-        expect(find.text('7 routes'), findsOneWidget);
+        await closeDropdownMenu(tester);
+        // Sort By offers all three orders.
+        await openDropdown(
+          tester,
+          const ValueKey('sort-filter-dropdown'),
+        );
+        for (final label in ['Lowest Fare', 'Newest Routes']) {
+          expect(
+            find.widgetWithText(DropdownMenuItem<String>, label),
+            findsOneWidget,
+          );
+        }
+        // 'Most Popular' appears twice: the button's current
+        // value plus the menu item (every dropdown button
+        // renders its selected value as a DropdownMenuItem).
+        expect(
+          find.widgetWithText(DropdownMenuItem<String>, 'Most Popular'),
+          findsWidgets,
+        );
+        await closeDropdownMenu(tester);
+        expect(
+          dropdown(
+            tester,
+            const ValueKey('sort-filter-dropdown'),
+          ).initialValue,
+          'Most Popular',
+        );
+        // Collapse again: the dropdowns leave the tree.
+        await tapVisible(tester, find.text('Additional Filters'));
+        expect(find.text('Operator'), findsNothing);
       },
     );
 
-    testWidgets('region filter narrows the list by either endpoint', (
+    testWidgets(
+      'region dropdown lists all 17 regions; selecting stages, '
+      'Apply updates',
+      (tester) async {
+        await pumpTab(tester);
+        // The menu lists all 17 regions: the first is visible
+        // on open, the last only after scrolling (the menu
+        // lazily builds its items).
+        await openDropdown(
+          tester,
+          const ValueKey('region-filter-dropdown'),
+        );
+        expect(find.text('Region I – Ilocos Region'), findsOneWidget);
+        await scrollMenuToItem(
+          tester,
+          'BARMM – Bangsamoro Autonomous Region',
+        );
+        expect(
+          find.text('BARMM – Bangsamoro Autonomous Region'),
+          findsOneWidget,
+        );
+        // Scroll back to the top of the same open menu and pick
+        // the first region.
+        await scrollMenuToItem(tester, 'Region I – Ilocos Region');
+        await tester.tap(
+          find.widgetWithText(
+            DropdownMenuItem<String>,
+            'Region I – Ilocos Region',
+          ),
+        );
+        await tester.pumpAndSettle();
+        // Staged, not applied: the list still shows all 7.
+        expect(find.text('7 routes'), findsOneWidget);
+        expect(find.text('Region I – Ilocos Region'), findsOneWidget);
+        await tapVisible(
+          tester,
+          find.widgetWithText(FilledButton, 'Apply Filters'),
+        );
+        expect(find.text('5 of 7'), findsOneWidget);
+        expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
+        expect(
+          find.text('Laoag Terminal → Vigan Bus Terminal'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Laoag Partas Terminal → Cubao Partas Terminal'),
+          findsNothing,
+        );
+        expect(
+          find.text('Bantay GMW Terminal → Tuguegarao GMW Terminal'),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets('province list follows the selected region', (
       tester,
     ) async {
       await pumpTab(tester);
-      // Only the regions with routes are offered.
-      expect(find.widgetWithText(ChoiceChip, 'Ilocos Sur'), findsOneWidget);
-      expect(find.widgetWithText(ChoiceChip, 'Ilocos Norte'), findsOneWidget);
-      expect(find.widgetWithText(ChoiceChip, 'La Union'), findsNothing);
-      // Ilocos Norte touches one route (Laoag Terminal → Vigan).
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Ilocos Norte'),
+      // With All Regions, the province menu offers every
+      // province — including one far from Ilocos.
+      await expandAdditionalFilters(tester);
+      await pickDropdownItem(
+        tester,
+        const ValueKey('province-filter-dropdown'),
+        'Cebu',
+      );
+      // Staged, not applied: the list still shows all 7.
+      expect(find.text('7 routes'), findsOneWidget);
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+      );
+      // No route touches Cebu.
+      expect(find.text('0 of 7'), findsOneWidget);
+      expect(find.text('No routes in Cebu yet.'), findsOneWidget);
+      // Now narrow the region to Ilocos Region: the province
+      // resets to All, and the menu offers only its provinces.
+      await tapVisible(tester, find.widgetWithText(OutlinedButton, 'Reset'));
+      expect(find.text('7 routes'), findsOneWidget);
+      await pickDropdownItem(
+        tester,
+        const ValueKey('region-filter-dropdown'),
+        'Region I – Ilocos Region',
+      );
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+      );
+      expect(find.text('5 of 7'), findsOneWidget);
+      await openDropdown(
+        tester,
+        const ValueKey('province-filter-dropdown'),
+      );
+      for (final province in ['Ilocos Norte', 'Ilocos Sur', 'Pangasinan']) {
+        expect(
+          find.widgetWithText(DropdownMenuItem<String>, province),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.widgetWithText(DropdownMenuItem<String>, 'Cebu'),
+        findsNothing,
+      );
+      await tester.tap(
+        find.widgetWithText(DropdownMenuItem<String>, 'Ilocos Norte'),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Norte'));
-      await tester.pump();
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+      );
       expect(find.text('1 of 7'), findsOneWidget);
       expect(
         find.text('Laoag Terminal → Vigan Bus Terminal'),
         findsOneWidget,
       );
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
-      // Ilocos Sur touches five (the Laoag → Vigan route too, via
-      // its Vigan destination).
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Ilocos Sur'),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Sur'));
-      await tester.pump();
-      expect(find.text('5 of 7'), findsOneWidget);
-      expect(
-        find.text('Laoag Terminal → Vigan Bus Terminal'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Bantay GMW Terminal → Tuguegarao GMW Terminal'),
-        findsNothing,
-      );
-      // Back to All via the region row's own All chip.
-      final regionAll = find.descendant(
-        of: find.byKey(const ValueKey('region-filter-row')),
-        matching: find.widgetWithText(ChoiceChip, 'All'),
-      );
-      await tester.ensureVisible(regionAll);
-      await tester.pumpAndSettle();
-      await tester.tap(regionAll);
-      await tester.pump();
-      expect(find.text('7 routes'), findsOneWidget);
     });
 
-    testWidgets('fare status filter shows verified / not-set routes', (
+    testWidgets(
+      'operator dropdown is data-driven; a non-Bus vehicle disables '
+      'it and resets it to All',
+      (tester) async {
+        await pumpTab(tester);
+        await expandAdditionalFilters(tester);
+        // The operator dropdown only enables once Bus is picked
+        // (operators apply to Bus routes).
+        await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Bus'));
+        expect(
+          dropdown(
+            tester,
+            const ValueKey('operator-filter-dropdown'),
+          ).onChanged,
+          isNotNull,
+        );
+        await pickDropdownItem(
+          tester,
+          const ValueKey('operator-filter-dropdown'),
+          'Partas',
+        );
+        expect(
+          dropdown(
+            tester,
+            const ValueKey('operator-filter-dropdown'),
+          ).initialValue,
+          'Partas',
+        );
+        // Staged, not applied: the list still shows all 7.
+        expect(find.text('7 routes'), findsOneWidget);
+        await tapVisible(
+          tester,
+          find.widgetWithText(FilledButton, 'Apply Filters'),
+        );
+        expect(find.text('1 of 7'), findsOneWidget);
+        expect(
+          find.text('Laoag Partas Terminal → Cubao Partas Terminal'),
+          findsOneWidget,
+        );
+        // Switching vehicle resets the operator to All and
+        // DISABLES the dropdown (it stays visible — operators
+        // only apply to Bus routes).
+        await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Van'));
+        expect(
+          dropdown(
+            tester,
+            const ValueKey('operator-filter-dropdown'),
+          ).initialValue,
+          'All',
+        );
+        expect(
+          dropdown(
+            tester,
+            const ValueKey('operator-filter-dropdown'),
+          ).onChanged,
+          isNull,
+        );
+        await tapVisible(
+          tester,
+          find.widgetWithText(FilledButton, 'Apply Filters'),
+        );
+        expect(find.text('No van routes yet.'), findsOneWidget);
+        await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Bus'));
+        await tapVisible(
+          tester,
+          find.widgetWithText(FilledButton, 'Apply Filters'),
+        );
+        expect(find.text('7 routes'), findsOneWidget);
+      },
+    );
+
+    testWidgets('sort by Lowest Fare orders cheapest first, no-fare last', (
       tester,
     ) async {
       await pumpTab(tester);
-      final fareAll = find.descendant(
-        of: find.byKey(const ValueKey('fare-filter-row')),
-        matching: find.widgetWithText(ChoiceChip, 'All'),
+      await expandAdditionalFilters(tester);
+      await pickDropdownItem(
+        tester,
+        const ValueKey('sort-filter-dropdown'),
+        'Lowest Fare',
       );
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Verified'),
+      // Staging a sort marks the section Active.
+      expect(find.text('Active'), findsOneWidget);
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Verified'));
-      await tester.pump();
-      expect(find.text('3 of 7'), findsOneWidget);
-      expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
-      expect(find.text('Cabugao → San Juan, Ilocos Sur'), findsOneWidget);
-      expect(find.text('Sinait → Cabugao'), findsOneWidget);
-      expect(
-        find.text('Vigan Bus Terminal → San Juan, Ilocos Sur'),
-        findsNothing,
-      );
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Not set'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Not set'));
-      await tester.pump();
-      expect(find.text('4 of 7'), findsOneWidget);
-      expect(
-        find.text('Vigan Bus Terminal → San Juan, Ilocos Sur'),
-        findsOneWidget,
-      );
-      expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
-      // No admin-set route exists in the seeded list.
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Admin-set'),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Admin-set'));
-      await tester.pump();
-      expect(find.text('0 of 7'), findsOneWidget);
-      expect(find.text('No admin-set routes yet.'), findsOneWidget);
-      await tester.ensureVisible(fareAll);
-      await tester.pumpAndSettle();
-      await tester.tap(fareAll);
-      await tester.pump();
       expect(find.text('7 routes'), findsOneWidget);
+      // The ₱20 routes sit above the ₱60 route, and the ₱60
+      // route sits above the no-fare routes.
+      final first20 = tester
+          .getTopLeft(find.text('Cabugao → San Juan, Ilocos Sur'))
+          .dy;
+      final second20 = tester
+          .getTopLeft(find.text('Sinait → Cabugao'))
+          .dy;
+      final sixty = tester
+          .getTopLeft(find.text('Cabugao → Vigan Bus Terminal'))
+          .dy;
+      final noFare = tester
+          .getTopLeft(find.text('Vigan Bus Terminal → San Juan, Ilocos Sur'))
+          .dy;
+      expect(first20, lessThan(sixty));
+      expect(second20, lessThan(sixty));
+      expect(sixty, lessThan(noFare));
+      // Newest Routes with seeded-only data keeps the list order
+      // (the built-ins have no creation date).
+      await pickDropdownItem(
+        tester,
+        const ValueKey('sort-filter-dropdown'),
+        'Newest Routes',
+      );
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+      );
+      final first = tester
+          .getTopLeft(find.text('Cabugao → Vigan Bus Terminal'))
+          .dy;
+      final second = tester
+          .getTopLeft(find.text('Cabugao → San Juan, Ilocos Sur'))
+          .dy;
+      expect(first, lessThan(second));
     });
 
-    testWidgets('clear filters resets all four categories', (tester) async {
+    testWidgets('Apply stages then updates; Reset restores defaults', (
+      tester,
+    ) async {
       await pumpTab(tester);
-      expect(find.text('Clear filters'), findsNothing);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
-      await tester.pump();
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Verified'),
+      // Nothing staged: Apply and Reset are both disabled.
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Apply Filters'),
+            )
+            .onPressed,
+        isNull,
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Verified'));
-      await tester.pump();
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Ilocos Sur'),
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Reset'),
+            )
+            .onPressed,
+        isNull,
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Sur'));
-      await tester.pump();
-      // Bus + Ilocos Sur + Verified: the three verified routes.
-      expect(find.text('3 of 7'), findsOneWidget);
-      expect(find.text('Clear filters'), findsOneWidget);
-      await tester.ensureVisible(find.text('Clear filters'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Clear filters'));
-      await tester.pump();
+      // Tapping a chip only STAGES it — the list does not change.
+      await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Van'));
       expect(find.text('7 routes'), findsOneWidget);
-      expect(find.text('Clear filters'), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Apply Filters'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+      );
+      expect(find.text('0 of 7'), findsOneWidget);
+      expect(find.text('No van routes yet.'), findsOneWidget);
+      // Reset restores everything: the list, the vehicle chip,
+      // and the region dropdown.
+      await tapVisible(tester, find.widgetWithText(OutlinedButton, 'Reset'));
+      expect(find.text('7 routes'), findsOneWidget);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'All'))
+            .selected,
+        isTrue,
+      );
+      expect(find.text('All Regions'), findsOneWidget);
+      await expandAdditionalFilters(tester);
+      expect(
+        dropdown(
+          tester,
+          const ValueKey('sort-filter-dropdown'),
+        ).initialValue,
+        'Most Popular',
+      );
+      expect(find.text('Active'), findsNothing);
     });
 
-    testWidgets('narrow phone: all four filter rows fit without overflow', (
+    testWidgets('narrow phone: filters fit without overflow at 390px', (
       tester,
     ) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -612,39 +1170,41 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await pumpTab(tester);
-      // All four rows render on a 390px phone (the preview's pill
-      // nav overflowed this width by ~100px).
-      for (final label in [
-        'Bus operator — Luzon, city & provincial',
-        'Region',
-        'Fare',
-      ]) {
-        await tester.ensureVisible(find.text(label));
-        await tester.pumpAndSettle();
-        expect(find.text(label), findsOneWidget);
-      }
-      // Interact with every row: the rows scroll, they never
-      // overflow.
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Bus'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
-      await tester.pump();
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Partas'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Partas'));
-      await tester.pump();
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Ilocos Norte'),
+      expect(find.text('Popular Routes'), findsOneWidget);
+      expect(find.text('7 routes'), findsOneWidget);
+      // Stage + apply a vehicle filter: the short '0 of 7'
+      // count label never overflows the header Row (the f1cf15c
+      // lesson — the old 'X of Y routes' label overflowed 39px).
+      await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Van'));
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Norte'));
-      await tester.pump();
-      await tester.ensureVisible(
-        find.widgetWithText(ChoiceChip, 'Verified'),
+      expect(find.text('0 of 7'), findsOneWidget);
+      await tapVisible(tester, find.widgetWithText(OutlinedButton, 'Reset'));
+      // Region dropdown + Apply at 390px.
+      await pickDropdownItem(
+        tester,
+        const ValueKey('region-filter-dropdown'),
+        'Region I – Ilocos Region',
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Verified'));
-      await tester.pump();
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+      );
+      expect(find.text('5 of 7'), findsOneWidget);
+      // Expand Additional Filters and apply a sort at 390px.
+      await expandAdditionalFilters(tester);
+      await pickDropdownItem(
+        tester,
+        const ValueKey('sort-filter-dropdown'),
+        'Lowest Fare',
+      );
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Apply Filters'),
+      );
+      expect(find.text('5 of 7'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

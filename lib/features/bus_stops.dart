@@ -286,6 +286,93 @@ List<String> hubRegions() {
   return out;
 }
 
+/// All 17 administrative regions, north to south, for the Region
+/// filter dropdown. Re-exported from the bundled places data
+/// here because fares_tab.dart cannot import
+/// philippine_places.dart (it imports fares_tab.dart for [Hub]).
+List<String> get allAdministrativeRegions => philippineRegionOrder;
+
+/// Province → administrative region, derived from the bundled
+/// places: each place carries its province in [Hub.region] and
+/// its region in [philippinePlaceRegion]. First-seen in list
+/// order wins — the only province in two regions is Basilan
+/// (Isabela City → Zamboanga Peninsula, Lamitan → BARMM); the
+/// list is ordered by region north to south, so Basilan maps to
+/// Zamboanga Peninsula. Provinces with no bundled place
+/// ('La Union', 'Mountain Province') are absent — endpoints
+/// there match only 'All'. Nothing here is invented: the map is
+/// the bundled data, read back.
+final Map<String, String> _provinceToRegion = () {
+  final map = <String, String>{};
+  for (final place in philippinePlaces) {
+    if (philippineRegionOrder.contains(place.region)) continue;
+    final region = philippinePlaceRegion[place.name];
+    if (region == null) continue;
+    map.putIfAbsent(place.region, () => region);
+  }
+  return map;
+}();
+
+/// Administrative region of a place name, or null when it cannot
+/// be resolved from the bundled places data. Resolution follows
+/// [resolveHub]'s precedence (built-in hub, then admin stop,
+/// then bundled place): a hub/stop's [Hub.region] is used when
+/// it is already one of the 17 administrative regions, otherwise
+/// its province is mapped through the bundled places; a bundled
+/// place resolves by exact name. Terminal names ('Laoag Partas
+/// Terminal') are not places, so they return null and their
+/// routes match only 'All' — the same honest limit as the old
+/// Hub.region row. Provinces with no bundled place ('La Union',
+/// 'Mountain Province') also return null.
+String? administrativeRegionOfEndpoint(String name, List<BusStop> stops) {
+  for (final hub in hubs) {
+    if (hub.name == name) return _administrativeRegionOfHub(hub);
+  }
+  for (final stop in stops) {
+    if (stop.name == name) {
+      return _administrativeRegionOfHub(busStopAsHub(stop));
+    }
+  }
+  return philippinePlaceRegion[name];
+}
+
+String? _administrativeRegionOfHub(Hub hub) {
+  if (philippineRegionOrder.contains(hub.region)) return hub.region;
+  return _provinceToRegion[hub.region];
+}
+
+/// Province of a place name, or null when unknown. A bundled
+/// place's [Hub.region] IS its province; a built-in hub's
+/// [Hub.region] is a province except when it is already an
+/// administrative region ('Ilocos Region', 'Cordillera
+/// Administrative Region', 'Metro Manila') — then the province
+/// is unknown. Terminal names return null.
+String? provinceOfRouteEndpoint(String name, List<BusStop> stops) {
+  final hub = resolveHub(name, stops);
+  if (hub == null) return null;
+  if (philippineRegionOrder.contains(hub.region)) return null;
+  return hub.region;
+}
+
+/// Provinces of the bundled places in [region], alphabetical.
+/// 'All' returns every province in the bundled data. 'Metro
+/// Manila' is a region, not a province, so it never appears.
+/// Pure, so the Province dropdown options are unit-testable.
+List<String> provincesInRegion(String region) {
+  final seen = <String>{};
+  final out = <String>[];
+  for (final place in philippinePlaces) {
+    if (region != 'All' && philippinePlaceRegion[place.name] != region) {
+      continue;
+    }
+    final province = place.region;
+    if (philippineRegionOrder.contains(province)) continue;
+    if (seen.add(province)) out.add(province);
+  }
+  out.sort();
+  return out;
+}
+
 /// True when [name] is already a hub or a bus stop
 /// (case-insensitive, trimmed) — names must stay unique.
 bool busStopNameTaken(String name, List<BusStop> stops) {
