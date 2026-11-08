@@ -104,6 +104,7 @@ class CommunityPost {
     this.authorUid = '',
     this.createdAt,
     this.rejectionReason,
+    this.description = '',
   });
 
   final String routeName;
@@ -155,8 +156,18 @@ class CommunityPost {
   /// Shared posts only; local posts never carry one.
   final String? rejectionReason;
 
+  /// Optional free-text description of the route/post, shown on the
+  /// post card in a Description box when non-empty. Empty means no
+  /// description was given — the card hides the box, never an empty
+  /// one. Set from the "Share info" form's Description field.
+  final String description;
+
   /// True for Firestore-backed posts, false for device-only posts.
   bool get isShared => id != null;
+
+  /// True when the post carries a non-blank description worth
+  /// showing on the card.
+  bool get hasDescription => description.trim().isNotEmpty;
 
   /// Copy with a new approval status (used by the admin screen).
   /// [rejectionReason] replaces the reason; [clearRejectionReason]
@@ -169,6 +180,7 @@ class CommunityPost {
     DateTime? createdAt,
     String? rejectionReason,
     bool clearRejectionReason = false,
+    String? description,
   }) =>
       CommunityPost(
         routeName: routeName,
@@ -188,6 +200,7 @@ class CommunityPost {
         rejectionReason: clearRejectionReason
             ? null
             : (rejectionReason ?? this.rejectionReason),
+        description: description ?? this.description,
       );
 
   /// Card title: the route itself when From/To exist, otherwise the
@@ -245,6 +258,7 @@ class CommunityPost {
         if (operatorName.isNotEmpty) 'operatorName': operatorName,
         'status': status.name,
         if (rejectionReason != null) 'rejectionReason': rejectionReason,
+        if (description.trim().isNotEmpty) 'description': description,
       };
 
   factory CommunityPost.fromJson(Map<String, dynamic> json) {
@@ -262,6 +276,7 @@ class CommunityPost {
     final operator = json['operatorName'];
     final status = json['status'];
     final reason = json['rejectionReason'];
+    final desc = json['description'];
     return CommunityPost(
       routeName: json['routeName'] is String ? json['routeName'] as String : '',
       vehicles: vehicles is List
@@ -277,6 +292,7 @@ class CommunityPost {
       operatorName: operator is String ? operator : '',
       status: postStatusFromString(status is String ? status : null),
       rejectionReason: reason is String ? reason : null,
+      description: desc is String ? desc : '',
     );
   }
 }

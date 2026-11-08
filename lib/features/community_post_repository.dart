@@ -263,6 +263,8 @@ Map<String, dynamic> sharedPostToDoc(CommunityPost post, String authorUid) {
     if (post.faresByVehicle.isNotEmpty)
       'faresByVehicle': Map<String, dynamic>.from(post.faresByVehicle),
     if (post.operatorName.isNotEmpty) 'operatorName': post.operatorName,
+    if (post.description.trim().isNotEmpty)
+      'description': post.description,
     'status': PostStatus.pending.name,
     'authorUid': authorUid,
   };
@@ -287,6 +289,7 @@ CommunityPost sharedPostFromDoc(
   }
   final createdAt = data['createdAt'];
   final reason = data['rejectionReason'];
+  final desc = data['description'];
   return CommunityPost(
     routeName: data['routeName'] is String ? data['routeName'] as String : '',
     vehicles: vehicles is List
@@ -307,6 +310,7 @@ CommunityPost sharedPostFromDoc(
     authorUid: data['authorUid'] is String ? data['authorUid'] as String : '',
     createdAt: createdAt is Timestamp ? createdAt.toDate() : null,
     rejectionReason: reason is String ? reason : null,
+    description: desc is String ? desc : '',
   );
 }
 

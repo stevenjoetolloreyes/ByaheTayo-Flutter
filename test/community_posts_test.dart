@@ -129,6 +129,76 @@ void main() {
     expect(base64Decode(loaded.first.photoBase64!), [104, 101, 108, 108, 111]);
   });
 
+  test('community post description survives a save/load round trip',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    const post = CommunityPost(
+      routeName: 'Cabugao → Vigan City',
+      from: 'Cabugao',
+      to: 'Vigan City',
+      vehicles: ['traditional-jeepney'],
+      hours: '',
+      fare: 0,
+      hubName: 'Cabugao',
+      faresByVehicle: {'traditional-jeepney': 60},
+      description: 'Fare and transport info for commuters.',
+      status: PostStatus.approved,
+    );
+    await saveCommunityPosts(prefs, [post]);
+    final loaded = await loadCommunityPosts(prefs);
+    expect(loaded.length, 1);
+    expect(
+      loaded.first.description,
+      'Fare and transport info for commuters.',
+    );
+    expect(loaded.first.hasDescription, isTrue);
+    // copyWith keeps the description unless replaced.
+    expect(
+      post.copyWith().description,
+      'Fare and transport info for commuters.',
+    );
+    expect(post.copyWith(description: 'New text').description, 'New text');
+  });
+
+  test('community post without a description has none to show', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    const post = CommunityPost(
+      routeName: 'Cabugao → Vigan City',
+      from: 'Cabugao',
+      to: 'Vigan City',
+      vehicles: ['traditional-jeepney'],
+      hours: '',
+      fare: 0,
+      hubName: 'Cabugao',
+      faresByVehicle: {'traditional-jeepney': 60},
+      status: PostStatus.approved,
+    );
+    // A whitespace-only description counts as no description.
+    const blank = CommunityPost(
+      routeName: 'Cabugao → Vigan City',
+      from: 'Cabugao',
+      to: 'Vigan City',
+      vehicles: ['traditional-jeepney'],
+      hours: '',
+      fare: 0,
+      hubName: 'Cabugao',
+      faresByVehicle: {'traditional-jeepney': 60},
+      description: '   ',
+      status: PostStatus.approved,
+    );
+    await saveCommunityPosts(prefs, [post, blank]);
+    final loaded = await loadCommunityPosts(prefs);
+    expect(loaded.length, 2);
+    expect(loaded[0].description, isEmpty);
+    expect(loaded[0].hasDescription, isFalse);
+    expect(loaded[1].hasDescription, isFalse);
+    // The stored JSON omits an empty description entirely.
+    expect(post.toJson().containsKey('description'), isFalse);
+    expect(blank.toJson().containsKey('description'), isFalse);
+  });
+
   test('community load keeps legacy posts without From/To', () async {
     // Stored JSON from before approval existed: no 'status' key.
     SharedPreferences.setMockInitialValues({
@@ -321,14 +391,24 @@ void main() {
       find.text('Add a fare above ₱0 for Traditional Jeepney.'),
       findsOneWidget,
     );
-    // Field order: From, To, per-vehicle fare, hours, operator.
+    // Field order: From, To, per-vehicle fare, hours, operator,
+    // description. The description is optional.
     await tester.enterText(find.byType(TextField).at(2), '60');
+    await tester.enterText(
+      find.byType(TextField).at(5),
+      'Fare and transport info for commuters.',
+    );
     await tester.tap(find.text('Share post'));
     await tester.pumpAndSettle();
     expect(find.text('Cabugao → Vigan City'), findsOneWidget);
     expect(find.text('Shared post'), findsOneWidget);
     expect(find.text('In Review'), findsOneWidget);
     expect(find.text('Traditional Jeepney: ₱60.00'), findsOneWidget);
+    expect(find.text('Description'), findsOneWidget);
+    expect(
+      find.text('Fare and transport info for commuters.'),
+      findsOneWidget,
+    );
     expect(find.text('View Route'), findsOneWidget);
     expect(find.text('View on map'), findsOneWidget);
   });

@@ -239,6 +239,7 @@ class FakePostRepository implements PostRepository {
       photoBase64: photo,
       faresByVehicle: post.faresByVehicle,
       operatorName: post.operatorName,
+      description: post.description,
       status: PostStatus.pending,
       id: 'fake-${_nextId++}',
       authorUid: author.uid,

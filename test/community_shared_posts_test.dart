@@ -240,6 +240,73 @@ void main() {
       expect(post.createdAt, DateTime(2026, 11, 2));
       expect(post.faresByVehicle['traditional-jeepney'], 60);
     });
+
+    test('create map carries the description when present', () {
+      final doc = sharedPostToDoc(
+        const CommunityPost(
+          routeName: 'Cabugao → Vigan City',
+          vehicles: ['traditional-jeepney'],
+          hours: '',
+          fare: 0,
+          hubName: 'Cabugao',
+          from: 'Cabugao',
+          to: 'Vigan City',
+          faresByVehicle: {'traditional-jeepney': 60},
+          description: 'Fare and transport info.',
+        ),
+        'uid-9',
+      );
+      expect(doc['description'], 'Fare and transport info.');
+    });
+
+    test('create map omits an empty description', () {
+      final doc = sharedPostToDoc(
+        const CommunityPost(
+          routeName: 'Cabugao → Vigan City',
+          vehicles: ['traditional-jeepney'],
+          hours: '',
+          fare: 0,
+          hubName: 'Cabugao',
+          from: 'Cabugao',
+          to: 'Vigan City',
+          faresByVehicle: {'traditional-jeepney': 60},
+        ),
+        'uid-9',
+      );
+      expect(doc.containsKey('description'), isFalse);
+    });
+
+    test('fromDoc parses the description, absent means empty', () {
+      final withDesc = sharedPostFromDoc('doc-1', {
+        'routeName': 'Cabugao → Vigan City',
+        'vehicles': ['traditional-jeepney'],
+        'hours': '',
+        'fare': 0,
+        'hubName': 'Cabugao',
+        'from': 'Cabugao',
+        'to': 'Vigan City',
+        'faresByVehicle': {'traditional-jeepney': 60},
+        'status': 'approved',
+        'authorUid': 'uid-9',
+        'description': 'Fare and transport info.',
+      });
+      expect(withDesc.description, 'Fare and transport info.');
+      expect(withDesc.hasDescription, isTrue);
+      final withoutDesc = sharedPostFromDoc('doc-2', {
+        'routeName': 'Cabugao → Vigan City',
+        'vehicles': ['traditional-jeepney'],
+        'hours': '',
+        'fare': 0,
+        'hubName': 'Cabugao',
+        'from': 'Cabugao',
+        'to': 'Vigan City',
+        'faresByVehicle': {'traditional-jeepney': 60},
+        'status': 'approved',
+        'authorUid': 'uid-9',
+      });
+      expect(withoutDesc.description, isEmpty);
+      expect(withoutDesc.hasDescription, isFalse);
+    });
   });
 
   group('communities tab shared section', () {
@@ -302,6 +369,59 @@ void main() {
       expect(find.text('Cabugao → Vigan City'), findsOneWidget);
       expect(find.text('Vigan City → Santa'), findsOneWidget);
       expect(find.text('Vigan City → Cabugao'), findsNothing);
+    });
+
+    testWidgets('approved card shows the Description box, hides Published', (
+      tester,
+    ) async {
+      final repo = FakePostRepository();
+      repo.stored.add(
+        _shared(id: 's1', authorUid: 'x', status: PostStatus.approved)
+            .copyWith(description: 'Fare and transport info.'),
+      );
+      await pumpTab(
+        tester,
+        user: _other,
+        repository: repo,
+        prefs: {samplePostSeededKey: true},
+      );
+      expect(find.text('Description'), findsOneWidget);
+      expect(find.text('Fare and transport info.'), findsOneWidget);
+      // The Published chip is hidden on the card: a post shown here
+      // is published by definition.
+      expect(find.text('Published'), findsNothing);
+    });
+
+    testWidgets('approved card without a description hides the box', (
+      tester,
+    ) async {
+      final repo = FakePostRepository();
+      repo.stored.add(
+        _shared(id: 's1', authorUid: 'x', status: PostStatus.approved),
+      );
+      await pumpTab(
+        tester,
+        user: _other,
+        repository: repo,
+        prefs: {samplePostSeededKey: true},
+      );
+      expect(find.text('Description'), findsNothing);
+      expect(find.text('Published'), findsNothing);
+    });
+
+    testWidgets('pending card still shows In Review', (tester) async {
+      final repo = FakePostRepository();
+      repo.stored.add(
+        _shared(id: 's1', authorUid: 'author-1', status: PostStatus.pending),
+      );
+      await pumpTab(
+        tester,
+        user: _author,
+        repository: repo,
+        prefs: {samplePostSeededKey: true},
+      );
+      expect(find.text('In Review'), findsOneWidget);
+      expect(find.text('Published'), findsNothing);
     });
 
     testWidgets('signed-out tab explains sign-in for shared posts', (

@@ -506,28 +506,28 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.s4),
-          Chip(
-            label: Text(
-              post.status == PostStatus.approved
-                  ? 'Published'
-                  : post.status == PostStatus.rejected
-                      ? 'Rejected'
-                      : 'In Review',
+          // The "Published" badge is hidden: a post shown in Shared
+          // posts is published by definition, so the chip is
+          // redundant. Pending ("In Review") and rejected badges
+          // still show — they carry real status information.
+          if (post.status != PostStatus.approved) ...[
+            const SizedBox(height: AppSpacing.s4),
+            Chip(
+              label: Text(
+                post.status == PostStatus.rejected
+                    ? 'Rejected'
+                    : 'In Review',
+              ),
+              backgroundColor: post.status == PostStatus.rejected
+                  ? (dark
+                      ? const Color(0xFF7F1D1D)
+                      : const Color(0xFFFEE2E2))
+                  : (dark
+                      ? const Color(0xFF78350F)
+                      : const Color(0xFFFEF9C3)),
+              visualDensity: VisualDensity.compact,
             ),
-            backgroundColor: post.status == PostStatus.approved
-                ? (dark
-                    ? kCommunityEmerald
-                    : const Color(0xFFDCFCE7))
-                : post.status == PostStatus.rejected
-                    ? (dark
-                        ? const Color(0xFF7F1D1D)
-                        : const Color(0xFFFEE2E2))
-                    : (dark
-                        ? const Color(0xFF78350F)
-                        : const Color(0xFFFEF9C3)),
-            visualDensity: VisualDensity.compact,
-          ),
+          ],
           // Rejected shared posts reach this card only for their
           // author (see sharedPostVisibleTo), so showing the reason
           // here never exposes it to other users.
@@ -535,6 +535,52 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               (post.rejectionReason ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: AppSpacing.s4),
             Text('Rejection reason: ${post.rejectionReason!.trim()}'),
+          ],
+          // Description box (mockup, Nov 8): green-tinted box with a
+          // document icon + "Description" heading and the post's
+          // description text. Shown only when the post has a
+          // description — never an empty box.
+          if (post.hasDescription) ...[
+            const SizedBox(height: AppSpacing.s4),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: dark
+                    ? kCommunityEmerald
+                    : const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.description_outlined,
+                        size: 20,
+                        color: dark
+                            ? const Color(0xFFBBF7D0)
+                            : kCommunityEmerald,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Description',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: dark
+                              ? const Color(0xFFBBF7D0)
+                              : kCommunityEmerald,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(post.description.trim()),
+                ],
+              ),
+            ),
           ],
           const SizedBox(height: AppSpacing.s4),
           Text(post.hubName),
@@ -867,6 +913,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
   final _toController = TextEditingController();
   final _hoursController = TextEditingController();
   final _operatorController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   /// One fare controller per selected vehicle id. Controllers are
   /// created when a chip is selected and disposed with the sheet;
@@ -889,6 +936,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
     _toController.dispose();
     _hoursController.dispose();
     _operatorController.dispose();
+    _descriptionController.dispose();
     for (final controller in _fareControllers.values) {
       controller.dispose();
     }
@@ -1011,6 +1059,15 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               ),
             ),
             const SizedBox(height: AppLayout.cardGap),
+            TextField(
+              controller: _descriptionController,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                hintText: 'e.g. what commuters should know about this route',
+              ),
+            ),
+            const SizedBox(height: AppLayout.cardGap),
             if (_photoBase64 != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -1116,6 +1173,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               ),
           },
           operatorName: _operatorController.text.trim(),
+          description: _descriptionController.text.trim(),
         ),
         user,
       );
