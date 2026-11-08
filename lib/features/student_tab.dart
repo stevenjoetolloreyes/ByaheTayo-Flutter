@@ -1348,6 +1348,7 @@ class _StudentTabState extends State<StudentTab> {
   // ----------------------------------------------------------- classes
 
   Widget _classesWidget(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final now = DateTime.now();
     final todays = classesOnDay(_subjects, now.weekday);
     final next = nextClass(_subjects, now);
@@ -1380,18 +1381,25 @@ class _StudentTabState extends State<StudentTab> {
         children: [
           ClassWeekGrid(subjects: _subjects, days: [now], now: now),
           const SizedBox(height: AppSpacing.s8),
-          if (next != null)
-            _row('Next class',
-                '${next.subject.name} · ${weekdayName(next.date.weekday)} ${formatMinutes(next.subject.startMin)}'),
+          if (next != null) ...[
+            _nextClassBanner(context, next),
+            const SizedBox(height: AppSpacing.s8),
+          ],
           if (todays.isEmpty) ...[
-            const Text('No classes today.',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-            const Text('Relax, study, or get ahead on your tasks!'),
+            _emptyRow(
+              context,
+              Icons.event_available_outlined,
+              'No classes today.',
+              'Relax, study, or get ahead on your tasks!',
+            ),
           ] else
             for (final s in todays)
-              _row(
-                '${formatMinutes(s.startMin)}–${formatMinutes(s.endMin)} · ${s.name}',
-                '${s.room.isEmpty ? '' : '${s.room} '}${s.teacher}',
+              _dotRow(
+                color: Color(s.color),
+                label:
+                    '${formatMinutes(s.startMin)}–${formatMinutes(s.endMin)} · ${s.name}',
+                value:
+                    '${s.room.isEmpty ? '' : '${s.room} '}${s.teacher}',
               ),
         ],
       );
@@ -1406,8 +1414,15 @@ class _StudentTabState extends State<StudentTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClassWeekGrid(subjects: _subjects, days: weekDays, now: now),
-          const SizedBox(height: AppSpacing.s8),
-          if (!hasAny) const Text('No classes this week.'),
+          if (!hasAny) ...[
+            const SizedBox(height: AppSpacing.s8),
+            _emptyRow(
+              context,
+              Icons.event_available_outlined,
+              'No classes this week.',
+              null,
+            ),
+          ],
         ],
       );
     } else {
@@ -1415,59 +1430,458 @@ class _StudentTabState extends State<StudentTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_subjects.isEmpty)
-            const Text('No subjects yet.')
+            _emptyRow(
+              context,
+              Icons.school_outlined,
+              'No subjects yet.',
+              null,
+            )
           else
             for (final s in _subjects)
-              _row(
-                s.code.isEmpty ? s.name : '${s.name} (${s.code})',
-                '${s.teacher}${s.room.isEmpty ? '' : ' · ${s.room}'}',
+              _dotRow(
+                color: Color(s.color),
+                label: s.code.isEmpty ? s.name : '${s.name} (${s.code})',
+                value:
+                    '${s.teacher}${s.room.isEmpty ? '' : ' · ${s.room}'}',
               ),
         ],
       );
     }
 
-    return _widgetCard(
-      context,
-      icon: Icons.calendar_month_outlined,
-      title: 'Classes & Timetable',
-      subtitle: 'Your schedule at a glance.',
-      onOpen: () => _open(const ClassesScreen()),
-      children: [
-        _row('Total Subjects', '${_subjects.length}'),
-        const SizedBox(height: AppSpacing.s4),
-        IosSegmentedControl<String>(
-          segments: const [
-            IosSegment(value: 'today', label: 'Today'),
-            IosSegment(value: 'week', label: 'This Week'),
-            IosSegment(value: 'all', label: 'All Classes'),
+    // Redesign (Nov 8, 2026): the card keeps the same Card shell,
+    // padding and tap-to-open behaviour as _widgetCard, but builds
+    // its own header (rounded-square emerald tile instead of the
+    // shared CircleAvatar) so the other cards stay untouched. The
+    // segmented control and the ClassWeekGrid below are NOT
+    // redesigned — they are the circled calendar region Steven
+    // asked to keep ("eto wag galawin").
+    return Card(
+      child: Padding(
+        padding: AppLayout.cardPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => _open(const ClassesScreen()),
+              borderRadius: BorderRadius.circular(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.calendar_month_outlined,
+                      color: scheme.primary,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Classes & Timetable',
+                          style: kStudentCardHeading,
+                        ),
+                        Text(
+                          'Your schedule at a glance.',
+                          style: AppText.caption.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppLayout.cardGap),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.s12),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.school_outlined,
+                    color: scheme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppSpacing.s8),
+                  const Expanded(child: Text('Total Subjects')),
+                  Text(
+                    '${_subjects.length}',
+                    key: const ValueKey('total-subjects-count'),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s4),
+            IosSegmentedControl<String>(
+              segments: const [
+                IosSegment(value: 'today', label: 'Today'),
+                IosSegment(value: 'week', label: 'This Week'),
+                IosSegment(value: 'all', label: 'All Classes'),
+              ],
+              groupValue: _classesTab,
+              onValueChanged: (value) => setState(() => _classesTab = value),
+            ),
+            const SizedBox(height: AppSpacing.s8),
+            tabBody,
+            const SizedBox(height: AppSpacing.s8),
+            _weekLoadGraph(context, now),
+            const SizedBox(height: AppSpacing.s8),
+            _sectionHeader(
+              context,
+              Icons.quiz_outlined,
+              kStudentInfo,
+              'Upcoming Exams',
+            ),
+            const SizedBox(height: AppSpacing.s4),
+            if (upcomingExams.isEmpty)
+              const Text('No upcoming exams.')
+            else
+              for (final e in upcomingExams.take(2))
+                _dotRow(
+                  color: kStudentInfo,
+                  label: subjectName(e.subjectId),
+                  value: '${e.title} · ${formatDate(e.due)}',
+                ),
+            const SizedBox(height: AppSpacing.s4),
+            _sectionHeader(
+              context,
+              Icons.assignment_outlined,
+              kStudentWarning,
+              'Assignment Deadlines',
+            ),
+            const SizedBox(height: AppSpacing.s4),
+            if (upcomingAssignments.isEmpty)
+              const Text('No upcoming assignments.')
+            else
+              for (final a in upcomingAssignments.take(2))
+                _dotRow(
+                  color: kStudentWarning,
+                  label: subjectName(a.subjectId),
+                  value: '${a.title} · ${formatDate(a.due)}',
+                ),
+            const SizedBox(height: AppSpacing.s8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _open(const ClassesScreen()),
+                icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                label: const Text('View Timetable'),
+              ),
+            ),
           ],
-          groupValue: _classesTab,
-          onValueChanged: (value) => setState(() => _classesTab = value),
         ),
-        const SizedBox(height: AppSpacing.s8),
-        tabBody,
-        const SizedBox(height: AppSpacing.s8),
-        const Text('Upcoming Exams',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        if (upcomingExams.isEmpty)
-          const Text('No upcoming exams.')
-        else
-          for (final e in upcomingExams.take(2))
-            _row(subjectName(e.subjectId), '${e.title} · ${formatDate(e.due)}'),
+      ),
+    );
+  }
+
+  /// Next-class banner (Today view): emerald-tinted, schedule icon,
+  /// "NEXT CLASS" micro label + subject · day time in bold. Same
+  /// data as the old plain row — name, weekday, start time — plus
+  /// the room · teacher line when either exists.
+  Widget _nextClassBanner(
+    BuildContext context,
+    ({Subject subject, DateTime date}) next,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final details = [
+      if (next.subject.room.isNotEmpty) next.subject.room,
+      if (next.subject.teacher.isNotEmpty) next.subject.teacher,
+    ].join(' · ');
+    return Container(
+      key: const ValueKey('next-class-banner'),
+      padding: const EdgeInsets.all(AppSpacing.s12),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.schedule_outlined,
+            color: scheme.primary,
+            size: 20,
+          ),
+          const SizedBox(width: AppSpacing.s8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'NEXT CLASS',
+                  style: AppText.micro.copyWith(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  '${next.subject.name} · ${weekdayName(next.date.weekday)} ${formatMinutes(next.subject.startMin)}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                if (details.isNotEmpty)
+                  Text(
+                    details,
+                    style: AppText.caption.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Label/value row with a leading color dot (the subject's own
+  /// color for class rows; the section color for exams/deadlines).
+  /// Same label/value data as the old plain [_row].
+  Widget _dotRow({
+    required Color color,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            margin: const EdgeInsets.only(top: 5, right: 8),
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(child: Text(label)),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Empty state under the calendar grid: icon + bold title, with
+  /// an optional second line. The strings are the card's exact
+  /// honest empty states — only the styling is new.
+  Widget _emptyRow(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String? subtitle,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+        const SizedBox(width: AppSpacing.s8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              if (subtitle != null) Text(subtitle),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Icon + bold title for a card section (Exams, Deadlines, the
+  /// week graph). Icons are Material icons — never emoji.
+  Widget _sectionHeader(
+    BuildContext context,
+    IconData icon,
+    Color color,
+    String title,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 6),
+        // Expanded so a long title wraps instead of overflowing
+        // the row (the test font measures wider than Inter).
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// "Your week at a glance" — a 7-bar chart of REAL class hours
+  /// per day (Mon–Sun) from [classHoursByWeekday]: each bar is the
+  /// subject's (endMin - startMin) summed over its meeting days.
+  /// Today is the solid emerald bar; other days are the same color
+  /// at 45% alpha. The total line is the real weekly sum + the real
+  /// meeting count. With no subjects (or no scheduled hours) there
+  /// is no fake chart — the honest empty state instead. Same
+  /// container/bar pattern as the allowance card's monthly chart.
+  Widget _weekLoadGraph(BuildContext context, DateTime now) {
+    final scheme = Theme.of(context).colorScheme;
+    final hours = classHoursByWeekday(_subjects);
+    final total = totalWeeklyClassHours(_subjects);
+    final count = weeklyClassCount(_subjects);
+    final maxHours =
+        hours.fold<double>(0, (m, h) => h > m ? h : m);
+    final todayIndex = now.weekday - 1; // Mon = 0 .. Sun = 6.
+    const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          context,
+          Icons.bar_chart_outlined,
+          scheme.primary,
+          'Your week at a glance',
+        ),
         const SizedBox(height: AppSpacing.s4),
-        const Text('Assignment Deadlines',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        if (upcomingAssignments.isEmpty)
-          const Text('No upcoming assignments.')
-        else
-          for (final a in upcomingAssignments.take(2))
-            _row(subjectName(a.subjectId),
-                '${a.title} · ${formatDate(a.due)}'),
-        const SizedBox(height: AppSpacing.s8),
-        OutlinedButton.icon(
-          onPressed: () => _open(const ClassesScreen()),
-          icon: const Icon(Icons.calendar_month_outlined, size: 18),
-          label: const Text('View Timetable'),
+        Container(
+          key: const ValueKey('week-load-graph'),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: scheme.outline.withValues(alpha: 0.6),
+            ),
+          ),
+          child: _subjects.isEmpty
+              ? Text(
+                  'No subjects yet — add your classes to see your weekly load.',
+                  style: AppText.caption.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                )
+              : total <= 0
+                  ? Text(
+                      'No class hours scheduled this week.',
+                      style: AppText.caption.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: 96,
+                          child: Stack(
+                            children: [
+                              Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  for (var i = 0; i < 3; i++)
+                                    Container(
+                                      height: 1,
+                                      color: scheme.outline
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                ],
+                              ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  for (var i = 0; i < 7; i++)
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            hours[i] > 0
+                                                ? formatHours(hours[i])
+                                                : '',
+                                            style: AppText.micro.copyWith(
+                                              color:
+                                                  scheme.onSurfaceVariant,
+                                              // Tight line height: the
+                                              // test font measures ~2x
+                                              // tall, which overflowed
+                                              // the 96px chart box.
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Container(
+                                            height: maxHours > 0
+                                                ? 56 * (hours[i] / maxHours)
+                                                : 2,
+                                            width: 18,
+                                            decoration: BoxDecoration(
+                                              color: i == todayIndex
+                                                  ? scheme.primary
+                                                  : scheme.primary
+                                                      .withValues(alpha: 0.45),
+                                              borderRadius:
+                                                  BorderRadius.circular(5),
+                                            ),
+                                          ),
+                                          const SizedBox(height: AppSpacing.s2),
+                                          Text(
+                                            dayLetters[i],
+                                            style: AppText.micro.copyWith(
+                                              color: i == todayIndex
+                                                  ? scheme.primary
+                                                  : null,
+                                              fontWeight: i == todayIndex
+                                                  ? FontWeight.w700
+                                                  : null,
+                                              // Same tight line height
+                                              // as the value label.
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.s4),
+                        Text(
+                          '${formatHours(total)} total · $count ${count == 1 ? 'class' : 'classes'} this week',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
         ),
       ],
     );

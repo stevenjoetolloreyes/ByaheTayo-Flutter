@@ -1141,6 +1141,48 @@ List<Subject> classesOnDay(List<Subject> subjects, int weekday) {
   return null;
 }
 
+/// Class hours per weekday (Mon = index 0 .. Sun = index 6) from real
+/// [Subject] data: each subject contributes (endMin - startMin) on
+/// every day in its [Subject.days]. Days with no classes are 0;
+/// nothing is invented — with no subjects every day is 0. A subject
+/// with endMin <= startMin (bad data) or a day outside 1..7
+/// contributes nothing.
+List<double> classHoursByWeekday(List<Subject> subjects) {
+  final hours = List<double>.filled(7, 0);
+  for (final s in subjects) {
+    final duration = (s.endMin - s.startMin).clamp(0, 24 * 60) / 60.0;
+    if (duration <= 0) continue;
+    for (final day in s.days) {
+      if (day < 1 || day > 7) continue;
+      hours[day - 1] += duration;
+    }
+  }
+  return hours;
+}
+
+/// Total class meetings this week (a subject meeting 3 days = 3).
+/// Only days in 1..7 count, and only for subjects with a positive
+/// duration — matching [classHoursByWeekday], so a subject that
+/// contributes no hours never counts as a meeting.
+int weeklyClassCount(List<Subject> subjects) {
+  var count = 0;
+  for (final s in subjects) {
+    if (s.endMin - s.startMin <= 0) continue;
+    count += s.days.where((d) => d >= 1 && d <= 7).length;
+  }
+  return count;
+}
+
+/// Total class hours this week (sum of [classHoursByWeekday]).
+double totalWeeklyClassHours(List<Subject> subjects) =>
+    classHoursByWeekday(subjects).fold(0.0, (a, b) => a + b);
+
+/// Short hours label: 2 -> '2h', 5.5 -> '5.5h'.
+String formatHours(double hours) {
+  if (hours == hours.truncateToDouble()) return '${hours.toInt()}h';
+  return '${hours.toStringAsFixed(1)}h';
+}
+
 ({int total, int present, int absent, int late, int excused, int half, double percent})
 attendanceStats(List<AttendanceRecord> records) {
   var present = 0;
