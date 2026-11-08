@@ -342,12 +342,19 @@ bool popularRouteMatchesOperator(String? routeOperator, String chip) {
   return route.contains(want) || want.contains(route);
 }
 
-/// Filters [routes] by vehicle chip and (Bus only) operator chip.
+/// Filters [routes] by vehicle, operator, region, and fare status.
 /// Pure, so the filter behaviour is unit-testable without widgets.
+/// The categories combine (AND). The operator chip only applies
+/// while the Bus vehicle chip is active (see the operator row);
+/// the region match is either endpoint; the fare status is
+/// [popularRouteFareStatus].
 List<PopularRoute> filterPopularRoutes(
   List<PopularRoute> routes, {
   required String vehicle,
   required String operator,
+  String region = 'All',
+  String fareStatus = 'All',
+  List<BusStop> busStops = const [],
 }) {
   return routes.where((route) {
     if (vehicle != 'All' && route.vehicle != vehicle) return false;
@@ -356,8 +363,96 @@ List<PopularRoute> filterPopularRoutes(
         !popularRouteMatchesOperator(route.operator, operator)) {
       return false;
     }
+    if (!popularRouteMatchesRegion(route, region, busStops)) {
+      return false;
+    }
+    if (fareStatus != 'All' &&
+        popularRouteFareStatus(route) != fareStatus) {
+      return false;
+    }
     return true;
   }).toList();
+}
+
+/// Fare status of a route — the same three states the breakdown
+/// sheet shows (see _openRouteSheet's fareStatus): 'Verified' for
+/// the Oct 16, 2026 verified fares, 'Admin-set' for a fare Steven
+/// set himself, 'Not set' when no fare exists. An admin-set fare
+/// is its own status, not 'Estimate': it is a real set fare (the
+/// sheet says "Fare entered by an admin"), and the VERIFIED badge
+/// is suppressed for it — but it is still a fare, never an
+/// estimate. 'Estimate' is not a fare status: it is whether the
+/// calculator can compute a number for a no-fare route, and the
+/// sheet already shows it on open.
+const fareStatusFilters = <String>['All', 'Verified', 'Admin-set', 'Not set'];
+
+/// The fare status of [route] for the fare filter: 'Verified',
+/// 'Admin-set', or 'Not set' — the same three states the
+/// breakdown sheet shows. Pure, so the filter behaviour is
+/// unit-testable without widgets.
+String popularRouteFareStatus(PopularRoute route) {
+  if (route.fare == null) return 'Not set';
+  if (route.fareLabel == 'Verified bus fare') return 'Verified';
+  return 'Admin-set';
+}
+
+/// Region of a route endpoint name, or null when the name is not a
+/// known place (built-in hub, admin stop, or bundled place).
+/// Built-ins win on a name clash, then admin stops, then bundled
+/// places — the same precedence as [resolveHub]. The region is
+/// the place's [Hub.region] (the same string the Trip card shows
+/// after the '·', and the values the add-stop dialog offers) —
+/// never invented: a terminal name like 'Laoag Partas Terminal'
+/// has no region, so its route only ever matches 'All'.
+String? regionOfRouteEndpoint(String name, List<BusStop> busStops) {
+  return resolveHub(name, busStops)?.region;
+}
+
+/// Whether [route] touches [region] at either endpoint. 'All'
+/// matches everything (including routes with an unknown endpoint
+/// region); a named region matches when the origin's OR the
+/// destination's region equals it. Either endpoint (not just the
+/// origin): a route connects two places, and a user browsing a
+/// region wants every route that touches it.
+bool popularRouteMatchesRegion(
+  PopularRoute route,
+  String region,
+  List<BusStop> busStops,
+) {
+  if (region == 'All') return true;
+  return regionOfRouteEndpoint(route.from, busStops) == region ||
+      regionOfRouteEndpoint(route.to, busStops) == region;
+}
+
+/// Regions present in [routes] (either endpoint), in first-seen
+/// order. A region with no route in the list is never offered —
+/// the row only ever shows regions that lead somewhere.
+List<String> routeRegions(
+  List<PopularRoute> routes,
+  List<BusStop> busStops,
+) {
+  final seen = <String>{};
+  final out = <String>[];
+  for (final route in routes) {
+    for (final endpoint in [route.from, route.to]) {
+      final region = regionOfRouteEndpoint(endpoint, busStops);
+      if (region != null && seen.add(region)) out.add(region);
+    }
+  }
+  return out;
+}
+
+/// 'N routes' / 'N of M' label for the Popular Routes header.
+/// Just the count when nothing is filtered; 'X of Y' when a
+/// filter hides routes, so the filter is visible at a glance.
+/// The filtered form drops the noun: the header is 350px wide on
+/// a 390px phone and 'Popular Routes' already takes 227px, so
+/// '1 of 7 routes' (161px) overflows the row by 39px — '1 of 7'
+/// fits, and the section title supplies the noun. Pure, so the
+/// label is unit-testable.
+String routesCountLabel({required int filtered, required int total}) {
+  if (filtered == total) return '$total ${total == 1 ? 'route' : 'routes'}';
+  return '$filtered of $total';
 }
 
 /// One admin-added route as a Popular Route (operator + fare are
@@ -965,9 +1060,12 @@ class _FaresTabState extends State<FaresTab> {
 
   /// Popular Routes filters (preview chips). The operator filter
   /// only applies while the Bus vehicle chip is active; picking
-  /// any other vehicle resets it to All.
+  /// any other vehicle resets it to All. The region and fare
+  /// filters combine with the vehicle/operator filters (AND).
   String _vehicleFilter = 'All';
   String _operatorFilter = 'All';
+  String _regionFilter = 'All';
+  String _fareStatusFilter = 'All';
 
   bool get _isAdmin => isAdminUser(widget.currentUser);
 
@@ -1342,7 +1440,125 @@ class _FaresTabState extends State<FaresTab> {
     _allPopularRoutes,
     vehicle: _vehicleFilter,
     operator: _operatorFilter,
+    region: _regionFilter,
+    fareStatus: _fareStatusFilter,
+    busStops: _busStops,
   );
+
+  /// Regions offered by the region row: the distinct regions of
+  /// the full Popular Routes list (either endpoint), in
+  /// first-seen order. Derived from the FULL list, not the
+  /// filtered one, so the row stays stable while a region is
+  /// picked. A region with no route in the list is never offered.
+  List<String> get _regionOptions =>
+      routeRegions(_allPopularRoutes, _busStops);
+
+  /// True when any Popular Routes filter is active.
+  bool get _hasActiveFilters =>
+      _vehicleFilter != 'All' ||
+      _operatorFilter != 'All' ||
+      _regionFilter != 'All' ||
+      _fareStatusFilter != 'All';
+
+  /// Resets all four Popular Routes filters to All.
+  void _clearFilters() {
+    setState(() {
+      _vehicleFilter = 'All';
+      _operatorFilter = 'All';
+      _regionFilter = 'All';
+      _fareStatusFilter = 'All';
+    });
+  }
+
+  /// Empty-state message for the filtered Popular Routes list.
+  /// Names the most specific active filter (operator, then
+  /// region, then fare status, then vehicle) — the existing
+  /// 'No Partas routes yet.' / 'No van routes yet.' messages are
+  /// kept verbatim.
+  String _emptyRoutesMessage() {
+    if (_vehicleFilter == 'Bus' && _operatorFilter != 'All') {
+      return 'No $_operatorFilter routes yet.';
+    }
+    if (_regionFilter != 'All') {
+      return 'No routes in $_regionFilter yet.';
+    }
+    if (_fareStatusFilter != 'All') {
+      if (_fareStatusFilter == 'Verified') {
+        return 'No verified routes yet.';
+      }
+      if (_fareStatusFilter == 'Admin-set') {
+        return 'No admin-set routes yet.';
+      }
+      return 'No routes without a fare yet.';
+    }
+    if (_vehicleFilter == 'All') return 'No routes yet.';
+    return 'No ${_vehicleFilter.toLowerCase()} routes yet.';
+  }
+
+  /// One filter chip row (vehicle / operator / region / fare):
+  /// an optional small label + a horizontally scrolling row of
+  /// ChoiceChips in the existing Fares style. The rows scroll
+  /// instead of wrapping, so they never overflow a narrow phone
+  /// (the preview's pill nav overflowed a 390px phone by ~100px).
+  /// [enabled] false greys the chips out (the operator row, when
+  /// the vehicle is not Bus — operators only apply to Bus
+  /// routes); the row stays visible so the category is
+  /// discoverable. [rowKey] is a test hook for tapping one row's
+  /// 'All' chip when several rows carry one.
+  Widget _filterChipRow({
+    Key? rowKey,
+    String? label,
+    required List<String> options,
+    required String selected,
+    required ValueChanged<String> onSelected,
+    bool enabled = true,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      key: rowKey,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label != null) ...[
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.s8),
+        ],
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final option in options)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(option),
+                    selected: selected == option,
+                    showCheckmark: false,
+                    selectedColor: kFaresAccent,
+                    backgroundColor: _faresCardColor(context),
+                    side: BorderSide(
+                      color: selected == option
+                          ? kFaresAccent
+                          : scheme.outline,
+                    ),
+                    labelStyle: TextStyle(
+                      color: selected == option ? Colors.white : null,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: enabled
+                        ? (_) => onSelected(option)
+                        : null,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   /// Loads a hub route into the calculator: hub-origin mode with
   /// From/To set to the route's hubs, so the distance and fare
@@ -2297,97 +2513,80 @@ class _FaresTabState extends State<FaresTab> {
                 const Text('Popular Routes', style: kFaresCardHeading),
                 const Spacer(),
                 Text(
-                  '${filteredRoutes.length} ${filteredRoutes.length == 1 ? 'route' : 'routes'}',
+                  routesCountLabel(
+                    filtered: filteredRoutes.length,
+                    total: _allPopularRoutes.length,
+                  ),
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.s8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final vehicle in vehicleFilters)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(vehicle),
-                        selected: _vehicleFilter == vehicle,
-                        showCheckmark: false,
-                        selectedColor: kFaresAccent,
-                        backgroundColor: _faresCardColor(context),
-                        side: BorderSide(
-                          color: _vehicleFilter == vehicle
-                              ? kFaresAccent
-                              : scheme.outline,
-                        ),
-                        labelStyle: TextStyle(
-                          color: _vehicleFilter == vehicle
-                              ? Colors.white
-                              : null,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        onSelected: (_) {
-                          setState(() {
-                            _vehicleFilter = vehicle;
-                            if (vehicle != 'Bus') _operatorFilter = 'All';
-                          });
-                        },
-                      ),
-                    ),
-                ],
-              ),
+            _filterChipRow(
+              rowKey: const ValueKey('vehicle-filter-row'),
+              options: vehicleFilters,
+              selected: _vehicleFilter,
+              onSelected: (vehicle) {
+                setState(() {
+                  _vehicleFilter = vehicle;
+                  if (vehicle != 'Bus') _operatorFilter = 'All';
+                });
+              },
             ),
-            if (_vehicleFilter == 'Bus') ...[
-              const SizedBox(height: AppLayout.cardGap),
-              Text(
-                'Bus operator — Luzon, city & provincial',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
+            // Nov 8, 2026 (Steven: "dapat may Filter / Category
+            // dito sa Popular Routes"): the operator row is a
+            // proper, always-visible category now — it used to hide
+            // behind the Bus chip. It only APPLIES to Bus routes,
+            // so when another vehicle is picked the chips disable
+            // (and the selection resets to All, as before) instead
+            // of vanishing.
+            const SizedBox(height: AppLayout.cardGap),
+            _filterChipRow(
+              rowKey: const ValueKey('operator-filter-row'),
+              label: 'Bus operator — Luzon, city & provincial',
+              options: busOperatorFilters,
+              selected: _operatorFilter,
+              onSelected: (operator) {
+                setState(() => _operatorFilter = operator);
+              },
+              enabled: _vehicleFilter == 'Bus',
+            ),
+            const SizedBox(height: AppLayout.cardGap),
+            _filterChipRow(
+              rowKey: const ValueKey('region-filter-row'),
+              label: 'Region',
+              options: ['All', ..._regionOptions],
+              selected: _regionFilter,
+              onSelected: (region) {
+                setState(() => _regionFilter = region);
+              },
+            ),
+            const SizedBox(height: AppLayout.cardGap),
+            _filterChipRow(
+              rowKey: const ValueKey('fare-filter-row'),
+              label: 'Fare',
+              options: fareStatusFilters,
+              selected: _fareStatusFilter,
+              onSelected: (fareStatus) {
+                setState(() => _fareStatusFilter = fareStatus);
+              },
+            ),
+            if (_hasActiveFilters) ...[
               const SizedBox(height: AppSpacing.s8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final operator in busOperatorFilters)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(operator),
-                          selected: _operatorFilter == operator,
-                          showCheckmark: false,
-                          selectedColor: kFaresAccent,
-                          backgroundColor: _faresCardColor(context),
-                          side: BorderSide(
-                            color: _operatorFilter == operator
-                                ? kFaresAccent
-                                : scheme.outline,
-                          ),
-                          labelStyle: TextStyle(
-                            color: _operatorFilter == operator
-                                ? Colors.white
-                                : null,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          onSelected: (_) {
-                            setState(() => _operatorFilter = operator);
-                          },
-                        ),
-                      ),
-                  ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.clear, size: 18),
+                  label: const Text('Clear filters'),
+                  onPressed: _clearFilters,
                 ),
               ),
             ],
             const SizedBox(height: AppLayout.cardGap),
             if (filteredRoutes.isEmpty)
               Text(
-                _vehicleFilter == 'Bus' && _operatorFilter != 'All'
-                    ? 'No $_operatorFilter routes yet.'
-                    : _vehicleFilter == 'All'
-                    ? 'No routes yet.'
-                    : 'No ${_vehicleFilter.toLowerCase()} routes yet.',
+                _emptyRoutesMessage(),
                 style: Theme.of(context).textTheme.bodyMedium
                     ?.copyWith(color: scheme.onSurfaceVariant),
               )

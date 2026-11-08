@@ -5,6 +5,7 @@
 // route list never carries a sample fare.
 import 'package:estudyantego/features/custom_routes.dart';
 import 'package:estudyantego/features/fares_tab.dart';
+import 'package:estudyantego/features/route_fare_overrides.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -214,6 +215,153 @@ void main() {
       expect(filtered.length, 2);
       expect(filtered, contains(converted));
     });
+
+    test('region filter matches either endpoint', () {
+      expect(regionOfRouteEndpoint('Cabugao', []), 'Ilocos Sur');
+      expect(regionOfRouteEndpoint('Vigan Bus Terminal', []), 'Ilocos Sur');
+      expect(regionOfRouteEndpoint('Laoag Terminal', []), 'Ilocos Norte');
+      // Terminal names are not places: no region is invented.
+      expect(regionOfRouteEndpoint('Laoag Partas Terminal', []), isNull);
+      expect(regionOfRouteEndpoint('Cubao Partas Terminal', []), isNull);
+      expect(
+        routeRegions(popularRoutes, []),
+        ['Ilocos Sur', 'Ilocos Norte'],
+      );
+      // Ilocos Sur touches five routes (Laoag → Vigan via its
+      // Vigan destination); Ilocos Norte touches one.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          region: 'Ilocos Sur',
+        ).length,
+        5,
+      );
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          region: 'Ilocos Norte',
+        ).length,
+        1,
+      );
+      // The two terminal routes have no region: only 'All' shows
+      // them.
+      final ilocos = filterPopularRoutes(
+        popularRoutes,
+        vehicle: 'All',
+        operator: 'All',
+        region: 'Ilocos Sur',
+      );
+      expect(
+        ilocos.map((r) => r.from),
+        isNot(contains('Laoag Partas Terminal')),
+      );
+    });
+
+    test('fare status reuses the breakdown sheet states', () {
+      for (final route in popularRoutes) {
+        if (route.fareLabel == 'Verified bus fare') {
+          expect(popularRouteFareStatus(route), 'Verified');
+        } else {
+          expect(popularRouteFareStatus(route), 'Not set');
+        }
+      }
+      // An admin override turns a verified fare into Admin-set
+      // (the VERIFIED badge is suppressed for it).
+      final overridden = popularRoutes.first.applyOverride(
+        const RouteFareOverride(
+          routeKey: 'Cabugao|Vigan Bus Terminal',
+          fare: 55,
+        ),
+      );
+      expect(popularRouteFareStatus(overridden), 'Admin-set');
+      // A custom route's own fare is admin-entered, also Admin-set.
+      const custom = CustomRoute(
+        from: 'Cabugao',
+        to: 'Vigan Bus Terminal',
+        operator: 'Partas',
+        vehicle: 'Bus',
+        fare: 60,
+      );
+      expect(
+        popularRouteFareStatus(popularRouteFromCustomRoute(custom)),
+        'Admin-set',
+      );
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          fareStatus: 'Verified',
+        ).length,
+        3,
+      );
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          fareStatus: 'Admin-set',
+        ),
+        isEmpty,
+      );
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          fareStatus: 'Not set',
+        ).length,
+        4,
+      );
+    });
+
+    test('filters combine across categories', () {
+      // Bus + Ilocos Sur + Verified: the three verified routes.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'Bus',
+          operator: 'All',
+          region: 'Ilocos Sur',
+          fareStatus: 'Verified',
+        ).length,
+        3,
+      );
+      // Ilocos Norte + Verified: the Laoag → Vigan route has no
+      // fare, so nothing matches.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'All',
+          operator: 'All',
+          region: 'Ilocos Norte',
+          fareStatus: 'Verified',
+        ),
+        isEmpty,
+      );
+      // Partas + Ilocos Sur: the Partas route has no region.
+      expect(
+        filterPopularRoutes(
+          popularRoutes,
+          vehicle: 'Bus',
+          operator: 'Partas',
+          region: 'Ilocos Sur',
+        ),
+        isEmpty,
+      );
+    });
+
+    test('routesCountLabel shows the total when unfiltered', () {
+      expect(routesCountLabel(filtered: 7, total: 7), '7 routes');
+      expect(routesCountLabel(filtered: 1, total: 1), '1 route');
+      expect(routesCountLabel(filtered: 1, total: 7), '1 of 7');
+      expect(routesCountLabel(filtered: 0, total: 7), '0 of 7');
+      expect(routesCountLabel(filtered: 0, total: 1), '0 of 1');
+    });
   });
 
   group('Fares tab restyle widgets', () {
@@ -234,14 +382,30 @@ void main() {
       expect(find.text('Know your fare before you go'), findsOneWidget);
       expect(find.text('Popular Routes'), findsOneWidget);
       expect(find.text('7 routes'), findsOneWidget);
-      for (final label in ['All', 'Bus', 'Van', 'Jeepney', 'Tricycle']) {
+      // Four filter rows, each carrying its own All chip.
+      expect(find.widgetWithText(ChoiceChip, 'All'), findsNWidgets(4));
+      for (final label in ['Bus', 'Van', 'Jeepney', 'Tricycle']) {
         expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
       }
-      // Bus operator row only appears with the Bus chip active.
+      // The operator row is a proper category now — always
+      // visible, not hidden behind the Bus chip.
       expect(
         find.text('Bus operator — Luzon, city & provincial'),
-        findsNothing,
+        findsOneWidget,
       );
+      // Region + fare rows, with only the regions that have routes.
+      expect(find.text('Region'), findsOneWidget);
+      expect(find.text('Fare'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Ilocos Sur'), findsOneWidget);
+      expect(
+        find.widgetWithText(ChoiceChip, 'Ilocos Norte'),
+        findsOneWidget,
+      );
+      for (final label in ['Verified', 'Admin-set', 'Not set']) {
+        expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+      }
+      // No filter active, so no Clear filters button.
+      expect(find.text('Clear filters'), findsNothing);
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
       expect(find.text('₱60'), findsOneWidget);
       expect(find.text('₱48 student'), findsOneWidget);
@@ -251,51 +415,237 @@ void main() {
       expect(find.text('Find routes'), findsNothing);
     });
 
-    testWidgets('Bus chip reveals the operator row; empty states are honest', (
+    testWidgets(
+      'operator row is always visible; switching vehicle disables it; '
+      'empty states are honest',
+      (tester) async {
+        await pumpTab(tester);
+        // The operator row is a proper category now — visible from
+        // the start, not hidden behind the Bus chip.
+        expect(
+          find.text('Bus operator — Luzon, city & provincial'),
+          findsOneWidget,
+        );
+        for (final label in ['Partas', 'GMW Trans', 'GV Florida']) {
+          expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+        }
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
+        await tester.pump();
+        await tester.ensureVisible(
+          find.widgetWithText(ChoiceChip, 'GV Florida'),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ChoiceChip, 'GV Florida'));
+        await tester.pump();
+        expect(find.text('No GV Florida routes yet.'), findsOneWidget);
+        expect(find.text('0 of 7'), findsOneWidget);
+        await tester.ensureVisible(
+          find.widgetWithText(ChoiceChip, 'GMW Trans'),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ChoiceChip, 'GMW Trans'));
+        await tester.pump();
+        expect(find.text('1 of 7'), findsOneWidget);
+        expect(
+          find.text('Bantay GMW Terminal → Tuguegarao GMW Terminal'),
+          findsOneWidget,
+        );
+        // Switching vehicle resets the operator filter to All and
+        // DISABLES the row (it stays visible — operators only
+        // apply to Bus routes).
+        await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Van'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Van'));
+        await tester.pump();
+        expect(
+          find.text('Bus operator — Luzon, city & provincial'),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<ChoiceChip>(
+                find.widgetWithText(ChoiceChip, 'Partas'),
+              )
+              .onSelected,
+          isNull,
+        );
+        expect(find.text('No van routes yet.'), findsOneWidget);
+        await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Bus'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
+        await tester.pump();
+        expect(find.text('7 routes'), findsOneWidget);
+      },
+    );
+
+    testWidgets('region filter narrows the list by either endpoint', (
       tester,
     ) async {
       await pumpTab(tester);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
+      // Only the regions with routes are offered.
+      expect(find.widgetWithText(ChoiceChip, 'Ilocos Sur'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Ilocos Norte'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'La Union'), findsNothing);
+      // Ilocos Norte touches one route (Laoag Terminal → Vigan).
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Ilocos Norte'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Norte'));
       await tester.pump();
+      expect(find.text('1 of 7'), findsOneWidget);
       expect(
-        find.text('Bus operator — Luzon, city & provincial'),
+        find.text('Laoag Terminal → Vigan Bus Terminal'),
         findsOneWidget,
       );
-      // 'All' is skipped here: the vehicle row and the operator row
-      // both carry an All chip once the operator row is visible.
-      for (final label in ['Partas', 'GMW Trans', 'GV Florida']) {
-        expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
-      }
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'GV Florida'));
+      expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
+      // Ilocos Sur touches five (the Laoag → Vigan route too, via
+      // its Vigan destination).
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Ilocos Sur'),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'GV Florida'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Sur'));
       await tester.pump();
-      expect(find.text('No GV Florida routes yet.'), findsOneWidget);
-      expect(find.text('0 routes'), findsOneWidget);
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'GMW Trans'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'GMW Trans'));
-      await tester.pump();
-      expect(find.text('1 route'), findsOneWidget);
+      expect(find.text('5 of 7'), findsOneWidget);
+      expect(
+        find.text('Laoag Terminal → Vigan Bus Terminal'),
+        findsOneWidget,
+      );
       expect(
         find.text('Bantay GMW Terminal → Tuguegarao GMW Terminal'),
-        findsOneWidget,
-      );
-      // Switching vehicle resets the operator filter to All.
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Van'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Van'));
-      await tester.pump();
-      expect(
-        find.text('Bus operator — Luzon, city & provincial'),
         findsNothing,
       );
-      expect(find.text('No van routes yet.'), findsOneWidget);
+      // Back to All via the region row's own All chip.
+      final regionAll = find.descendant(
+        of: find.byKey(const ValueKey('region-filter-row')),
+        matching: find.widgetWithText(ChoiceChip, 'All'),
+      );
+      await tester.ensureVisible(regionAll);
+      await tester.pumpAndSettle();
+      await tester.tap(regionAll);
+      await tester.pump();
+      expect(find.text('7 routes'), findsOneWidget);
+    });
+
+    testWidgets('fare status filter shows verified / not-set routes', (
+      tester,
+    ) async {
+      await pumpTab(tester);
+      final fareAll = find.descendant(
+        of: find.byKey(const ValueKey('fare-filter-row')),
+        matching: find.widgetWithText(ChoiceChip, 'All'),
+      );
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Verified'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Verified'));
+      await tester.pump();
+      expect(find.text('3 of 7'), findsOneWidget);
+      expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
+      expect(find.text('Cabugao → San Juan, Ilocos Sur'), findsOneWidget);
+      expect(find.text('Sinait → Cabugao'), findsOneWidget);
+      expect(
+        find.text('Vigan Bus Terminal → San Juan, Ilocos Sur'),
+        findsNothing,
+      );
+      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Not set'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Not set'));
+      await tester.pump();
+      expect(find.text('4 of 7'), findsOneWidget);
+      expect(
+        find.text('Vigan Bus Terminal → San Juan, Ilocos Sur'),
+        findsOneWidget,
+      );
+      expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
+      // No admin-set route exists in the seeded list.
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Admin-set'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Admin-set'));
+      await tester.pump();
+      expect(find.text('0 of 7'), findsOneWidget);
+      expect(find.text('No admin-set routes yet.'), findsOneWidget);
+      await tester.ensureVisible(fareAll);
+      await tester.pumpAndSettle();
+      await tester.tap(fareAll);
+      await tester.pump();
+      expect(find.text('7 routes'), findsOneWidget);
+    });
+
+    testWidgets('clear filters resets all four categories', (tester) async {
+      await pumpTab(tester);
+      expect(find.text('Clear filters'), findsNothing);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Verified'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Verified'));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Ilocos Sur'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Sur'));
+      await tester.pump();
+      // Bus + Ilocos Sur + Verified: the three verified routes.
+      expect(find.text('3 of 7'), findsOneWidget);
+      expect(find.text('Clear filters'), findsOneWidget);
+      await tester.ensureVisible(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear filters'));
+      await tester.pump();
+      expect(find.text('7 routes'), findsOneWidget);
+      expect(find.text('Clear filters'), findsNothing);
+    });
+
+    testWidgets('narrow phone: all four filter rows fit without overflow', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await pumpTab(tester);
+      // All four rows render on a 390px phone (the preview's pill
+      // nav overflowed this width by ~100px).
+      for (final label in [
+        'Bus operator — Luzon, city & provincial',
+        'Region',
+        'Fare',
+      ]) {
+        await tester.ensureVisible(find.text(label));
+        await tester.pumpAndSettle();
+        expect(find.text(label), findsOneWidget);
+      }
+      // Interact with every row: the rows scroll, they never
+      // overflow.
       await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Bus'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ChoiceChip, 'Bus'));
       await tester.pump();
-      expect(find.text('7 routes'), findsOneWidget);
+      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Partas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Partas'));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Ilocos Norte'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Ilocos Norte'));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.widgetWithText(ChoiceChip, 'Verified'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Verified'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('tapping a verified route opens its breakdown sheet', (
