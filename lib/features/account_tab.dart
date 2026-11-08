@@ -15,6 +15,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../theme_preference.dart';
 import 'about_screen.dart';
 import 'ad_service.dart';
 import 'admin_access.dart';
@@ -69,8 +70,8 @@ const kAccountCardHeading =
 class AccountTab extends StatefulWidget {
   const AccountTab({
     super.key,
-    required this.themeMode,
-    required this.onThemeModeChanged,
+    required this.themePreference,
+    required this.onThemePreferenceChanged,
     required this.authService,
     required this.user,
     this.profile,
@@ -89,8 +90,8 @@ class AccountTab extends StatefulWidget {
     required this.onSignedOut,
   });
 
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
+  final AppThemePreference themePreference;
+  final ValueChanged<AppThemePreference> onThemePreferenceChanged;
 
   /// Auth backend (Firebase implementation in production, fake in
   /// tests). Never null: when Firebase is not configured the service
@@ -274,34 +275,36 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
-  String _themeModeLabel(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
+  String _themePreferenceLabel(AppThemePreference preference) {
+    switch (preference) {
+      case AppThemePreference.light:
         return 'Light';
-      case ThemeMode.dark:
+      case AppThemePreference.dark:
         return 'Dark';
-      case ThemeMode.system:
+      case AppThemePreference.system:
         return 'System';
+      case AppThemePreference.timeBased:
+        return 'Time Based';
     }
   }
 
   Future<void> _pickTheme() async {
-    final selected = await showDialog<ThemeMode>(
+    final selected = await showDialog<AppThemePreference>(
       context: context,
       builder: (context) => SimpleDialog(
         title: const Text('Theme Settings'),
         children: [
-          RadioGroup<ThemeMode>(
-            groupValue: widget.themeMode,
+          RadioGroup<AppThemePreference>(
+            groupValue: widget.themePreference,
             onChanged: (value) {
               if (value != null) Navigator.of(context).pop(value);
             },
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final mode in ThemeMode.values)
-                  RadioListTile<ThemeMode>(
-                    title: Text(_themeModeLabel(mode)),
+                for (final mode in AppThemePreference.values)
+                  RadioListTile<AppThemePreference>(
+                    title: Text(_themePreferenceLabel(mode)),
                     value: mode,
                   ),
               ],
@@ -310,7 +313,7 @@ class _AccountTabState extends State<AccountTab> {
         ],
       ),
     );
-    if (selected != null) widget.onThemeModeChanged(selected);
+    if (selected != null) widget.onThemePreferenceChanged(selected);
   }
 
   Future<void> _showTransactionHistory() async {
@@ -609,7 +612,7 @@ class _AccountTabState extends State<AccountTab> {
             _infoTile(
               icon: Icons.brightness_6_outlined,
               title: 'Theme Settings',
-              subtitle: _themeModeLabel(widget.themeMode),
+              subtitle: _themePreferenceLabel(widget.themePreference),
               onTap: _pickTheme,
               glass: glass,
             ),

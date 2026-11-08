@@ -16,6 +16,7 @@
 import 'package:estudyantego/features/account_tab.dart';
 import 'package:estudyantego/features/ios_glass.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/theme_preference.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -52,8 +53,8 @@ Future<void> _pumpAccount(
     MaterialApp(
       home: Scaffold(
         body: AccountTab(
-          themeMode: ThemeMode.light,
-          onThemeModeChanged: (_) {},
+          themePreference: AppThemePreference.light,
+          onThemePreferenceChanged: (_) {},
           authService: FakeAuthService(user: user ?? _user),
           user: user ?? _user,
           permissionService: FakePermissionService(),

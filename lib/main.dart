@@ -66,11 +66,13 @@ import 'features/onboarding/splash_screen.dart';
 import 'features/onboarding/verify_email_screen.dart';
 import 'features/student_tab.dart';
 import 'features/student/student_theme.dart';
+import 'theme_preference.dart';
 
 /// SharedPreferences key for the sidebar collapsed state.
 const _sidebarCollapsedKey = 'byahetayo_sidebar_collapsed';
 
-/// SharedPreferences key for the theme mode ('system', 'light', 'dark').
+/// SharedPreferences key for the theme preference
+/// ('system', 'light', 'dark', 'timeBased' — see theme_preference.dart).
 const _themeModeKey = 'byahetayo_theme_mode';
 
 /// Production-safe startup with the ONE diagnostics system.
@@ -201,13 +203,18 @@ Future<void> main() async {
 
   runZonedGuarded(
     () {
+      // Theme preference is read once at startup; Time Based resolves
+      // against the clock right now and re-evaluates while running
+      // (resume + periodic check in _EstudyanteGOAppState).
+      final themePreference =
+          appThemePreferenceFromString(prefs?.getString(_themeModeKey));
       runApp(
         EstudyanteGOApp(
           initialSidebarCollapsed:
               prefs?.getBool(_sidebarCollapsedKey) ?? false,
-          initialThemeMode: _themeModeFromString(
-            prefs?.getString(_themeModeKey),
-          ),
+          initialThemePreference: themePreference,
+          initialThemeMode:
+              resolveThemeMode(themePreference, DateTime.now()),
           authService: FirebaseAuthService(isConfigured: firebaseConfigured),
         ),
       );
@@ -219,21 +226,6 @@ Future<void> main() async {
     },
     diagnosticsService.handleZoneError,
   );
-}
-
-ThemeMode _themeModeFromString(String? value) {
-  switch (value) {
-    case 'light':
-      return ThemeMode.light;
-    case 'dark':
-      return ThemeMode.dark;
-    default:
-      // Preview default is DARK (Nov 7): no stored preference means
-      // dark, not system. A stored 'light' / 'dark' / 'system' still
-      // wins — the Settings → General → Appearance toggle is the
-      // only thing that writes this key.
-      return ThemeMode.dark;
-  }
 }
 
 // ---- Brand — Premium Dark Minimalist redesign (Oct 31 spec): emerald accent ----
@@ -549,6 +541,7 @@ class EstudyanteGOApp extends StatefulWidget {
     super.key,
     this.initialSidebarCollapsed = false,
     this.initialThemeMode = ThemeMode.dark,
+    this.initialThemePreference,
     this.authService,
     this.permissionService,
     this.notificationService,
@@ -556,6 +549,11 @@ class EstudyanteGOApp extends StatefulWidget {
 
   final bool initialSidebarCollapsed;
   final ThemeMode initialThemeMode;
+
+  /// Stored theme preference, when the caller read it (main() passes
+  /// it). Null in tests that only inject an initial ThemeMode — the
+  /// state then derives the preference from [initialThemeMode].
+  final AppThemePreference? initialThemePreference;
 
   /// Auth backend. Null in tests that pump the app directly means
   /// "Firebase not configured" (gate falls back to the dashboard).
@@ -573,13 +571,26 @@ class EstudyanteGOApp extends StatefulWidget {
   State<EstudyanteGOApp> createState() => _EstudyanteGOAppState();
 }
 
-class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
+class _EstudyanteGOAppState extends State<EstudyanteGOApp>
+    with WidgetsBindingObserver {
   // The gate state sits above MaterialApp, so its own context has no
   // Navigator. Route pushes (profile setup) and dialogs (notification
   // prompt) go through this key instead.
   final _navigatorKey = GlobalKey<NavigatorState>();
 
   late ThemeMode _themeMode = widget.initialThemeMode;
+
+  /// The stored theme preference behind [_themeMode]. Time Based is
+  /// resolved to light/dark by the clock; the other options map
+  /// straight onto their ThemeMode.
+  late AppThemePreference _themePreference =
+      widget.initialThemePreference ??
+          appThemePreferenceForThemeMode(widget.initialThemeMode);
+
+  /// Re-checks the Time Based theme once a minute while it is
+  /// selected, so it flips at 6 AM / 6 PM without a restart. Null
+  /// for the other options.
+  Timer? _themeTimer;
   late final AuthService _authService =
       widget.authService ?? FirebaseAuthService(isConfigured: false);
   late final PermissionService _permissionService =
@@ -594,6 +605,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startTimeBasedTimerIfNeeded();
     // Local notifications (Nov 8): initialize the plugin and build
     // the first schedule without awaiting — reminders must never
     // block the app start, and the service never throws.
@@ -614,6 +627,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
 
   @override
   void dispose() {
+    _themeTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     localNotificationRefreshRequest.removeListener(
       _onLocalNotificationRefreshRequested,
     );
@@ -660,13 +675,62 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
   }
 
   Future<void> _setThemeMode(ThemeMode mode) async {
-    setState(() => _themeMode = mode);
+    // Entry screens only ever flip light <-> dark explicitly (their
+    // sun/moon toggle); map the explicit mode onto the matching
+    // preference so the stored value and the Settings dialog stay
+    // in sync.
+    await _setThemePreference(appThemePreferenceForThemeMode(mode));
+  }
+
+  /// Applies a theme preference from Settings → General → Appearance:
+  /// resolves it against the clock, persists the preference name
+  /// ('system' / 'light' / 'dark' / 'timeBased') under the existing
+  /// key, and (re)starts the Time Based re-check timer as needed.
+  Future<void> _setThemePreference(AppThemePreference preference) async {
+    setState(() {
+      _themePreference = preference;
+      _themeMode = resolveThemeMode(preference, DateTime.now());
+    });
+    _startTimeBasedTimerIfNeeded();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_themeModeKey, mode.name);
+      await prefs.setString(_themeModeKey, preference.name);
     } catch (_) {
       // Theme already switched in memory; a failed local save is not fatal.
     }
+  }
+
+  /// Starts the once-a-minute Time Based re-check while Time Based is
+  /// selected; stops it for the other options. The check itself is
+  /// cheap (a DateTime read) and only rebuilds when the resolved mode
+  /// actually changed.
+  void _startTimeBasedTimerIfNeeded() {
+    _themeTimer?.cancel();
+    _themeTimer = null;
+    if (_themePreference != AppThemePreference.timeBased) return;
+    _themeTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _refreshTimeBasedTheme(),
+    );
+  }
+
+  /// Re-resolves the Time Based theme against the clock. No-op unless
+  /// Time Based is selected, and only rebuilds when the resolved mode
+  /// actually changed.
+  void _refreshTimeBasedTheme() {
+    if (_themePreference != AppThemePreference.timeBased) return;
+    final resolved = resolveThemeMode(_themePreference, DateTime.now());
+    if (resolved != _themeMode && mounted) {
+      setState(() => _themeMode = resolved);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-evaluate the Time Based theme when the app comes back, so a
+    // 6 AM / 6 PM flip that happened while it was backgrounded
+    // applies immediately instead of waiting for the next tick.
+    if (state == AppLifecycleState.resumed) _refreshTimeBasedTheme();
   }
 
   void _selectTab(int index) {
@@ -848,6 +912,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
       theme: _lightTheme(),
       darkTheme: _darkTheme(),
       themeMode: _themeMode,
+      supportedLocales: const [Locale('en')],
       home: _gateWidget(),
     );
   }
@@ -958,8 +1023,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
       case AppStartDestination.dashboard:
         return _HomeShell(
           initialSidebarCollapsed: widget.initialSidebarCollapsed,
-          themeMode: _themeMode,
-          onThemeModeChanged: _setThemeMode,
+          themePreference: _themePreference,
+          onThemePreferenceChanged: _setThemePreference,
           selectedIndex: _tabIndex,
           onSelect: _selectTab,
           authService: _authService,
@@ -987,8 +1052,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
 class _HomeShell extends StatefulWidget {
   const _HomeShell({
     required this.initialSidebarCollapsed,
-    required this.themeMode,
-    required this.onThemeModeChanged,
+    required this.themePreference,
+    required this.onThemePreferenceChanged,
     required this.selectedIndex,
     required this.onSelect,
     required this.authService,
@@ -1006,8 +1071,8 @@ class _HomeShell extends StatefulWidget {
   });
 
   final bool initialSidebarCollapsed;
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
+  final AppThemePreference themePreference;
+  final ValueChanged<AppThemePreference> onThemePreferenceChanged;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final AuthService authService;
@@ -1204,8 +1269,8 @@ class _HomeShellState extends State<_HomeShell>
               : null,
         ),
         AccountTab(
-          themeMode: widget.themeMode,
-          onThemeModeChanged: widget.onThemeModeChanged,
+          themePreference: widget.themePreference,
+          onThemePreferenceChanged: widget.onThemePreferenceChanged,
           authService: widget.authService,
           user: widget.user,
           profile: widget.profile,

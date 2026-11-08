@@ -18,6 +18,7 @@ import 'package:estudyantego/features/onboarding/permission_service.dart';
 import 'package:estudyantego/features/onboarding/profile_setup_screen.dart';
 import 'package:estudyantego/features/onboarding/splash_screen.dart';
 import 'package:estudyantego/features/onboarding/verify_email_screen.dart';
+import 'package:estudyantego/theme_preference.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -815,8 +816,8 @@ void main() {
     }) async {
       await tester.pumpWidget(_wrap(
         AccountTab(
-          themeMode: ThemeMode.system,
-          onThemeModeChanged: (_) {},
+          themePreference: AppThemePreference.system,
+          onThemePreferenceChanged: (_) {},
           authService: auth ?? FakeAuthService(user: user),
           user: user,
           profile: profile,
@@ -852,8 +853,8 @@ void main() {
       var viewedStudent = false;
       await tester.pumpWidget(_wrap(
         AccountTab(
-          themeMode: ThemeMode.system,
-          onThemeModeChanged: (_) {},
+          themePreference: AppThemePreference.system,
+          onThemePreferenceChanged: (_) {},
           authService: FakeAuthService(user: _verifiedUser),
           user: _verifiedUser,
           permissionService: FakePermissionService(),
@@ -940,8 +941,8 @@ void main() {
       var signInRequested = false;
       await tester.pumpWidget(_wrap(
         AccountTab(
-          themeMode: ThemeMode.system,
-          onThemeModeChanged: (_) {},
+          themePreference: AppThemePreference.system,
+          onThemePreferenceChanged: (_) {},
           authService: FakeAuthService(),
           user: null,
           permissionService: FakePermissionService(),

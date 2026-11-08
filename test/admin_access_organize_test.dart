@@ -14,6 +14,7 @@ import 'package:estudyantego/features/hidden_routes.dart';
 import 'package:estudyantego/features/map_tab.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:estudyantego/features/route_fare_overrides.dart';
+import 'package:estudyantego/theme_preference.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,8 +39,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: AccountTab(
-              themeMode: ThemeMode.dark,
-              onThemeModeChanged: (_) {},
+              themePreference: AppThemePreference.dark,
+              onThemePreferenceChanged: (_) {},
               authService: FakeAuthService(user: user),
               user: user,
               permissionService: FakePermissionService(),

@@ -14,6 +14,7 @@ import 'package:estudyantego/features/onboarding/onboarding_state.dart';
 import 'package:estudyantego/features/points_wallet_repository.dart';
 import 'package:estudyantego/features/student/signin_screen.dart';
 import 'package:estudyantego/features/student/student_data.dart';
+import 'package:estudyantego/theme_preference.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -460,8 +461,8 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: AccountTab(
-            themeMode: ThemeMode.light,
-            onThemeModeChanged: (_) {},
+            themePreference: AppThemePreference.light,
+            onThemePreferenceChanged: (_) {},
             authService: FakeAuthService(user: _user),
             user: _user,
             profile: const UserProfile(
@@ -497,8 +498,8 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: AccountTab(
-            themeMode: ThemeMode.light,
-            onThemeModeChanged: (_) {},
+            themePreference: AppThemePreference.light,
+            onThemePreferenceChanged: (_) {},
             authService: FakeAuthService(user: _user),
             user: _user,
             profile: const UserProfile(
