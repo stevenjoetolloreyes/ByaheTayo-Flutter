@@ -3,10 +3,11 @@
 // Honest-state rules under test: authenticated header (real name/email,
 // real Verified badge, no "Guest" identity anywhere), 0 points wallet
 // with an honest empty history, theme switching really changes the app
-// theme, notification settings show the REAL permission status (no dead
-// toggle), language honestly shows English only, Edit Profile opens the
-// real profile screen, and Sign Out really signs out to the sign-in
-// screen. Auth/permission behavior goes through the fakes.
+// theme, notification settings open a real settings screen (permission
+// status + four working reminder toggles), language honestly shows
+// English only, Edit Profile opens the real profile screen, and
+// Sign Out really signs out to the sign-in screen. Auth/permission
+// behavior goes through the fakes.
 import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:estudyantego/features/onboarding/permission_service.dart';
 import 'package:estudyantego/main.dart';
@@ -249,17 +250,37 @@ void main() {
     expect(find.text('Not allowed'), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
 
+    // The row now opens the full Notification Settings screen
+    // (Nov 8 local notifications build): permission card + four
+    // real reminder toggles, all on by default.
     await _tapVisible(tester, 'Notification Settings');
+    expect(find.text('Class reminders'), findsOneWidget);
+    expect(find.byKey(const Key('class-reminders-toggle')), findsOneWidget);
+    expect(
+      find.byKey(const Key('assignment-reminders-toggle')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('school-reminders-toggle')), findsOneWidget);
+    expect(find.byKey(const Key('daily-login-toggle')), findsOneWidget);
+    expect(find.text('8:00 AM'), findsOneWidget);
+
+    // The permission button opens the same allow prompt the row
+    // used to show directly.
+    await tester.tap(find.byKey(const Key('notification-permission-button')));
+    await tester.pumpAndSettle();
     expect(find.text('Allow notifications?'), findsOneWidget);
     await tester.tap(find.text('Not now'));
     await tester.pumpAndSettle();
     expect(permissions.requestCount, 0);
 
-    await _tapVisible(tester, 'Notification Settings');
-    await tester.tap(find.text('Allow'));
+    // The button and the dialog action both read "Allow"; the
+    // dialog's copy is the later one in the tree.
+    await tester.tap(find.byKey(const Key('notification-permission-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Allow').last);
     await tester.pumpAndSettle();
     expect(permissions.requestCount, 1);
-    expect(find.text('Allowed'), findsOneWidget);
+    expect(find.text('Allowed'), findsWidgets);
   });
 
   testWidgets('language setting honestly shows English only',

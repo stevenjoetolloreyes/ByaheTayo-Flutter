@@ -45,6 +45,7 @@ import 'features/fares_tab.dart';
 import 'features/friend_cloud_repository.dart';
 import 'features/hidden_routes.dart';
 import 'features/ios_components.dart';
+import 'features/local_notifications.dart';
 import 'features/route_fare_overrides.dart';
 import 'features/shared_study_files.dart';
 import 'features/map_tab.dart';
@@ -550,6 +551,7 @@ class EstudyanteGOApp extends StatefulWidget {
     this.initialThemeMode = ThemeMode.dark,
     this.authService,
     this.permissionService,
+    this.notificationService,
   });
 
   final bool initialSidebarCollapsed;
@@ -562,6 +564,10 @@ class EstudyanteGOApp extends StatefulWidget {
   /// Notification permission backend. Null means the real
   /// permission_handler implementation.
   final PermissionService? permissionService;
+
+  /// Local notification backend. Null means the real
+  /// flutter_local_notifications implementation.
+  final LocalNotificationService? notificationService;
 
   @override
   State<EstudyanteGOApp> createState() => _EstudyanteGOAppState();
@@ -578,6 +584,41 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
       widget.authService ?? FirebaseAuthService(isConfigured: false);
   late final PermissionService _permissionService =
       widget.permissionService ?? AppPermissionService();
+
+  /// Local notification service, created once per app: the real
+  /// flutter_local_notifications implementation unless a test
+  /// injects one.
+  late final LocalNotificationService _notificationService =
+      widget.notificationService ?? LocalNotificationService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Local notifications (Nov 8): initialize the plugin and build
+    // the first schedule without awaiting — reminders must never
+    // block the app start, and the service never throws.
+    unawaited(_initLocalNotifications());
+    localNotificationRefreshRequest.addListener(
+      _onLocalNotificationRefreshRequested,
+    );
+  }
+
+  Future<void> _initLocalNotifications() async {
+    await _notificationService.initialize();
+    await _notificationService.refreshAll();
+  }
+
+  void _onLocalNotificationRefreshRequested() {
+    unawaited(_notificationService.refreshAll());
+  }
+
+  @override
+  void dispose() {
+    localNotificationRefreshRequest.removeListener(
+      _onLocalNotificationRefreshRequested,
+    );
+    super.dispose();
+  }
 
   // ---- First-time gate state ----
   AppStartDestination? _destination;
@@ -925,6 +966,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
           user: _user,
           profile: _profile,
           permissionService: _permissionService,
+          notificationService: _notificationService,
           onViewStudent: () => _selectTab(0),
           onViewCommunities: () => _selectTab(4),
           onViewFares: () => _selectTab(2),
@@ -953,6 +995,7 @@ class _HomeShell extends StatefulWidget {
     required this.user,
     required this.profile,
     required this.permissionService,
+    required this.notificationService,
     required this.onViewStudent,
     required this.onViewCommunities,
     required this.onViewFares,
@@ -971,6 +1014,7 @@ class _HomeShell extends StatefulWidget {
   final AuthUser? user;
   final UserProfile? profile;
   final PermissionService permissionService;
+  final LocalNotificationService notificationService;
   final VoidCallback onViewStudent;
   final VoidCallback onViewCommunities;
   final VoidCallback onViewFares;
@@ -1166,6 +1210,7 @@ class _HomeShellState extends State<_HomeShell>
           user: widget.user,
           profile: widget.profile,
           permissionService: widget.permissionService,
+          notificationService: widget.notificationService,
           walletController: _walletController,
           creditsController: _creditsController,
           adService: _adService,
@@ -1272,7 +1317,8 @@ class _HomeShellState extends State<_HomeShell>
             Text('No notifications yet.'),
             SizedBox(height: AppSpacing.s4),
             Text(
-              'This app does not have a notification system yet, so there is nothing to show here.',
+              'Reminders you turn on in Notification Settings arrive '
+              'as system notifications. There is no inbox here yet.',
               style: AppText.caption,
             ),
           ],

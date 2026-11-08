@@ -26,6 +26,8 @@ import 'friend_cloud_repository.dart';
 import 'friends_tab.dart';
 import 'ios_glass.dart';
 import 'ios_components.dart';
+import 'local_notifications.dart';
+import 'notification_settings_screen.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/permission_service.dart';
@@ -73,6 +75,7 @@ class AccountTab extends StatefulWidget {
     required this.user,
     this.profile,
     required this.permissionService,
+    this.notificationService,
     this.walletController,
     this.creditsController,
     this.adService,
@@ -103,6 +106,11 @@ class AccountTab extends StatefulWidget {
   final UserProfile? profile;
 
   final PermissionService permissionService;
+
+  /// Local notification service (null in bare widget tests, in
+  /// which case the Notification Settings screen creates its own
+  /// service for the session). Wired in main.dart.
+  final LocalNotificationService? notificationService;
 
   /// Shared wallet state (null in bare widget tests). When it has a
   /// real backend, the wallet card and transaction history show live
@@ -164,6 +172,12 @@ class _AccountTabState extends State<AccountTab> {
   /// [_showingMembership]: the full About page (stats graph + lots
   /// of text) replaces the Account content until Back is tapped.
   bool _showingAbout = false;
+
+  /// Notification Settings screen shown INSIDE the Account tab,
+  /// same pattern as [_showingMembership]: the full settings page
+  /// (permission + four real reminder toggles) replaces the Account
+  /// content until Back is tapped.
+  bool _showingNotifications = false;
 
   AuthUser? get _user => widget.user;
   UserProfile? get _profile => widget.profile;
@@ -453,39 +467,11 @@ class _AccountTabState extends State<AccountTab> {
     }
   }
 
-  Future<void> _handleNotificationSettings() async {
-    switch (_notificationStatus) {
-      case NotificationPermissionStatus.granted:
-        _showInfoDialog(
-          'Notifications allowed',
-          'Notifications are allowed for EstudyanteGO. To turn them off, '
-          'use your device settings.',
-        );
-        return;
-      case NotificationPermissionStatus.permanentlyDenied:
-        await widget.permissionService.openAppSettings();
-        await _loadNotificationStatus();
-        return;
-      case NotificationPermissionStatus.denied:
-      case NotificationPermissionStatus.unknown:
-        final allow = await showIosAlert<bool>(
-          context: context,
-          title: 'Allow notifications?',
-          message:
-              'EstudyanteGO can send you notifications about community '
-              'updates and service alerts. You can change this anytime '
-              'in your device settings.',
-          actions: const [
-            IosAlertAction<bool>('Not now', value: false),
-            IosAlertAction<bool>('Allow', value: true, isDefault: true),
-          ],
-        );
-        if (allow == true) {
-          await widget.permissionService.requestNotification();
-          await _loadNotificationStatus();
-        }
-        return;
-    }
+  void _handleNotificationSettings() {
+    // The full Notification Settings screen (permission + four real
+    // reminder toggles) lives inside the Account tab, like the About
+    // and Membership screens.
+    setState(() => _showingNotifications = true);
   }
 
   Future<void> _changePassword() async {
@@ -536,6 +522,21 @@ class _AccountTabState extends State<AccountTab> {
       return AboutEstudyanteGOScreen(
         onBack: () => setState(() => _showingAbout = false),
         customRouteRepository: widget.customRouteRepository,
+      );
+    }
+    // Notification Settings screen: permission + four real reminder
+    // toggles, shown inside the Account tab, returned to via Back.
+    // The permission status is reloaded on return, so the row
+    // subtitle reflects any change made in the settings screen.
+    if (_showingNotifications) {
+      return NotificationSettingsScreen(
+        permissionService: widget.permissionService,
+        notificationService:
+            widget.notificationService ?? LocalNotificationService(),
+        onBack: () {
+          setState(() => _showingNotifications = false);
+          _loadNotificationStatus();
+        },
       );
     }
     // iPhone glass branch: appearance only — same sections, same

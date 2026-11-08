@@ -2,12 +2,14 @@
 //
 // Conflict detection blocks saving a subject that overlaps another
 // subject on the same weekday. "Reminders" surface as the Upcoming
-// section (this app has no push-notification plugin, so reminders
-// appear in-app, not as system notifications).
+// section in-app, and — since the Nov 8 local notifications build
+// — as scheduled system notifications too: every save re-runs the
+// notification schedule (see local_notifications.dart).
 import 'package:flutter/material.dart';
 
 import '../app_layout.dart';
 import '../ios_components.dart';
+import '../local_notifications.dart';
 import 'student_data.dart';
 
 const _subjectColors = [
@@ -52,10 +54,17 @@ class _ClassesScreenState extends State<ClassesScreen> {
     });
   }
 
-  Future<void> _saveSubjects() => StudentStorage.saveList(
-      StudentStorage.subjectsKey, _subjects.map((s) => s.toJson()).toList());
-  Future<void> _saveItems() => StudentStorage.saveList(
-      StudentStorage.assignmentsKey, _items.map((i) => i.toJson()).toList());
+  Future<void> _saveSubjects() async {
+    await StudentStorage.saveList(
+        StudentStorage.subjectsKey, _subjects.map((s) => s.toJson()).toList());
+    requestLocalNotificationRefresh();
+  }
+
+  Future<void> _saveItems() async {
+    await StudentStorage.saveList(
+        StudentStorage.assignmentsKey, _items.map((i) => i.toJson()).toList());
+    requestLocalNotificationRefresh();
+  }
 
   void _snack(String m) {
     if (mounted) {

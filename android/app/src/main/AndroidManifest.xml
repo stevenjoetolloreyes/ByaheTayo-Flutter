@@ -72,6 +72,11 @@
     <!-- Requested once, after sign-in/profile setup, with an explanation
          (see notification_prompt.dart). Never requested at launch. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Exact alarms (Android 12+) for on-time local reminders
+         (class reminders, daily login). The plugin falls back to
+         inexact alarms when the user has not allowed exact alarms
+         in system settings; see local_notifications.dart. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Walking Goal step counting (Android 10+ runtime permission
          for the TYPE_STEP_COUNTER sensor). Requested only when the
          user taps "Allow activity tracking" on the Walking Goal
