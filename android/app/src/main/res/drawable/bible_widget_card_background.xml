@@ -1,0 +1,14 @@
+<!-- Rounded card the photo sits inside (Steven, Nov 8: "yung
+     photo, inside the widget"). The widget is a rounded-corner
+     card; the photo fills it edge to edge. This shape is the
+     card's own background (dark, so the white text still reads
+     if a photo ever fails to decode) AND the outline source for
+     the photo ImageView: the ImageView uses this as its
+     background with clipToOutline, so the photo is clipped to
+     the same rounded rect. Radius 16dp, matching the old widget
+     card and the v2/v3 samples. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#0F2238" />
+    <corners android:radius="16dp" />
+</shape>

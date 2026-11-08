@@ -119,12 +119,282 @@ void main() {
     });
   });
 
+  group('verse scenes', () {
+    test('every bundled verse maps to a known nature scene', () {
+      expect(BibleWidgetService.verseScenes.length, bundledVerses.length);
+      for (final v in bundledVerses) {
+        final scene = BibleWidgetService.sceneForVerse(v);
+        expect(BibleWidgetService.knownScenes, contains(scene),
+            reason: '${v.id} (${v.ref}) maps to an unknown scene');
+      }
+    });
+
+    test('Philippians 4:13 uses the sample sunset/cross scene', () {
+      final verse = bundledVerses.firstWhere((v) => v.id == 'v03');
+      expect(verse.ref, 'Philippians 4:13');
+      expect(BibleWidgetService.sceneForVerse(verse), 'sunset_cross');
+    });
+
+    test('the known scenes are exactly the four nature scenes', () {
+      // The verse-list JSON only ever carries a NATURE scene: the
+      // season scenes are picked from the date (see
+      // seasonSceneForDate) and appear only in the today-pair's
+      // `scene` — so they must NOT be here.
+      expect(BibleWidgetService.knownScenes, [
+        'sunset_cross',
+        'mountain_sunrise',
+        'calm_sea',
+        'forest_light',
+      ]);
+      for (final season in BibleWidgetService.seasonScenes) {
+        expect(BibleWidgetService.knownScenes, isNot(contains(season)));
+      }
+    });
+
+    test('a verse without a mapping falls back to the default scene', () {
+      const unmapped = BundledVerse(
+        id: 'v99',
+        book: 'Test',
+        chapter: 1,
+        verse: '1',
+        text: 'Test.',
+        topics: ['Faith'],
+      );
+      expect(BibleWidgetService.sceneForVerse(unmapped),
+          BibleWidgetService.defaultScene);
+    });
+
+    test('the scene round-trips through JSON', () {
+      const verse = BibleWidgetVerse(
+          id: 'v09', ref: 'Matthew 11:28', text: 'Come.', scene: 'calm_sea');
+      final back = BibleWidgetVerse.fromJson(verse.toJson());
+      expect(back, verse);
+      expect(back.scene, 'calm_sea');
+    });
+
+    test('fromJson defaults the scene when it is missing or unknown', () {
+      // A list pushed by an older app build has no scene field.
+      final missing = BibleWidgetVerse.fromJson(
+          {'id': 'v03', 'ref': 'Philippians 4:13', 'text': 'I can.'});
+      expect(missing.scene, BibleWidgetService.defaultScene);
+      final unknown = BibleWidgetVerse.fromJson({
+        'id': 'v03',
+        'ref': 'Philippians 4:13',
+        'text': 'I can.',
+        'scene': 'not_a_scene',
+      });
+      expect(unknown.scene, BibleWidgetService.defaultScene);
+    });
+
+    test('the pushed JSON carries a scene for every verse', () {
+      final decoded =
+          BibleWidgetService.decodeVerses(BibleWidgetService.encodeVerses());
+      expect(decoded.length, bundledVerses.length);
+      for (final v in decoded) {
+        expect(BibleWidgetService.knownScenes, contains(v.scene));
+      }
+      final philippians = decoded.firstWhere((v) => v.id == 'v03');
+      expect(philippians.scene, 'sunset_cross');
+    });
+  });
+
   group('syncVerses', () {
     test('completes without throwing when the plugin is unavailable', () async {
       // No platform channel is registered in tests, so the
       // home_widget calls throw MissingPluginException — the
       // service must swallow that so the Bible screen never breaks.
       await BibleWidgetService.syncVerses();
+    });
+  });
+
+  group('season scenes', () {
+    test('the season scenes are exactly the eight feast/season photos', () {
+      expect(BibleWidgetService.seasonScenes, [
+        'all_saints',
+        'all_souls',
+        'immaculate_conception',
+        'epiphany',
+        'advent',
+        'christmas',
+        'lent',
+        'ordinary_time',
+      ]);
+      // A season scene is never a nature scene and vice versa.
+      for (final s in BibleWidgetService.seasonScenes) {
+        expect(BibleWidgetService.knownScenes, isNot(contains(s)));
+      }
+    });
+
+    test('fixed feasts override the season they fall in', () {
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2026, 11, 1)),
+          'all_saints');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 11, 1)),
+          'all_saints');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2026, 11, 2)),
+          'all_souls');
+      // Dec 8 is inside Advent — the feast still wins.
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2026, 12, 8)),
+          'immaculate_conception');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 12, 8)),
+          'immaculate_conception');
+    });
+
+    test('Epiphany is the Sunday observance, not the traditional Jan 6', () {
+      // 2027: Sunday Jan 3; 2028: Sunday Jan 2.
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 1, 3)),
+          'epiphany');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2028, 1, 2)),
+          'epiphany');
+      // Jan 6 is an ordinary Christmas-season day, not Epiphany.
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 1, 6)),
+          'christmas');
+    });
+
+    test('Advent and Christmas windows, 2026-27 and 2027-28', () {
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2026, 11, 29)),
+          'advent');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2026, 12, 24)),
+          'advent');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2026, 12, 25)),
+          'christmas');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 1, 10)),
+          'christmas');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 11, 28)),
+          'advent');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 12, 24)),
+          'advent');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 12, 25)),
+          'christmas');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2028, 1, 9)),
+          'christmas');
+    });
+
+    test('Lent windows, 2027 and 2028', () {
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 2, 10)),
+          'lent');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 3, 25)),
+          'lent');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2028, 3, 1)),
+          'lent');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2028, 4, 13)),
+          'lent');
+    });
+
+    test('Easter Time and the Triduum have no photo yet (null)', () {
+      // 2027: Triduum Mar 26-27, Easter Mar 28 – May 16.
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 3, 26)),
+          isNull);
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 3, 28)),
+          isNull);
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 5, 16)),
+          isNull);
+      // 2028: Triduum Apr 14-15, Easter Apr 16 – Jun 4.
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2028, 4, 14)),
+          isNull);
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2028, 4, 16)),
+          isNull);
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2028, 6, 4)),
+          isNull);
+    });
+
+    test('Ordinary Time is the default (its own photo)', () {
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 1, 11)),
+          'ordinary_time');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 2, 9)),
+          'ordinary_time');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 5, 17)),
+          'ordinary_time');
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2026, 11, 3)),
+          'ordinary_time');
+      // Christ the King (Nov 21, 2027) is an Ordinary Time Sunday
+      // until its photo arrives — it shows the Ordinary Time photo.
+      expect(BibleWidgetService.seasonSceneForDate(DateTime(2027, 11, 21)),
+          'ordinary_time');
+    });
+
+    test('seasonSceneForDate only ever returns a season scene or null', () {
+      // Sweep a full year: every result must be a season scene
+      // (or null for the photo-less seasons), never a nature scene.
+      for (var day = 1; day <= 365; day++) {
+        final date = DateTime(2027, 1, 1).add(Duration(days: day - 1));
+        final scene = BibleWidgetService.seasonSceneForDate(date);
+        if (scene != null) {
+          expect(BibleWidgetService.seasonScenes, contains(scene),
+              reason: '$date returned $scene');
+        }
+      }
+    });
+
+    test('sceneForDate resolves the background: season, then verse', () {
+      final verse = bundledVerses.firstWhere((v) => v.id == 'v03');
+      // Advent: the season photo, not the verse's sunset_cross.
+      expect(BibleWidgetService.sceneForDate(DateTime(2026, 12, 1), verse),
+          'advent');
+      // Lent: the season photo.
+      expect(BibleWidgetService.sceneForDate(DateTime(2027, 2, 20), verse),
+          'lent');
+      // Ordinary Time: the dedicated Ordinary Time photo, NOT the
+      // verse's nature scene.
+      expect(BibleWidgetService.sceneForDate(DateTime(2027, 1, 20), verse),
+          'ordinary_time');
+      // Easter (no photo yet): the verse's nature photo.
+      expect(BibleWidgetService.sceneForDate(DateTime(2027, 4, 10), verse),
+          'sunset_cross');
+    });
+  });
+
+  group('today pair', () {
+    test('todayPair carries the verse and its background together', () {
+      final date = DateTime(2026, 12, 1); // Advent
+      final pair = BibleWidgetService.todayPair(date);
+      final verse = verseOfDay(date);
+      expect(pair['date'], '2026-12-01');
+      expect(pair['id'], verse.id);
+      expect(pair['ref'], verse.ref);
+      expect(pair['text'], verse.text);
+      expect(pair['scene'], 'advent');
+      expect(
+          pair['scene'],
+          BibleWidgetService.sceneForDate(date, verse));
+    });
+
+    test('the pair scene follows the season: Ordinary Time, Easter', () {
+      expect(
+          BibleWidgetService.todayPair(DateTime(2027, 1, 20))['scene'],
+          'ordinary_time');
+      // Easter: the verse's nature photo (no Easter photo yet).
+      final easter = DateTime(2027, 4, 10);
+      expect(
+          BibleWidgetService.todayPair(easter)['scene'],
+          BibleWidgetService.sceneForVerse(verseOfDay(easter)));
+      // A fixed feast: All Saints Day.
+      expect(
+          BibleWidgetService.todayPair(DateTime(2026, 11, 1))['scene'],
+          'all_saints');
+    });
+
+    test('the pair is one JSON object that round-trips for its date', () {
+      final date = DateTime(2026, 11, 8);
+      final encoded = BibleWidgetService.encodeTodayPair(date);
+      expect(encoded.startsWith('{'), isTrue);
+      final decoded = BibleWidgetService.decodeTodayPair(encoded, date);
+      expect(decoded, isNotNull);
+      expect(decoded, BibleWidgetService.todayPair(date));
+      // A different date is stale: the provider must not use it.
+      expect(BibleWidgetService.decodeTodayPair(
+          encoded, DateTime(2026, 11, 9)), isNull);
+      // Malformed input is not a pair.
+      expect(BibleWidgetService.decodeTodayPair(null, date), isNull);
+      expect(BibleWidgetService.decodeTodayPair('', date), isNull);
+      expect(BibleWidgetService.decodeTodayPair('not json', date), isNull);
+      expect(BibleWidgetService.decodeTodayPair('[]', date), isNull);
+      expect(BibleWidgetService.decodeTodayPair('{}', date), isNull);
+      // A pair missing its scene is not a pair.
+      expect(
+          BibleWidgetService.decodeTodayPair(
+              '{"date":"2026-11-08","id":"v01","ref":"John 3:16","text":"x"}',
+              date),
+          isNull);
     });
   });
 }

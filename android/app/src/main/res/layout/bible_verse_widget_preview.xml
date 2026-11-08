@@ -1,46 +1,126 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Static preview for the widget picker ONLY. The picker never runs
-     the provider, so the live layout would render empty here; this
-     layout hardcodes a sample verse (Matthew 11:28, the same verse
-     the user saw on his phone) styled like the light variant, so
-     the picker shows what the widget really looks like. Never used
-     at runtime — the provider fills the live layouts instead. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Static preview for the widget picker ONLY. The picker never runs
+  the provider, so the live layout would render empty here; this
+  layout hardcodes the sample scene (sunset/cross) with the
+  sample's verse — Philippians 4:13, in the KJV wording the app
+  actually shows ("which strengtheneth me", not the sample's
+  modern "who strengthens me") — styled exactly like the live
+  layout, so the picker shows what the widget really looks like.
+  Never used at runtime — the provider fills the live layouts
+  instead. The header uses the real E logo (@drawable/launch_image),
+  and the photo fills the rounded card edge to edge, as in the
+  live layout. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bible_verse_widget_background"
-    android:gravity="center_vertical"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:background="@drawable/bible_widget_card_background">
 
-    <TextView
-        android:id="@+id/widget_verse"
+    <ImageView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="4"
-        android:text="Come unto me, all ye that labour and are heavy laden, and I will give you rest."
-        android:textColor="#17231C"
-        android:textSize="14sp" />
+        android:layout_height="match_parent"
+        android:background="@drawable/bible_widget_card_background"
+        android:clipToOutline="true"
+        android:outlineProvider="background"
+        android:src="@drawable/verse_bg_sunset_cross"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
 
-    <TextView
-        android:id="@+id/widget_ref"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Matthew 11:28 (KJV)"
-        android:textColor="#14532D"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bible_widget_text_scrim" />
 
-    <TextView
-        android:id="@+id/widget_footer"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="EstudyanteGO · Bible Verse"
-        android:textColor="#6B7280"
-        android:textSize="11sp" />
+    <!-- Content padding is ASYMMETRIC on purpose (top 16dp,
+         bottom 8dp). The header (28dp logo) is shorter than the
+         footer (divider + 10dp gap + pill), so equal padding would
+         leave the verse ~6dp above the card's true center; the
+         8dp bottom padding balances the chrome and puts the
+         verse's center on the card's center (Steven, Nov 8:
+         "Center yung verse"). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingTop="16dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp">
 
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/launch_image"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Estudyante"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#80000000"
+                android:shadowRadius="3"
+                android:shadowDy="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="GO"
+                android:textColor="#22C55E"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#80000000"
+                android:shadowRadius="3"
+                android:shadowDy="1" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="“I can do all things through Christ which strengtheneth me.”"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:shadowColor="#CC000000"
+            android:shadowRadius="5"
+            android:shadowDy="1"
+            android:maxLines="4"
+            android:ellipsize="end" />
+
+        <!-- Short divider, centered under the verse and just
+             wider than the pill, as in the v4 sample (~40% of the
+             card width at the usual 4-cell size) — NOT full-width. -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginStart="80dp"
+            android:layout_marginEnd="80dp"
+            android:background="#40FFFFFF" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bible_widget_ref_pill"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:text="Philippians 4:13"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>

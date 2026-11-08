@@ -1,45 +1,128 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Bible Verse widget, dark variant. Colors follow the ChatGPT
-     tokens: dark card #202B25, accent #34D399, text #F8FAF9.
-     The verse + reference + footer are centered as one group
-     (root gravity center_vertical, verse wraps its content) so a
-     short verse does not leave a big empty void in the middle.
-     The verse TextView keeps maxLines 4 + ellipsize so long verses
-     never overflow the widget. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Bible Verse widget, dark variant — INTENTIONALLY IDENTICAL to
+  the light variant. The background is a photo (one of the
+  verse_bg_* WebP drawables) and the text is white with a dark
+  scrim in both themes, so there is nothing theme-dependent left
+  to vary. Kept as a separate file (rather than deleting the
+  night variant) so the provider and the widget info keep
+  resolving the same layout in both themes. See the light
+  layout's header comment for the full design notes (photo
+  inside the rounded card, real E logo, sans-serif verse).
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bible_verse_widget_background"
-    android:gravity="center_vertical"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:background="@drawable/bible_widget_card_background">
 
-    <TextView
-        android:id="@+id/widget_verse"
+    <ImageView
+        android:id="@+id/widget_background"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="4"
-        android:textColor="#F8FAF9"
-        android:textSize="14sp" />
+        android:layout_height="match_parent"
+        android:background="@drawable/bible_widget_card_background"
+        android:clipToOutline="true"
+        android:outlineProvider="background"
+        android:src="@drawable/verse_bg_sunset_cross"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
 
-    <TextView
-        android:id="@+id/widget_ref"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:textColor="#34D399"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+    <View
+        android:id="@+id/widget_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bible_widget_text_scrim" />
 
-    <TextView
-        android:id="@+id/widget_footer"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="EstudyanteGO · Bible Verse"
-        android:textColor="#9AA5A0"
-        android:textSize="11sp" />
+    <!-- Content padding is ASYMMETRIC on purpose (top 16dp,
+         bottom 8dp). The header (28dp logo) is shorter than the
+         footer (divider + 10dp gap + pill), so equal padding would
+         leave the verse ~6dp above the card's true center; the
+         8dp bottom padding balances the chrome and puts the
+         verse's center on the card's center (Steven, Nov 8:
+         "Center yung verse"). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingTop="16dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp">
 
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/launch_image"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Estudyante"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#80000000"
+                android:shadowRadius="3"
+                android:shadowDy="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="GO"
+                android:textColor="#22C55E"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#80000000"
+                android:shadowRadius="3"
+                android:shadowDy="1" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_verse"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:shadowColor="#CC000000"
+            android:shadowRadius="5"
+            android:shadowDy="1"
+            android:maxLines="4"
+            android:ellipsize="end" />
+
+        <!-- Short divider, centered under the verse and just
+             wider than the pill, as in the v4 sample (~40% of the
+             card width at the usual 4-cell size) — NOT full-width. -->
+        <View
+            android:id="@+id/widget_divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginStart="80dp"
+            android:layout_marginEnd="80dp"
+            android:background="#40FFFFFF" />
+
+        <TextView
+            android:id="@+id/widget_ref"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bible_widget_ref_pill"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>

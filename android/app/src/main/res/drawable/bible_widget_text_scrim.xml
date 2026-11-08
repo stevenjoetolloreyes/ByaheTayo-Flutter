@@ -1,0 +1,18 @@
+<!-- Dark scrim over the background photo so the white verse
+     text stays readable on the brightest photos (the radiant
+     All Saints sky, the pale dawn sea) and the white/green logo
+     stays readable top-left. Darkest in the middle band where
+     the verse sits, lighter at the top and bottom edges so the
+     photo still shows through. A deliberate, small deviation
+     from the sample (which has no scrim) — without it the white
+     text washes out on the brightest photos. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="linear"
+        android:angle="90"
+        android:startColor="#4D000000"
+        android:centerColor="#66000000"
+        android:endColor="#4D000000" />
+    <corners android:radius="16dp" />
+</shape>
