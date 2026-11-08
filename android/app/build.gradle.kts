@@ -25,10 +25,22 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace = "com.estudyantego.app"
-    compileSdk = flutter.compileSdkVersion
+    // compileSdk is pinned to 37 (NOT flutter.compileSdkVersion, which
+    // resolves to 36): flutter_local_notifications 23.0.0 pulls in
+    // androidx.core:core 1.19.0, which requires compiling against API 37
+    // or later — the Nov 8 cloud build failed at checkReleaseAarMetadata
+    // until this was set. AGP 9.1.1 supports API 37 (its release notes:
+    // "supports Android API level 37.0 and lower"). targetSdk stays
+    // flutter.targetSdkVersion on purpose: raising it would change the
+    // app's runtime behaviour on Android 17, which is a separate change.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Core library desugaring is REQUIRED by flutter_local_notifications
+        // 23.0.0 (the Nov 8 build failed without it) — it backports the
+        // java.time APIs the plugin uses to the app's minSdk 26 devices.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -84,6 +96,9 @@ android {
 }
 
 dependencies {
+    // Core library desugaring runtime (see compileOptions above):
+    // 2.1.5 is the recommended desugar_jdk_libs for AGP 8.9+ / 9.x.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     // Walking Goal Health Connect fallback (Nov 5, 2026): today's
     // steps from Health Connect on phones with no step-counter
     // sensor. connect-client 1.1.0 is the stable release and
