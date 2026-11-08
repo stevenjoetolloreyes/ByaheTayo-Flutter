@@ -3765,72 +3765,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     );
     if (waypointIndex < 0 || waypointIndex >= waypoints.length) return;
     final waypoint = waypoints[waypointIndex];
-    final controller = TextEditingController(text: waypoint.name ?? '');
     final result = await showDialog<String?>(
       context: context,
-      builder: (dialogContext) {
-        String? error;
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            return AlertDialog(
-              title: const Text('Rename this stop'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      labelText: 'Stop name',
-                      hintText: waypoint.name == null
-                          ? 'e.g. Cabugao Public Market'
-                          : null,
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                    autofocus: true,
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(dialogContext).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final name = controller.text.trim();
-                    if (name.isEmpty) {
-                      setDialogState(
-                        () => error = 'Enter a name for the stop.',
-                      );
-                      return;
-                    }
-                    if (name.length > 100) {
-                      setDialogState(
-                        () => error =
-                            'The name must be 100 characters or fewer.',
-                      );
-                      return;
-                    }
-                    Navigator.pop(dialogContext, name);
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (dialogContext) =>
+          _RenameStopDialog(initialName: waypoint.name),
     );
-    controller.dispose();
     if (result == null || !mounted) return;
     final renamed = List<RouteWaypoint>.of(waypoints);
     renamed[waypointIndex] = waypoint.copyWith(name: result);
@@ -5315,6 +5254,91 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
 
 
+}
+
+/// Rename dialog for one drawn stop. A StatefulWidget so the
+/// TextEditingController is owned by the dialog itself and disposed
+/// only when the dialog subtree unmounts (after the pop animation):
+/// disposing it right after `await showDialog` returns is too
+/// early — the route is still in the overlay animating out, its
+/// dependencies change on pop, and the rebuilding TextField reads
+/// the disposed controller. The error is State too, so it survives
+/// the dialog rebuilding (an error held in the showDialog builder
+/// closure resets on every outer rebuild).
+class _RenameStopDialog extends StatefulWidget {
+  const _RenameStopDialog({this.initialName});
+
+  final String? initialName;
+
+  @override
+  State<_RenameStopDialog> createState() => _RenameStopDialogState();
+}
+
+class _RenameStopDialogState extends State<_RenameStopDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialName ?? '');
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename this stop'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            decoration: InputDecoration(
+              labelText: 'Stop name',
+              hintText: widget.initialName == null
+                  ? 'e.g. Cabugao Public Market'
+                  : null,
+            ),
+            textCapitalization: TextCapitalization.words,
+            autofocus: true,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _controller.text.trim();
+            if (name.isEmpty) {
+              setState(() => _error = 'Enter a name for the stop.');
+              return;
+            }
+            if (name.length > 100) {
+              setState(
+                () => _error = 'The name must be 100 characters or fewer.',
+              );
+              return;
+            }
+            Navigator.pop(context, name);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
 }
 
 /// Round dark control button used for zoom and my-location.
