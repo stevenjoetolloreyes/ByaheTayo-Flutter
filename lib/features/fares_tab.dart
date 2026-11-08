@@ -21,6 +21,7 @@ import 'app_layout.dart';
 import 'bus_companies.dart';
 import 'bus_stops.dart';
 import 'custom_routes.dart';
+import 'hidden_routes.dart';
 import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
@@ -880,6 +881,7 @@ class FaresTab extends StatefulWidget {
     this.currentUser,
     this.customRouteRepository,
     this.fareOverrideRepository,
+    this.hiddenRouteRepository,
     this.busStopRepository,
     this.busCompanyRepository,
     this.onViewOnMap,
@@ -893,6 +895,9 @@ class FaresTab extends StatefulWidget {
   /// Admin-set fare / student fare / direction overrides for the
   /// built-in routes. Null = no overrides are applied.
   final RouteFareOverrideRepository? fareOverrideRepository;
+
+  /// Hidden built-in routes source. Null = no routes are hidden.
+  final HiddenRouteRepository? hiddenRouteRepository;
 
   /// Admin-added bus stops source. Null = only the 16 built-in
   /// hubs are known.
@@ -933,6 +938,10 @@ class _FaresTabState extends State<FaresTab> {
   /// [seededRouteKey] ('From|To'). Empty when none are stored.
   Map<String, RouteFareOverride> _fareOverrides = {};
 
+  /// Built-in routes removed from Popular Routes, keyed by
+  /// [seededRouteKey] ('From|To'). Empty when none are hidden.
+  Set<String> _hiddenRouteKeys = {};
+
   /// Admin-added bus stops (Map line maker / "+ Add bus stop"),
   /// appended after the 16 built-in hubs everywhere hubs appear.
   List<BusStop> _busStops = [];
@@ -968,6 +977,7 @@ class _FaresTabState extends State<FaresTab> {
     busStopsChanged.addListener(_onRouteDataChanged);
     customRoutesChanged.addListener(_onRouteDataChanged);
     routeFareOverridesChanged.addListener(_onRouteDataChanged);
+    hiddenRoutesChanged.addListener(_onRouteDataChanged);
     _loadRouteData();
   }
 
@@ -976,6 +986,7 @@ class _FaresTabState extends State<FaresTab> {
     busStopsChanged.removeListener(_onRouteDataChanged);
     customRoutesChanged.removeListener(_onRouteDataChanged);
     routeFareOverridesChanged.removeListener(_onRouteDataChanged);
+    hiddenRoutesChanged.removeListener(_onRouteDataChanged);
     super.dispose();
   }
 
@@ -998,6 +1009,11 @@ class _FaresTabState extends State<FaresTab> {
       if (mounted) {
         setState(() => _fareOverrides = overrides);
       }
+    }
+    final hiddenRepo = widget.hiddenRouteRepository;
+    if (hiddenRepo != null) {
+      final hidden = await hiddenRepo.loadAll();
+      if (mounted) setState(() => _hiddenRouteKeys = hidden);
     }
     final stopRepo = widget.busStopRepository;
     if (stopRepo != null) {
@@ -1141,17 +1157,117 @@ class _FaresTabState extends State<FaresTab> {
     );
   }
 
+  /// Remove a route (admin only — the entry points are hidden
+  /// for everyone else, and the repositories re-check on save).
+  /// An admin-added route is DELETED for real (same confirm +
+  /// repository call as the Edit sheet's Delete route); a
+  /// built-in route is HIDDEN (restorable from Hidden routes —
+  /// never hard-deleted, and its fare/direction override is
+  /// untouched). Both confirm first.
+  Future<void> _removeRoute(PopularRoute route) async {
+    final user = widget.currentUser;
+    if (user == null || !isAdminUser(user)) return;
+    final customId = route.customRouteId;
+    if (customId != null) {
+      final custom = _customRoutes
+          .where((r) => r.id == customId)
+          .firstOrNull;
+      final repo = widget.customRouteRepository;
+      if (custom == null || repo == null) return;
+      final confirmed = await showIosAlert<bool>(
+        context: context,
+        title: 'Delete this route?',
+        message: '${custom.from} → ${custom.to} will be removed from '
+            'Popular Routes. This cannot be undone.',
+        actions: const [
+          IosAlertAction<bool>('Cancel', value: false),
+          IosAlertAction<bool>(
+            'Delete',
+            value: true,
+            isDestructive: true,
+          ),
+        ],
+      );
+      if (confirmed != true || !mounted) return;
+      try {
+        await repo.delete(custom, user);
+        await _loadRouteData();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Route deleted.')),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete the route.')),
+        );
+      }
+      return;
+    }
+    final repo = widget.hiddenRouteRepository;
+    if (repo == null) return;
+    final key = seededRouteKey(route.from, route.to);
+    final confirmed = await showIosAlert<bool>(
+      context: context,
+      title: 'Remove this route?',
+      message: '${route.from} → ${route.to} will be hidden from '
+          'Popular Routes. You can restore it from Hidden routes.',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false),
+        IosAlertAction<bool>(
+          'Remove',
+          value: true,
+          isDestructive: true,
+        ),
+      ],
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await repo.hide(key, user);
+      await _loadRouteData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Route hidden.'),
+          action: SnackBarAction(
+            label: 'View hidden',
+            onPressed: _showHiddenRoutes,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not hide the route.')),
+      );
+    }
+  }
+
   /// Popular Routes: the built-in verified / named routes (with
   /// any admin overrides merged in) plus admin-added custom routes
-  /// (newest first). The list is rebuilt from [_customRoutes] and
+  /// (newest first). Hidden built-in routes are skipped — a
+  /// remove never hard-deletes them, so they come back from
+  /// Hidden routes. The list is rebuilt from [_customRoutes] and
   /// [_fareOverrides] on every build, so a newly added route or
   /// an edited fare appears here without a reload.
   List<PopularRoute> get _allPopularRoutes => [
     for (final route in popularRoutes)
-      route.applyOverride(
-        _fareOverrides[seededRouteKey(route.from, route.to)],
-      ),
+      if (!_hiddenRouteKeys.contains(
+        seededRouteKey(route.from, route.to),
+      ))
+        route.applyOverride(
+          _fareOverrides[seededRouteKey(route.from, route.to)],
+        ),
     for (final route in _customRoutes) popularRouteFromCustomRoute(route),
+  ];
+
+  /// Built-in routes currently hidden, for the Hidden routes
+  /// admin sheet. A hidden key with no matching built-in route
+  /// (stale data) is skipped — it hides nothing.
+  List<PopularRoute> get _hiddenSeededRoutes => [
+    for (final route in popularRoutes)
+      if (_hiddenRouteKeys.contains(seededRouteKey(route.from, route.to)))
+        route,
   ];
 
   /// The Popular Routes list under the current chip filters.
@@ -1314,6 +1430,7 @@ class _FaresTabState extends State<FaresTab> {
         routeFareSenior: route.effectiveSeniorFare,
         routeFareSeniorSet: route.seniorFare != null,
         onEditRoute: _isAdmin ? () => _openEditRoute(route) : null,
+        onRemoveRoute: _isAdmin ? () => _removeRoute(route) : null,
         distanceKm: distanceKm,
         distanceNote: distanceNote,
         etaMinutes: etaMinutes,
@@ -1440,6 +1557,122 @@ class _FaresTabState extends State<FaresTab> {
                                     },
                                   ),
                                 ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Hidden routes (admin only): the built-in routes removed
+  /// from Popular Routes, each with a Restore button. Restoring
+  /// deletes the hidden record — the route comes back with any
+  /// fare/direction override intact, because hiding never
+  /// touches the override.
+  Future<void> _showHiddenRoutes() async {
+    final user = widget.currentUser;
+    final repo = widget.hiddenRouteRepository;
+    if (user == null || repo == null || !isAdminUser(user)) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final hidden = _hiddenSeededRoutes;
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom:
+                    MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Hidden routes',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Built-in routes removed from Popular Routes. '
+                    'Restoring brings a route back — its fares and '
+                    'direction are untouched.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  if (hidden.isEmpty)
+                    const Text('No hidden routes.')
+                  else
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final route in hidden)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(
+                                Icons.visibility_off_outlined,
+                              ),
+                              title: Text('${route.from} → ${route.to}'),
+                              subtitle: Text(
+                                [
+                                  if (route.operator != null)
+                                    route.operator!,
+                                  route.vehicle,
+                                ].join(' · '),
+                              ),
+                              trailing: TextButton(
+                                onPressed: () async {
+                                  try {
+                                    await repo.unhide(
+                                      seededRouteKey(
+                                        route.from,
+                                        route.to,
+                                      ),
+                                      user,
+                                    );
+                                    await _loadRouteData();
+                                    if (mounted) setSheetState(() {});
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Route restored.'),
+                                        ),
+                                      );
+                                    }
+                                  } catch (_) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Could not restore the route.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                                child: const Text('Restore'),
                               ),
                             ),
                         ],
@@ -2098,6 +2331,7 @@ class _FaresTabState extends State<FaresTab> {
                   child: _PopularRouteCard(
                     route: route,
                     onTap: () => _openRouteSheet(route),
+                    onRemove: _isAdmin ? () => _removeRoute(route) : null,
                   ),
                 ),
             // Nov 7 (Steven): the calculator (Sasakyan card, result
@@ -2139,6 +2373,21 @@ class _FaresTabState extends State<FaresTab> {
                 icon: const Icon(Icons.restart_alt),
                 label: const Text('Reset all directions'),
               ),
+              // Hidden routes (admin only): shown only while at
+              // least one built-in route is hidden, with the
+              // count — restoring lives here, next to the other
+              // route-data tools, because this tab already holds
+              // the repository + loaded data.
+              if (_hiddenSeededRoutes.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _showHiddenRoutes,
+                  icon: const Icon(Icons.visibility_off_outlined),
+                  label: Text(
+                    'Hidden routes (${_hiddenSeededRoutes.length})',
+                  ),
+                ),
+              ],
             ],
           ],
         ),
@@ -2257,10 +2506,18 @@ IconData _popularRouteIcon(String vehicle) {
 /// vehicle with the "Provincial" scope tag on bus cards, and the
 /// route's own fare (regular + 20%-off) or "Fare not set".
 class _PopularRouteCard extends StatelessWidget {
-  const _PopularRouteCard({required this.route, required this.onTap});
+  const _PopularRouteCard({
+    required this.route,
+    required this.onTap,
+    this.onRemove,
+  });
 
   final PopularRoute route;
   final VoidCallback onTap;
+
+  /// Admin-only remove (delete for admin-added routes, hide for
+  /// built-in routes). Null for non-admins — no icon is shown.
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -2344,6 +2601,15 @@ class _PopularRouteCard extends StatelessWidget {
                         ),
                       ],
                     ),
+              if (onRemove != null) ...[
+                const SizedBox(width: AppSpacing.s4),
+                IconButton(
+                  tooltip: 'Remove route',
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  color: scheme.error,
+                ),
+              ],
             ],
           ),
         ),
@@ -2439,6 +2705,7 @@ class _FareBreakdownSheet extends StatefulWidget {
     required this.breakdownNote,
     required this.onViewOnMap,
     this.onEditRoute,
+    this.onRemoveRoute,
     this.initialGeometry,
     this.loadGeometry,
     this.geometryFrom,
@@ -2514,6 +2781,11 @@ class _FareBreakdownSheet extends StatefulWidget {
   /// sheet (no route to edit).
   final VoidCallback? onEditRoute;
 
+  /// Admin-only: removes this route — delete for admin-added
+  /// routes, hide for built-in routes. Null for non-admins (no
+  /// remove entry is shown) and for the calculator sheet.
+  final VoidCallback? onRemoveRoute;
+
   /// Live OSRM geometry for this route when either tab already
   /// fetched it (see [routeGeometryCache]); null until the sheet
   /// fetches it (see [loadGeometry]).
@@ -2583,6 +2855,7 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
     final breakdownNote = widget.breakdownNote;
     final onViewOnMap = widget.onViewOnMap;
     final onEditRoute = widget.onEditRoute;
+    final onRemoveRoute = widget.onRemoveRoute;
     final distanceKm = geometry?.distanceKm ?? widget.distanceKm;
     final distanceNote = geometry != null
         ? 'Live road distance — same as the Map tab.'
@@ -2869,6 +3142,21 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
                   },
                   icon: const Icon(Icons.map_outlined),
                   label: const Text('Show direction on Map'),
+                ),
+              ],
+              if (onRemoveRoute != null) ...[
+                const SizedBox(height: AppSpacing.s12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onRemoveRoute();
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Remove route'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: scheme.error,
+                    side: BorderSide(color: scheme.error),
+                  ),
                 ),
               ],
             ],

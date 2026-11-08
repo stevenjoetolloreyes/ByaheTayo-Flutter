@@ -42,6 +42,7 @@ import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/custom_routes.dart';
 import 'features/fares_tab.dart';
+import 'features/hidden_routes.dart';
 import 'features/ios_components.dart';
 import 'features/route_fare_overrides.dart';
 import 'features/map_tab.dart';
@@ -1103,6 +1104,10 @@ class _HomeShellState extends State<_HomeShell>
               widget.authService.isConfigured
                   ? FirestoreRouteFareOverrideRepository()
                   : LocalRouteFareOverrideRepository(),
+          hiddenRouteRepository:
+              widget.authService.isConfigured
+                  ? FirestoreHiddenRouteRepository()
+                  : LocalHiddenRouteRepository(),
           busStopRepository:
               widget.authService.isConfigured
                   ? FirestoreBusStopRepository()
