@@ -58,6 +58,7 @@ import 'community_posts.dart';
 import 'custom_routes.dart';
 import 'fares_tab.dart';
 import 'ios_components.dart';
+import 'live_follow.dart';
 import 'onboarding/auth_service.dart';
 import 'osm_routing.dart';
 import 'route_fare_overrides.dart';
@@ -1935,6 +1936,45 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // Live bearing for the compass needle only (a ValueNotifier so
   // the needle rebuilds alone, never the whole map).
   final ValueNotifier<double> _bearing = ValueNotifier<double>(0);
+
+  // ---- Live Follow (Nov 8, 2026): real-GPS follow mode ----
+  // The camera follows the phone's live GPS in 3D while a route
+  // is active; every number on the Live panel is computed from
+  // the live position + route geometry (see live_follow.dart),
+  // never invented.
+  bool _liveFollowActive = false;
+  // Camera follow paused while a stop card is open from a
+  // stop-chip tap — GPS + stats keep updating; closing the card
+  // (or Resume follow) re-centres the camera.
+  bool _liveFollowPaused = false;
+  DateTime? _liveFollowStartedAt;
+  StreamSubscription<Position>? _livePositionSub;
+  Timer? _liveGpsLostTimer;
+  Timer? _liveMarkerTimer;
+  Timer? _liveClockTimer;
+  // Interpolated bus-marker position: glides toward the latest
+  // GPS fix between updates so the marker never teleports.
+  LatLng? _liveMarkerPos;
+  LatLng? _liveTargetPos;
+  double _liveBearing = 0;
+  double _liveTargetBearing = 0;
+  final SpeedSmoother _liveSpeed = SpeedSmoother();
+  LatLng? _livePrevPos;
+  DateTime? _livePrevPosAt;
+  // Last time a speed sample above liveMinMovingKmh arrived —
+  // the panel treats a longer gap as "bus stopped" and shows
+  // the last good ETA, labelled, instead of a fresh guess.
+  DateTime? _liveLastMovingAt;
+  bool _liveGpsLost = false;
+  LiveFollowSnapshot? _liveSnapshot;
+  // Last computed ETA kept when the bus stops (speed ~0), so
+  // the panel shows it clearly labelled instead of inventing
+  // one.
+  int? _liveLastGoodRemainingMin;
+  DateTime? _liveLastGoodArrival;
+  MapViewMode _livePrevViewMode = MapViewMode.standard2d;
+  DateTime? _liveLastCameraAt;
+  bool _liveCameraBusy = false;
   // Catholic churches from Google Places (Churches chip, whole
   // Luzon). Markers show only while the chip is active and not
   // navigating, so they never clutter a route.
@@ -2538,6 +2578,13 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _fitActiveRoute(sheetFraction: 0.55);
       _fetchRoadPath(oLat, oLng, destHub, via: resolved.via);
       _snapSheet(_SheetSnap.half);
+      if (jump.startLive) {
+        // Start Ride (Nov 8): the Fares sheet asked for Live
+        // Follow on this route. Permission is requested here —
+        // a denial only shows the honest message; the route
+        // still draws.
+        await _startLiveFollow();
+      }
     }
   }
 
@@ -2552,6 +2599,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _styleLoadTimer?.cancel();
     _tileWatchdogTimer?.cancel();
     _fallbackLoadTimer?.cancel();
+    _livePositionSub?.cancel();
+    _liveGpsLostTimer?.cancel();
+    _liveMarkerTimer?.cancel();
+    _liveClockTimer?.cancel();
     _sheetController.dispose();
     _sheetFocusNode.dispose();
     _bearing.dispose();
@@ -2619,6 +2670,328 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  // ---- Live Follow (Nov 8, 2026) ----
+
+  /// Starts Live Follow: the camera follows the phone's live
+  /// GPS in 3D (pitch 60°, bearing follows the direction of
+  /// travel) while a route is active — or the live position
+  /// alone when no route is active. Returns false when follow
+  /// could not start: location off, permission denied, or the
+  /// location API failed. Follow never starts without
+  /// permission and never tracks silently; every denial shows
+  /// an honest message with the phone steps to enable it.
+  Future<bool> _startLiveFollow() async {
+    if (_liveFollowActive) return true;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _snack('Turn on Location (GPS) on your phone first.');
+        return false;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        _snack(
+          'Location permission is needed to follow your ride. '
+          'Turn it on in Settings > Location.',
+        );
+        return false;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Location is blocked for EstudyanteGO. Turn it on in '
+              'Settings > Apps > EstudyanteGO > Permissions > '
+              'Location.',
+            ),
+            action: SnackBarAction(
+              label: 'Open Settings',
+              onPressed: () => Geolocator.openAppSettings(),
+            ),
+          ),
+        );
+        return false;
+      }
+    } catch (_) {
+      _snack('Location is unavailable on this device right now.');
+      return false;
+    }
+    // Permission granted: save the view mode to restore on exit,
+    // switch to 3D, and start tracking.
+    _livePrevViewMode = _viewMode;
+    _liveSpeed.clear();
+    _livePrevPos = null;
+    _livePrevPosAt = null;
+    _liveLastMovingAt = null;
+    _liveLastGoodRemainingMin = null;
+    _liveLastGoodArrival = null;
+    _liveSnapshot = null;
+    _liveGpsLost = false;
+    _liveFollowPaused = false;
+    setState(() {
+      _liveFollowActive = true;
+      _liveFollowStartedAt = DateTime.now();
+      _locationGranted = true;
+    });
+    await _setViewMode(MapViewMode.perspective3d);
+    _snapSheet(_SheetSnap.half);
+    // First fix now (centres the camera at once) + a stream for
+    // the ride. Stream errors mean the GPS feed died — show the
+    // honest lost state and keep the last known position.
+    try {
+      final first = await Geolocator.getCurrentPosition();
+      if (mounted && _liveFollowActive) _onLivePosition(first);
+    } catch (_) {
+      // The stream below still delivers fixes; a missing first
+      // fix only delays the first camera move.
+    }
+    _livePositionSub = Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 5,
+      ),
+    ).listen(
+      _onLivePosition,
+      onError: (_) {
+        if (!mounted || !_liveFollowActive) return;
+        setState(() => _liveGpsLost = true);
+        _snack('GPS signal lost — showing your last known position.');
+      },
+    );
+    _armLiveGpsLostTimer();
+    _liveMarkerTimer = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _liveMarkerTick(),
+    );
+    _liveClockTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _liveClockTick(),
+    );
+    return true;
+  }
+
+  /// Ends Live Follow: stops GPS tracking, restores the view
+  /// mode from before the ride, and fits the active route back
+  /// into view.
+  void _stopLiveFollow() {
+    if (!_liveFollowActive) return;
+    _livePositionSub?.cancel();
+    _livePositionSub = null;
+    _liveGpsLostTimer?.cancel();
+    _liveMarkerTimer?.cancel();
+    _liveClockTimer?.cancel();
+    final prevMode = _livePrevViewMode;
+    setState(() {
+      _liveFollowActive = false;
+      _liveFollowPaused = false;
+      _liveGpsLost = false;
+      _liveSnapshot = null;
+      _liveMarkerPos = null;
+      _liveTargetPos = null;
+      _liveFollowStartedAt = null;
+      _liveLastMovingAt = null;
+      _liveLastGoodRemainingMin = null;
+      _liveLastGoodArrival = null;
+    });
+    unawaited(_setViewMode(prevMode));
+    if (_activeRoute != null) _fitActiveRoute();
+  }
+
+  /// One live GPS fix: smooths the speed, steers the bearing,
+  /// recomputes the trip snapshot, and glides the camera. The
+  /// position itself is never faked — a missing fix simply
+  /// leaves the last known position in place (see the lost
+  /// timer).
+  void _onLivePosition(Position pos) {
+    if (!_liveFollowActive || !mounted) return;
+    final now = DateTime.now();
+    final here = LatLng(pos.latitude, pos.longitude);
+    // Speed: the GPS-reported speed when the device gives one
+    // (>= 0 m/s), else derived from the last two fixes. The
+    // smoother averages the last few samples so one noisy fix
+    // cannot swing the ETA.
+    double? kmh;
+    if (pos.speed >= 0) {
+      kmh = pos.speed * 3.6;
+    } else if (_livePrevPos != null && _livePrevPosAt != null) {
+      kmh = speedKmhBetween(
+        prev: _livePrevPos!,
+        next: here,
+        delta: now.difference(_livePrevPosAt!),
+      );
+    }
+    if (kmh != null) {
+      _liveSpeed.add(kmh);
+      if (kmh > liveMinMovingKmh) _liveLastMovingAt = now;
+    }
+    // Bearing follows the direction of travel: only when the bus
+    // actually moved (10 m+), so GPS jitter at a stop does not
+    // spin the camera. The bearing is approached gradually
+    // (shortest arc), never snapped.
+    if (_livePrevPos != null) {
+      final movedKm =
+          distanceAlongPath([_livePrevPos!, here], 0, 1);
+      if (movedKm >= 0.01) {
+        _liveTargetBearing = bearingBetween(_livePrevPos!, here);
+      }
+    }
+    _liveBearing = lerpAngleDeg(_liveBearing, _liveTargetBearing, 0.3);
+    _livePrevPos = here;
+    _livePrevPosAt = now;
+    _liveTargetPos = here;
+    _liveMarkerPos ??= here;
+    setState(() {
+      _userPos = pos;
+      _liveGpsLost = false;
+      final route = _activeRoute;
+      final totalKm =
+          _routeDistanceKm > 0 ? _routeDistanceKm : (route?.roadKm ?? 0);
+      _liveSnapshot = computeLiveFollow(
+        roadPoints: _roadPoints,
+        origin: _activeRouteOrigin,
+        stops: _routeStops,
+        position: here,
+        totalKm: totalKm,
+        speedKmh: _liveSpeed.averageKmh,
+        now: now,
+      );
+      final snap = _liveSnapshot!;
+      if (snap.remainingMinutes != null) {
+        _liveLastGoodRemainingMin = snap.remainingMinutes;
+        _liveLastGoodArrival = snap.arrivalTime;
+      }
+    });
+    _armLiveGpsLostTimer();
+    unawaited(_liveMoveCameraToMarker());
+  }
+
+  /// Re-arms the GPS-lost timer: no fix for [liveGpsLostAfter]
+  /// shows the honest lost state (the camera stays at the last
+  /// known position — movement is never faked).
+  void _armLiveGpsLostTimer() {
+    _liveGpsLostTimer?.cancel();
+    _liveGpsLostTimer = Timer(liveGpsLostAfter, () {
+      if (!mounted || !_liveFollowActive) return;
+      setState(() => _liveGpsLost = true);
+    });
+  }
+
+  /// Glides the bus marker toward the latest GPS fix (200 ms
+  /// ticks, half the remaining distance each tick): the marker
+  /// moves continuously even when fixes arrive in steps, and
+  /// never teleports. Only rebuilds when it actually moved.
+  void _liveMarkerTick() {
+    if (!_liveFollowActive || !mounted) return;
+    final target = _liveTargetPos;
+    final current = _liveMarkerPos;
+    if (target == null) return;
+    if (current == null) {
+      setState(() => _liveMarkerPos = target);
+      return;
+    }
+    final next = lerpLatLng(current, target, 0.5);
+    // Below ~1 m the move is invisible — snap and stop
+    // rebuilding.
+    final movedKm = distanceAlongPath([current, next], 0, 1);
+    if (movedKm < 0.001) {
+      if (current.latitude != target.latitude ||
+          current.longitude != target.longitude) {
+        setState(() => _liveMarkerPos = target);
+      }
+      return;
+    }
+    setState(() => _liveMarkerPos = next);
+  }
+
+  /// Refreshes the Live panel clock (elapsed / arrival) while
+  /// the bus is stopped — no new GPS fixes arrive then, so the
+  /// elapsed time would freeze without it. Only recomputes the
+  /// snapshot while the bus is still moving; a stopped bus keeps
+  /// its last good ETA (labelled in the panel), never a fresh
+  /// guess from a stale speed.
+  void _liveClockTick() {
+    if (!_liveFollowActive || !mounted) return;
+    final pos = _userPos;
+    if (pos == null) return;
+    setState(() {
+      final snap = _liveSnapshot;
+      if (snap != null && snap.remainingMinutes != null) {
+        // Still moving: the arrival clock time advances with now.
+        final route = _activeRoute;
+        final totalKm = _routeDistanceKm > 0
+            ? _routeDistanceKm
+            : (route?.roadKm ?? 0);
+        _liveSnapshot = computeLiveFollow(
+          roadPoints: _roadPoints,
+          origin: _activeRouteOrigin,
+          stops: _routeStops,
+          position: LatLng(pos.latitude, pos.longitude),
+          totalKm: totalKm,
+          speedKmh: _liveSpeed.averageKmh,
+          now: DateTime.now(),
+        );
+      }
+      // Stopped / no speed yet: no recompute — the panel keeps
+      // the last good ETA (labelled) or "calculating…", and the
+      // elapsed chip still ticks from _liveFollowStartedAt.
+    });
+  }
+
+  /// One smooth follow-camera move: an animated (900 ms) glide
+  /// to the interpolated marker position in 3D, bearing
+  /// following the direction of travel. Throttled to one move
+  /// per 900 ms and skipped while a move is in flight or the
+  /// camera is paused, so updates never stack into jumps.
+  Future<void> _liveMoveCameraToMarker() async {
+    final controller = _mapController;
+    final target = _liveMarkerPos ??
+        (_userPos == null
+            ? null
+            : LatLng(_userPos!.latitude, _userPos!.longitude));
+    if (controller == null || target == null) return;
+    if (_liveFollowPaused || _liveCameraBusy) return;
+    final now = DateTime.now();
+    if (_liveLastCameraAt != null &&
+        now.difference(_liveLastCameraAt!) <
+            const Duration(milliseconds: 900)) {
+      return;
+    }
+    _liveLastCameraAt = now;
+    _liveCameraBusy = true;
+    try {
+      await controller.animateCamera(
+        center: Geographic(lon: target.longitude, lat: target.latitude),
+        zoom: 16,
+        pitch: 60,
+        bearing: _liveBearing,
+        nativeDuration: const Duration(milliseconds: 900),
+      );
+    } catch (_) {
+      // Interrupted by a newer camera move — the next one lands.
+    } finally {
+      _liveCameraBusy = false;
+    }
+  }
+
+  /// A Live stop-chip tap: pauses the follow camera so the stop
+  /// flight is not yanked back by the next GPS update, then
+  /// flies to the stop (GPS + stats keep running).
+  Future<void> _onLiveStopTap(int index) async {
+    if (!_liveFollowActive) return;
+    setState(() => _liveFollowPaused = true);
+    await _selectStop(index);
+  }
+
+  /// Resumes the follow camera after a stop-chip pause.
+  void _resumeLiveFollow() {
+    if (!_liveFollowActive) return;
+    setState(() => _liveFollowPaused = false);
+    unawaited(_liveMoveCameraToMarker());
   }
 
   /// Fits the map to a southwest/northeast box. Native fitBounds
@@ -3184,24 +3557,59 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       }
     }
     // User position: a plain blue-dot circle (MapLibre has no
-    // built-in blue dot).
+    // built-in blue dot). During Live Follow it is the green bus
+    // icon from Steven's Live screen, riding the interpolated
+    // position so it glides instead of jumping between fixes.
     if (_userPos != null && _locationGranted) {
-      markers.add(
-        Marker(
-          point: Geographic(
-            lon: _userPos!.longitude,
-            lat: _userPos!.latitude,
-          ),
-          size: const Size(24, 24),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF4285F4),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
+      if (_liveFollowActive) {
+        final markerPos = _liveMarkerPos ??
+            LatLng(_userPos!.latitude, _userPos!.longitude);
+        markers.add(
+          Marker(
+            point: Geographic(
+              lon: markerPos.longitude,
+              lat: markerPos.latitude,
+            ),
+            size: const Size(48, 48),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.directions_bus,
+                color: Colors.white,
+                size: 26,
+              ),
             ),
           ),
-        ),
-      );
+        );
+      } else {
+        markers.add(
+          Marker(
+            point: Geographic(
+              lon: _userPos!.longitude,
+              lat: _userPos!.latitude,
+            ),
+            size: const Size(24, 24),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF4285F4),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+              ),
+            ),
+          ),
+        );
+      }
     }
     return markers;
   }
@@ -3267,7 +3675,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// highlight only exists while a stop is selected.
   void _dismissStopCard() {
     if (_selectedStopIndex == null) return;
-    setState(() => _selectedStopIndex = null);
+    // A stop card opened from a Live stop chip paused the follow
+    // camera — closing the card resumes it.
+    final resumeFollow = _liveFollowActive && _liveFollowPaused;
+    setState(() {
+      _selectedStopIndex = null;
+      if (resumeFollow) _liveFollowPaused = false;
+    });
+    if (resumeFollow) unawaited(_liveMoveCameraToMarker());
   }
 
   // ---- Line maker (admin-only) ----
@@ -3604,6 +4019,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       to: endName,
       fromLat: null,
       fromLng: null,
+      startLive: false,
     );
     _onFaresJump();
   }
@@ -4710,6 +5126,9 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// moment before the default route loads), an honest
   /// placeholder shows instead of an invented route.
   List<Widget> _sheetBodyWidgets({required ColorScheme scheme}) {
+    // Live Follow panel replaces the route sheet while follow
+    // is active (Steven's Live screen layout).
+    if (_liveFollowActive) return _livePanelWidgets(scheme);
     final route = _activeRoute;
     if (route == null) {
       return const [
@@ -4728,6 +5147,438 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       const SizedBox(height: 16),
       ..._stopsSection(scheme),
     ];
+  }
+
+  /// The Live Follow panel (Nov 8, 2026): Steven's Live screen
+  /// layout — header, progress bar with stop dots, three stat
+  /// chips, arrived banner, tappable stop chips — in English.
+  /// Every number is computed from the live GPS position +
+  /// route geometry ([_liveSnapshot]); nothing is hardcoded.
+  /// When no route is active the panel says so honestly and
+  /// shows only the live position.
+  List<Widget> _livePanelWidgets(ColorScheme scheme) {
+    final route = _activeRoute;
+    final snap = _liveSnapshot;
+    final widgets = <Widget>[const SizedBox(height: 4)];
+    // Header: bus icon + "Bus · Cabugao → Vigan" + "≈45 min trip".
+    // The trip label is the route's own estimate (same model as
+    // the preview cards, marked ≈); the ARRIVAL chip below is
+    // the live-GPS calculation, never this estimate.
+    if (route != null) {
+      final totalMin = _previewMinutes(TravelMode.transit);
+      widgets.add(
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.directions_bus,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Bus · ${route.originName} → ${route.dest.name}',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (totalMin > 0)
+              Text(
+                '≈${formatTripTime(totalMin)} trip',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
+      );
+    } else {
+      widgets.add(
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.directions_bus,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Live · Your position',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(
+        Text(
+          'No route selected — showing your live position. Pick a '
+          'route in Fares to see trip info here.',
+          style: TextStyle(
+            fontSize: 13,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    if (route != null && snap != null) {
+      widgets.add(const SizedBox(height: 14));
+      widgets.add(_liveProgressBar(scheme, snap));
+      widgets.add(const SizedBox(height: 14));
+      widgets.add(_liveStatChips(scheme, snap));
+      // Honest status line (only when something is not live).
+      final status = _liveStatusText();
+      if (status != null) {
+        widgets.add(const SizedBox(height: 8));
+        widgets.add(
+          Text(
+            status,
+            style: TextStyle(
+              fontSize: 12,
+              color: _liveGpsLost
+                  ? const Color(0xFFB45309)
+                  : scheme.onSurfaceVariant,
+            ),
+          ),
+        );
+      }
+      if (snap.arrived) {
+        widgets.add(const SizedBox(height: 12));
+        widgets.add(
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.flag,
+                  color: Color(0xFF16A34A),
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Arrived at ${route.dest.name}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      if (_routeStops.isNotEmpty) {
+        widgets.add(const SizedBox(height: 14));
+        widgets.add(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < _routeStops.length; i++)
+                _liveStopChip(scheme, i),
+            ],
+          ),
+        );
+      }
+    }
+    if (_liveFollowPaused) {
+      widgets.add(const SizedBox(height: 14));
+      widgets.add(
+        FilledButton.icon(
+          onPressed: _resumeLiveFollow,
+          icon: const Icon(Icons.my_location),
+          label: const Text('Resume follow'),
+        ),
+      );
+    }
+    widgets.add(const SizedBox(height: 14));
+    widgets.add(
+      OutlinedButton.icon(
+        onPressed: _stopLiveFollow,
+        icon: const Icon(Icons.stop),
+        label: const Text('Stop live follow'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.error,
+          side: BorderSide(color: scheme.error),
+        ),
+      ),
+    );
+    return widgets;
+  }
+
+  /// The honest one-line status for the Live panel, or null when
+  /// everything is live. Priority: GPS lost > stopped (last
+  /// known) > calculating.
+  String? _liveStatusText() {
+    if (_liveGpsLost) {
+      return 'GPS signal lost — showing your last known position.';
+    }
+    final snap = _liveSnapshot;
+    if (snap == null) return 'Calculating arrival from live speed…';
+    if (snap.remainingMinutes == null) {
+      if (_liveLastGoodRemainingMin != null) {
+        return 'Bus stopped — showing the last known arrival.';
+      }
+      return 'Calculating arrival from live speed…';
+    }
+    if (_liveBusStopped) {
+      return 'Bus stopped — showing the last known arrival.';
+    }
+    return null;
+  }
+
+  /// True when no speed sample above [liveMinMovingKmh] has
+  /// arrived for 30 s — the bus counts as stopped, so the panel
+  /// shows the last good ETA (labelled) instead of a fresh
+  /// guess from a stale speed.
+  bool get _liveBusStopped {
+    final lastMoving = _liveLastMovingAt;
+    if (lastMoving == null) return false;
+    if (_liveLastGoodRemainingMin == null) return false;
+    return DateTime.now().difference(lastMoving) >
+        const Duration(seconds: 30);
+  }
+
+  /// Elapsed / Remaining / Arriving chips. Elapsed = time since
+  /// Start Ride was tapped. Remaining + arrival come from the
+  /// live GPS speed; when the bus is stopped they show the last
+  /// good values (labelled by [_liveStatusText]); when no speed
+  /// exists yet they show "…" — never a guessed time.
+  Widget _liveStatChips(ColorScheme scheme, LiveFollowSnapshot snap) {
+    final now = DateTime.now();
+    final showLastGood = _liveBusStopped;
+    final remainingMin = showLastGood
+        ? _liveLastGoodRemainingMin
+        : snap.remainingMinutes;
+    final arrival =
+        showLastGood ? _liveLastGoodArrival : snap.arrivalTime;
+    final elapsedMin = _liveFollowStartedAt == null
+        ? 0
+        : now.difference(_liveFollowStartedAt!).inMinutes;
+    return Row(
+      children: [
+        Expanded(
+          child: _liveStatChip(
+            scheme,
+            formatTripTime(elapsedMin),
+            'Elapsed',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _liveStatChip(
+            scheme,
+            remainingMin == null ? '…' : formatTripTime(remainingMin),
+            'Remaining',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _liveStatChip(
+            scheme,
+            arrival == null ? '…' : formatArrivalTime(arrival),
+            'Arriving at terminal',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _liveStatChip(ColorScheme scheme, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: scheme.onSurfaceVariant,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Green progress bar with a dot per stop (Steven's Live
+  /// screen): the fill is the travelled fraction of the route,
+  /// each dot sits at its stop's fraction along the route
+  /// (filled once passed, outlined while upcoming).
+  Widget _liveProgressBar(ColorScheme scheme, LiveFollowSnapshot snap) {
+    final totalKm = snap.totalKm > 0 ? snap.totalKm : 1;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return SizedBox(
+          height: 24,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              Container(
+                height: 8,
+                width: width * snap.progress,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16A34A),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              for (var i = 0; i < _routeStops.length; i++)
+                Positioned(
+                  left: (width *
+                              (_routeStops[i].kmFromOrigin / totalKm) -
+                          6)
+                      .clamp(0.0, width - 12),
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: i <= snap.currentStopIndex
+                          ? const Color(0xFF16A34A)
+                          : scheme.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF16A34A),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// One tappable stop chip: number circle + name. The current
+  /// stop (the one the bus is at / last passed) is dark green
+  /// filled with white text; the rest are outlined. Tapping
+  /// pauses the follow camera and flies to the stop.
+  Widget _liveStopChip(ColorScheme scheme, int index) {
+    final stop = _routeStops[index];
+    final current = index == _liveSnapshot?.currentStopIndex;
+    final number = Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        color: current ? Colors.white : const Color(0xFF16A34A),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          '${index + 1}',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color:
+                current ? const Color(0xFF14532D) : Colors.white,
+          ),
+        ),
+      ),
+    );
+    final label = Text(
+      stop.name,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: current ? FontWeight.w700 : FontWeight.w500,
+        color: current ? Colors.white : scheme.onSurface,
+      ),
+    );
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [number, const SizedBox(width: 6), label],
+    );
+    if (current) {
+      return Material(
+        color: const Color(0xFF14532D),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () => _onLiveStopTap(index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 7,
+            ),
+            child: content,
+          ),
+        ),
+      );
+    }
+    return Material(
+      color: scheme.surface,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => _onLiveStopTap(index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 7,
+          ),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFF16A34A)),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: content,
+        ),
+      ),
+    );
   }
 
   /// The preview's fare cards: REGULAR FARE and DISCOUNTED -20%,
@@ -5050,6 +5901,70 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               ),
             ),
           ),
+        // Live Follow (Nov 8, 2026): starts the real-GPS follow
+        // for the active route (or the live position when no
+        // route is active). Below the 2D|3D pill — the only free
+        // top-centre slot; the control cluster is already 5
+        // buttons tall (a 6th would cover the stop card's close
+        // button). Tapping again stops follow.
+        if (!_tilesFailed)
+          Positioned(
+            top: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(999),
+                clipBehavior: Clip.antiAlias,
+                color: _liveFollowActive
+                    ? const Color(0xFFDC2626)
+                    : Theme.of(context).colorScheme.surface,
+                child: InkWell(
+                  onTap: () {
+                    if (_liveFollowActive) {
+                      _stopLiveFollow();
+                    } else {
+                      _startLiveFollow();
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 7,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _liveFollowActive
+                              ? Icons.stop
+                              : Icons.play_arrow,
+                          size: 16,
+                          color: _liveFollowActive
+                              ? Colors.white
+                              : const Color(0xFF16A34A),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _liveFollowActive ? 'Stop' : 'Live',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _liveFollowActive
+                                ? Colors.white
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         // Floating map controls, top-right (Steven, Nov 7: the
         // buttons belong at the top). They used to sit bottom-right
         // above the peeked sheet; the top-right is free — no text
@@ -5337,7 +6252,9 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                           ),
                           // Fixed header: title + ETA • FARE +
                           // VERIFIED FARE badge — never scrolled.
-                          _sheetFixedHeader(scheme),
+                          // Hidden during Live Follow: the Live
+                          // panel carries its own header.
+                          if (!_liveFollowActive) _sheetFixedHeader(scheme),
                           Expanded(
                             child: SingleChildScrollView(
                               controller: scrollController,

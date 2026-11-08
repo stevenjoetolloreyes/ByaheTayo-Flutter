@@ -75,8 +75,16 @@ double discountedFareOf(double fare) => (fare * 0.8 * 4).round() / 4;
 /// when the jump's origin is 'My location' (J2, Nov 7, 2026) —
 /// without them the Map silently retargeted to the home hub.
 /// Null when the origin is a hub (the Map resolves it by name).
+/// [startLive] asks the Map tab to start Live Follow on the
+/// jumped route (Start Ride, Nov 8, 2026) — false for a plain jump.
 final faresMapJump = ValueNotifier<
-    ({String from, String to, double? fromLat, double? fromLng})?>(null);
+    ({
+      String from,
+      String to,
+      double? fromLat,
+      double? fromLng,
+      bool startLive,
+    })?>(null);
 
 /// Web formatTripTime, mirrored here so the Fares sheet can show an
 /// ETA without importing map_tab.dart (which imports this file):
@@ -1766,12 +1774,14 @@ class _FaresTabState extends State<FaresTab> {
     required String to,
     double? fromLat,
     double? fromLng,
+    bool startLive = false,
   }) {
     faresMapJump.value = (
       from: from,
       to: to,
       fromLat: fromLat,
       fromLng: fromLng,
+      startLive: startLive,
     );
     widget.onViewOnMap?.call();
   }
@@ -1906,6 +1916,16 @@ class _FaresTabState extends State<FaresTab> {
             : null,
         onViewOnMap: canViewOnMap
             ? () => _jumpToMap(from: route.from, to: route.to)
+            : null,
+        // Start Ride (Nov 8, 2026): the same jump, with Live
+        // Follow requested — the Map starts GPS tracking on
+        // this route. Same endpoint gate as Show direction.
+        onStartRide: canViewOnMap
+            ? () => _jumpToMap(
+                  from: route.from,
+                  to: route.to,
+                  startLive: true,
+                )
             : null,
         // F1/F2: the sheet shows the live OSRM geometry when
         // available (cached or freshly fetched) and falls back to
@@ -3284,6 +3304,7 @@ class _FareBreakdownSheet extends StatefulWidget {
     required this.breakdown,
     required this.breakdownNote,
     required this.onViewOnMap,
+    this.onStartRide,
     this.onEditRoute,
     this.onRemoveRoute,
     this.initialGeometry,
@@ -3355,6 +3376,12 @@ class _FareBreakdownSheet extends StatefulWidget {
   final FareBreakdown? breakdown;
   final String? breakdownNote;
   final VoidCallback? onViewOnMap;
+
+  /// Starts Live Follow on this route (Start Ride, Nov 8, 2026):
+  /// the sheet closes, the Map opens on the route, and GPS
+  /// follow starts. Null when the route cannot be jumped to
+  /// (same gate as [onViewOnMap]).
+  final VoidCallback? onStartRide;
 
   /// Admin-only: opens the edit sheet for this route. Null for
   /// non-admins (no edit entry is shown) and for the calculator
@@ -3434,6 +3461,7 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
     final fareStatus = widget.fareStatus;
     final breakdownNote = widget.breakdownNote;
     final onViewOnMap = widget.onViewOnMap;
+    final onStartRide = widget.onStartRide;
     final onEditRoute = widget.onEditRoute;
     final onRemoveRoute = widget.onRemoveRoute;
     final distanceKm = geometry?.distanceKm ?? widget.distanceKm;
@@ -3712,6 +3740,17 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
                       ],
                     ),
                   ),
+              ],
+              if (onStartRide != null) ...[
+                const SizedBox(height: AppSpacing.s16),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onStartRide();
+                  },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start Ride'),
+                ),
               ],
               if (onViewOnMap != null) ...[
                 const SizedBox(height: AppSpacing.s16),

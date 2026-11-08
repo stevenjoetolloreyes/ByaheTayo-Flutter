@@ -69,4 +69,33 @@ void main() {
     expect(find.text('Cabugao → Vigan Bus Terminal'), findsWidgets);
     expect(find.text('VERIFIED FARE'), findsOneWidget);
   });
+
+  testWidgets('route sheet Start Ride jumps to the Map route', (tester) async {
+    await _pumpApp(tester);
+    await tester.tap(find.byKey(const Key('top-nav-item-Fares')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.text('Cabugao → Vigan Bus Terminal'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cabugao → Vigan Bus Terminal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fare breakdown'), findsOneWidget);
+    // Start Ride sits above 'Show direction on Map' in the
+    // sheet's action row (Nov 8, 2026).
+    expect(find.text('Start Ride'), findsOneWidget);
+    await tester.ensureVisible(find.text('Start Ride'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start Ride'));
+    await tester.pumpAndSettle();
+
+    // The jump draws the route on the Map. Live Follow itself
+    // cannot start in a widget test (no location platform
+    // channel) — _startLiveFollow catches that and shows the
+    // honest message instead of crashing, so the route still
+    // lands.
+    expect(find.text('Cabugao → Vigan Bus Terminal'), findsWidgets);
+    expect(find.text('VERIFIED FARE'), findsOneWidget);
+  });
 }

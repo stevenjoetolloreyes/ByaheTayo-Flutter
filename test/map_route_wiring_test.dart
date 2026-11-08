@@ -328,6 +328,7 @@ void main() {
         to: 'San Juan, Ilocos Sur',
         fromLat: null,
         fromLng: null,
+        startLive: false,
       );
       await tester.pumpAndSettle();
 
