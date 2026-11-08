@@ -51,8 +51,11 @@ void main() {
     // entry point anymore.
     expect(find.text('School Calendar'), findsOneWidget);
     expect(find.text('Attendance'), findsNothing);
-    expect(find.text('Tasks & Assignments'), findsOneWidget);
-    expect(find.text('No pending tasks.'), findsOneWidget);
+    // The Tasks & Assignments and Upcoming cards were removed Nov 8
+    // at Steven's request — they must not render anymore.
+    expect(find.text('Tasks & Assignments'), findsNothing);
+    expect(find.text('No pending tasks.'), findsNothing);
+    expect(find.text('Upcoming'), findsNothing);
     // Real zero state, not an invented amount.
     expect(find.text('Available Balance'), findsOneWidget);
     expect(find.textContaining('₱0'), findsWidgets);
