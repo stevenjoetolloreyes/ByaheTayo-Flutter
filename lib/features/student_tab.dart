@@ -41,7 +41,6 @@ import 'student/allowance_screen.dart';
 import 'student/bible_screen.dart';
 import 'student/classes_screen.dart';
 import 'student/commute_screen.dart';
-import 'student/notes_screen.dart';
 import 'student/quotes_screen.dart';
 import 'student/share_card.dart';
 import 'student/signin_screen.dart';
@@ -116,9 +115,6 @@ class _StudentTabState extends State<StudentTab> {
   List<BudgetLimit> _budgets = [];
   List<Subject> _subjects = [];
   List<AssignmentItem> _assignments = [];
-  List<Note> _notes = [];
-  List<Quiz> _quizzes = [];
-  List<QuizAttempt> _attempts = [];
   List<AttendanceRecord> _attendance = [];
 
   List<String> _savedKeys = [];
@@ -256,11 +252,6 @@ class _StudentTabState extends State<StudentTab> {
         await StudentStorage.loadList(StudentStorage.subjectsKey);
     final assignments =
         await StudentStorage.loadList(StudentStorage.assignmentsKey);
-    final notes = await StudentStorage.loadList(StudentStorage.notesKey);
-    final quizzes =
-        await StudentStorage.loadList(StudentStorage.quizzesKey);
-    final attempts =
-        await StudentStorage.loadList(StudentStorage.attemptsKey);
     final attendance =
         await StudentStorage.loadList(StudentStorage.attendanceKey);
 
@@ -281,9 +272,6 @@ class _StudentTabState extends State<StudentTab> {
       _budgets = budgets.map(BudgetLimit.fromJson).toList();
       _subjects = subjects.map(Subject.fromJson).toList();
       _assignments = assignments.map(AssignmentItem.fromJson).toList();
-      _notes = notes.map(Note.fromJson).toList();
-      _quizzes = quizzes.map(Quiz.fromJson).toList();
-      _attempts = attempts.map(QuizAttempt.fromJson).toList();
       _attendance = attendance.map(AttendanceRecord.fromJson).toList();
 
       _savedKeys = prefs.getStringList('byahetayo_saved_routes') ?? [];
@@ -383,7 +371,6 @@ class _StudentTabState extends State<StudentTab> {
         title: 'Study',
         sections: [
           _classesWidget(context),
-          _notesWidget(context),
         ],
       ),
       (
@@ -1912,166 +1899,6 @@ class _StudentTabState extends State<StudentTab> {
     return counts;
   }
 
-  Widget _notesWidget(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final attemptedIds = <String>{};
-    for (final a in _attempts) {
-      attemptedIds.add(a.quizTitle);
-    }
-    final notAttempted =
-        _quizzes.where((q) => !attemptedIds.contains(q.title)).toList();
-    double avg = 0;
-    if (_attempts.isNotEmpty) {
-      var sum = 0.0;
-      for (final a in _attempts) {
-        if (a.total > 0) sum += a.score / a.total * 100;
-      }
-      avg = sum / _attempts.length;
-    }
-    final notes = List.of(_notes)
-      ..sort((a, b) => b.updated.compareTo(a.updated));
-    final attempts = List.of(_attempts)
-      ..sort((a, b) => b.date.compareTo(a.date));
-
-    Widget statBox(IconData icon, String value, String label) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: scheme.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: scheme.primary, size: 20),
-              const SizedBox(width: AppSpacing.s8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(value,
-                        style: AppText.bodyStrong),
-                    Text(label, style: AppText.small),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return _widgetCard(
-      context,
-      icon: Icons.quiz_outlined,
-      title: 'Review Notes & Quizzes',
-      subtitle: 'Study, practice, and track your progress.',
-      onOpen: () => _open(const NotesScreen()),
-      children: [
-        // Graph-first (preview parity, Nov 6): Learning Progress
-        // ring + Average Score gauge, from the real quizzes and
-        // attempts — 0% / "—" when nothing is recorded yet.
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                children: [
-                  _VizRing(
-                    fraction: _quizzes.isEmpty
-                        ? 0
-                        : (attemptedIds.length / _quizzes.length)
-                            .clamp(0.0, 1.0),
-                    top:
-                        '${(_quizzes.isEmpty ? 0 : (attemptedIds.length / _quizzes.length * 100)).round()}%',
-                    bottom: 'Done',
-                    color: kStudentEmerald,
-                  ),
-                  const SizedBox(height: AppSpacing.s4),
-                  const Text('Learning Progress',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                  Text(
-                    '${attemptedIds.length} of ${_quizzes.length} completed',
-                    style: AppText.small,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Column(
-                children: [
-                  _VizGauge(
-                    fraction: _attempts.isEmpty ? 0 : (avg / 100).clamp(0, 1).toDouble(),
-                    top: _attempts.isEmpty
-                        ? '—'
-                        : '${avg.toStringAsFixed(0)}%',
-                    bottom: 'Avg. Score',
-                    color: const Color(0xFF2563EB),
-                  ),
-                  const SizedBox(height: AppSpacing.s4),
-                  const Text('Average score',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                  Text(
-                    _attempts.isEmpty
-                        ? 'No quizzes taken'
-                        : '${avg.toStringAsFixed(1)}%',
-                    style: AppText.small,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        Row(
-          children: [
-            statBox(Icons.note_outlined, '${_notes.length}', 'Saved Notes'),
-            const SizedBox(width: AppSpacing.s8),
-            statBox(Icons.quiz_outlined, '${_quizzes.length}', 'Quizzes'),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        Row(
-          children: [
-            statBox(Icons.check_circle_outlined, '${_attempts.length}',
-                'Completed'),
-            const SizedBox(width: AppSpacing.s8),
-            statBox(Icons.bar_chart_outlined,
-                _attempts.isEmpty ? '—' : '${avg.toStringAsFixed(1)}%',
-                'Avg. Score'),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        const Text('Quizzes this week',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        _WeekBars(values: _weekCounts(_attempts.map((a) => a.date))),
-        const SizedBox(height: AppSpacing.s8),
-        const Text('Recent Study Activity',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        if (notes.isEmpty && attempts.isEmpty)
-          const Text('No recent study activity.')
-        else ...[
-          if (notes.isNotEmpty) _row('Latest note', notes.first.title),
-          if (attempts.isNotEmpty)
-            _row('Latest quiz',
-                '${attempts.first.quizTitle} · ${attempts.first.score}/${attempts.first.total}'),
-        ],
-        if (notAttempted.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.s4),
-          const Text('Upcoming Study Tasks',
-              style: TextStyle(fontWeight: FontWeight.w700)),
-          for (final q in notAttempted.take(2))
-            _row('Quiz to take', q.title),
-        ],
-        const SizedBox(height: AppSpacing.s8),
-        FilledButton.icon(
-          onPressed: () => _open(const NotesScreen(initialTab: 'quizzes')),
-          icon: const Icon(Icons.play_arrow, size: 18),
-          label: const Text('Take a Quiz'),
-        ),
-      ],
-    );
-  }
-
   // ----------------------------------------------------------- commute
   // (Preserved from the previous dashboard so the module stays
   // reachable; it adapts to the light theme automatically.)
@@ -2487,49 +2314,6 @@ const _vizPalette = <Color>[
   Color(0xFFEC4899),
 ];
 
-class _RingPainter extends CustomPainter {
-  _RingPainter({
-    required this.fraction,
-    required this.color,
-    required this.trackColor,
-  });
-
-  final double fraction;
-  final Color color;
-  final Color trackColor;
-  static const double strokeWidth = 8;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (math.min(size.width, size.height) / 2) - strokeWidth / 2;
-    final track = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(center, radius, track);
-    final f = fraction.clamp(0.0, 1.0);
-    if (f > 0) {
-      final fill = Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2,
-        math.pi * 2 * f,
-        false,
-        fill,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RingPainter old) =>
-      old.fraction != fraction || old.color != color;
-}
 
 class _DonutPainter extends CustomPainter {
   _DonutPainter({required this.segments, required this.trackColor});
@@ -2574,157 +2358,6 @@ class _DonutPainter extends CustomPainter {
       old.segments != segments;
 }
 
-class _GaugePainter extends CustomPainter {
-  _GaugePainter({
-    required this.fraction,
-    required this.color,
-    required this.trackColor,
-  });
-
-  /// 0..1 across the semicircle (left = 0, right = 1).
-  final double fraction;
-  final Color color;
-  final Color trackColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const strokeWidth = 8.0;
-    // Semicircle: width 2r, height r + stroke.
-    final radius = size.width / 2 - strokeWidth / 2;
-    final center = Offset(size.width / 2, size.height - strokeWidth / 2);
-    final track = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      math.pi,
-      math.pi,
-      false,
-      track,
-    );
-    final f = fraction.clamp(0.0, 1.0);
-    if (f > 0) {
-      final fill = Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        math.pi,
-        math.pi * f,
-        false,
-        fill,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GaugePainter old) =>
-      old.fraction != fraction || old.color != color;
-}
-
-/// Full-circle progress ring with a centre label (preview
-/// "viz-ring": Learning Progress).
-class _VizRing extends StatelessWidget {
-  const _VizRing({
-    required this.fraction,
-    required this.top,
-    required this.bottom,
-    required this.color,
-  });
-
-  final double fraction;
-  final String top;
-  final String bottom;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 76,
-      height: 76,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: const Size(76, 76),
-            painter: _RingPainter(
-              fraction: fraction,
-              color: color,
-              trackColor: scheme.outlineVariant,
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(top,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w800)),
-              Text(bottom, style: AppText.small),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Semicircle gauge with a centre label (preview "viz-gauge":
-/// Average Score).
-class _VizGauge extends StatelessWidget {
-  const _VizGauge({
-    required this.fraction,
-    required this.top,
-    required this.bottom,
-    required this.color,
-  });
-
-  final double fraction;
-  final String top;
-  final String bottom;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 76,
-      height: 76,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            top: 14,
-            child: CustomPaint(
-              size: const Size(76, 46),
-              painter: _GaugePainter(
-                fraction: fraction,
-                color: color,
-                trackColor: scheme.outlineVariant,
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 6,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(top,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w800)),
-                Text(bottom, style: AppText.small),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 /// Donut with a two-line centre label (preview "viz-donut":
 /// Subject breakdown, Monthly report).

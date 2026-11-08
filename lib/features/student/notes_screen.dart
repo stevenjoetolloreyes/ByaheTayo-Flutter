@@ -1,11 +1,12 @@
 // Review Notes & Quizzes — learning center (local only).
 //
-// Notes are plain text (this app has no rich-text editor plugin, so
-// no fake formatting toolbar). Attachments are not included: there is
-// no image/file picker dependency in this app. What IS real: notes
-// CRUD + favorites + search, flashcards with a study mode, and
-// quizzes (MCQ / True-False / Identification / Enumeration /
-// Matching / Fill in the Blanks) with a timer,
+// Notes are plain text OR rich text (flutter_quill Delta, stored
+// as `body_rich` on the note; plain notes keep it null and render
+// exactly as before). Tapping a note opens its full-screen view
+// page; the edit icon opens its full-screen edit page (Nov 8).
+// What IS real: notes CRUD + favorites + search, flashcards with a
+// study mode, and quizzes (MCQ / True-False / Identification /
+// Enumeration / Matching / Fill in the Blanks) with a timer,
 // automatic scoring, explanations, and saved history.
 import 'dart:async';
 
@@ -15,6 +16,7 @@ import '../ai_quiz_generate_screen.dart';
 import '../ai_quiz_service.dart';
 import '../app_layout.dart';
 import '../ios_components.dart';
+import 'note_detail_page.dart';
 import 'student_data.dart';
 
 class NotesScreen extends StatefulWidget {
@@ -100,6 +102,42 @@ class _NotesScreenState extends State<NotesScreen> {
     });
     await _saveNotes();
     _snack(existing == null ? 'Note added.' : 'Note updated.');
+  }
+
+  /// Replace a note in the list with its edited version and save
+  /// (shared by the view and edit pages, which return the note).
+  Future<void> _applyUpdatedNote(Note updated) async {
+    setState(() {
+      final idx = _notes.indexWhere((x) => x.id == updated.id);
+      if (idx >= 0) {
+        _notes[idx] = updated;
+      } else {
+        _notes.insert(0, updated);
+      }
+    });
+    await _saveNotes();
+    _snack('Note updated.');
+  }
+
+  /// Open a note in its full-screen view page (Nov 8).
+  Future<void> _openNoteDetail(Note n) async {
+    final updated = await Navigator.push<Note>(
+      context,
+      MaterialPageRoute(builder: (_) => NoteDetailPage(note: n)),
+    );
+    if (updated == null) return;
+    await _applyUpdatedNote(updated);
+  }
+
+  /// Open a note in its full-screen edit page (Nov 8 — edit is a
+  /// new page, not the _NoteForm sheet).
+  Future<void> _openNoteEdit(Note n) async {
+    final updated = await Navigator.push<Note>(
+      context,
+      MaterialPageRoute(builder: (_) => NoteEditPage(note: n)),
+    );
+    if (updated == null) return;
+    await _applyUpdatedNote(updated);
   }
 
   Future<void> _deleteNote(Note n) async {
@@ -286,6 +324,7 @@ class _NotesScreenState extends State<NotesScreen> {
                           subtitle: Text(
                             '${n.subject.isEmpty ? 'No subject' : n.subject} · ${n.body.length > 60 ? '${n.body.substring(0, 60)}…' : n.body}',
                           ),
+                          onTap: () => _openNoteDetail(n),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -308,6 +347,7 @@ class _NotesScreenState extends State<NotesScreen> {
                                         body: n.body,
                                         favorite: !n.favorite,
                                         updated: n.updated,
+                                        bodyRich: n.bodyRich,
                                       );
                                     }
                                   });
@@ -317,7 +357,7 @@ class _NotesScreenState extends State<NotesScreen> {
                               IconButton(
                                 icon:
                                     const Icon(Icons.edit_outlined, size: 20),
-                                onPressed: () => _openNoteForm(existing: n),
+                                onPressed: () => _openNoteEdit(n),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete_outline,

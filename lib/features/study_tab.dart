@@ -94,6 +94,8 @@ import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'points_wallet_repository.dart';
 import 'shared_study_files.dart';
+import 'student/note_create_sheet.dart';
+import 'student/note_detail_page.dart';
 import 'student/notes_screen.dart';
 import 'student/student_data.dart';
 
@@ -417,6 +419,10 @@ class _StudyTabState extends State<StudyTab> {
   String? _selectedFolder;
   String _noteQuery = '';
 
+  /// True while the Notes + menu is open — the FAB's + rotates 45°
+  /// (the preview's open-menu state).
+  bool _notesMenuOpen = false;
+
   List<Subject> _subjects = [];
   List<GradeRecord> _grades = [];
   List<StudyFile> _files = [];
@@ -728,12 +734,51 @@ class _StudyTabState extends State<StudyTab> {
     if (_panel == 'files') {
       await _addFile();
     } else if (_panel == 'notes') {
-      await _open(const NotesScreen());
+      await _openNoteCreateMenu();
     } else if (_panel == 'review') {
       await _open(const AiQuizGenerateScreen());
     } else {
       await _fabGrades();
     }
+  }
+
+  /// The Notes + menu (Nov 8): Add notes / Camera / Photos /
+  /// Videos / Files. The created note is saved here — the Study tab
+  /// owns the notes list; the menu only returns the note.
+  Future<void> _openNoteCreateMenu() async {
+    setState(() => _notesMenuOpen = true);
+    final created = await showNoteCreateMenu(context);
+    if (!mounted) return;
+    setState(() => _notesMenuOpen = false);
+    if (created == null) return;
+    setState(() => _notes.insert(0, created));
+    await _saveNotes();
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Note saved!')));
+    }
+  }
+
+  /// Persist the notes list (same shape as NotesScreen._saveNotes).
+  Future<void> _saveNotes() => StudentStorage.saveList(
+      StudentStorage.notesKey, _notes.map((n) => n.toJson()).toList());
+
+  /// Open a note in its full-screen view page; when the page
+  /// returns an edited note, replace it in the list and save.
+  Future<void> _openNoteDetail(Note note) async {
+    final updated = await Navigator.of(context).push<Note>(
+      MaterialPageRoute(builder: (_) => NoteDetailPage(note: note)),
+    );
+    if (updated == null || !mounted) return;
+    setState(() {
+      final idx = _notes.indexWhere((n) => n.id == updated.id);
+      if (idx >= 0) {
+        _notes[idx] = updated;
+      } else {
+        _notes.insert(0, updated);
+      }
+    });
+    await _saveNotes();
   }
 
   Future<void> _fabGrades() async {
@@ -929,8 +974,14 @@ class _StudyTabState extends State<StudyTab> {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: _onFab,
-          child: const Center(
-            child: Icon(Icons.add, size: 20, color: Colors.white),
+          child: Center(
+            child: AnimatedRotation(
+              // The + rotates 45° while the Notes menu is open
+              // (the preview's open-menu state).
+              turns: _notesMenuOpen ? 0.125 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: const Icon(Icons.add, size: 20, color: Colors.white),
+            ),
           ),
         ),
       ),
@@ -2009,15 +2060,15 @@ class _StudyTabState extends State<StudyTab> {
   }
 
   /// Preview note card: title 15px bold, 2-line clamped excerpt,
-  /// footer with subject tag + date ("Nov 4"). Tapping opens
-  /// NotesScreen for full CRUD.
+  /// footer with subject tag + date ("Nov 4"). Tapping opens the
+  /// note's full-screen view page (Nov 8).
   Widget _noteCard(_StudyTokens tokens, Note note) {
     return _studyCard(
       tokens,
       Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _open(const NotesScreen()),
+          onTap: () => _openNoteDetail(note),
           borderRadius: BorderRadius.circular(17),
           child: Padding(
             padding: const EdgeInsets.all(15),

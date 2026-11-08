@@ -24,7 +24,7 @@ void main() {
     SharedPreferences.setMockInitialValues({'byahetayo_onboarding_done': true});
   });
 
-  testWidgets('Student Hub dashboard shows all 7 modules, honest data', (
+  testWidgets('Student Hub dashboard shows all 6 modules, honest data', (
     tester,
   ) async {
     // Tall viewport: the redesigned Hub (group headers, at-a-glance
@@ -40,7 +40,10 @@ void main() {
     expect(find.text('Student Hub'), findsOneWidget);
     expect(find.text('Allowance & Budgeting'), findsOneWidget);
     expect(find.text('Classes & Timetable'), findsOneWidget);
-    expect(find.text('Review Notes & Quizzes'), findsOneWidget);
+    // The Review Notes & Quizzes card was removed Nov 8 at Steven's
+    // request — it must not render anymore (the Review screen itself
+    // stays reachable via the Notes segmented control's Review segment).
+    expect(find.text('Review Notes & Quizzes'), findsNothing);
     expect(find.text('My Commute'), findsOneWidget);
     expect(find.text('Daily Quotes'), findsOneWidget);
     expect(find.text('Bible Verse'), findsOneWidget);
@@ -64,7 +67,9 @@ void main() {
       find.textContaining('Saved routes are shared with the Map tab.'),
       findsOneWidget,
     );
-    expect(find.text('No recent study activity.'), findsOneWidget);
+    // 'No recent study activity.' was the removed Review card's empty
+    // state — gone with the card (Nov 8).
+    expect(find.text('No recent study activity.'), findsNothing);
   });
 
   testWidgets('Student Hub cards stack in one column even at 800px wide', (
@@ -191,25 +196,27 @@ void main() {
   );
 
   testWidgets(
-    'Student Hub is graph-first: ring, gauge, week bars, donuts, Add school',
+    'Student Hub is graph-first: week bars, donuts, Add school',
     (tester) async {
-      // Preview parity (Nov 6): Review ring + gauge, Commute stat
-      // panels + week bars, calendar legend + Add school chip,
-      // Subject breakdown + Monthly report donuts — all from real
-      // (empty) data. The old holiday text list is gone.
+      // Preview parity (Nov 6): Commute stat panels + week bars,
+      // calendar legend + Add school chip, Subject breakdown +
+      // Monthly report donuts — all from real (empty) data. The old
+      // holiday text list is gone. The Review ring + gauge left with
+      // the Review Notes & Quizzes card, removed Nov 8 at Steven's
+      // request.
       tester.view.physicalSize = const Size(390, 10000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(wrap(const StudentTab()));
       await tester.pumpAndSettle();
-      // Review card: ring + gauge.
-      expect(find.text('Learning Progress'), findsOneWidget);
-      expect(find.text('0%'), findsWidgets);
-      expect(find.text('Average score'), findsOneWidget);
-      expect(find.text('No quizzes taken'), findsOneWidget);
-      expect(find.text('Quizzes this week'), findsOneWidget);
-      expect(find.text('0 of 0 completed'), findsOneWidget);
+      // Review card: gone with the card (Nov 8).
+      expect(find.text('Learning Progress'), findsNothing);
+      expect(find.text('0%'), findsNothing);
+      expect(find.text('Average score'), findsNothing);
+      expect(find.text('No quizzes taken'), findsNothing);
+      expect(find.text('Quizzes this week'), findsNothing);
+      expect(find.text('0 of 0 completed'), findsNothing);
       // Commute card: stat panels + week bars.
       expect(find.text('Routes'), findsOneWidget);
       expect(find.text('0 Trips this week'), findsOneWidget);

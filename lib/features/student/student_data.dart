@@ -311,14 +311,27 @@ class Note {
     required this.body,
     required this.favorite,
     required this.updated,
+    this.bodyRich,
   });
 
   final String id;
   final String title;
   final String subject;
+
+  /// Plain-text body. ALWAYS kept in sync with [bodyRich] so list
+  /// previews and search keep working for every note.
   final String body;
   final bool favorite;
   final DateTime updated;
+
+  /// Rich-text body as a flutter_quill Delta JSON list (see
+  /// note_rich_text.dart). Null for plain-text notes — old notes
+  /// (and notes added from the plain Add sheet) have null here and
+  /// render from [body] exactly as before.
+  final List<dynamic>? bodyRich;
+
+  /// True when this note carries formatting worth rendering rich.
+  bool get hasRichBody => bodyRich != null && bodyRich!.isNotEmpty;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -327,6 +340,7 @@ class Note {
         'body': body,
         'favorite': favorite,
         'updated': updated.toIso8601String(),
+        if (bodyRich != null) 'body_rich': bodyRich,
       };
 
   static Note fromJson(Map<String, dynamic> j) => Note(
@@ -336,6 +350,7 @@ class Note {
         body: j['body'] as String? ?? '',
         favorite: j['favorite'] as bool? ?? false,
         updated: DateTime.parse(j['updated'] as String),
+        bodyRich: j['body_rich'] as List<dynamic>?,
       );
 }
 

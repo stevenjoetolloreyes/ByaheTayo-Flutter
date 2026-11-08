@@ -27,6 +27,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -912,6 +914,15 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
       theme: _lightTheme(),
       darkTheme: _darkTheme(),
       themeMode: _themeMode,
+      // flutter_quill throws without its delegate (Nov 8); the
+      // Global* delegates are the MaterialApp defaults, restated
+      // here because specifying localizationsDelegates replaces them.
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        FlutterQuillLocalizations.delegate,
+      ],
       supportedLocales: const [Locale('en')],
       home: _gateWidget(),
     );
