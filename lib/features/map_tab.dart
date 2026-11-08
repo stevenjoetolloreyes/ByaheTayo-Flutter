@@ -57,6 +57,7 @@ import 'bus_stops.dart';
 import 'community_posts.dart';
 import 'custom_routes.dart';
 import 'fares_tab.dart';
+import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'osm_routing.dart';
 import 'route_fare_overrides.dart';
@@ -1365,6 +1366,22 @@ double bearingForMode(MapViewMode mode, double currentBearing) =>
 /// 3D buildings render only in 3D mode.
 bool buildingsForMode(MapViewMode mode) => mode == MapViewMode.perspective3d;
 
+/// View modes the Map tab's 2D/3D toggle offers: 2D top-down and
+/// 3D perspective only. Satellite is NOT offered — it needs a
+/// separate imagery tile source (not Meta vector) and was not
+/// part of the Nov 8 approval ("Oo, lagyan mo ng 3D toggle").
+const List<MapViewMode> mapViewModeOptions = [
+  MapViewMode.standard2d,
+  MapViewMode.perspective3d,
+];
+
+/// Short label for a view mode in the 2D/3D toggle.
+String mapViewModeLabel(MapViewMode mode) => switch (mode) {
+  MapViewMode.standard2d => '2D',
+  MapViewMode.perspective3d => '3D',
+  MapViewMode.satellite => 'Satellite',
+};
+
 /// Full camera position for a view mode over [target].
 CameraPosition cameraForMode({
   required MapViewMode mode,
@@ -1756,6 +1773,15 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // Which basemap is live: Meta vector, or the CartoDB raster
   // fallback after a failed Meta load.
   _MapStyleMode _styleMode = _MapStyleMode.meta;
+  // 2D/3D view mode (Steven, Nov 8: "Oo, lagyan mo ng 3D
+  // toggle"): 2D = flat top-down (the default); 3D = perspective
+  // tilt. The toggle only moves the camera — never the route,
+  // stops, or fares. Buildings extrude only if the loaded style
+  // renders them: the Meta Canterbury style's building support
+  // is unverified from the sandbox (its CDN is unreachable
+  // there), so 3D promises perspective, not buildings — nothing
+  // is invented when they don't appear (see _applyViewMode).
+  MapViewMode _viewMode = MapViewMode.standard2d;
   // True once the current style has reported loaded (cleared on
   // every style switch, so the fallback timer only fires for a
   // style that never loads).
@@ -2248,6 +2274,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _armStyleFallbackTimer();
     }
     _fitActiveRoute();
+    // A 3D tap before the native map existed only stored the
+    // mode — apply it now that the camera exists.
+    if (_viewMode == MapViewMode.perspective3d) {
+      unawaited(_applyViewMode());
+    }
   }
 
   /// A style finished loading (Meta, or the CartoDB fallback):
@@ -2258,6 +2289,13 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   void _onStyleLoaded(StyleController _) {
     _styleLoadTimer?.cancel();
     _styleLoaded = true;
+    // A style reload can reset the camera pitch: if the user is
+    // in 3D, re-apply the tilt instantly (no animation — the
+    // style just loaded, and an animation would replay on every
+    // theme switch). 2D needs nothing (pitch 0 is the default).
+    if (_viewMode == MapViewMode.perspective3d) {
+      unawaited(_applyViewMode(animated: false));
+    }
     if (_styleMode != _MapStyleMode.meta) {
       // The CartoDB fallback style loaded: its tiles still have
       // to arrive — probe one fallback tile under the camera.
@@ -2723,6 +2761,54 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       );
     } catch (_) {}
     _bearing.value = 0;
+  }
+
+  /// Switches the map between 2D (flat, north-up) and 3D
+  /// (perspective tilt, bearing kept). Camera-only: no route,
+  /// stop, or fare state changes. A tap before the native map
+  /// exists only stores the mode; the camera applies once the
+  /// map is created (see _onMapCreated).
+  Future<void> _setViewMode(MapViewMode mode) async {
+    if (mode == _viewMode) return;
+    setState(() => _viewMode = mode);
+    await _applyViewMode();
+  }
+
+  /// Applies [_viewMode] to the live camera: 3D tilts to 60°
+  /// ([tiltForMode]) keeping the current bearing; 2D flattens to
+  /// 0° and faces north again ([bearingForMode]). [animated]
+  /// picks the 800 ms tilt animation (mode taps, map creation)
+  /// or an instant move (style reloads, where an animation
+  /// would replay on every theme switch). No-op when the native
+  /// map is not created yet — the mode is stored and applied on
+  /// creation / style load.
+  ///
+  /// Buildings: the native renderer draws whatever
+  /// fill-extrusion layers the loaded style declares — the
+  /// Canterbury style's building support is unverified from
+  /// this sandbox (its CDN is unreachable there), so this
+  /// method tilts the camera and promises nothing about
+  /// buildings. No building data is invented: when the style
+  /// carries no heights, 3D is perspective only.
+  Future<void> _applyViewMode({bool animated = true}) async {
+    final controller = _mapController;
+    if (controller == null) return;
+    final pitch = tiltForMode(_viewMode);
+    try {
+      if (animated) {
+        final camera = controller.getCamera();
+        await controller.animateCamera(
+          pitch: pitch,
+          bearing: bearingForMode(_viewMode, camera.bearing),
+          nativeDuration: const Duration(milliseconds: 800),
+        );
+      } else {
+        await controller.moveCamera(pitch: pitch);
+      }
+    } catch (_) {
+      // Interrupted by a newer camera move, or the map is not
+      // attached yet — the next camera move still lands.
+    }
   }
 
   /// Tapping a location selects it AND draws its path: the road
@@ -4923,6 +5009,45 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               icon: Icons.refresh,
               tooltip: 'Reload map',
               onPressed: _retryTileSources,
+            ),
+          ),
+        // 2D/3D view-mode toggle (Steven, Nov 8: "Oo, lagyan mo
+        // ng 3D toggle"): a compact segmented pill, top-centre.
+        // The corners are taken — Reload top-left, the control
+        // cluster top-right (already 5 buttons tall; a 6th would
+        // cover the stop card's close button) — and the pill must
+        // clear the "couldn't load the map" banner (top-left,
+        // right 88), so it hides while the banner shows, like
+        // the Reload button. Satellite is not offered here: it
+        // needs a separate imagery tile source and was not part
+        // of the approval. Tapping a segment only moves the
+        // camera (see _setViewMode) — never the route or fares.
+        if (!_tilesFailed)
+          Positioned(
+            top: 16,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: SizedBox(
+                width: 132,
+                child: Material(
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(12),
+                  clipBehavior: Clip.antiAlias,
+                  child: IosSegmentedControl<MapViewMode>(
+                    key: const ValueKey('map-view-mode-toggle'),
+                    segments: [
+                      for (final mode in mapViewModeOptions)
+                        IosSegment<MapViewMode>(
+                          value: mode,
+                          label: mapViewModeLabel(mode),
+                        ),
+                    ],
+                    groupValue: _viewMode,
+                    onValueChanged: _setViewMode,
+                  ),
+                ),
+              ),
             ),
           ),
         // Floating map controls, top-right (Steven, Nov 7: the
