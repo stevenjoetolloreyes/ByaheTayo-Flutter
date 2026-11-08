@@ -42,9 +42,11 @@ import 'features/community_post_repository.dart';
 import 'features/credits_repository.dart';
 import 'features/custom_routes.dart';
 import 'features/fares_tab.dart';
+import 'features/friend_cloud_repository.dart';
 import 'features/hidden_routes.dart';
 import 'features/ios_components.dart';
 import 'features/route_fare_overrides.dart';
+import 'features/shared_study_files.dart';
 import 'features/map_tab.dart';
 import 'features/study_tab.dart';
 import 'features/top_nav.dart';
@@ -1098,6 +1100,17 @@ class _HomeShellState extends State<_HomeShell>
         StudyTab(
           walletController: _walletController,
           visible: widget.selectedIndex == 1,
+          currentUser: widget.user,
+          // File sharing (Nov 8): cloud friends only when Firebase
+          // is configured; shared-file storage follows the same
+          // Firestore-vs-Local choice as the Fares tab repos.
+          friendCloudRepository: widget.authService.isConfigured
+              ? FirestoreFriendCloudRepository()
+              : null,
+          sharedFileRepository:
+              widget.authService.isConfigured
+                  ? FirestoreSharedStudyFileRepository()
+                  : LocalSharedStudyFileRepository(),
         ),
         FaresTab(
           onViewOnMap: () => widget.onSelect(3),

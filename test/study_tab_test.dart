@@ -15,6 +15,9 @@
 // controller wired, as in widget tests).
 import 'dart:convert';
 
+import 'package:estudyantego/features/friend_cloud_repository.dart';
+import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/features/shared_study_files.dart';
 import 'package:estudyantego/features/student/student_data.dart';
 import 'package:estudyantego/features/study_tab.dart';
 import 'package:flutter/material.dart';
@@ -42,11 +45,101 @@ const _filesJson =
 Future<void> _pumpTab(
   WidgetTester tester, {
   Map<String, Object>? prefs,
+  AuthUser? currentUser,
+  FriendCloudRepository? friendCloudRepository,
+  SharedStudyFileRepository? sharedFileRepository,
 }) async {
   SharedPreferences.setMockInitialValues(prefs ?? {});
   await tester.pumpWidget(
-    const MaterialApp(home: Scaffold(body: StudyTab())),
+    MaterialApp(
+      home: Scaffold(
+        body: StudyTab(
+          currentUser: currentUser,
+          friendCloudRepository: friendCloudRepository,
+          sharedFileRepository: sharedFileRepository,
+        ),
+      ),
+    ),
   );
+  await tester.pumpAndSettle();
+}
+
+const _me = AuthUser(
+  uid: 'u-me',
+  email: 'me@example.com',
+  displayName: 'Me',
+);
+const _benFriend =
+    CloudFriend(uid: 'u-ben', code: 'ESK-BEN123', name: 'Ben');
+
+/// Fake cloud friends: only fetchFriends is implemented; the rest
+/// of the interface is never touched by the share sheet.
+class _FakeFriendCloudRepository implements FriendCloudRepository {
+  _FakeFriendCloudRepository(this.friends);
+
+  final List<CloudFriend> friends;
+
+  @override
+  Future<List<CloudFriend>> fetchFriends(String uid) async => friends;
+
+  @override
+  Future<String> ensureCloudCode({
+    required String uid,
+    required String localCode,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<String> ensureInviteCode({
+    required String uid,
+    String? localCode,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<CloudCodeLookup?> lookupCode(String code) =>
+      throw UnimplementedError();
+
+  @override
+  Future<FriendRequest> sendRequest({
+    required String fromUid,
+    required String? fromName,
+    required String fromCode,
+    required String toUid,
+    required String toCode,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<FriendRequest>> fetchIncoming(String uid) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<FriendRequest>> fetchOutgoing(String uid) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> respondToRequest({
+    required String requestId,
+    required String uid,
+    required bool accept,
+  }) =>
+      throw UnimplementedError();
+}
+
+/// Opens the three-dot menu of the row showing [fileName].
+Future<void> _tapFileMenu(WidgetTester tester, String fileName) async {
+  final row = find.ancestor(
+    of: find.text(fileName),
+    matching: find.byType(ListTile),
+  );
+  final menu = find.descendant(
+    of: row,
+    matching: find.byIcon(Icons.more_vert),
+  );
+  await tester.ensureVisible(menu);
+  await tester.pumpAndSettle();
+  await tester.tap(menu);
   await tester.pumpAndSettle();
 }
 
@@ -180,7 +273,7 @@ void main() {
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
   });
 
-  testWidgets('tapping a file trash deletes it without opening details',
+  testWidgets('tapping a file trash asks for confirmation first',
       (tester) async {
     await _pumpTab(tester, prefs: {
       'byahetayo_student_files': _filesJson,
@@ -200,6 +293,23 @@ void main() {
     await tester.ensureVisible(f1Trash);
     await tester.pumpAndSettle();
     await tester.tap(f1Trash);
+    await tester.pumpAndSettle();
+    // Confirmation first: the file is still there, the dialog
+    // names it, and the details never opened.
+    expect(find.text('Delete file?'), findsOneWidget);
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    expect(find.text('Close'), findsNothing);
+    // Cancel keeps the file.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    expect(find.text('Activity 1.docx'), findsOneWidget);
+    // Confirm deletes it.
+    await tester.ensureVisible(f1Trash);
+    await tester.pumpAndSettle();
+    await tester.tap(f1Trash);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     expect(find.text('Lecture 1.pdf'), findsNothing);
     expect(find.text('Activity 1.docx'), findsOneWidget);
@@ -411,5 +521,298 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Science 101'), findsOneWidget);
+  });
+
+  testWidgets(
+      'file row three-dot menu offers Details, Rename, Share, Delete',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Rename file'), findsOneWidget);
+    expect(find.text('Share this file'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+    // The file name is the sheet title (row title + sheet title).
+    expect(find.text('Lecture 1.pdf'), findsNWidgets(2));
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    expect(find.text('Details'), findsNothing);
+  });
+
+  testWidgets('menu Details opens the same details dialog',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('PDF'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+  });
+
+  testWidgets('menu Rename renames the file and saves it',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Rename file'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rename file'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'File name'),
+      'Lecture 1 revised.pdf',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1 revised.pdf'), findsOneWidget);
+    expect(find.text('Lecture 1.pdf'), findsNothing);
+    expect(find.text('File renamed.'), findsOneWidget);
+    final stored = jsonDecode(
+      (await SharedPreferences.getInstance())
+              .getString('byahetayo_student_files') ??
+          '[]',
+    ) as List;
+    expect(
+      stored.map((f) => (f as Map)['name']).toList(),
+      contains('Lecture 1 revised.pdf'),
+    );
+  });
+
+  testWidgets('menu Rename validates empty and over-long names',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Rename file'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'File name'),
+      '   ',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter a name for the file.'), findsOneWidget);
+    // Dialog stays open; the file is unchanged.
+    expect(find.text('Rename file'), findsOneWidget);
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'File name'),
+      'a' * 101,
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('The name must be 100 characters or fewer.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+  });
+
+  testWidgets('menu Rename re-derives the kind from the new extension',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Rename file'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'File name'),
+      'Lecture 1.docx',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.docx'), findsOneWidget);
+    // Now a Document, not a PDF: the Docs pill shows it, the PDF
+    // pill hides it.
+    await tester.tap(find.text('Docs'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.docx'), findsOneWidget);
+    await tester.tap(find.text('PDF'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.docx'), findsNothing);
+  });
+
+  testWidgets('menu Delete asks for confirmation before deleting',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete file?'), findsOneWidget);
+    // Cancel keeps the file.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+    // Delete removes it.
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsNothing);
+    expect(find.text('Activity 1.docx'), findsOneWidget);
+  });
+
+  testWidgets('menu Share with no signed-in user says so honestly',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_files': _filesJson,
+    });
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Share this file'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in to share'), findsOneWidget);
+    expect(
+      find.text('Sign in to share this file with a friend.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture 1.pdf'), findsOneWidget);
+  });
+
+  testWidgets('menu Share with a friend shares the file with them',
+      (tester) async {
+    final repo = LocalSharedStudyFileRepository();
+    await _pumpTab(
+      tester,
+      prefs: {'byahetayo_student_files': _filesJson},
+      currentUser: _me,
+      friendCloudRepository: _FakeFriendCloudRepository([_benFriend]),
+      sharedFileRepository: repo,
+    );
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Share this file'));
+    await tester.pumpAndSettle();
+    expect(find.text('Share "Lecture 1.pdf"'), findsOneWidget);
+    await tester.tap(find.text('Ben'));
+    await tester.pumpAndSettle();
+    expect(find.text('Shared with Ben.'), findsOneWidget);
+    final shared = await repo.fetchSharedWithMe('u-ben');
+    expect(shared.length, 1);
+    expect(shared.first.name, 'Lecture 1.pdf');
+    expect(shared.first.fromUid, 'u-me');
+    expect(shared.first.toUid, 'u-ben');
+  });
+
+  testWidgets('menu Share with no friends shows the honest empty state',
+      (tester) async {
+    await _pumpTab(
+      tester,
+      prefs: {'byahetayo_student_files': _filesJson},
+      currentUser: _me,
+      friendCloudRepository: _FakeFriendCloudRepository([]),
+      sharedFileRepository: LocalSharedStudyFileRepository(),
+    );
+    await _tapNav(tester, 'files');
+    await _tapFileMenu(tester, 'Lecture 1.pdf');
+    await tester.tap(find.text('Share this file'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'No friends yet. Add a friend from the Friends tab first.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Ben'), findsNothing);
+  });
+
+  testWidgets('Shared with me shows files shared to the user',
+      (tester) async {
+    // Ben shares a file with me before the tab opens: the mock
+    // prefs must be set before seeding, or the seed is wiped.
+    SharedPreferences.setMockInitialValues({});
+    final repo = LocalSharedStudyFileRepository();
+    await repo.share(
+      SharedStudyFile(
+        id: 's-shared',
+        fileId: 'f-shared',
+        name: 'Shared Lecture.pdf',
+        sizeBytes: 4096,
+        kind: 'pdf',
+        folder: 'Lectures',
+        added: DateTime(2026, 11, 7),
+        fromUid: 'u-ben',
+        fromName: 'Ben',
+        toUid: 'u-me',
+        sharedAt: DateTime(2026, 11, 8, 9, 0),
+      ),
+      const AuthUser(uid: 'u-ben', email: 'ben@example.com'),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StudyTab(
+            currentUser: _me,
+            sharedFileRepository: repo,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _tapNav(tester, 'files');
+    expect(find.text('SHARED WITH ME'), findsOneWidget);
+    expect(find.text('Shared Lecture.pdf'), findsOneWidget);
+    expect(find.text('Shared by Ben · 4.0 KB · Lectures'), findsOneWidget);
+    // Tapping the shared row opens details with the sender.
+    await tester.tap(find.text('Shared Lecture.pdf'));
+    await tester.pumpAndSettle();
+    expect(find.text('Shared Lecture.pdf'), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Ben'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    // Removing asks for confirmation and only removes the share.
+    final sharedRow = find.ancestor(
+      of: find.text('Shared Lecture.pdf'),
+      matching: find.byType(ListTile),
+    );
+    final sharedTrash = find.descendant(
+      of: sharedRow,
+      matching: find.byIcon(Icons.delete_outline),
+    );
+    await tester.ensureVisible(sharedTrash);
+    await tester.pumpAndSettle();
+    await tester.tap(sharedTrash);
+    await tester.pumpAndSettle();
+    expect(find.text('Remove shared file?'), findsOneWidget);
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+    expect(find.text('Shared Lecture.pdf'), findsNothing);
+    expect(find.text('SHARED WITH ME'), findsNothing);
   });
 }

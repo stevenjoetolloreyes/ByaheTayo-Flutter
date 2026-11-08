@@ -83,11 +83,17 @@
 // No schema changes: grades + files are additive SharedPreferences
 // keys; existing records are untouched.
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 import 'ai_quiz_generate_screen.dart';
 import 'app_layout.dart';
+import 'friend_cloud_repository.dart';
+import 'ios_components.dart';
+import 'onboarding/auth_service.dart';
 import 'points_wallet_repository.dart';
+import 'shared_study_files.dart';
 import 'student/notes_screen.dart';
 import 'student/student_data.dart';
 
@@ -360,7 +366,14 @@ String _gwaStanding(double gwa) {
 }
 
 class StudyTab extends StatefulWidget {
-  const StudyTab({super.key, this.walletController, this.visible = true});
+  const StudyTab({
+    super.key,
+    this.walletController,
+    this.visible = true,
+    this.currentUser,
+    this.friendCloudRepository,
+    this.sharedFileRepository,
+  });
 
   /// The shell's points wallet (same controller the Student and
   /// Account tabs read). Null in widget tests — the ⭐ chip then
@@ -374,6 +387,22 @@ class StudyTab extends StatefulWidget {
   /// app restart (Fares × Map audit, Nov 7, 2026: cross-tab
   /// staleness). True by default (widget tests).
   final bool visible;
+
+  /// The signed-in user (the shell's AuthUser). Null in widget
+  /// tests and when signed out — sharing then honestly says so
+  /// instead of inventing a sender, and "Shared with me" stays
+  /// hidden.
+  final AuthUser? currentUser;
+
+  /// Cloud friends (accepted friend requests only). Null when
+  /// Firebase is not configured — the share sheet then says
+  /// sharing is not available, never a fake friend list.
+  final FriendCloudRepository? friendCloudRepository;
+
+  /// Shared-file storage (Firestore vs Local, chosen by the shell
+  /// the same way as the Fares tab repos). Null in widget tests
+  /// that do not wire it — the shared section then stays hidden.
+  final SharedStudyFileRepository? sharedFileRepository;
 
   @override
   State<StudyTab> createState() => _StudyTabState();
@@ -393,6 +422,11 @@ class _StudyTabState extends State<StudyTab> {
   List<StudyFile> _files = [];
   List<Note> _notes = [];
   List<Quiz> _quizzes = [];
+
+  /// Files shared TO this user (newest first). Empty when signed
+  /// out, when no repository is wired, or when nobody shared
+  /// anything — never invented.
+  List<SharedStudyFile> _sharedWithMe = [];
 
   @override
   void initState() {
@@ -447,6 +481,7 @@ class _StudyTabState extends State<StudyTab> {
     final notes = await StudentStorage.loadList(StudentStorage.notesKey);
     final quizzes =
         await StudentStorage.loadList(StudentStorage.quizzesKey);
+    final shared = await _loadSharedWithMe();
     if (!mounted) return;
     setState(() {
       _subjects = subjects.map(Subject.fromJson).toList();
@@ -456,7 +491,22 @@ class _StudyTabState extends State<StudyTab> {
       _notes = notes.map(Note.fromJson).toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
       _quizzes = quizzes.map(Quiz.fromJson).toList();
+      _sharedWithMe = shared;
     });
+  }
+
+  /// Files shared TO the signed-in user, newest first. Empty when
+  /// signed out or when no repository is wired. Reads never throw:
+  /// a storage failure loads as no shares, never a fake list.
+  Future<List<SharedStudyFile>> _loadSharedWithMe() async {
+    final user = widget.currentUser;
+    final repo = widget.sharedFileRepository;
+    if (user == null || repo == null) return const [];
+    try {
+      return await repo.fetchSharedWithMe(user.uid);
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<void> _saveGrades() => StudentStorage.saveList(
@@ -1311,6 +1361,23 @@ class _StudyTabState extends State<StudyTab> {
             if (i > 0) const SizedBox(height: 8),
             _fileRow(context, tokens, filtered[i]),
           ],
+        // Files other users shared with this user (metadata
+        // snapshots, never file bytes). The section only shows
+        // while there is at least one share — an empty "Shared
+        // with me" is not a state worth a permanent header.
+        if (_sharedWithMe.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.s16),
+          Text('SHARED WITH ME',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: tokens.muted)),
+          const SizedBox(height: AppSpacing.s8),
+          for (var i = 0; i < _sharedWithMe.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _sharedFileRow(context, tokens, _sharedWithMe[i]),
+          ],
+        ],
       ],
     );
   }
@@ -1417,9 +1484,12 @@ class _StudyTabState extends State<StudyTab> {
   }
 
   /// Preview file row: tinted file-type icon tile, name, size ·
-  /// folder; delete stays. Tapping the row (ripple, same pattern
-  /// as _entryCard) opens the file details — the trash button
-  /// still deletes, and never opens the details.
+  /// folder; the three-dot menu and the delete button stay.
+  /// Tapping the row (ripple, same pattern as _entryCard) opens
+  /// the file details — the menu and trash buttons never open the
+  /// details. The menu (⋮) offers Details, Rename file, Share
+  /// this file and Delete; the trash deletes after the same
+  /// confirmation as the menu's Delete.
   Widget _fileRow(BuildContext context, _StudyTokens tokens, StudyFile file) {
     return _studyCard(
       tokens,
@@ -1435,13 +1505,20 @@ class _StudyTabState extends State<StudyTab> {
               '${_formatBytes(file.sizeBytes)} · ${file.folder}',
               style: TextStyle(color: tokens.muted),
             ),
-            trailing: IconButton(
-              tooltip: 'Remove file',
-              icon: Icon(Icons.delete_outline, color: tokens.muted),
-              onPressed: () async {
-                setState(() => _files.removeWhere((f) => f.id == file.id));
-                await _saveFiles();
-              },
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'More options',
+                  icon: Icon(Icons.more_vert, color: tokens.muted),
+                  onPressed: () => _showFileMenu(tokens, file),
+                ),
+                IconButton(
+                  tooltip: 'Remove file',
+                  icon: Icon(Icons.delete_outline, color: tokens.muted),
+                  onPressed: () => _deleteFile(file),
+                ),
+              ],
             ),
           ),
         ),
@@ -1449,12 +1526,355 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
+  /// Three-dot menu for one file row: Details, Rename file, Share
+  /// this file, Delete. An iOS action sheet (the overflow-menu
+  /// pattern) — the file name is the title. The sheet pops the
+  /// picked action first, then the caller runs it, so the next
+  /// dialog never stacks on top of the sheet. The State's own
+  /// context is used throughout (like _addFile), never a context
+  /// passed in as a parameter, so the mounted guard below covers
+  /// every use after an await.
+  Future<void> _showFileMenu(_StudyTokens tokens, StudyFile file) async {
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: Text(file.name),
+        message: Text(
+          '${_formatBytes(file.sizeBytes)} · ${file.folder}',
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop('details'),
+            child: const Text('Details'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop('rename'),
+            child: const Text('Rename file'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop('share'),
+            child: const Text('Share this file'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(sheetContext).pop('delete'),
+            child: const Text('Delete'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    switch (action) {
+      case 'details':
+        await _showFileDetails(context, tokens, file);
+      case 'rename':
+        await _showRenameFileDialog(tokens, file);
+      case 'share':
+        await _showShareFileSheet(tokens, file);
+      case 'delete':
+        await _deleteFile(file);
+    }
+  }
+
+  /// Delete confirmation (all users): the file's name is in the
+  /// dialog and Delete is iOS red. Every delete — the trash icon
+  /// and the menu's Delete — goes through here first.
+  Future<bool> _confirmDeleteFile(
+      BuildContext context, StudyFile file) async {
+    final confirmed = await showIosAlert<bool>(
+      context: context,
+      title: 'Delete file?',
+      message: '"${file.name}" will be deleted. This cannot be undone.',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false, isDefault: true),
+        IosAlertAction<bool>('Delete', value: true, isDestructive: true),
+      ],
+    );
+    return confirmed ?? false;
+  }
+
+  /// Deletes one file after confirmation. The sender's shares of
+  /// the file go with it, so a share never points at a file that
+  /// no longer exists; a failed share cleanup never blocks the
+  /// delete itself.
+  Future<void> _deleteFile(StudyFile file) async {
+    if (!await _confirmDeleteFile(context, file)) return;
+    final user = widget.currentUser;
+    final repo = widget.sharedFileRepository;
+    setState(() => _files.removeWhere((f) => f.id == file.id));
+    await _saveFiles();
+    if (user != null && repo != null) {
+      try {
+        await repo.deleteSharesForFile(file.id, user);
+      } catch (_) {
+        // The file is already deleted; a failed share cleanup is
+        // not fatal and never re-adds the file.
+      }
+    }
+  }
+
+  /// Renames one file. Same dialog shape as the stop rename in
+  /// map_tab.dart (Material AlertDialog + inline error — forms
+  /// stay Material, per ios_components): pre-filled name,
+  /// non-empty, at most 100 characters. The kind is re-derived
+  /// from the new extension when the new name has one (a ".pdf"
+  /// renamed to ".docx" filters as a Document); a name with no
+  /// extension keeps the old kind.
+  Future<void> _showRenameFileDialog(
+      _StudyTokens tokens, StudyFile file) async {
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) =>
+          _RenameFileDialog(initialName: file.name),
+    );
+    if (result == null || !mounted) return;
+    final ext = result.contains('.') ? result.split('.').last : '';
+    final renamed = file.copyWith(
+      name: result,
+      kind: ext.isEmpty ? null : _fileKindForExtension(ext),
+    );
+    setState(() {
+      final index = _files.indexWhere((f) => f.id == file.id);
+      if (index >= 0) _files[index] = renamed;
+    });
+    try {
+      await _saveFiles();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File renamed.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not rename the file.')),
+      );
+    }
+  }
+
+  /// Shares one file with ONE friend (user-to-user only). The
+  /// recipient is picked from the user's cloud friends (accepted
+  /// friend requests — the only friends with a UID a share can be
+  /// addressed to). Local friends have no UID and never appear
+  /// here. The shared record is the file's metadata snapshot
+  /// (name, size, type, folder, added date) — never file bytes,
+  /// and never a public link.
+  Future<void> _showShareFileSheet(
+      _StudyTokens tokens, StudyFile file) async {
+    final user = widget.currentUser;
+    final cloud = widget.friendCloudRepository;
+    final repo = widget.sharedFileRepository;
+    if (user == null) {
+      await showIosMessage(
+        context: context,
+        title: 'Sign in to share',
+        message: 'Sign in to share this file with a friend.',
+      );
+      return;
+    }
+    if (cloud == null || repo == null) {
+      await showIosMessage(
+        context: context,
+        title: 'Sharing is not available',
+        message: 'Sharing is not available right now.',
+      );
+      return;
+    }
+    final friend = await showIosSheet<CloudFriend>(
+      context: context,
+      builder: (sheetContext) {
+        return FutureBuilder<List<CloudFriend>>(
+          future: cloud.fetchFriends(user.uid),
+          builder: (sheetContext, snapshot) {
+            final friends = snapshot.data ?? const <CloudFriend>[];
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Share "${file.name}"',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: tokens.text,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Choose a friend. Only they can see this file.',
+                      style: TextStyle(fontSize: 13, color: tokens.muted),
+                    ),
+                    const SizedBox(height: 12),
+                    if (snapshot.connectionState == ConnectionState.waiting)
+                      const Center(child: CircularProgressIndicator())
+                    else if (snapshot.hasError)
+                      Text(
+                        'Could not load your friends. Try again later.',
+                        style: TextStyle(color: tokens.muted),
+                      )
+                    else if (friends.isEmpty)
+                      Text(
+                        'No friends yet. Add a friend from the Friends tab first.',
+                        style: TextStyle(color: tokens.muted),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 280),
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final f in friends)
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: CircleAvatar(
+                                  backgroundColor: tokens.brand,
+                                  child: Text(
+                                    f.displayName.isEmpty
+                                        ? '?'
+                                        : f.displayName[0].toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                title: Text(
+                                  f.displayName,
+                                  style: TextStyle(color: tokens.text),
+                                ),
+                                subtitle: Text(
+                                  f.code,
+                                  style: TextStyle(color: tokens.muted),
+                                ),
+                                onTap: () =>
+                                    Navigator.of(sheetContext).pop(f),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (friend == null || !mounted) return;
+    try {
+      await repo.share(
+        SharedStudyFile(
+          id: const Uuid().v4(),
+          fileId: file.id,
+          name: file.name,
+          sizeBytes: file.sizeBytes,
+          kind: file.kind,
+          folder: file.folder,
+          added: file.added,
+          fromUid: user.uid,
+          fromName: user.displayName ?? user.email,
+          toUid: friend.uid,
+          sharedAt: DateTime.now(),
+        ),
+        user,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Shared with ${friend.displayName}.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not share this file.')),
+      );
+    }
+  }
+
+  /// One file shared TO this user: the sender's name is in the
+  /// subtitle. Tapping opens the same details dialog (with a
+  /// "Shared by" row); the trash removes the share from this
+  /// user's view after confirmation — the sender's file is never
+  /// touched.
+  Widget _sharedFileRow(
+      BuildContext context, _StudyTokens tokens, SharedStudyFile share) {
+    final file = StudyFile(
+      id: share.fileId,
+      name: share.name,
+      sizeBytes: share.sizeBytes,
+      kind: share.kind,
+      folder: share.folder,
+      added: share.added,
+    );
+    return _studyCard(
+      tokens,
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showFileDetails(context, tokens, file,
+              sharedBy: share.fromName),
+          borderRadius: BorderRadius.circular(15),
+          child: ListTile(
+            leading: _fileTile(tokens, share.kind),
+            title: Text(share.name, style: TextStyle(color: tokens.text)),
+            subtitle: Text(
+              'Shared by ${share.fromName} · ${_formatBytes(share.sizeBytes)} · ${share.folder}',
+              style: TextStyle(color: tokens.muted),
+            ),
+            trailing: IconButton(
+              tooltip: 'Remove shared file',
+              icon: Icon(Icons.delete_outline, color: tokens.muted),
+              onPressed: () => _removeSharedFile(share),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Removes a file shared TO this user from their "Shared with
+  /// me" list (the share record is deleted; the sender's original
+  /// file is never touched). The recipient confirms first, like
+  /// every other delete here.
+  Future<void> _removeSharedFile(SharedStudyFile share) async {
+    final confirmed = await showIosAlert<bool>(
+      context: context,
+      title: 'Remove shared file?',
+      message:
+          '"${share.name}" will be removed from Shared with me. The original file is not affected.',
+      actions: const [
+        IosAlertAction<bool>('Cancel', value: false, isDefault: true),
+        IosAlertAction<bool>('Remove', value: true, isDestructive: true),
+      ],
+    );
+    if (confirmed != true || !mounted) return;
+    final user = widget.currentUser;
+    final repo = widget.sharedFileRepository;
+    if (user == null || repo == null) return;
+    try {
+      await repo.delete(share.id, user);
+      if (!mounted) return;
+      setState(() => _sharedWithMe.removeWhere((s) => s.id == share.id));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not remove this file.')),
+      );
+    }
+  }
+
   /// File details: metadata only (name, type, size, folder, added
   /// date) — files store no content, so there is nothing to open.
   /// Entrance is a fade + gentle scale whose duration follows
   /// _animDuration (zero under reduced motion).
   Future<void> _showFileDetails(
-      BuildContext context, _StudyTokens tokens, StudyFile file) {
+      BuildContext context, _StudyTokens tokens, StudyFile file,
+      {String? sharedBy}) {
     return showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -1471,6 +1891,8 @@ class _StudyTabState extends State<StudyTab> {
             _detailRow(tokens, 'Folder', file.folder),
             _detailRow(tokens, 'Added',
                 '${_monthDay(file.added)}, ${file.added.year}'),
+            if (sharedBy != null)
+              _detailRow(tokens, 'Shared by', sharedBy),
           ],
         ),
         actions: [
@@ -1985,6 +2407,80 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
+}
+
+/// Rename dialog for one file. A StatefulWidget so the
+/// TextEditingController is owned by the dialog itself and disposed
+/// only when the dialog subtree unmounts (after the pop animation):
+/// disposing it right after `await showDialog` returns is too
+/// early — the route is still in the overlay animating out, its
+/// dependencies change on pop, and the rebuilding TextField reads
+/// the disposed controller. The error is State too, so it survives
+/// the dialog rebuilding (an error held in the showDialog builder
+/// closure resets on every outer rebuild).
+class _RenameFileDialog extends StatefulWidget {
+  const _RenameFileDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_RenameFileDialog> createState() => _RenameFileDialogState();
+}
+
+class _RenameFileDialogState extends State<_RenameFileDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialName);
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename file'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(labelText: 'File name'),
+            textCapitalization: TextCapitalization.none,
+            autofocus: true,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style:
+                  TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _controller.text.trim();
+            final problem = validateFileName(name);
+            if (problem != null) {
+              setState(() => _error = problem);
+              return;
+            }
+            Navigator.pop(context, name);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
 }
 
 class _LegendDot extends StatelessWidget {

@@ -256,6 +256,20 @@ class StudyFile {
 
   final DateTime added;
 
+  /// Copies this file with a new name and/or kind (rename flow in
+  /// study_tab.dart). The id, size, folder and added date never
+  /// change on a rename.
+  StudyFile copyWith({String? name, String? kind}) {
+    return StudyFile(
+      id: id,
+      name: name ?? this.name,
+      sizeBytes: sizeBytes,
+      kind: kind ?? this.kind,
+      folder: folder,
+      added: added,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -274,6 +288,19 @@ class StudyFile {
         added: DateTime.tryParse(j['added'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
       );
+}
+
+/// Validates a file name typed into the rename dialog: non-empty
+/// and at most 100 characters (the same limit as the stop rename
+/// in map_tab.dart). Returns the first problem, or null when the
+/// name may be saved. Never throws.
+String? validateFileName(String name) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return 'Enter a name for the file.';
+  if (trimmed.length > 100) {
+    return 'The name must be 100 characters or fewer.';
+  }
+  return null;
 }
 
 class Note {
