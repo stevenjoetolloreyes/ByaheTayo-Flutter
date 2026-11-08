@@ -108,4 +108,39 @@ void main() {
       );
     });
   });
+
+  group('mapTabBecameVisible', () {
+    test('fires on a false → true transition (returning to the tab)', () {
+      // The re-validate exists for exactly this case: the user
+      // comes back to the Map tab and the tiles are re-checked.
+      expect(
+        mapTabBecameVisible(oldVisible: false, visible: true),
+        isTrue,
+      );
+    });
+
+    test('does NOT fire on a parent rebuild while already visible', () {
+      // The old guard was inverted here: it returned on the
+      // return transition and ran the body on rebuilds while
+      // visible. A rebuild must not re-probe.
+      expect(
+        mapTabBecameVisible(oldVisible: true, visible: true),
+        isFalse,
+      );
+    });
+
+    test('does NOT fire while the tab stays hidden', () {
+      expect(
+        mapTabBecameVisible(oldVisible: false, visible: false),
+        isFalse,
+      );
+    });
+
+    test('does NOT fire when leaving the tab', () {
+      expect(
+        mapTabBecameVisible(oldVisible: true, visible: false),
+        isFalse,
+      );
+    });
+  });
 }

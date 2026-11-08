@@ -1484,6 +1484,21 @@ LatLng mapProbeCenter({
   );
 }
 
+/// Whether the Map tab just became visible (a false → true
+/// `visible` transition). Pure, so the guard is testable. The
+/// re-validate in didUpdateWidget runs only on this transition —
+/// never on a parent rebuild while the tab stays visible, and
+/// never while it is hidden. (MapTab guard fix, Nov 8, 2026:
+/// the old guard `!oldWidget.visible || !widget.visible`
+/// returned on exactly this transition, so the re-validate
+/// never ran on return — it only ran on rebuilds while the tab
+/// was already visible. Same form as StudyTab's reload guard.)
+bool mapTabBecameVisible({
+  required bool oldVisible,
+  required bool visible,
+}) =>
+    !oldVisible && visible;
+
 /// One map line layer, as data: the points to draw, its colour,
 /// its width, and whether it is the solid road shape or the
 /// dashed direct fallback. Value equality (LatLng compares by
@@ -1924,10 +1939,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   }
 
   @override
-  @override
   void didUpdateWidget(covariant MapTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!oldWidget.visible || !widget.visible) return;
+    if (!mapTabBecameVisible(
+      oldVisible: oldWidget.visible,
+      visible: widget.visible,
+    )) {
+      return;
+    }
     // Returning to the tab after the tiles failed (e.g. the
     // user switched from a network that blocks the tile CDNs to
     // one that does not): retry the tile sources so the map
