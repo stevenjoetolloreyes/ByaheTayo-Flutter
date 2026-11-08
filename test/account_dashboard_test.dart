@@ -316,4 +316,77 @@ void main() {
     expect(find.text('My Friends'), findsOneWidget);
     expect(find.text('My Friend Code'), findsOneWidget);
   });
+
+  testWidgets('About opens the full About screen and back returns',
+      (WidgetTester tester) async {
+    await _setSurface(tester, const Size(800, 1280));
+    await _pumpApp(tester);
+    await _openAccount(tester);
+
+    await _tapVisible(tester, 'About EstudyanteGO');
+    // The full About screen: stats graph with live counts, lots of
+    // text — not the old three-line dialog.
+    expect(find.text('App stats'), findsOneWidget);
+    expect(find.text('What is EstudyanteGO?'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('16'), findsOneWidget);
+    expect(find.text('164'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back to Account'));
+    await tester.pumpAndSettle();
+    expect(find.text('About EstudyanteGO'), findsOneWidget);
+    expect(find.text('App stats'), findsNothing);
+  });
+
+  testWidgets('Privacy Policy stays separate from About',
+      (WidgetTester tester) async {
+    await _setSurface(tester, const Size(800, 1280));
+    await _pumpApp(tester);
+    await _openAccount(tester);
+
+    await _tapVisible(tester, 'Privacy Policy');
+    // Its own dialog, unchanged content — and no About graph.
+    expect(find.text('Privacy Policy'), findsWidgets);
+    expect(
+      find.textContaining('does not sell or share your data'),
+      findsOneWidget,
+    );
+    expect(find.text('App stats'), findsNothing);
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('About EstudyanteGO'), findsOneWidget);
+  });
+
+  testWidgets('Account Actions rows have their own full colors',
+      (WidgetTester tester) async {
+    await _setSurface(tester, const Size(800, 1280));
+    await _pumpApp(tester);
+    await _openAccount(tester);
+
+    // The leading icon of each row's tile carries that row's own
+    // full color — never the green-tinted monochrome (Steven, Nov 8).
+    Icon leadingIcon(String rowTitle) {
+      final tile = find.ancestor(
+        of: find.text(rowTitle),
+        matching: find.byType(ListTile),
+      );
+      return tester.widget<Icon>(
+        find.descendant(of: tile, matching: find.byType(Icon)).first,
+      );
+    }
+
+    expect(leadingIcon('Privacy Settings').color, const Color(0xFF2563EB));
+    expect(leadingIcon('Help & Support').color, const Color(0xFFEA580C));
+    expect(leadingIcon('About EstudyanteGO').color, const Color(0xFF7C3AED));
+    expect(
+      leadingIcon('Terms and Conditions').color,
+      const Color(0xFF0D9488),
+    );
+    final privacy = leadingIcon('Privacy Policy');
+    expect(privacy.color, const Color(0xFFE11D48));
+    // Privacy Policy has its own icon now, no longer sharing Privacy
+    // Settings' icon.
+    expect(privacy.icon, Icons.policy_outlined);
+  });
 }

@@ -1156,6 +1156,12 @@ class _HomeShellState extends State<_HomeShell>
           walletController: _walletController,
           creditsController: _creditsController,
           adService: _adService,
+          // About screen's live stats graph (Nov 8): same
+          // Firestore-vs-Local choice as the Fares tab.
+          customRouteRepository:
+              widget.authService.isConfigured
+                  ? FirestoreCustomRouteRepository()
+                  : LocalCustomRouteRepository(),
           onViewStudent: widget.onViewStudent,
           onViewCommunities: widget.onViewCommunities,
           onViewFares: widget.onViewFares,

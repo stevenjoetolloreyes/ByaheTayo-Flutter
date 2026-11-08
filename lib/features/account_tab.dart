@@ -15,11 +15,13 @@
 
 import 'package:flutter/material.dart';
 
+import 'about_screen.dart';
 import 'ad_service.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
 import 'bus_stops.dart';
 import 'credits_repository.dart';
+import 'custom_routes.dart';
 import 'friend_cloud_repository.dart';
 import 'friends_tab.dart';
 import 'ios_glass.dart';
@@ -74,6 +76,7 @@ class AccountTab extends StatefulWidget {
     this.walletController,
     this.creditsController,
     this.adService,
+    this.customRouteRepository,
     this.onViewStudent,
     this.onViewCommunities,
     this.onViewFares,
@@ -115,6 +118,12 @@ class AccountTab extends StatefulWidget {
   /// the Rewards screen keeps its honest no-ads notice).
   final AdService? adService;
 
+  /// Route store for the About screen's live stats graph (null in
+  /// bare widget tests, in which case the graph counts the built-in
+  /// routes only). Wired in main.dart, Firestore vs Local by
+  /// [authService.isConfigured], like the Fares tab.
+  final CustomRouteRepository? customRouteRepository;
+
   /// Jump to the Student tab (7-Day Sign-in, the real earn path).
   final VoidCallback? onViewStudent;
 
@@ -150,6 +159,11 @@ class _AccountTabState extends State<AccountTab> {
   /// bottom navigation / sidebar stays visible). The Account page
   /// itself is unchanged; only this flag swaps its content.
   bool _showingMembership = false;
+
+  /// About screen shown INSIDE the Account tab, same pattern as
+  /// [_showingMembership]: the full About page (stats graph + lots
+  /// of text) replaces the Account content until Back is tapped.
+  bool _showingAbout = false;
 
   AuthUser? get _user => widget.user;
   UserProfile? get _profile => widget.profile;
@@ -515,6 +529,15 @@ class _AccountTabState extends State<AccountTab> {
         onBack: () => setState(() => _showingMembership = false),
       );
     }
+    // About screen (Nov 8): the full About page — stats graph,
+    // full-color icons in the section rows, and lots of text — shown
+    // inside the Account tab, returned to via Back.
+    if (_showingAbout) {
+      return AboutEstudyanteGOScreen(
+        onBack: () => setState(() => _showingAbout = false),
+        customRouteRepository: widget.customRouteRepository,
+      );
+    }
     // iPhone glass branch: appearance only — same sections, same
     // order, same taps. Android (and tests) take the Material path.
     final glass = iosGlassEnabled;
@@ -651,6 +674,12 @@ class _AccountTabState extends State<AccountTab> {
             _infoTile(
               icon: Icons.privacy_tip_outlined,
               title: 'Privacy Settings',
+              // Full color (Steven, Nov 8): blue icon on a soft blue
+              // tint — not the green-tinted monochrome of the other
+              // sections. Same pattern on every Account Actions row.
+              iconColor: const Color(0xFF2563EB),
+              iconBackground:
+                  const Color(0xFF2563EB).withValues(alpha: 0.12),
               onTap: () => _showInfoDialog(
                 'Privacy Settings',
                 _signedIn
@@ -674,6 +703,12 @@ class _AccountTabState extends State<AccountTab> {
             _infoTile(
               icon: Icons.help_outline,
               title: 'Help & Support',
+              // Full color (Steven, Nov 8): orange icon on a soft
+              // orange tint. Each Account Actions row gets its own
+              // color — never the green-tinted monochrome.
+              iconColor: const Color(0xFFEA580C),
+              iconBackground:
+                  const Color(0xFFEA580C).withValues(alpha: 0.12),
               onTap: () => _showInfoDialog(
                 'Help & Support',
                 'EstudyanteGO v1.0.0. For account help, use password reset '
@@ -685,17 +720,25 @@ class _AccountTabState extends State<AccountTab> {
               icon: Icons.info_outline,
               title: 'About EstudyanteGO',
               subtitle: 'Version 1.0.0',
-              onTap: () => _showInfoDialog(
-                'About EstudyanteGO',
-                'EstudyanteGO — Northern PH commute at jeepney companion. Trip '
-                'planner, LTFRB fare calculator, at student hub. '
-                'Version 1.0.0 (com.estudyantego.app).',
-              ),
+              // Full color (Steven, Nov 8): violet icon on a soft
+              // violet tint.
+              iconColor: const Color(0xFF7C3AED),
+              iconBackground:
+                  const Color(0xFF7C3AED).withValues(alpha: 0.12),
+              // Full About screen (Nov 8): stats graph + lots of
+              // text, shown inside the Account tab — not the old
+              // three-line dialog.
+              onTap: () => setState(() => _showingAbout = true),
               glass: glass,
             ),
             _infoTile(
               icon: Icons.description_outlined,
               title: 'Terms and Conditions',
+              // Full color (Steven, Nov 8): teal icon on a soft teal
+              // tint. The Terms content itself is unchanged.
+              iconColor: const Color(0xFF0D9488),
+              iconBackground:
+                  const Color(0xFF0D9488).withValues(alpha: 0.12),
               onTap: () => _showInfoDialog(
                 'Terms and Conditions',
                 'EstudyanteGO is a commute companion. Fares shown are '
@@ -706,8 +749,16 @@ class _AccountTabState extends State<AccountTab> {
               glass: glass,
             ),
             _infoTile(
-              icon: Icons.privacy_tip_outlined,
+              icon: Icons.policy_outlined,
               title: 'Privacy Policy',
+              // Full color (Steven, Nov 8): rose icon on a soft rose
+              // tint, with its own icon (policy) so it no longer
+              // shares Privacy Settings' icon. The Privacy Policy
+              // content stays SEPARATE from the About screen and is
+              // unchanged.
+              iconColor: const Color(0xFFE11D48),
+              iconBackground:
+                  const Color(0xFFE11D48).withValues(alpha: 0.12),
               onTap: () => _showInfoDialog(
                 'Privacy Policy',
                 'Your Firebase account holds your email and sign-in '
