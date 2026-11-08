@@ -203,6 +203,15 @@ Widget studentHeader({
 }) {
   final photoImage = resolveProfilePhotoImage(profile);
   final hasPhoto = photoImage != null;
+  // The greeting uses the profile's first name — the same display
+  // name the Account tab shows — falling back to 'Steven' when
+  // the profile has no display name (Fares × Map audit, Nov 7,
+  // 2026: the old code hardcoded 'Steven' here, so a changed
+  // display name would never show on the Student tab).
+  final displayName = profile?.displayName.trim() ?? '';
+  final firstName = displayName.isEmpty
+      ? 'Steven'
+      : displayName.split(RegExp(r'\s+')).first;
   return Container(
     padding: const EdgeInsets.all(20),
     decoration: const BoxDecoration(
@@ -230,7 +239,7 @@ Widget studentHeader({
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$greetingName, Steven!',
+                '$greetingName, $firstName!',
                 style: kStudentPageTitle.copyWith(color: Colors.white),
               ),
               Text(

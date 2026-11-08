@@ -1088,7 +1088,10 @@ class _HomeShellState extends State<_HomeShell>
             adService: _adService,
           ),
         ),
-        StudyTab(walletController: _walletController),
+        StudyTab(
+          walletController: _walletController,
+          visible: widget.selectedIndex == 1,
+        ),
         FaresTab(
           onViewOnMap: () => widget.onSelect(3),
           currentUser: widget.user,

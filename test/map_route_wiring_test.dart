@@ -312,17 +312,22 @@ void main() {
 
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsWidgets);
       expect(find.text('₱60'), findsOneWidget);
-      expect(find.text('₱48'), findsOneWidget);
+      // ₱48 three times: DISCOUNTED + PWD + SENIOR all derive 20%
+      // off the verified ₱60 (F7 — the Map sheet now shows the
+      // PWD/Senior fares Fares shows).
+      expect(find.text('₱48'), findsNWidgets(3));
       expect(find.text('VERIFIED FARE'), findsOneWidget);
     });
 
-    testWidgets('sheet shows "Fare not set" for an unset pair',
+    testWidgets('sheet shows an estimate for an unset pair',
         (tester) async {
       await _pumpMap(tester);
 
       faresMapJump.value = (
         from: _viganTerminal,
         to: 'San Juan, Ilocos Sur',
+        fromLat: null,
+        fromLng: null,
       );
       await tester.pumpAndSettle();
 
@@ -330,7 +335,11 @@ void main() {
         find.text('Vigan Bus Terminal → San Juan, Ilocos Sur'),
         findsWidgets,
       );
-      expect(find.text('Fare not set'), findsWidgets);
+      // F4 (Fares × Map audit, Nov 7, 2026): the Map sheet now
+      // shows the same LTFRB estimate as Fares, labelled
+      // ESTIMATE, instead of "Fare not set".
+      expect(find.text('ESTIMATE'), findsWidgets);
+      expect(find.text('Fare not set'), findsNothing);
       expect(find.text('VERIFIED FARE'), findsNothing);
     });
 

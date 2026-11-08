@@ -13,6 +13,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'add_route_sheet.dart';
 import 'admin_access.dart';
@@ -68,7 +69,13 @@ double discountedFareOf(double fare) => (fare * 0.8 * 4).round() / 4;
 /// 'My location' when the calculator's origin is the GPS position;
 /// the Map tab resolves that to the device location (else the home
 /// hub), exactly like its hub-tap flow.
-final faresMapJump = ValueNotifier<({String from, String to})?>(null);
+/// A Fares → Map jump: the Map tab draws this route when the
+/// value is set. [fromLat]/[fromLng] carry the device position
+/// when the jump's origin is 'My location' (J2, Nov 7, 2026) —
+/// without them the Map silently retargeted to the home hub.
+/// Null when the origin is a hub (the Map resolves it by name).
+final faresMapJump = ValueNotifier<
+    ({String from, String to, double? fromLat, double? fromLng})?>(null);
 
 /// Web formatTripTime, mirrored here so the Fares sheet can show an
 /// ETA without importing map_tab.dart (which imports this file):
@@ -370,13 +377,47 @@ PopularRoute popularRouteFromCustomRoute(CustomRoute route) {
   );
 }
 
+/// LTFRB table rate for a route's vehicle string — the rate the
+/// breakdown sheet computes with (Fares × Map audit, Nov 7,
+/// 2026: F5). Bus → prov-aircon, Jeepney → trad-jeep; Van /
+/// Tricycle / anything else has no table rate, so the sheet
+/// shows no breakdown instead of a wrong-rate number. This
+/// mirrors [rateForVehicleString] in vehicle_categories.dart
+/// (the canonical mapping) because fares_tab cannot import that
+/// file — it imports fares_tab for [fareRates].
+FareRate? rateForRouteVehicle(String vehicle) {
+  final String? rateId;
+  switch (vehicle) {
+    case 'Bus':
+      rateId = 'prov-aircon';
+    case 'Jeepney':
+      rateId = 'trad-jeep';
+    default:
+      rateId = null;
+  }
+  if (rateId == null) return null;
+  for (final rate in fareRates) {
+    if (rate.id == rateId) return rate;
+  }
+  return null;
+}
+
 /// Road distance for a route, resolving endpoints against the
 /// merged hub list (built-ins + admin-added stops). Same ×1.22
 /// rule as [PopularRoute.roadKm]; null when an endpoint is
 /// unknown. [PopularRoute.roadKm] stays hubs-only (its tests pin
-/// it); callers that hold stops use this.
-double? popularRouteRoadKm(PopularRoute route, List<BusStop> stops) {
+/// it); callers that hold stops use this. A custom route
+/// ([customRoute]) uses its leg-summed distance instead —
+/// From → via… → To (see [customRouteRoadKm]) — never the direct
+/// endpoint-to-endpoint distance (Fares × Map audit, Nov 7,
+/// 2026: F3).
+double? popularRouteRoadKm(
+  PopularRoute route,
+  List<BusStop> stops, {
+  CustomRoute? customRoute,
+}) {
   if (route.distanceKm != null) return route.distanceKm;
+  if (customRoute != null) return customRouteRoadKm(customRoute, stops);
   final fromHub = hubByName(route.from, stops);
   final toHub = hubByName(route.to, stops);
   if (fromHub == null || toHub == null) return null;
@@ -874,9 +915,9 @@ class FaresTab extends StatefulWidget {
 
 class _FaresTabState extends State<FaresTab> {
   // Nov 7 (Steven): the vehicle/discount pickers were removed with the
-  // calculator, so these are frozen at their defaults (Traditional
-  // jeepney, Regular). The route breakdown sheets still use them.
-  final String _rateId = 'trad-jeep';
+  // calculator, so the discount stays frozen at Regular. The rate is
+  // NOT frozen: each breakdown sheet uses the rate matching the
+  // route's vehicle (Fares × Map audit, Nov 7, 2026: F5).
   final bool _discounted = false;
   _OriginMode _originMode = _OriginMode.location;
   int _originHub = 2; // Cabugao.
@@ -1139,8 +1180,22 @@ class _FaresTabState extends State<FaresTab> {
   /// Sets the Fares → Map jump, then switches to the Map tab.
   /// The Map tab draws the route and shows its ETA • FARE sheet;
   /// without the jump it would open with no route at all.
-  void _jumpToMap({required String from, required String to}) {
-    faresMapJump.value = (from: from, to: to);
+  /// [fromLat]/[fromLng] carry the device position when the
+  /// jump's origin is 'My location' (J2) — the Map starts at the
+  /// real location instead of silently retargeting to the home
+  /// hub. Null for hub origins (resolved by name on the Map).
+  void _jumpToMap({
+    required String from,
+    required String to,
+    double? fromLat,
+    double? fromLng,
+  }) {
+    faresMapJump.value = (
+      from: from,
+      to: to,
+      fromLat: fromLat,
+      fromLng: fromLng,
+    );
     widget.onViewOnMap?.call();
   }
 
@@ -1148,14 +1203,33 @@ class _FaresTabState extends State<FaresTab> {
   /// routes only) and opens the fare breakdown sheet for it.
   void _openRouteSheet(PopularRoute route) {
     _loadRouteIntoCalculator(route);
-    final rate = _rate;
-    final roadKm = _roadKm;
-    final breakdown = rate != null && roadKm != null
-        ? fareBreakdownFor(rate, roadKm, _discounted)
+    final override = route.customRouteId == null
+        ? _fareOverrides[seededRouteKey(route.from, route.to)]
         : null;
+    final custom = route.customRouteId == null
+        ? null
+        : _customRoutes.where((r) => r.id == route.customRouteId).firstOrNull;
     final fromHub = hubByName(route.from, _busStops);
     final toHub = hubByName(route.to, _busStops);
-    final distanceKm = popularRouteRoadKm(route, _busStops);
+    // F10: the breakdown uses the ROUTE's own distance — never the
+    // Trip card's leftover From/To distance (the old code showed
+    // another route's estimate for non-hub routes like Laoag
+    // Partas → Cubao, and contradicted the GMW route's own
+    // 401.0 km). Null when the route's distance is unknown: the
+    // estimate section hides instead of showing a borrowed number.
+    // F3: a custom route's distance is its leg-summed distance.
+    final distanceKm = popularRouteRoadKm(
+      route,
+      _busStops,
+      customRoute: custom,
+    );
+    // F5: the rate matches the route's vehicle (Bus → prov-aircon,
+    // Jeepney → trad-jeep); Van / Tricycle have no table rate, so
+    // no breakdown is shown instead of a wrong-rate number.
+    final rate = rateForRouteVehicle(route.vehicle);
+    final breakdown = rate != null && distanceKm != null
+        ? fareBreakdownFor(rate, distanceKm, _discounted)
+        : null;
     final distanceNote =
         route.distanceNote ??
         (fromHub != null && toHub != null
@@ -1171,27 +1245,38 @@ class _FaresTabState extends State<FaresTab> {
         : route.fareLabel == 'Verified bus fare'
         ? 'Verified fare'
         : 'Admin-set fare';
-    // Stops along the way, without road geometry: origin +
-    // destination (+ the route's effective direction — a drawn
-    // line wins over the named via stops). The Map tab adds the
-    // on-the-way towns once its OSRM line loads — never guessed.
-    final override = route.customRouteId == null
-        ? _fareOverrides[seededRouteKey(route.from, route.to)]
+    // The route's effective direction — a drawn line wins over the
+    // named via stops — as raw points for the geometry key/fetch.
+    final viaWaypoints = effectiveRouteWaypoints(
+      customRoute: custom,
+      override: override,
+      busStops: _busStops,
+    );
+    final viaPoints = viaWaypoints.map((w) => w.point).toList();
+    // F1/F2: the live OSRM geometry for this route when either tab
+    // has already fetched it; the sheet fetches on a miss and
+    // updates to the Map's values (distance, ETA, stops) live.
+    final initialGeometry = fromHub != null && toHub != null
+        ? routeGeometryCache.get(
+            routeGeometryKey(
+              oLat: fromHub.lat,
+              oLng: fromHub.lng,
+              dest: toHub,
+              via: viaPoints,
+            ),
+          )
         : null;
-    final custom = route.customRouteId == null
-        ? null
-        : _customRoutes.where((r) => r.id == route.customRouteId).firstOrNull;
+    // Stops along the way, without road geometry: origin +
+    // destination (+ the route's effective direction). The sheet
+    // recomputes the full on-the-way list once its geometry loads
+    // — never guessed.
     final stops = fromHub != null && toHub != null && distanceKm != null
         ? hubPairStops(
             from: fromHub,
             to: toHub,
             totalKm: distanceKm,
             viaHubNames: route.viaHubs,
-            viaWaypoints: effectiveRouteWaypoints(
-              customRoute: custom,
-              override: override,
-              busStops: _busStops,
-            ),
+            viaWaypoints: viaWaypoints,
             extraStops: _busStops,
           ).map((s) => (name: s.name, role: s.role)).toList()
         : null;
@@ -1244,8 +1329,31 @@ class _FaresTabState extends State<FaresTab> {
         onViewOnMap: canViewOnMap
             ? () => _jumpToMap(from: route.from, to: route.to)
             : null,
+        // F1/F2: the sheet shows the live OSRM geometry when
+        // available (cached or freshly fetched) and falls back to
+        // the estimate values above until it loads.
+        initialGeometry: initialGeometry,
+        loadGeometry: fromHub != null && toHub != null
+            ? () => fetchRouteGeometry(
+                  oLat: fromHub.lat,
+                  oLng: fromHub.lng,
+                  dest: toHub,
+                  via: viaPoints,
+                )
+            : null,
+        geometryFrom: fromHub,
+        geometryTo: toHub,
+        geometryViaHubNames: route.viaHubs,
+        geometryViaWaypoints: viaWaypoints,
+        geometryExtraStops: _busStops,
+        breakdownForKm: (km) =>
+            rate == null ? null : fareBreakdownFor(rate, km, _discounted),
       ),
-    );
+    ).then((_) {
+      // A geometry fetched while the sheet was open is now cached:
+      // refresh the Trip card so it shows the live distance too.
+      if (mounted) setState(() {});
+    });
   }
 
   /// Manage bus stops (admin only): the list of admin-added
@@ -1549,11 +1657,60 @@ class _FaresTabState extends State<FaresTab> {
     }
   }
 
-  FareRate? get _rate {
-    for (final r in fareRates) {
-      if (r.id == _rateId) return r;
+  /// The custom route matching the Trip card's current From/To
+  /// (hub mode only), or null when the pair is a generated route
+  /// or the origin is the device location.
+  CustomRoute? _tripCustomRoute() {
+    if (_originMode != _OriginMode.hub) return null;
+    return matchCustomRoute(
+      _customRoutes,
+      _tripHubs[_originHub].name,
+      _tripHubs[_destHub].name,
+    );
+  }
+
+  /// Cached live OSRM geometry for the Trip card's current
+  /// From/To (+ the matching custom route's via points), or null
+  /// when the route has not been fetched yet — the Map tab or a
+  /// breakdown sheet populates the cache (see
+  /// [routeGeometryCache]).
+  RouteGeometry? _tripGeometry() {
+    final dest = _tripHubs[_destHub];
+    final custom = _tripCustomRoute();
+    final via = custom == null
+        ? const <LatLng>[]
+        : effectiveRouteWaypoints(customRoute: custom, busStops: _busStops)
+              .map((w) => w.point)
+              .toList();
+    if (_originMode == _OriginMode.location) {
+      if (_deviceLat == null || _deviceLng == null) return null;
+      return routeGeometryCache.get(
+        routeGeometryKey(
+          oLat: _deviceLat!,
+          oLng: _deviceLng!,
+          dest: dest,
+          via: via,
+        ),
+      );
     }
-    return null; // 'tricycle-local': no rate, handled as a special state.
+    final from = _tripHubs[_originHub];
+    return routeGeometryCache.get(
+      routeGeometryKey(oLat: from.lat, oLng: from.lng, dest: dest, via: via),
+    );
+  }
+
+  /// Road distance shown in the Trip card: the live OSRM distance
+  /// when the route has been fetched (same as the Map tab — F2),
+  /// else a custom route's leg-summed distance (F3), else
+  /// max(0.1, direct * 1.22) like the web calculator.
+  double? get _roadKm {
+    final geometry = _tripGeometry();
+    if (geometry != null) return geometry.distanceKm;
+    final custom = _tripCustomRoute();
+    if (custom != null) return customRouteRoadKm(custom, _busStops);
+    final direct = _directKm;
+    if (direct == null) return null;
+    return math.max(0.1, direct * 1.22);
   }
 
   /// Direct (straight-line) distance for the computed modes, null when
@@ -1575,14 +1732,6 @@ class _FaresTabState extends State<FaresTab> {
       _tripHubs[_destHub].lat,
       _tripHubs[_destHub].lng,
     );
-  }
-
-  /// Road distance shown and used for the fare: always auto-computed
-  /// as max(0.1, direct * 1.22) like the web calculator.
-  double? get _roadKm {
-    final direct = _directKm;
-    if (direct == null) return null;
-    return math.max(0.1, direct * 1.22);
   }
 
   Future<void> _useLocation() async {
@@ -1687,6 +1836,8 @@ class _FaresTabState extends State<FaresTab> {
     final scheme = Theme.of(context).colorScheme;
     final roadKm = _roadKm;
     final directKm = _directKm;
+    final tripGeometry = _tripGeometry();
+    final tripCustom = _tripCustomRoute();
     final filteredRoutes = _filteredPopularRoutes;
 
     Widget sectionTitle(String text) => Padding(
@@ -1797,7 +1948,13 @@ class _FaresTabState extends State<FaresTab> {
                       ),
                       const SizedBox(height: AppSpacing.s4),
                       Text(
-                        'Calculated: ${directKm!.toStringAsFixed(1)} km straight-line distance + 22% road allowance. May differ from the actual route.',
+                        // F2: the ×1.22 figure is labelled an
+                        // estimate; the live OSRM distance says so.
+                        tripGeometry != null
+                            ? 'Live road distance — same as the Map tab.'
+                            : tripCustom != null
+                            ? 'Calculated from your stops: straight-line legs + 22% road allowance.'
+                            : 'Calculated: ${directKm!.toStringAsFixed(1)} km straight-line distance + 22% road allowance. May differ from the actual route.',
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
@@ -1815,6 +1972,15 @@ class _FaresTabState extends State<FaresTab> {
                               ? 'My location'
                               : _tripHubs[_originHub].name,
                           to: _tripHubs[_destHub].name,
+                          // J2: the device position travels with the
+                          // jump, so the Map starts at the real
+                          // location instead of the home hub.
+                          fromLat: _originMode == _OriginMode.location
+                              ? _deviceLat
+                              : null,
+                          fromLng: _originMode == _OriginMode.location
+                              ? _deviceLng
+                              : null,
                         ),
                         icon: const Icon(Icons.map_outlined),
                         label: const Text('Find routes'),
@@ -2246,7 +2412,7 @@ class _SheetRow extends StatelessWidget {
 /// current vehicle and discount. Every row comes from
 /// [FareBreakdown] or the route's own fare — the preview's sample
 /// ₱40 + ₱13 + ₱7 breakdown is never shown.
-class _FareBreakdownSheet extends StatelessWidget {
+class _FareBreakdownSheet extends StatefulWidget {
   const _FareBreakdownSheet({
     required this.from,
     required this.to,
@@ -2273,6 +2439,14 @@ class _FareBreakdownSheet extends StatelessWidget {
     required this.breakdownNote,
     required this.onViewOnMap,
     this.onEditRoute,
+    this.initialGeometry,
+    this.loadGeometry,
+    this.geometryFrom,
+    this.geometryTo,
+    this.geometryViaHubNames = const [],
+    this.geometryViaWaypoints = const [],
+    this.geometryExtraStops = const [],
+    this.breakdownForKm,
   });
 
   final String from;
@@ -2326,8 +2500,9 @@ class _FareBreakdownSheet extends StatelessWidget {
 
   /// Stops along the way as (name, role) pairs — origin + destination
   /// (+ an admin route's via-stops); null when the endpoints are not
-  /// both known hubs. Intermediate on-the-way towns appear on the
-  /// Map tab once its OSRM line loads; they are never guessed here.
+  /// both known hubs. Intermediate on-the-way towns appear once
+  /// the live geometry loads (see [initialGeometry]/[loadGeometry]);
+  /// they are never guessed.
   final List<({String name, String role})>? stops;
 
   final FareBreakdown? breakdown;
@@ -2339,12 +2514,102 @@ class _FareBreakdownSheet extends StatelessWidget {
   /// sheet (no route to edit).
   final VoidCallback? onEditRoute;
 
+  /// Live OSRM geometry for this route when either tab already
+  /// fetched it (see [routeGeometryCache]); null until the sheet
+  /// fetches it (see [loadGeometry]).
+  final RouteGeometry? initialGeometry;
+
+  /// Fetches the route's live geometry (cache-first, see
+  /// [fetchRouteGeometry]). Null when the endpoints are unknown
+  /// — the sheet stays on the estimate values.
+  final Future<RouteGeometry?> Function()? loadGeometry;
+
+  /// Endpoints + direction inputs for recomputing the stops list
+  /// from the live geometry (see [hubPairStops]). Null when the
+  /// endpoints are not both known hubs.
+  final Hub? geometryFrom;
+  final Hub? geometryTo;
+  final List<String> geometryViaHubNames;
+  final List<RouteWaypoint> geometryViaWaypoints;
+  final List<BusStop> geometryExtraStops;
+
+  /// Rebuilds the calculator breakdown for a live road distance
+  /// (same rate as the estimate breakdown). Null when the route's
+  /// vehicle has no table rate.
+  final FareBreakdown? Function(double roadKm)? breakdownForKm;
+
+  @override
+  State<_FareBreakdownSheet> createState() => _FareBreakdownSheetState();
+}
+
+class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
+  RouteGeometry? _geometry;
+
+  @override
+  void initState() {
+    super.initState();
+    _geometry = widget.initialGeometry;
+    if (_geometry == null && widget.loadGeometry != null) {
+      widget.loadGeometry!().then((geometry) {
+        if (!mounted || geometry == null) return;
+        setState(() => _geometry = geometry);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final breakdown = this.breakdown;
-    final routeFare = this.routeFare;
-    final distanceKm = this.distanceKm;
+    final geometry = _geometry;
+    // Effective values: the live geometry wins when loaded (the
+    // SAME distance, ETA, and stops the Map tab shows — F1/F2);
+    // the estimate values passed in are the pre-load fallback.
+    final from = widget.from;
+    final to = widget.to;
+    final operator = widget.operator;
+    final vehicle = widget.vehicle;
+    final isBus = widget.isBus;
+    final showRouteFare = widget.showRouteFare;
+    final routeFare = widget.routeFare;
+    final routeFareLabel = widget.routeFareLabel;
+    final routeFareNote = widget.routeFareNote;
+    final routeFareStudent = widget.routeFareStudent;
+    final routeFareStudentSet = widget.routeFareStudentSet;
+    final routeFarePwd = widget.routeFarePwd;
+    final routeFarePwdSet = widget.routeFarePwdSet;
+    final routeFareSenior = widget.routeFareSenior;
+    final routeFareSeniorSet = widget.routeFareSeniorSet;
+    final fareStatus = widget.fareStatus;
+    final breakdownNote = widget.breakdownNote;
+    final onViewOnMap = widget.onViewOnMap;
+    final onEditRoute = widget.onEditRoute;
+    final distanceKm = geometry?.distanceKm ?? widget.distanceKm;
+    final distanceNote = geometry != null
+        ? 'Live road distance — same as the Map tab.'
+        : widget.distanceNote;
+    final etaMinutes = geometry != null
+        ? (geometry.durationSec / 60).round()
+        : widget.etaMinutes;
+    final etaNote = geometry != null
+        ? 'Live road time — same as the Map tab.'
+        : widget.etaNote;
+    final stops =
+        geometry != null &&
+                widget.geometryFrom != null &&
+                widget.geometryTo != null
+            ? hubPairStops(
+                from: widget.geometryFrom!,
+                to: widget.geometryTo!,
+                totalKm: geometry.distanceKm,
+                viaHubNames: widget.geometryViaHubNames,
+                viaWaypoints: widget.geometryViaWaypoints,
+                extraStops: widget.geometryExtraStops,
+                roadPoints: geometry.points,
+              ).map((s) => (name: s.name, role: s.role)).toList()
+            : widget.stops;
+    final breakdown = geometry != null && widget.breakdownForKm != null
+        ? widget.breakdownForKm!(geometry.distanceKm)
+        : widget.breakdown;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -2373,7 +2638,7 @@ class _FareBreakdownSheet extends StatelessWidget {
                     TextButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        onEditRoute!();
+                        onEditRoute();
                       },
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       label: const Text('Edit route'),
@@ -2397,7 +2662,7 @@ class _FareBreakdownSheet extends StatelessWidget {
                 children: [
                   if (operator != null)
                     Text(
-                      operator!,
+                      operator,
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
@@ -2422,14 +2687,14 @@ class _FareBreakdownSheet extends StatelessWidget {
                 _SheetRow(
                   label: 'ETA',
                   detail: etaNote,
-                  amount: formatTripTimeShort(etaMinutes!),
+                  amount: formatTripTimeShort(etaMinutes),
                 ),
               ],
               if (fareStatus != null) ...[
                 const SizedBox(height: AppSpacing.s8),
                 _SheetRow(
                   label: 'Fare status',
-                  amount: fareStatus!,
+                  amount: fareStatus,
                   bold: true,
                 ),
               ],
@@ -2479,7 +2744,7 @@ class _FareBreakdownSheet extends StatelessWidget {
                   if (routeFareNote != null) ...[
                     const SizedBox(height: AppSpacing.s4),
                     Text(
-                      routeFareNote!,
+                      routeFareNote,
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
@@ -2559,16 +2824,16 @@ class _FareBreakdownSheet extends StatelessWidget {
               ] else if (breakdownNote != null) ...[
                 const SizedBox(height: AppSpacing.s16),
                 Text(
-                  breakdownNote!,
+                  breakdownNote,
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
-              if (stops != null && stops!.isNotEmpty) ...[
+              if (stops != null && stops.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.s16),
                 const Text('Stops along the way', style: kFaresCardHeading),
                 const SizedBox(height: AppSpacing.s8),
-                for (var i = 0; i < stops!.length; i++)
+                for (var i = 0; i < stops.length; i++)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(
@@ -2582,12 +2847,12 @@ class _FareBreakdownSheet extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(
-                            stops![i].name,
+                            stops[i].name,
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
                         Text(
-                          stops![i].role,
+                          stops[i].role,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
@@ -2600,7 +2865,7 @@ class _FareBreakdownSheet extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: () {
                     Navigator.pop(context);
-                    onViewOnMap!();
+                    onViewOnMap();
                   },
                   icon: const Icon(Icons.map_outlined),
                   label: const Text('Show direction on Map'),

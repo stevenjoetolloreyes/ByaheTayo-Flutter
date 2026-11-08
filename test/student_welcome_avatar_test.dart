@@ -143,4 +143,26 @@ void main() {
     expect(image, isA<FileImage>());
     expect((image as FileImage).file.path, _photoA);
   });
+
+  testWidgets('greeting uses the profile display name\'s first name',
+      (tester) async {
+    // The Account tab shows profile?.displayName; the Student
+    // greeting must use the same name (Fares × Map audit, Nov 7,
+    // 2026 — the old code hardcoded 'Steven' here).
+    await _pumpHeader(
+      tester,
+      const UserProfile(
+        displayName: 'Juan Dela Cruz',
+        email: 'juan@example.com',
+      ),
+    );
+    expect(find.text('Good Morning, Juan!'), findsOneWidget);
+    expect(find.text('Good Morning, Steven!'), findsNothing);
+  });
+
+  testWidgets('greeting falls back to Steven with no display name',
+      (tester) async {
+    await _pumpHeader(tester, null);
+    expect(find.text('Good Morning, Steven!'), findsOneWidget);
+  });
 }

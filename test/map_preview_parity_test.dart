@@ -73,7 +73,10 @@ void main() {
     expect(find.text('REGULAR FARE'), findsOneWidget);
     expect(find.text('₱60'), findsOneWidget);
     expect(find.text('DISCOUNTED -20%'), findsOneWidget);
-    expect(find.text('₱48'), findsOneWidget);
+    // ₱48 three times: DISCOUNTED + PWD + SENIOR all derive 20%
+    // off the verified ₱60 (F7 — the Map sheet now shows the
+    // PWD/Senior fares Fares shows).
+    expect(find.text('₱48'), findsNWidgets(3));
 
     // Duration + distance (estimate model until OSRM loads: the
     // 32.3 km in the preview is the live OSRM road length; the

@@ -360,12 +360,20 @@ String _gwaStanding(double gwa) {
 }
 
 class StudyTab extends StatefulWidget {
-  const StudyTab({super.key, this.walletController});
+  const StudyTab({super.key, this.walletController, this.visible = true});
 
   /// The shell's points wallet (same controller the Student and
   /// Account tabs read). Null in widget tests — the ⭐ chip then
   /// honestly shows 0 pts.
   final PointsWalletController? walletController;
+
+  /// Whether this tab is the selected one. The shell passes
+  /// `selectedIndex == 1`; the tab reloads when it becomes
+  /// visible (see didUpdateWidget) so a subject added in
+  /// Student → Classes & Timetable appears in Grades without an
+  /// app restart (Fares × Map audit, Nov 7, 2026: cross-tab
+  /// staleness). True by default (widget tests).
+  final bool visible;
 
   @override
   State<StudyTab> createState() => _StudyTabState();
@@ -390,6 +398,18 @@ class _StudyTabState extends State<StudyTab> {
   void initState() {
     super.initState();
     widget.walletController?.addListener(_onWalletChanged);
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant StudyTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Becoming visible again (e.g. back from the Student tab):
+    // reload the shared StudentStorage lists so edits made in
+    // another tab show here at once. A rebuild while already
+    // visible (oldWidget.visible) does NOT reload — _load is a
+    // storage read, not a reaction to a parent rebuild.
+    if (oldWidget.visible || !widget.visible) return;
     _load();
   }
 

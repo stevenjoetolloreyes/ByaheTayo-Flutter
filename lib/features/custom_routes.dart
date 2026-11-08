@@ -242,6 +242,20 @@ class CustomRoute {
   }
 }
 
+/// The admin-added custom route for a From|To pair, or null.
+/// Exact hub-name match; the first match wins (a pair has at most
+/// one custom route — the Add Route sheet blocks duplicates).
+CustomRoute? matchCustomRoute(
+  List<CustomRoute> customs,
+  String from,
+  String to,
+) {
+  for (final route in customs) {
+    if (route.from == from && route.to == to) return route;
+  }
+  return null;
+}
+
 /// Hub by name, or null when the name is not one of [hubs] nor
 /// an admin-added stop in [busStops].
 Hub? hubByName(String name, [List<BusStop> busStops = const []]) {
@@ -375,6 +389,107 @@ int customRouteEtaMinutes(
   );
 }
 
+/// A route's live road geometry: the OSRM shape + length +
+/// duration. The Fares and Map tabs share these through
+/// [routeGeometryCache] so both show the SAME distance, ETA, and
+/// stops for a route (Fares × Map audit, Nov 7, 2026: F1/F2).
+/// [OsrmRoute] stays in osm_routing (which imports fares_tab, so
+/// fares_tab cannot name it) — this plain shape is the shared
+/// type both tabs can use.
+class RouteGeometry {
+  const RouteGeometry({
+    required this.points,
+    required this.distanceKm,
+    required this.durationSec,
+  });
+
+  /// Road geometry, origin first, destination last.
+  final List<LatLng> points;
+
+  /// Routed length in km.
+  final double distanceKm;
+
+  /// Routed duration in seconds.
+  final double durationSec;
+
+  factory RouteGeometry.fromOsrm(OsrmRoute route) => RouteGeometry(
+    points: route.points,
+    distanceKm: route.distanceKm,
+    durationSec: route.durationSec,
+  );
+}
+
+/// In-memory cache of live OSRM road geometries, shared by the
+/// Fares and Map tabs. The Map tab writes on every successful
+/// OSRM fetch; the Fares breakdown sheet reads (and fetches on a
+/// miss, so the sheet converges to the Map's values without a
+/// Map visit first). Never persisted — a fresh app start
+/// re-fetches. Keyed by [routeGeometryKey].
+class RouteGeometryCache {
+  final Map<String, RouteGeometry> _entries = {};
+
+  RouteGeometry? get(String key) => _entries[key];
+
+  void put(String key, RouteGeometry geometry) => _entries[key] = geometry;
+
+  void clear() => _entries.clear();
+}
+
+/// The shared geometry cache (same precedent as [faresMapJump]:
+/// cross-tab state the shell does not own).
+final routeGeometryCache = RouteGeometryCache();
+
+/// Cache key for a route's OSRM geometry: origin + destination
+/// coordinates + the EFFECTIVE via points. The Quezon Ave
+/// waypoint counts when it applies (see
+/// [viaWaypointsForDestination]) — so a Fares-side key matches
+/// the Map-side key for the same physical route. Coordinates are
+/// rounded to 5 decimals (~1 m): close enough to share, far
+/// enough to differ.
+String routeGeometryKey({
+  required double oLat,
+  required double oLng,
+  required Hub dest,
+  List<LatLng> via = const [],
+}) {
+  final effectiveVia =
+      via.isNotEmpty ? via : viaWaypointsForDestination(dest);
+  String coord(double lat, double lng) =>
+      '${lat.toStringAsFixed(5)},${lng.toStringAsFixed(5)}';
+  final viaPart = effectiveVia
+      .map((p) => coord(p.latitude, p.longitude))
+      .join(';');
+  return '${coord(oLat, oLng)}|${coord(dest.lat, dest.lng)}|$viaPart';
+}
+
+/// Fetches a route's OSRM geometry, cache-first: returns the
+/// cached geometry when the same route was already fetched (by
+/// either tab); otherwise fetches from OSRM and caches on
+/// success. Returns null on any failure — the caller keeps the
+/// ×1.22 estimate. Never throws.
+Future<RouteGeometry?> fetchRouteGeometry({
+  required double oLat,
+  required double oLng,
+  required Hub dest,
+  List<LatLng> via = const [],
+}) async {
+  final key = routeGeometryKey(oLat: oLat, oLng: oLng, dest: dest, via: via);
+  final cached = routeGeometryCache.get(key);
+  if (cached != null) return cached;
+  final effectiveVia =
+      via.isNotEmpty ? via : viaWaypointsForDestination(dest);
+  final result = await fetchOsrmRoute(
+    oLat: oLat,
+    oLng: oLng,
+    dest: dest,
+    via: effectiveVia,
+  );
+  if (result == null) return null;
+  final geometry = RouteGeometry.fromOsrm(result);
+  routeGeometryCache.put(key, geometry);
+  return geometry;
+}
+
 /// Transit ETA minutes for any road distance, using the same
 /// estimateTripMinutes model the Map tab uses. Use when neither
 /// endpoint is a known hub (e.g. a named terminal that is not in
@@ -417,7 +532,10 @@ int hubPairEtaMinutes({
 /// breakdown sheet, which has no geometry of its own.
 /// [viaWaypoints] (a drawn line) wins over [viaHubNames] for the
 /// intermediate stops; [extraStops] are the admin-added stops
-/// the names may resolve to.
+/// the names may resolve to. Pass [roadPoints] (the live OSRM
+/// geometry) to get the SAME on-the-way towns the Map tab shows
+/// for the route (Fares × Map audit, Nov 7, 2026: F1) — null
+/// keeps the geometry-free list.
 List<RouteStop> hubPairStops({
   required Hub from,
   required Hub to,
@@ -425,12 +543,13 @@ List<RouteStop> hubPairStops({
   List<String> viaHubNames = const [],
   List<RouteWaypoint> viaWaypoints = const [],
   List<BusStop> extraStops = const [],
+  List<LatLng>? roadPoints,
 }) {
   return routeStops(
     origin: LatLng(from.lat, from.lng),
     originName: from.name,
     dest: to,
-    roadPoints: null,
+    roadPoints: roadPoints,
     totalKm: totalKm,
     viaHubNames: viaHubNames,
     viaWaypoints: viaWaypoints,

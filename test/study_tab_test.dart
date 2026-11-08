@@ -15,6 +15,7 @@
 // controller wired, as in widget tests).
 import 'dart:convert';
 
+import 'package:estudyantego/features/student/student_data.dart';
 import 'package:estudyantego/features/study_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -365,5 +366,50 @@ void main() {
               .getString('byahetayo_student_grades') ??
           '[]',
     ), isNotEmpty);
+  });
+
+  testWidgets('reloads subjects when it becomes visible again',
+      (tester) async {
+    // A subject added in Student → Classes & Timetable while the
+    // Study tab is hidden must appear in Grades when the user
+    // comes back — no app restart (cross-tab staleness, Fares ×
+    // Map audit, Nov 7, 2026).
+    SharedPreferences.setMockInitialValues({
+      'byahetayo_student_subjects': _subjectJson,
+    });
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: StudyTab(visible: true))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Math 101'), findsOneWidget);
+    expect(find.text('Science 101'), findsNothing);
+
+    // Switch to another tab (visible false), then add a subject
+    // the way the Student tab would.
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: StudyTab(visible: false))),
+    );
+    await tester.pumpAndSettle();
+    final subjects =
+        List<Map<String, dynamic>>.from(jsonDecode(_subjectJson));
+    subjects.add({
+      'id': 's2',
+      'name': 'Science 101',
+      'code': 'SCI101',
+      'teacher': '',
+      'room': '',
+      'days': [2, 4],
+      'startMin': 480,
+      'endMin': 540,
+      'color': 4278190080,
+    });
+    await StudentStorage.saveList(StudentStorage.subjectsKey, subjects);
+
+    // Back to Study — the new subject appears.
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: StudyTab(visible: true))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Science 101'), findsOneWidget);
   });
 }

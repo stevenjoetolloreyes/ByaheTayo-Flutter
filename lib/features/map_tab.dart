@@ -60,6 +60,7 @@ import 'fares_tab.dart';
 import 'onboarding/auth_service.dart';
 import 'osm_routing.dart';
 import 'route_fare_overrides.dart';
+import 'vehicle_categories.dart';
 
 /// Map tab's OWN ChatGPT tokens (loose UI base, Nov 5): Premium Dark +
 /// Emerald Green with a matching Light Mode. Only the chrome around
@@ -1113,20 +1114,6 @@ double? resolveTransitFare({
   return computeFare(rate, roadKm, false).regular;
 }
 
-/// The admin-added custom route for a From|To pair, or null.
-/// Exact hub-name match; the first match wins (a pair has at most
-/// one custom route — the Add Route sheet blocks duplicates).
-CustomRoute? matchCustomRoute(
-  List<CustomRoute> customs,
-  String from,
-  String to,
-) {
-  for (final route in customs) {
-    if (route.from == from && route.to == to) return route;
-  }
-  return null;
-}
-
 /// Map points for ordered via-stop hub names (unknown names are
 /// skipped — never invented). Intermediate points only: the
 /// caller supplies the origin and destination separately.
@@ -1185,16 +1172,122 @@ resolveMapSheetFares({
   final regular = customRoute?.fare ??
       override?.fare ??
       knownBusFare(from, to)?.toDouble();
-  final discounted = customRoute?.studentFare ??
-      override?.studentFare ??
-      (regular == null ? null : discountedFareOf(regular));
-  final pwd = customRoute?.pwdFare ??
-      override?.pwdFare ??
-      (regular == null ? null : discountedFareOf(regular));
-  final senior = customRoute?.seniorFare ??
-      override?.seniorFare ??
-      (regular == null ? null : discountedFareOf(regular));
+  // The discounted fares exist only when a regular fare exists:
+  // an admin-set student/PWD/Senior fare with no regular fare is
+  // hidden, exactly like the Fares tab (PopularRoute's effective
+  // fares return null when fare is null) — otherwise the Map
+  // would show a discount with no fare to discount.
+  final discounted = regular == null
+      ? null
+      : customRoute?.studentFare ??
+            override?.studentFare ??
+            discountedFareOf(regular);
+  final pwd = regular == null
+      ? null
+      : customRoute?.pwdFare ??
+            override?.pwdFare ??
+            discountedFareOf(regular);
+  final senior = regular == null
+      ? null
+      : customRoute?.seniorFare ??
+            override?.seniorFare ??
+            discountedFareOf(regular);
   return (regular: regular, discounted: discounted, pwd: pwd, senior: senior);
+}
+
+/// Operator + vehicle for a Map route, for the sheet header (F8)
+/// and the unset-fare estimate (F4): the custom route's own when
+/// present, else the seeded route's from [popularRoutes], else
+/// neither (a generic hub-to-hub route has no operator or vehicle
+/// — nothing is invented).
+({String? operator, String? vehicle}) mapRouteOperatorVehicle({
+  CustomRoute? customRoute,
+  required String from,
+  required String to,
+}) {
+  if (customRoute != null) {
+    return (operator: customRoute.operator, vehicle: customRoute.vehicle);
+  }
+  for (final route in popularRoutes) {
+    if (route.from == from && route.to == to) {
+      return (operator: route.operator, vehicle: route.vehicle);
+    }
+  }
+  return (operator: null, vehicle: null);
+}
+
+/// The LTFRB estimate for a route whose fare is NOT set (F4): the
+/// same formula fare the Fares breakdown sheet shows, at the
+/// route's own vehicle rate (see [rateForVehicleString]) — null
+/// when the vehicle has no table rate (Van / Tricycle) or the
+/// vehicle is unknown, so the sheet shows "Fare not set" instead
+/// of a wrong-rate number. The caller labels it an estimate.
+double? mapSheetEstimateFare({
+  required String? vehicle,
+  required double roadKm,
+}) {
+  if (vehicle == null) return null;
+  final rate = rateForVehicleString(vehicle);
+  if (rate == null) return null;
+  return computeFare(rate, roadKm, false).regular;
+}
+
+/// Label for the Map sheet's discounted-fare card (F6): the card
+/// claims "-20%" ONLY when the student fare is derived (20% off
+/// by construction); an admin-set student fare shows no
+/// percentage — a set fare equal to the regular fare is NOT a
+/// 20% discount (Steven's own ₱60 student on ₱60 regular).
+String mapDiscountLabel({required bool studentFareSet}) =>
+    studentFareSet ? 'DISCOUNTED' : 'DISCOUNTED -20%';
+
+/// Origin for a Fares → Map jump whose From is not a hub
+/// ('My location'): the jump's own coordinates win (the Fares
+/// tab's device fix, J2), else the Map's own last position, else
+/// the home hub. [isUserLocation] is true when the origin is a
+/// real device position rather than the home hub.
+({double lat, double lng, bool isUserLocation}) resolveJumpOrigin({
+  double? jumpLat,
+  double? jumpLng,
+  LatLng? userPos,
+  required Hub homeHub,
+}) {
+  if (jumpLat != null && jumpLng != null) {
+    return (lat: jumpLat, lng: jumpLng, isUserLocation: true);
+  }
+  if (userPos != null) {
+    return (
+      lat: userPos.latitude,
+      lng: userPos.longitude,
+      isUserLocation: true,
+    );
+  }
+  return (lat: homeHub.lat, lng: homeHub.lng, isUserLocation: false);
+}
+
+/// Transit ETA minutes for a route's preview (pre-OSRM fallback),
+/// from the app's estimateTripMinutes model: mountain /
+/// same-region rules from the two hubs. The origin is looked up
+/// in the MERGED hub list (built-ins + admin-added stops), so an
+/// admin-added stop as origin gets its real mountain/region rules
+/// (F9 — the old code looked in `hubs` only and treated every
+/// admin stop as non-mountain / other-region).
+int previewMinutesForRoute({
+  required RouteInfo route,
+  List<BusStop> stops = const [],
+  required TravelMode mode,
+}) {
+  final originHub = resolveHub(route.originName, stops);
+  final mountain =
+      isMountainHub(route.dest) ||
+      (originHub != null && isMountainHub(originHub));
+  final sameRegion =
+      originHub != null && originHub.region == route.dest.region;
+  return estimateTripMinutes(
+    roadKm: route.roadKm,
+    mountain: mountain,
+    sameRegion: sameRegion,
+    mode: mode,
+  );
 }
 
 /// Preview label for a route card, following the vehicle selection.
@@ -2341,9 +2434,19 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       oLng = originHub.lng;
       oName = originHub.name;
     } else {
-      oLat = _userPos?.latitude ?? hubs[_homeHub].lat;
-      oLng = _userPos?.longitude ?? hubs[_homeHub].lng;
-      oName = _userPos != null ? 'Your location' : hubs[_homeHub].name;
+      // J2: the jump's own device coordinates win; else the Map's
+      // own last position; else the home hub.
+      final origin = resolveJumpOrigin(
+        jumpLat: jump.fromLat,
+        jumpLng: jump.fromLng,
+        userPos: _userPos == null
+            ? null
+            : LatLng(_userPos!.latitude, _userPos!.longitude),
+        homeHub: hubs[_homeHub],
+      );
+      oLat = origin.lat;
+      oLng = origin.lng;
+      oName = origin.isUserLocation ? 'Your location' : hubs[_homeHub].name;
     }
     final resolved = await _resolveRoute(
       originName: oName,
@@ -2359,6 +2462,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
       _roadLoading = route != null;
+      // J1: the previous route's OSRM totals are cleared, so the
+      // sheet falls back to this route's estimate until the new
+      // fetch succeeds — never the old route's distance/ETA.
+      _routeDistanceKm = 0;
+      _routeDurationSec = 0;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
     });
@@ -2606,19 +2714,9 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   int _previewMinutes(TravelMode mode) {
     final route = _activeRoute;
     if (route == null) return 0;
-    Hub? originHub;
-    for (final h in hubs) {
-      if (h.name == route.originName) originHub = h;
-    }
-    final mountain =
-        isMountainHub(route.dest) ||
-        (originHub != null && isMountainHub(originHub));
-    final sameRegion =
-        originHub != null && originHub.region == route.dest.region;
-    return estimateTripMinutes(
-      roadKm: route.roadKm,
-      mountain: mountain,
-      sameRegion: sameRegion,
+    return previewMinutesForRoute(
+      route: route,
+      stops: _busStops,
       mode: mode,
     );
   }
@@ -2645,6 +2743,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _activeRouteOrigin = route == null ? null : LatLng(oLat, oLng);
       _roadPoints = null;
       _roadLoading = route != null;
+      // J1: the previous route's OSRM totals are cleared, so the
+      // sheet falls back to this route's estimate until the new
+      // fetch succeeds — never the old route's distance/ETA.
+      _routeDistanceKm = 0;
+      _routeDurationSec = 0;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
     });
@@ -2706,12 +2809,25 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       // OSRM routing unavailable — the fetch has settled, so
       // the dashed direct line shows (roadLoading off). The
       // re-sync re-asserts it once, same as the success path.
+      // J1: the previous route's OSRM totals are cleared too, so
+      // the sheet falls back to the new route's estimate instead
+      // of showing the old route's distance/ETA forever.
       if (mounted) {
-        setState(() => _roadLoading = false);
+        setState(() {
+          _roadLoading = false;
+          _routeDistanceKm = 0;
+          _routeDurationSec = 0;
+        });
       }
       _resyncLineLayers(requestId);
       return;
     }
+    // F1/F2: share the live geometry with the Fares tab (same
+    // distance, ETA, and stops for this route).
+    routeGeometryCache.put(
+      routeGeometryKey(oLat: oLat, oLng: oLng, dest: dest, via: via),
+      RouteGeometry.fromOsrm(result),
+    );
     setState(() {
       _roadPoints = result.points;
       _roadLoading = false;
@@ -3362,8 +3478,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _exitSetEndpointsMode();
     // The jump reloads stops before matching hubs (see
     // _onFaresJump), so the just-added stops match as the
-    // route's From/To.
-    faresMapJump.value = (from: startName, to: endName);
+    // route's From/To. Both endpoints are stop names — no
+    // device coordinates travel with this jump (J2).
+    faresMapJump.value = (
+      from: startName,
+      to: endName,
+      fromLat: null,
+      fromLng: null,
+    );
     _onFaresJump();
   }
 
@@ -3445,6 +3567,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _activeRouteOverride = resolved.override;
       _roadPoints = null;
       _roadLoading = resolved.route != null;
+      // J1: same as a jump — the old OSRM totals are cleared so a
+      // failed refetch falls back to the route's estimate, not the
+      // pre-edit direction's distance/ETA.
+      _routeDistanceKm = 0;
+      _routeDurationSec = 0;
       _selectedStopIndex = null;
       _pendingStopIndex = null;
     });
@@ -4361,8 +4488,21 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     final verified = adminFare == null
         ? knownBusFare(route.originName, route.dest.name)
         : null;
+    // F8: operator + vehicle for the line under the title (the
+    // custom route's own, else the seeded route's).
+    final ov = mapRouteOperatorVehicle(
+      customRoute: route.customRoute,
+      from: route.originName,
+      to: route.dest.name,
+    );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      // Bottom padding 2 (not 10): the F8 operator/vehicle line
+      // added ~15 px to this fixed header, and the header must
+      // still fit the peeked sheet whole (Peek is 0.20 of a short
+      // viewport in tests — the overflow was 13 px). The body
+      // below starts with its own 4 px gap, so the title-to-cards
+      // gap stays 6 px.
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -4417,7 +4557,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           // Title row: the route name (ellipsized when long) and,
           // for admins, the line maker entry. "Draw line" draws
           // the active route's line by tapping the map; it lives
@@ -4482,6 +4622,24 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                 ),
             ],
           ),
+          // F8: operator + vehicle under the route name. Nothing
+          // when the route has neither — a generic hub-to-hub
+          // route.
+          if (ov.operator != null || ov.vehicle != null)
+            Padding(
+              padding: EdgeInsets.zero,
+              child: Text(
+                [
+                  if (ov.operator != null) ov.operator!,
+                  if (ov.vehicle != null) ov.vehicle!,
+                ].join(' · '),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
         ],
       ),
     );
@@ -4515,12 +4673,16 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   }
 
   /// The preview's fare cards: REGULAR FARE and DISCOUNTED -20%,
-  /// side by side. The fares are the EFFECTIVE fares (see
-  /// [resolveMapSheetFares]): an admin-added route's own fares,
-  /// else an admin override's fares, else the user-verified fare
-  /// — a pair with none of those shows "Fare not set", never a
-  /// computed number. A blank student fare derives 20% off the
-  /// effective regular fare.
+  /// side by side, plus a PWD / SENIOR row below (F7). The fares
+  /// are the EFFECTIVE fares (see [resolveMapSheetFares]): an
+  /// admin-added route's own fares, else an admin override's
+  /// fares, else the user-verified fare. A pair with none of
+  /// those shows the same LTFRB estimate the Fares breakdown
+  /// shows (F4 — labelled ESTIMATE, at the route's own vehicle
+  /// rate), or "Fare not set" when the vehicle has no table rate.
+  /// A blank student fare derives 20% off the effective regular
+  /// fare. The DISCOUNTED card claims "-20%" only when the
+  /// student fare is derived (F6).
   Widget _fareCards(ColorScheme scheme, RouteInfo route) {
     final fares = resolveMapSheetFares(
       customRoute: route.customRoute,
@@ -4529,25 +4691,77 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       to: route.dest.name,
     );
     final regular = fares.regular;
-    final discounted = fares.discounted;
-    return Row(
+    final vehicle = mapRouteOperatorVehicle(
+      customRoute: route.customRoute,
+      from: route.originName,
+      to: route.dest.name,
+    ).vehicle;
+    final km = _routeDistanceKm > 0 ? _routeDistanceKm : route.roadKm;
+    final estimate = regular == null
+        ? mapSheetEstimateFare(vehicle: vehicle, roadKm: km)
+        : null;
+    final isEstimate = regular == null && estimate != null;
+    final regularValue = regular ?? estimate;
+    final studentSet = route.customRoute?.studentFare != null ||
+        _activeRouteOverride?.studentFare != null;
+    final discountedValue =
+        fares.discounted ??
+        (estimate == null ? null : discountedFareOf(estimate));
+    final pwdValue =
+        fares.pwd ?? (estimate == null ? null : discountedFareOf(estimate));
+    final seniorValue =
+        fares.senior ??
+        (estimate == null ? null : discountedFareOf(estimate));
+    String valueText(double? value) => value == null
+        ? 'Fare not set'
+        : isEstimate
+        ? '≈ ${peso(value)}'
+        : peso(value);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: _etaFareStatCard(
-            scheme: scheme,
-            label: 'REGULAR FARE',
-            value: regular == null ? 'Fare not set' : peso(regular),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _etaFareStatCard(
+                scheme: scheme,
+                label: isEstimate ? 'ESTIMATE' : 'REGULAR FARE',
+                value: valueText(regularValue),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _etaFareStatCard(
+                scheme: scheme,
+                label: mapDiscountLabel(studentFareSet: studentSet),
+                value: valueText(discountedValue),
+                highlight: true,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _etaFareStatCard(
-            scheme: scheme,
-            label: 'DISCOUNTED -20%',
-            value: discounted == null ? 'Fare not set' : peso(discounted),
-            highlight: true,
+        if (regularValue != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _etaFareStatCard(
+                  scheme: scheme,
+                  label: 'PWD',
+                  value: valueText(pwdValue),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _etaFareStatCard(
+                  scheme: scheme,
+                  label: 'SENIOR',
+                  value: valueText(seniorValue),
+                ),
+              ),
+            ],
           ),
-        ),
+        ],
       ],
     );
   }
@@ -4969,11 +5183,15 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                               );
                             },
                             child: Padding(
+                              // Bottom padding 0 (not 4): part of
+                              // reclaiming the ~13 px the F8 line
+                              // added to the fixed header, so the
+                              // header still fits the peeked sheet.
                               padding: const EdgeInsets.fromLTRB(
                                 20,
                                 10,
                                 20,
-                                4,
+                                0,
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,

@@ -323,7 +323,8 @@ void main() {
     });
 
     testWidgets(
-      'tapping a no-fare route shows Fare not set, no invented fare',
+      'tapping a no-fare route with a known distance shows its own '
+      'estimate, no invented fare',
       (tester) async {
         await pumpTab(tester);
         await tester.ensureVisible(
@@ -341,7 +342,13 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('401.0 km'), findsOneWidget);
-        expect(find.text('Calculator estimate'), findsNothing);
+        // F10 (Fares × Map audit, Nov 7, 2026): the estimate now
+        // uses the route's OWN stored distance (401.0 km) at the
+        // route's own vehicle rate — not the Trip card's leftover
+        // distance. The old test pinned the buggy behaviour where
+        // the estimate hid because the Trip card was unset.
+        expect(find.text('Calculator estimate'), findsOneWidget);
+        expect(find.text('Amount to pay'), findsOneWidget);
       },
     );
 
