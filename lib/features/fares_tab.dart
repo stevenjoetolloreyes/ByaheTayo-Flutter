@@ -978,6 +978,7 @@ class _FaresTabState extends State<FaresTab> {
     customRoutesChanged.addListener(_onRouteDataChanged);
     routeFareOverridesChanged.addListener(_onRouteDataChanged);
     hiddenRoutesChanged.addListener(_onRouteDataChanged);
+    faresAdminActionRequest.addListener(_onFaresAdminActionRequest);
     _loadRouteData();
   }
 
@@ -987,7 +988,73 @@ class _FaresTabState extends State<FaresTab> {
     customRoutesChanged.removeListener(_onRouteDataChanged);
     routeFareOverridesChanged.removeListener(_onRouteDataChanged);
     hiddenRoutesChanged.removeListener(_onRouteDataChanged);
+    faresAdminActionRequest.removeListener(_onFaresAdminActionRequest);
     super.dispose();
+  }
+
+  /// A request from the Account tab's Admin Access section (Nov 8,
+  /// 2026 organize: the standalone admin actions live there now).
+  /// Runs synchronously: the section jumps to this tab first and
+  /// then sets the request, so the sheet/dialog opens over the
+  /// Fares tab. (A post-frame deferral was tried first — a
+  /// post-frame callback registered outside a frame never runs
+  /// under the test binding, so the action never fired.) Consumed
+  /// once; the notifier is cleared here so the same action can be
+  /// requested again. Non-admins are ignored (the section is
+  /// hidden for them, and the repos re-check on save).
+  void _onFaresAdminActionRequest() {
+    final action = faresAdminActionRequest.value;
+    if (action == null) return;
+    faresAdminActionRequest.value = null;
+    if (!mounted || !isAdminUser(widget.currentUser)) return;
+    switch (action) {
+      case FaresAdminAction.addRoute:
+        _openAddRoute();
+      case FaresAdminAction.manageBusStops:
+        _showManageBusStops();
+      case FaresAdminAction.resetDirections:
+        _resetAllDirections();
+      case FaresAdminAction.hiddenRoutes:
+        _showHiddenRoutes();
+      case FaresAdminAction.addCompany:
+        _addCompanyStandalone();
+    }
+  }
+
+  /// Standalone "Add company" (Admin Access section, Nov 8, 2026
+  /// organize): the same save as the Add Route sheet's "+ Add
+  /// company" chip — typed name, repository dedupes
+  /// case-insensitively — but as its own dialog, because the
+  /// section row has no route form to attach the chip to.
+  Future<void> _addCompanyStandalone() async {
+    final user = widget.currentUser;
+    final repo = widget.busCompanyRepository;
+    if (user == null || repo == null || !isAdminUser(user)) return;
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const _AddCompanyDialog(),
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+    try {
+      await repo.create(
+        BusCompany(
+          name: name,
+          authorUid: user.uid,
+          authorEmail: user.email,
+        ),
+        user,
+      );
+      await _loadRouteData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Company added.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not add the company.')),
+      );
+    }
   }
 
   /// A route / override / stop changed elsewhere (the Map tab's
@@ -2337,61 +2404,87 @@ class _FaresTabState extends State<FaresTab> {
             // Nov 7 (Steven): the calculator (Sasakyan card, result
             // card, estimate disclaimer), Added routes, and Posted
             // operator fares sections were removed at his request.
-            // The admin-only Add Route button stays so an admin can
-            // still add routes — added routes appear in Popular
-            // Routes above, where they can be opened like any
-            // other route.
-            if (_isAdmin) ...[
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: () => _openAddRoute(),
-                icon: const Icon(Icons.add),
-                label: const Text('Add Route'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _showManageBusStops,
-                icon: const Icon(Icons.push_pin_outlined),
-                label: const Text('Manage bus stops'),
-              ),
-              const SizedBox(height: 8),
-              // Reset all directions (admin only, Steven Nov 7,
-              // 20:41: "Mag Reset Direction ka ako na gagawa New
-              // Line" + "Lahat"). One tap clears every saved
-              // direction — drawn lines AND named via stops — on
-              // every route, so each route falls back to its
-              // generated/OSRM path and he can draw the new lines
-              // himself on the Map. Fares are never touched.
-              // It lives here, next to Manage bus stops, because
-              // this is where the admin manages route data and
-              // the Fares tab already holds the repos + loaded
-              // data (so the confirm dialog can count the
-              // affected routes). The Draw line UI is per-route
-              // — the wrong scope for a bulk action.
-              OutlinedButton.icon(
-                onPressed: _resetAllDirections,
-                icon: const Icon(Icons.restart_alt),
-                label: const Text('Reset all directions'),
-              ),
-              // Hidden routes (admin only): shown only while at
-              // least one built-in route is hidden, with the
-              // count — restoring lives here, next to the other
-              // route-data tools, because this tab already holds
-              // the repository + loaded data.
-              if (_hiddenSeededRoutes.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _showHiddenRoutes,
-                  icon: const Icon(Icons.visibility_off_outlined),
-                  label: Text(
-                    'Hidden routes (${_hiddenSeededRoutes.length})',
-                  ),
-                ),
-              ],
-            ],
+            // Nov 8, 2026 (Steven: organize Admin Access into one
+            // category): the standalone admin actions — Add Route,
+            // Manage bus stops, Reset all directions, Hidden routes
+            // — moved to the Account tab's Admin Access section.
+            // They run here on request (see
+            // _onFaresAdminActionRequest), so this tab keeps only
+            // the route-specific entries: Edit route in the fare
+            // breakdown sheet and Remove on each route card / sheet.
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Standalone "Add company" dialog (Admin Access section). Owns
+/// its TextEditingController so disposal happens with the dialog:
+/// disposing a caller-owned controller right after showDialog
+/// returns breaks the TextField while the pop animation is still
+/// in flight. Returns the typed name, or null when cancelled.
+class _AddCompanyDialog extends StatefulWidget {
+  const _AddCompanyDialog();
+
+  @override
+  State<_AddCompanyDialog> createState() => _AddCompanyDialogState();
+}
+
+class _AddCompanyDialogState extends State<_AddCompanyDialog> {
+  final _controller = TextEditingController();
+  var _error = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add company'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'A bus company for the operator list, e.g. Partas.',
+            style: TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Company name *',
+              errorText: _error.isEmpty ? null : _error,
+            ),
+            onChanged: (_) {
+              if (_error.isNotEmpty) {
+                setState(() => _error = '');
+              }
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_controller.text.trim().isEmpty) {
+              setState(() => _error = 'Type a company name first.');
+              return;
+            }
+            Navigator.pop(context, _controller.text.trim());
+          },
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

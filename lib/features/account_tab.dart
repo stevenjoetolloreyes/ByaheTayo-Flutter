@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'ad_service.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
+import 'bus_stops.dart';
 import 'credits_repository.dart';
 import 'friend_cloud_repository.dart';
 import 'friends_tab.dart';
@@ -75,6 +76,8 @@ class AccountTab extends StatefulWidget {
     this.adService,
     this.onViewStudent,
     this.onViewCommunities,
+    this.onViewFares,
+    this.onViewMap,
     this.onEditProfile,
     this.onSignInRequested,
     required this.onSignedOut,
@@ -117,6 +120,13 @@ class AccountTab extends StatefulWidget {
 
   /// Jump to the Communities tab (where admin actions live).
   final VoidCallback? onViewCommunities;
+
+  /// Jump to the Fares tab (Admin Access: edit / remove a route).
+  final VoidCallback? onViewFares;
+
+  /// Jump to the Map tab (Admin Access: draw a line, set Start/End,
+  /// rename a stop).
+  final VoidCallback? onViewMap;
 
   /// Open profile setup in edit mode.
   final VoidCallback? onEditProfile;
@@ -1575,12 +1585,52 @@ class _AccountTabState extends State<AccountTab> {
     );
   }
 
+  /// Runs one of the Fares tab's standalone admin actions from
+  /// this section: jump to the Fares tab first, then set the
+  /// request the Fares tab consumes — the sheet/dialog opens over
+  /// the Fares tab. (The jump goes first so the action runs
+  /// against the visible tab; the Fares tab runs it synchronously
+  /// on the request, see _onFaresAdminActionRequest.)
+  void _runFaresAdminAction(FaresAdminAction action) {
+    widget.onViewFares?.call();
+    faresAdminActionRequest.value = action;
+  }
+
+  /// Small caps subheader dividing the Admin Access tiles into
+  /// groups (Communities tools first, then Routes & fares, then
+  /// On the map) — one category, organized, not a flat list.
+  Widget _adminSubheader(String label, bool glass) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+          color: glass
+              ? Colors.white70
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
   Widget _adminCard(bool glass) {
     // Admin-only section: visible only to allowlisted admin accounts
-    // (admin_access.dart). The actions jump to the Communities tab,
-    // where the gated admin screens live — no duplicated post state.
-    // Both existing tiles are kept; the preview shows only the LGU
-    // tile, but Post approvals is a real admin function.
+    // (admin_access.dart). One category for ALL admin tools (Nov 8,
+    // 2026 organize, Steven: "paki organize yung Admin Access,
+    // isang category lang"). The Communities tiles jump to the
+    // Communities tab, where the gated admin screens live — no
+    // duplicated post state. Both existing tiles are kept; the
+    // preview shows only the LGU tile, but Post approvals is a
+    // real admin function. The standalone Fares actions run from
+    // here (request + jump to the Fares tab, where the sheet
+    // opens); the Map actions jump to the Map tab with the tool
+    // ready; the route-specific ones (edit / remove a route,
+    // rename a stop) jump to the tab where the route or stop is
+    // picked — a route or stop must be chosen first, so no
+    // action can open without it.
     final dark = _isDark;
     return _sectionCard(
       glass: glass,
@@ -1642,6 +1692,81 @@ class _AccountTabState extends State<AccountTab> {
           title: 'LGU directory',
           subtitle: 'Manage LGU directory entries',
           onTap: () => widget.onViewCommunities?.call(),
+          glass: glass,
+        ),
+        _adminSubheader('Routes & fares', glass),
+        _infoTile(
+          icon: Icons.add,
+          title: 'Add Route',
+          subtitle: 'Add a route with its fare and direction',
+          onTap: () => _runFaresAdminAction(FaresAdminAction.addRoute),
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.push_pin_outlined,
+          title: 'Manage bus stops',
+          subtitle: 'Edit regions or delete stops you added',
+          onTap: () =>
+              _runFaresAdminAction(FaresAdminAction.manageBusStops),
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.restart_alt,
+          title: 'Reset all directions',
+          subtitle: 'Clear every saved direction — fares stay',
+          onTap: () =>
+              _runFaresAdminAction(FaresAdminAction.resetDirections),
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.visibility_off_outlined,
+          title: 'Hidden routes',
+          subtitle: 'Restore a route removed from Popular Routes',
+          onTap: () =>
+              _runFaresAdminAction(FaresAdminAction.hiddenRoutes),
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.business_outlined,
+          title: 'Add company',
+          subtitle: 'Add a bus company for the operator list',
+          onTap: () =>
+              _runFaresAdminAction(FaresAdminAction.addCompany),
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.edit_outlined,
+          title: 'Edit or remove a route',
+          subtitle: 'Open Fares, then open a route to edit or remove it',
+          onTap: () => widget.onViewFares?.call(),
+          glass: glass,
+        ),
+        _adminSubheader('On the map', glass),
+        _infoTile(
+          icon: Icons.gesture_outlined,
+          title: 'Draw a line',
+          subtitle: 'Open the Map and draw a route line',
+          onTap: () {
+            mapLineMakerRequest.value = (drawLine: true, addStop: false);
+            widget.onViewMap?.call();
+          },
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.location_on_outlined,
+          title: 'Set Start/End',
+          subtitle: 'Open the Map and place the Start and End pins',
+          onTap: () {
+            mapSetEndpointsRequest.value = true;
+            widget.onViewMap?.call();
+          },
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.drive_file_rename_outline,
+          title: 'Rename a stop',
+          subtitle: 'Open the Map, tap a stop pin, then the pencil',
+          onTap: () => widget.onViewMap?.call(),
           glass: glass,
         ),
       ],

@@ -1910,6 +1910,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     communityMapJump.addListener(_onCommunityJump);
     faresMapJump.addListener(_onFaresJump);
     mapLineMakerRequest.addListener(_onLineMakerRequest);
+    mapSetEndpointsRequest.addListener(_onSetEndpointsRequest);
     // Preview parity: the map always opens on the default route
     // (Cabugao → Vigan Bus Terminal, the Fares default pair), so
     // the tab shows the clean route + ETA • FARE sheet at once
@@ -2488,6 +2489,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     communityMapJump.removeListener(_onCommunityJump);
     faresMapJump.removeListener(_onFaresJump);
     mapLineMakerRequest.removeListener(_onLineMakerRequest);
+    mapSetEndpointsRequest.removeListener(_onSetEndpointsRequest);
     WidgetsBinding.instance.removeObserver(this);
     _sheetController.removeListener(_onSheetExtentChanged);
     _styleLoadTimer?.cancel();
@@ -3178,6 +3180,18 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     } else if (request.drawLine) {
       _enterDrawLineMode();
     }
+  }
+
+  /// A request from the Account tab's Admin Access section (Nov 8,
+  /// 2026 organize) to open this tab with Set Start/End mode
+  /// ready. Consumed once, like [mapLineMakerRequest] — the
+  /// request is set together with the tab jump, so the mode is
+  /// active by the time the tab is visible.
+  void _onSetEndpointsRequest() {
+    if (!mapSetEndpointsRequest.value) return;
+    mapSetEndpointsRequest.value = false;
+    if (!mounted || !isAdminUser(widget.currentUser)) return;
+    _enterSetEndpointsMode();
   }
 
   /// Enters draw-line mode for the active route (admin-only,

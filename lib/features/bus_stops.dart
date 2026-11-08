@@ -60,6 +60,35 @@ final busStopsChanged = ValueNotifier<int>(0);
 final mapLineMakerRequest =
     ValueNotifier<({bool drawLine, bool addStop})?>(null);
 
+/// One of the Fares tab's standalone admin actions, requested
+/// from the Account tab's Admin Access section (Nov 8, 2026:
+/// Steven asked to organize Admin Access into one category in
+/// the Account tab). The section row sets [faresAdminActionRequest]
+/// and jumps to the Fares tab; FaresTab consumes it once and runs
+/// the matching action. Lives here (not in fares_tab.dart) so
+/// account_tab.dart can set it without importing fares_tab.dart —
+/// the same reason [mapLineMakerRequest] lives here.
+enum FaresAdminAction {
+  addRoute,
+  manageBusStops,
+  resetDirections,
+  hiddenRoutes,
+  addCompany,
+}
+
+/// Pending [FaresAdminAction] from the Admin Access section, or
+/// null when none. Consumed once by FaresTab, which clears it so
+/// the same action can be requested again.
+final faresAdminActionRequest = ValueNotifier<FaresAdminAction?>(null);
+
+/// Request from the Account tab's Admin Access section to open
+/// the Map tab with Set Start/End mode ready (same organize pass
+/// as [faresAdminActionRequest]). Set by AccountTab together with
+/// a jump to the Map tab; consumed once by MapTab, which clears
+/// it. Draw line needs no new notifier — it reuses
+/// [mapLineMakerRequest] with (drawLine: true, addStop: false).
+final mapSetEndpointsRequest = ValueNotifier<bool>(false);
+
 /// One point of a drawn route line: a raw map tap ([name] null)
 /// or a named hub / bus stop. The name is the display name in
 /// "Stops along the way"; an unnamed point shows as "Point N".

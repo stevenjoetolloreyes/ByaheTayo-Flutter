@@ -925,6 +925,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp> {
           permissionService: _permissionService,
           onViewStudent: () => _selectTab(0),
           onViewCommunities: () => _selectTab(4),
+          onViewFares: () => _selectTab(2),
+          onViewMap: () => _selectTab(3),
           onEditProfile: () => _openProfileSetup(isEdit: true),
           onSignInRequested: () {
             setState(() {
@@ -951,6 +953,8 @@ class _HomeShell extends StatefulWidget {
     required this.permissionService,
     required this.onViewStudent,
     required this.onViewCommunities,
+    required this.onViewFares,
+    required this.onViewMap,
     required this.onEditProfile,
     required this.onSignInRequested,
     required this.onSignedOut,
@@ -967,6 +971,8 @@ class _HomeShell extends StatefulWidget {
   final PermissionService permissionService;
   final VoidCallback onViewStudent;
   final VoidCallback onViewCommunities;
+  final VoidCallback onViewFares;
+  final VoidCallback onViewMap;
   final VoidCallback onEditProfile;
   final VoidCallback onSignInRequested;
   final VoidCallback onSignedOut;
@@ -1152,6 +1158,8 @@ class _HomeShellState extends State<_HomeShell>
           adService: _adService,
           onViewStudent: widget.onViewStudent,
           onViewCommunities: widget.onViewCommunities,
+          onViewFares: widget.onViewFares,
+          onViewMap: widget.onViewMap,
           onEditProfile: widget.onEditProfile,
           onSignInRequested: widget.onSignInRequested,
           onSignedOut: widget.onSignedOut,

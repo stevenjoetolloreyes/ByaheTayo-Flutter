@@ -734,11 +734,18 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('admin sees Add Route and Manage bus stops',
+    testWidgets(
+        'admin actions moved out of the Fares tab (Admin Access section)',
         (tester) async {
+      // Nov 8, 2026 organize: Add Route / Manage bus stops /
+      // Reset all directions live in the Account tab's Admin
+      // Access section now — the Fares tab keeps only the
+      // route-specific entries (Edit route in the sheet, Remove
+      // on the card).
       await pumpFares(tester, _admin);
-      expect(find.text('Add Route'), findsOneWidget);
-      expect(find.text('Manage bus stops'), findsOneWidget);
+      expect(find.text('Add Route'), findsNothing);
+      expect(find.text('Manage bus stops'), findsNothing);
+      expect(find.text('Reset all directions'), findsNothing);
     });
 
     testWidgets('a non-admin sees neither admin entry', (tester) async {

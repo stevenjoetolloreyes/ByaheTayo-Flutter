@@ -3,6 +3,7 @@
 // admin-only entry points in the route card + breakdown sheet.
 // Firestore is not touched here — the local repository covers the
 // same rules.
+import 'package:estudyantego/features/bus_stops.dart';
 import 'package:estudyantego/features/custom_routes.dart';
 import 'package:estudyantego/features/fares_tab.dart';
 import 'package:estudyantego/features/hidden_routes.dart';
@@ -21,6 +22,7 @@ const _regular = AuthUser(uid: 'user-1', email: 'student@example.com');
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    faresAdminActionRequest.value = null;
   });
 
   group('HiddenRoute model', () {
@@ -122,13 +124,26 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    /// Opens the Hidden routes sheet the way the Admin Access
+    /// section does (Nov 8, 2026 organize): set the request, let
+    /// the Fares tab consume it one frame later. The Fares tab no
+    /// longer has its own Hidden routes button.
+    Future<void> openHiddenRoutesSheet(WidgetTester tester) async {
+      faresAdminActionRequest.value = FaresAdminAction.hiddenRoutes;
+      await tester.pump();
+      await tester.pump();
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('a hidden seeded route is gone from Popular Routes',
         (tester) async {
       await hiddenRepo.hide('Cabugao|Vigan Bus Terminal', _admin);
       await pumpTab(tester, _admin);
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
       expect(find.text('Cabugao → San Juan, Ilocos Sur'), findsOneWidget);
-      expect(find.text('Hidden routes (1)'), findsOneWidget);
+      await openHiddenRoutesSheet(tester);
+      expect(find.text('Hidden routes'), findsOneWidget);
+      expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
     });
 
     testWidgets('card remove icon hides a seeded route (admin)',
@@ -146,7 +161,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
       expect(find.text('Route hidden.'), findsOneWidget);
-      expect(find.text('Hidden routes (1)'), findsOneWidget);
+      await openHiddenRoutesSheet(tester);
+      expect(find.text('Hidden routes'), findsOneWidget);
+      expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
       expect(
         await hiddenRepo.loadAll(),
         {'Cabugao|Vigan Bus Terminal'},
@@ -220,11 +237,7 @@ void main() {
       await pumpTab(tester, _admin);
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
       expect(find.text('₱55'), findsNothing);
-      expect(find.text('Hidden routes (1)'), findsOneWidget);
-      await tester.ensureVisible(find.text('Hidden routes (1)'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Hidden routes (1)'));
-      await tester.pumpAndSettle();
+      await openHiddenRoutesSheet(tester);
       // The sheet lists the hidden route with a Restore button.
       expect(find.text('Hidden routes'), findsOneWidget);
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
@@ -234,7 +247,8 @@ void main() {
       // Back in the list — with the admin-set fare still applied.
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
       expect(find.text('₱55'), findsOneWidget);
-      expect(find.text('Hidden routes (1)'), findsNothing);
+      // The sheet stays open, now empty.
+      expect(find.text('No hidden routes.'), findsOneWidget);
       expect(await hiddenRepo.loadAll(), isEmpty);
       final stored = await overrideRepo.loadAll();
       expect(stored['Cabugao|Vigan Bus Terminal']!.fare, 55);
