@@ -17,6 +17,7 @@
 //   that land in the SAME deck the Flashcards and Quiz pages
 //   share. It states that it is built into the app, not an
 //   online AI.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -35,6 +36,12 @@ class _ChatMessage {
   final String text;
   final bool isUser;
 }
+
+/// The AI reply animation phase. Only chat replies (via _send)
+/// animate: the AI first "thinks" for 5 seconds, then types the
+/// answer out character by character. File-flow status messages
+/// appear immediately as before.
+enum _AiReplyPhase { idle, thinking, typing }
 
 /// The AI chat panel, embedded in the Study tab when the AI pill
 /// tab is active. [onQuestionsGenerated] hands generated questions
@@ -85,6 +92,60 @@ class _AiChatPanelState extends State<AiChatPanel> {
   /// True while the AI is reading a file.
   bool _readingFile = false;
 
+  /// The in-progress AI reply animation (thinking, then typing).
+  /// The on-device AI answers instantly — the 5-second thinking
+  /// window is a display delay that reveals the answer, it does
+  /// not slow the AI itself.
+  _AiReplyPhase _replyPhase = _AiReplyPhase.idle;
+
+  /// Which rotating status word the Thinking bubble shows.
+  int _thinkingStatus = 0;
+
+  /// Which of the three Thinking dots is lit (cycles 0 → 1 → 2).
+  int _dotPhase = 0;
+
+  /// The full reply being typed, split into characters (runes, so
+  /// a multi-code-unit glyph is never split in half).
+  String _typingFull = '';
+  List<String> _typingChars = const [];
+  int _typingShown = 0;
+
+  /// Blinks the typing cursor while the answer is being typed.
+  bool _cursorVisible = true;
+
+  Timer? _dotTimer;
+  Timer? _statusTimer;
+  Timer? _phaseTimer;
+  Timer? _typeTimer;
+  Timer? _cursorTimer;
+
+  /// How long the Thinking bubble shows before typing starts.
+  static const _thinkingDuration = Duration(seconds: 5);
+
+  /// How often the Thinking status word rotates / a dot lights up.
+  static const _statusStep = Duration(milliseconds: 1300);
+  static const _dotStep = Duration(milliseconds: 320);
+
+  /// Typing pace: quick between ordinary characters, with natural
+  /// pauses after a sentence ends or a clause breaks.
+  static const _typeStep = Duration(milliseconds: 30);
+  static const _typePauseSentence = Duration(milliseconds: 280);
+  static const _typePauseClause = Duration(milliseconds: 140);
+
+  /// Cursor blink rate, and how long it takes to fade out once the
+  /// answer is complete.
+  static const _cursorBlink = Duration(milliseconds: 530);
+  static const _cursorFade = Duration(milliseconds: 320);
+
+  /// Status words the Thinking bubble rotates through. No progress
+  /// bar and no elapsed-seconds counter — both were asked away.
+  static const _thinkingStatuses = <String>[
+    'Thinking…',
+    'Understanding your question…',
+    'Checking your notes…',
+    'Writing your answer…',
+  ];
+
   /// The file the AI just read, shown as a removable chip.
   String? _attachedFile;
 
@@ -108,9 +169,38 @@ class _AiChatPanelState extends State<AiChatPanel> {
 
   @override
   void dispose() {
+    _cancelReplyTimers();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Cancels every timer driving the reply animation.
+  void _cancelReplyTimers() {
+    _dotTimer?.cancel();
+    _statusTimer?.cancel();
+    _phaseTimer?.cancel();
+    _typeTimer?.cancel();
+    _cursorTimer?.cancel();
+    _dotTimer = null;
+    _statusTimer = null;
+    _phaseTimer = null;
+    _typeTimer = null;
+    _cursorTimer = null;
+  }
+
+  /// Finishes any in-flight reply animation at once: a half-typed
+  /// answer joins the chat in full, a still-thinking reply simply
+  /// never appears. Callers must rebuild (setState) afterwards.
+  void _finishReplyNow() {
+    _cancelReplyTimers();
+    if (_replyPhase == _AiReplyPhase.typing && _typingFull.isNotEmpty) {
+      _messages.add(_ChatMessage(text: _typingFull, isUser: false));
+    }
+    _replyPhase = _AiReplyPhase.idle;
+    _typingFull = '';
+    _typingChars = const [];
+    _typingShown = 0;
   }
 
   void _scrollToBottom() {
@@ -127,11 +217,16 @@ class _AiChatPanelState extends State<AiChatPanel> {
   Future<void> _send(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+    // A new send finishes any in-flight reply animation first, so
+    // the chat never shows two half-written AI replies.
+    _finishReplyNow();
     setState(() {
       _messages.add(_ChatMessage(text: trimmed, isUser: true));
       _input.clear();
     });
     _scrollToBottom();
+    // The on-device AI answers instantly; the animation below only
+    // controls how that answer appears.
     final reply = answerChat(
       trimmed,
       notes: widget.notes,
@@ -140,14 +235,107 @@ class _AiChatPanelState extends State<AiChatPanel> {
       subjects: widget.subjects,
       points: widget.points,
     );
+    _startReplyAnimation(reply.text);
+  }
+
+  /// Shows the Thinking bubble for 5 seconds (bouncing dots +
+  /// rotating status words, no progress bar, no counter), then
+  /// types the answer out character by character.
+  void _startReplyAnimation(String fullText) {
+    _cancelReplyTimers();
     setState(() {
-      _messages.add(_ChatMessage(text: reply.text, isUser: false));
+      _replyPhase = _AiReplyPhase.thinking;
+      _thinkingStatus = 0;
+      _dotPhase = 0;
+      _typingFull = fullText;
+      _typingChars =
+          fullText.runes.map((r) => String.fromCharCode(r)).toList();
+      _typingShown = 0;
+      _cursorVisible = true;
     });
     _scrollToBottom();
+    // The three dots light up in turn while thinking.
+    _dotTimer = Timer.periodic(_dotStep, (_) {
+      if (!mounted) return;
+      setState(() => _dotPhase = (_dotPhase + 1) % 3);
+    });
+    // The status word rotates while thinking.
+    _statusTimer = Timer.periodic(_statusStep, (_) {
+      if (!mounted) return;
+      setState(() {
+        _thinkingStatus =
+            (_thinkingStatus + 1) % _thinkingStatuses.length;
+      });
+    });
+    // After the thinking window, start typing the answer out.
+    _phaseTimer = Timer(_thinkingDuration, () {
+      if (!mounted) return;
+      _dotTimer?.cancel();
+      _statusTimer?.cancel();
+      _dotTimer = null;
+      _statusTimer = null;
+      setState(() {
+        _replyPhase = _AiReplyPhase.typing;
+        _typingShown = 0;
+        _cursorVisible = true;
+      });
+      _scrollToBottom();
+      _cursorTimer = Timer.periodic(_cursorBlink, (_) {
+        if (!mounted) return;
+        setState(() => _cursorVisible = !_cursorVisible);
+      });
+      _typeNext();
+    });
+  }
+
+  /// Reveals one more character, then schedules the next with a
+  /// natural pause (longer after a sentence ends, shorter after a
+  /// clause, quick between ordinary characters).
+  void _typeNext() {
+    if (!mounted) return;
+    if (_typingShown >= _typingChars.length) {
+      _completeTyping();
+      return;
+    }
+    setState(() => _typingShown++);
+    _scrollToBottom();
+    final justShown = _typingChars[_typingShown - 1];
+    final delay = _isSentenceEnd(justShown)
+        ? _typePauseSentence
+        : _isClausePause(justShown)
+            ? _typePauseClause
+            : _typeStep;
+    _typeTimer = Timer(delay, _typeNext);
+  }
+
+  bool _isSentenceEnd(String ch) =>
+      ch == '.' || ch == '!' || ch == '?';
+  bool _isClausePause(String ch) =>
+      ch == ',' || ch == ';' || ch == ':';
+
+  /// Fades the cursor out, then joins the finished reply to the
+  /// chat as a normal message bubble.
+  void _completeTyping() {
+    _cancelReplyTimers();
+    if (!mounted) return;
+    setState(() => _cursorVisible = false);
+    _typeTimer = Timer(_cursorFade, () {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_ChatMessage(text: _typingFull, isUser: false));
+        _replyPhase = _AiReplyPhase.idle;
+        _typingFull = '';
+        _typingChars = const [];
+        _typingShown = 0;
+      });
+      _scrollToBottom();
+    });
   }
 
   /// Reads a picked file on-device and turns it into questions.
   Future<void> _generateFromFile(File file, String fileName) async {
+    // A file message must not land ahead of a half-typed reply.
+    _finishReplyNow();
     setState(() {
       _readingFile = true;
       _attachOpen = false;
@@ -261,40 +449,24 @@ class _AiChatPanelState extends State<AiChatPanel> {
           ),
         ),
         const SizedBox(height: 12),
-        // Messages (scrollable).
+        // Messages (scrollable). The in-progress AI reply — the
+        // Thinking bubble, then the typed answer — renders as one
+        // extra item after the finished messages.
         Expanded(
           child: ListView.builder(
             controller: _scroll,
             padding: const EdgeInsets.symmetric(vertical: 4),
-            itemCount: _messages.length,
+            itemCount: _messages.length +
+                (_replyPhase == _AiReplyPhase.idle ? 0 : 1),
             itemBuilder: (context, i) {
-              final msg = _messages[i];
-              final align = msg.isUser
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft;
-              return Align(
-                alignment: align,
-                child: Container(
-                  constraints: BoxConstraints(
-                    maxWidth:
-                        MediaQuery.of(context).size.width * 0.78,
-                  ),
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: msg.isUser ? bubbleUser : bubbleAi,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    msg.text,
-                    style: TextStyle(
-                      color: msg.isUser ? Colors.white : textColor,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                ),
-              );
+              if (i < _messages.length) {
+                return _messageBubble(
+                    _messages[i], bubbleAi, bubbleUser, textColor);
+              }
+              if (_replyPhase == _AiReplyPhase.thinking) {
+                return _thinkingBubble(bubbleAi, textColor);
+              }
+              return _typingBubble(bubbleAi, textColor);
             },
           ),
         ),
@@ -488,6 +660,125 @@ class _AiChatPanelState extends State<AiChatPanel> {
           ],
         ),
       ],
+    );
+  }
+
+  /// A finished chat message bubble (unchanged from before).
+  Widget _messageBubble(_ChatMessage msg, Color bubbleAi,
+      Color bubbleUser, Color textColor) {
+    final align =
+        msg.isUser ? Alignment.centerRight : Alignment.centerLeft;
+    return Align(
+      alignment: align,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: msg.isUser ? bubbleUser : bubbleAi,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          msg.text,
+          style: TextStyle(
+            color: msg.isUser ? Colors.white : textColor,
+            fontSize: 14.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The Thinking bubble: three dots lighting up in turn plus the
+  /// rotating status word. No progress bar and no elapsed-seconds
+  /// counter — both were asked away.
+  Widget _thinkingBubble(Color bubbleAi, Color textColor) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: bubbleAi,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < 3; i++) ...[
+              AnimatedOpacity(
+                opacity: _dotPhase == i ? 1.0 : 0.35,
+                duration: const Duration(milliseconds: 200),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF34D399),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              if (i < 2) const SizedBox(width: 4),
+            ],
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                _thinkingStatuses[_thinkingStatus],
+                style: TextStyle(color: textColor, fontSize: 14.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The answer being typed out, with a blinking green cursor at
+  /// the end. The cursor fades out once the answer is complete
+  /// (see _completeTyping).
+  Widget _typingBubble(Color bubbleAi, Color textColor) {
+    final shown = _typingChars.take(_typingShown).join();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: bubbleAi,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(color: textColor, fontSize: 14.5),
+            children: [
+              TextSpan(text: shown),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: AnimatedOpacity(
+                  opacity: _cursorVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    width: 2,
+                    height: 16,
+                    color: const Color(0xFF16A34A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

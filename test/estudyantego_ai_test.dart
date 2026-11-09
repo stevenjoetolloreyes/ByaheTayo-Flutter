@@ -162,6 +162,36 @@ void main() {
         (tester) async {
       await pumpChat(tester);
       await tester.tap(find.text('Fare: Cabugao → Vigan?'));
+      // The reply animates (5s thinking, then typing), and
+      // pumpAndSettle cannot wait through the idle gaps between
+      // the animation timers, so step through it explicitly.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('₱60'), findsWidgets);
+      expect(find.textContaining('₱48'), findsWidgets);
+    });
+
+    testWidgets('AI reply thinks for 5s, then types out with a cursor',
+        (tester) async {
+      await pumpChat(tester);
+      await tester.tap(find.text('Fare: Cabugao → Vigan?'));
+      await tester.pump();
+      // The Thinking bubble shows first — dots + status word, no
+      // progress bar and no elapsed-seconds counter.
+      expect(find.text('Thinking…'), findsOneWidget);
+      expect(find.textContaining('Thinking for'), findsNothing);
+      // The full answer is not out yet.
+      expect(find.textContaining('₱60'), findsNothing);
+      // After the 5s thinking window the answer starts typing;
+      // after only 300ms of typing the fare (near the end of the
+      // line) is still not out.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('₱60'), findsNothing);
+      // Let the rest of the typing + fade finish, then settle
+      // the scroll.
+      await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
       expect(find.textContaining('₱60'), findsWidgets);
       expect(find.textContaining('₱48'), findsWidgets);
@@ -175,6 +205,10 @@ void main() {
       await tester.ensureVisible(find.text('Are you an online AI?'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Are you an online AI?'));
+      // Step through the reply animation explicitly (see the fare
+      // chip test): 5s thinking, then typing + fade.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 12));
       await tester.pumpAndSettle();
       expect(find.textContaining('not an online AI'), findsOneWidget);
     });
