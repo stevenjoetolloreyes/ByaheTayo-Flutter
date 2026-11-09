@@ -986,6 +986,30 @@ class StudentStorage {
   static const commuteExpensesKey = 'byahetayo_student_commute_expenses';
   static const checkinsKey = 'byahetayo_student_checkins';
 
+  /// Lifetime quiz points earned (10 per correct answer). Local
+  /// only: the published Firestore rules for points_transactions
+  /// allow only 'signin' and 'redemption' creates, so quiz points
+  /// cannot go through the ledger. The wallet controller adds this
+  /// local total on top of the Firestore balance for the header
+  /// chips.
+  static const quizPointsKey = 'byahetayo_quiz_points_total';
+
+  static Future<int> loadInt(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(key) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<void> saveInt(String key, int value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(key, value);
+    } catch (_) {}
+  }
+
   static Future<List<Map<String, dynamic>>> loadList(String key) async {
     try {
       final prefs = await SharedPreferences.getInstance();

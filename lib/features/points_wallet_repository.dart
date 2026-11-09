@@ -517,6 +517,10 @@ class PointsWalletController extends ChangeNotifier {
       _balance = wallet.balance;
       _totalEarned = wallet.totalEarned;
       _entries = entries;
+      // Local quiz points sit on top of the Firestore balance for
+      // the header chips (the ledger cannot hold them — see
+      // recordQuizPoints).
+      await _loadQuizPoints();
       // Keep the local cache in sync so the Student tab card (which
       // reads local storage) shows ledger progress.
       await StudentStorage.saveList(
@@ -601,5 +605,49 @@ class PointsWalletController extends ChangeNotifier {
       dayIndex: dayIndex,
       points: points,
     );
+  }
+
+  /// Local quiz points earned (10 per correct answer). Stored in
+  /// local storage only — the published Firestore rules for
+  /// points_transactions allow only 'signin' and 'redemption'
+  /// creates, so quiz points cannot go through the ledger. The
+  /// header chips read [balance], which includes this local total
+  /// on top of the Firestore balance (see [_load]).
+  int _quizPoints = 0;
+
+  /// Lifetime quiz points earned, local only.
+  int get quizPoints => _quizPoints;
+
+  /// Credits quiz points (10 per correct answer) to the local
+  /// total and refreshes the header chips. Persists locally so
+  /// the points survive restarts. Never throws.
+  Future<void> recordQuizPoints(int points) async {
+    if (points <= 0) return;
+    _quizPoints += points;
+    _balance += points;
+    _totalEarned += points;
+    notifyListeners();
+    try {
+      await StudentStorage.saveInt(
+          StudentStorage.quizPointsKey, _quizPoints);
+    } catch (_) {}
+  }
+
+  /// Loads the persisted local quiz-points total. Called from
+  /// [_load] after the Firestore wallet so the balance the chips
+  /// read is Firestore + local quiz points. Loads from storage
+  /// only once — later loads keep the in-memory total, so a
+  /// concurrent [recordQuizPoints] cannot be overwritten by a
+  /// stale storage read.
+  bool _quizPointsLoaded = false;
+
+  Future<void> _loadQuizPoints() async {
+    if (!_quizPointsLoaded) {
+      _quizPoints =
+          await StudentStorage.loadInt(StudentStorage.quizPointsKey);
+      _quizPointsLoaded = true;
+    }
+    _balance += _quizPoints;
+    _totalEarned += _quizPoints;
   }
 }

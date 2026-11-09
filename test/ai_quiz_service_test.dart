@@ -1,11 +1,10 @@
-// Unit tests for the AI quiz parser + generator contract.
-// No network, no real model calls: the parser is pure and the
-// generator is exercised through a fake.
+// Unit tests for the AI quiz parser + the on-device generator contract.
+// No network, no model calls: the parser is pure and the on-device
+// generator is rule-based (no external API).
 import 'dart:typed_data';
 
-import 'package:estudyantego/features/ai_quiz_input.dart';
 import 'package:estudyantego/features/ai_quiz_service.dart';
-import 'package:firebase_ai/firebase_ai.dart';
+import 'package:estudyantego/features/estudyantego_ai.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeAiQuizGenerator implements AiQuizGenerator {
@@ -145,14 +144,24 @@ void main() {
     });
   });
 
-  group('FirebaseAiQuizGenerator empty input', () {
-    test('empty context returns an error without touching Firebase', () async {
-      // No model override: construction must not touch Firebase,
-      // and the empty check must fire before any model access.
-      final generator = FirebaseAiQuizGenerator();
+  group('OnDeviceAiQuizGenerator empty input', () {
+    test('empty context returns an error, no external call', () async {
+      final generator = OnDeviceAiQuizGenerator();
       final result = await generator.generateFromText('   ');
       expect(result.succeeded, isFalse);
       expect(result.error, contains('Paste some study text'));
+    });
+
+    test('generates questions from a definition, at most 5', () async {
+      final generator = OnDeviceAiQuizGenerator();
+      final result = await generator.generateFromText(
+        'CPU is the Central Processing Unit. RAM is temporary memory. '
+        'ROM is read-only memory. SSD is fast storage. The keyboard '
+        'is an input device. The monitor is an output device.',
+      );
+      expect(result.succeeded, isTrue);
+      expect(result.questions.length, lessThanOrEqualTo(5));
+      expect(result.questions.length, greaterThan(0));
     });
   });
 
@@ -171,43 +180,16 @@ void main() {
     });
   });
 
-  group('buildMediaContent', () {
-    test('prompt first, then one inline part per attachment', () {
-      final content = buildMediaContent(
-        [
-          AiQuizAttachment(
-            mimeType: 'image/jpeg',
-            bytes: Uint8List.fromList([1, 2, 3]),
-          ),
-          AiQuizAttachment(
-            mimeType: 'application/pdf',
-            bytes: Uint8List.fromList([4, 5]),
-          ),
-        ],
-        questionCount: 3,
-      );
-      expect(content.parts.length, 3);
-      final prompt = content.parts.first as TextPart;
-      expect(prompt.text, contains('exactly 3'));
-      final image = content.parts[1] as InlineDataPart;
-      expect(image.mimeType, 'image/jpeg');
-      expect(image.bytes, [1, 2, 3]);
-      final doc = content.parts[2] as InlineDataPart;
-      expect(doc.mimeType, 'application/pdf');
-    });
-  });
-
-  group('FirebaseAiQuizGenerator media guards', () {
-    test('empty attachments return an error without touching Firebase',
-        () async {
-      final generator = FirebaseAiQuizGenerator();
+  group('OnDeviceAiQuizGenerator media guards', () {
+    test('empty attachments return an error, no extraction', () async {
+      final generator = OnDeviceAiQuizGenerator();
       final result = await generator.generateFromMedia([]);
       expect(result.succeeded, isFalse);
       expect(result.error, contains('Attach a photo'));
     });
 
     test('unsupported MIME type is rejected, never faked', () async {
-      final generator = FirebaseAiQuizGenerator();
+      final generator = OnDeviceAiQuizGenerator();
       final result = await generator.generateFromMedia([
         AiQuizAttachment(
           mimeType: 'application/msword',
@@ -215,12 +197,12 @@ void main() {
         ),
       ]);
       expect(result.succeeded, isFalse);
-      expect(result.error, contains('Only images and PDF'));
+      expect(result.error, contains('Only images, PDFs, and text files'));
     });
 
-    test('oversized attachments are rejected before any model call',
+    test('oversized attachments are rejected before any extraction',
         () async {
-      final generator = FirebaseAiQuizGenerator();
+      final generator = OnDeviceAiQuizGenerator();
       final result = await generator.generateFromMedia([
         AiQuizAttachment(
           mimeType: 'image/jpeg',
@@ -232,18 +214,4 @@ void main() {
     });
   });
 
-  group('mimeTypeForExtension', () {
-    test('maps supported types, docx maps to its mime, doc rejected', () {
-      expect(mimeTypeForExtension('jpg'), 'image/jpeg');
-      expect(mimeTypeForExtension('PDF'), 'application/pdf');
-      expect(mimeTypeForExtension('txt'), 'text/plain');
-      expect(
-        mimeTypeForExtension('docx'),
-        'application/vnd.openxmlformats-officedocument.'
-        'wordprocessingml.document',
-      );
-      expect(mimeTypeForExtension('doc'), isNull);
-      expect(mimeTypeForExtension('xlsx'), isNull);
-    });
-  });
 }

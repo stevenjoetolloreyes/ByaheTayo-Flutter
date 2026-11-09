@@ -23,8 +23,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:firebase_ai/firebase_ai.dart';
-
 import 'student/student_data.dart';
 
 /// One generated question. The original MCQ shape is preserved
@@ -184,38 +182,9 @@ const Set<String> kAiQuizMediaMimeTypes = {
 /// 20 MB; 15 MB leaves headroom for the prompt and encoding.
 const int kAiQuizMaxMediaBytes = 15 * 1024 * 1024;
 
-/// Builds the multimodal request for attached study material.
-/// Pure (no model call) so tests can assert on its parts: a text
-/// prompt first, then one inline-data part per attachment.
-Content buildMediaContent(
-  List<AiQuizAttachment> attachments, {
-  int questionCount = 5,
-  String difficulty = 'medium',
-  List<String> questionTypes = const ['mcq'],
-}) {
-  final count = clampQuizQuestionCount(questionCount);
-  final types = questionTypes.isEmpty ? ['mcq'] : questionTypes;
-  final largeCountNote = count > 10
-      ? ' If you cannot produce that many distinct questions from the material, produce as many valid distinct questions as you can — never invent, repeat, or pad questions.'
-      : '';
-  final prompt = 'You are a study assistant. Read the attached study '
-      'material (photos of notes and/or documents — read by the '
-      'model itself; there is no separate OCR step) and create '
-      'exactly $count quiz questions from it, at '
-      '${normalizeDifficulty(difficulty)} difficulty, using only '
-      'these question types: ${types.join(', ')}.$largeCountNote '
-      'Reply with JSON ONLY — no explanation, no Markdown fences '
-      'around anything except the JSON itself. The JSON must be an '
-      'array of objects. ${aiQuizTypeSchema()}';
-  return Content.multi([
-    TextPart(prompt),
-    for (final attachment in attachments)
-      InlineDataPart(attachment.mimeType, attachment.bytes),
-  ]);
-}
-
 /// Contract for quiz generation. Tests inject a fake; production uses
-/// [FirebaseAiQuizGenerator].
+/// the on-device generator ([OnDeviceAiQuizGenerator] in
+/// `estudyantego_ai.dart`). No Gemini, no external API.
 abstract class AiQuizGenerator {
   Future<AiQuizGeneration> generateFromText(
     String contextText, {
@@ -394,157 +363,5 @@ List<AiQuizQuestion> parseAiQuizJson(String raw) {
     return questions;
   } catch (_) {
     return [];
-  }
-}
-
-/// Production generator over the Firebase AI Logic SDK.
-///
-/// The model is built lazily on first generation (not in the
-/// constructor) so constructing this class never touches Firebase —
-/// safe before Firebase init and safe in unit tests that only
-/// exercise the empty-input path.
-class FirebaseAiQuizGenerator implements AiQuizGenerator {
-  FirebaseAiQuizGenerator({GenerativeModel? model}) : _modelOverride = model;
-
-  final GenerativeModel? _modelOverride;
-
-  GenerativeModel get _model =>
-      _modelOverride ??
-      FirebaseAI.googleAI().generativeModel(model: 'gemini-3.8-flash');
-
-  @override
-  Future<AiQuizGeneration> generateFromText(
-    String contextText, {
-    int questionCount = 5,
-    String difficulty = 'medium',
-    List<String> questionTypes = const ['mcq'],
-  }) async {
-    final context = contextText.trim();
-    if (context.isEmpty) {
-      return const AiQuizGeneration(
-        questions: [],
-        error: 'Paste some study text first.',
-      );
-    }
-    final count = clampQuizQuestionCount(questionCount);
-    final types = questionTypes.isEmpty ? ['mcq'] : questionTypes;
-    final largeCountNote = count > 10
-        ? ' If you cannot produce that many distinct questions from the material, produce as many valid distinct questions as you can — never invent, repeat, or pad questions.'
-        : '';
-    final prompt = 'You are a study assistant. Create exactly $count '
-        'quiz questions from the study text below, at '
-        '${normalizeDifficulty(difficulty)} difficulty, using only '
-        'these question types: ${types.join(', ')}.$largeCountNote '
-        'Reply with JSON ONLY — no explanation, no Markdown fences '
-        'around anything except the JSON itself. The JSON must be an '
-        'array of objects. ${aiQuizTypeSchema()}\n\n'
-        'Study text:\n$context';
-    return _callModel([Content.text(prompt)]);
-  }
-
-  @override
-  Future<AiQuizGeneration> generateFromMedia(
-    List<AiQuizAttachment> attachments, {
-    int questionCount = 5,
-    String difficulty = 'medium',
-    List<String> questionTypes = const ['mcq'],
-  }) async {
-    if (attachments.isEmpty) {
-      return const AiQuizGeneration(
-        questions: [],
-        error: 'Attach a photo or document first.',
-      );
-    }
-    if (attachments
-        .any((a) => !kAiQuizMediaMimeTypes.contains(a.mimeType))) {
-      return const AiQuizGeneration(
-        questions: [],
-        error: 'Only images and PDF documents are supported for quiz '
-            'generation.',
-      );
-    }
-    final totalBytes =
-        attachments.fold<int>(0, (sum, a) => sum + a.bytes.length);
-    if (totalBytes > kAiQuizMaxMediaBytes) {
-      return const AiQuizGeneration(
-        questions: [],
-        error: 'The attached files are too large — pick files '
-            'totalling under 15 MB.',
-      );
-    }
-    return _callModel([
-      buildMediaContent(
-        attachments,
-        questionCount: questionCount,
-        difficulty: difficulty,
-        questionTypes: questionTypes,
-      ),
-    ]);
-  }
-
-  @override
-  Future<String> explainMore({
-    required String question,
-    required String correctAnswer,
-    String explanation = '',
-  }) async {
-    const fallback = 'No explanation available.';
-    if (question.trim().isEmpty || correctAnswer.trim().isEmpty) {
-      return explanation.trim().isNotEmpty ? explanation.trim() : fallback;
-    }
-    // Grounded by construction: the model gets ONLY the question,
-    // the correct answer, and the stored explanation. It is told
-    // to say the material does not explain further rather than
-    // invent anything — and any failure falls back to the stored
-    // explanation, never to a fabricated one.
-    final prompt = 'You are a study tutor. Explain the correct answer '
-        'to this quiz question in 2-4 short, easy sentences, using '
-        'ONLY the information below. Do not add facts that are not '
-        'in it. If it does not explain why the answer is correct, '
-        'reply exactly: "The provided material does not explain '
-        'this further."\n\n'
-        'Question: ${question.trim()}\n'
-        'Correct answer: ${correctAnswer.trim()}\n'
-        'Stored explanation: ${explanation.trim()}';
-    try {
-      final response = await _model.generateContent([Content.text(prompt)]);
-      final text = response.text?.trim() ?? '';
-      if (text.isEmpty) {
-        return explanation.trim().isNotEmpty ? explanation.trim() : fallback;
-      }
-      return text;
-    } catch (_) {
-      return explanation.trim().isNotEmpty ? explanation.trim() : fallback;
-    }
-  }
-
-  /// One model call shared by the text and media paths: same JSON
-  /// parsing, same never-throws contract.
-  Future<AiQuizGeneration> _callModel(List<Content> content) async {
-    try {
-      final response = await _model.generateContent(content);
-      final text = response.text;
-      if (text == null || text.trim().isEmpty) {
-        return const AiQuizGeneration(
-          questions: [],
-          error: 'The AI returned an empty response. Try again.',
-        );
-      }
-      final questions = parseAiQuizJson(text);
-      if (questions.isEmpty) {
-        return const AiQuizGeneration(
-          questions: [],
-          error: 'Could not read the AI response as quiz questions. '
-              'Try again with shorter text.',
-        );
-      }
-      return AiQuizGeneration(questions: questions);
-    } catch (e) {
-      return AiQuizGeneration(
-        questions: [],
-        error: 'AI generation failed. Check your connection and that '
-            'App Check is registered, then try again. ($e)',
-      );
-    }
   }
 }

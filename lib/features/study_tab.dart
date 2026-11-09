@@ -17,23 +17,34 @@
 //   type, folder). Nothing is seeded: folders start at 0 files and
 //   the storage bar at 0 B of 5 GB. Only metadata is stored, never
 //   file bytes.
-// * Notes — the real notes from NotesScreen (StudentStorage),
-//   searchable; tapping one opens NotesScreen for full CRUD.
+// * Notes — the real notes (StudentStorage), searchable; tapping
+//   one opens its full-screen view page for full CRUD.
 // * Review — the real quizzes (StudentStorage) and the real study
-//   entry points: Flashcards, Quiz, and AI Quiz. Quiz shows the
-//   deck cards; Summary shows the same decks as summary cards
-//   (icon + title + teaser + chevron), exactly as the preview's
-//   #stReviewSummary does. The stats view the port first built
-//   in Summary (Quizzes completed/saved, Average score, Notes
+//   entry points: Flashcards and Quiz only (AI Quiz is deleted —
+//   it duplicated Quiz). Tapping Flashcards opens the dedicated
+//   Flashcards Page; tapping Quiz opens the dedicated Quiz Page.
+//   The old "Review Notes & Quizzes" screen (NotesScreen, with its
+//   Notes/Flashcards/Quizzes tabs) is deleted. The Notes panel
+//   (Study tab → Notes) is a separate, untouched panel — see below.
+//   Quiz shows the deck cards; Summary shows the same decks as
+//   summary cards (icon + title + teaser + chevron), exactly as the
+//   preview's #stReviewSummary does. The stats view the port first
+//   built in Summary (Quizzes completed/saved, Average score, Notes
 //   saved, Recent attempts) has no counterpart anywhere in the
 //   preview's Review tab, so it is gone — not moved elsewhere.
 //   The preview's Drag & Drop and Identification modes have no
 //   app equivalent and are NOT faked with a substitute.
+// * AI — EstudyanteGO AI, the app's own on-device assistant (no
+//   Gemini, no external API, offline, no quota). It is its own
+//   tab in the bottom pill (Grades | Files | Notes | Review | AI),
+//   NOT a row inside Review. The AI screen is Chat only (no Notes
+//   Lab tab). It reads files on-device and its generated questions
+//   land in the same deck the Flashcards and Quiz pages share.
 //
 // Real-data mappings for the preview's chips (the preview's ❤️ 15
 // is a hardcoded sample):
 // * ❤️ = the user's favorited-notes count (Note.favorite, toggled
-//   in NotesScreen). 0 with no favorites — never invented.
+//   in the note view page). 0 with no favorites — never invented.
 // * ⭐ = the real points balance from the shell's
 //   PointsWalletController (wired in main.dart; null in widget
 //   tests, where the chip honestly shows 0 pts).
@@ -88,7 +99,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-import 'ai_quiz_generate_screen.dart';
 import 'app_layout.dart';
 import 'app_rating.dart';
 import 'friend_cloud_repository.dart';
@@ -96,9 +106,11 @@ import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'points_wallet_repository.dart';
 import 'shared_study_files.dart';
+import 'student/ai_screen.dart';
+import 'student/flashcards_page.dart';
 import 'student/note_create_sheet.dart';
 import 'student/note_detail_page.dart';
-import 'student/notes_screen.dart';
+import 'student/quiz_page.dart';
 import 'student/student_data.dart';
 
 /// 5 GB study-files quota, matching the preview's storage bar.
@@ -431,6 +443,10 @@ class _StudyTabState extends State<StudyTab> {
   List<Note> _notes = [];
   List<Quiz> _quizzes = [];
 
+  /// The user's saved flashcards (for the AI chat context and the
+  /// shared deck). Loaded here so the AI panel can count them.
+  List<Flashcard> _cards = [];
+
   /// Files shared TO this user (newest first). Empty when signed
   /// out, when no repository is wired, or when nobody shared
   /// anything — never invented.
@@ -477,6 +493,7 @@ class _StudyTabState extends State<StudyTab> {
         'files' => 'Files',
         'notes' => 'Notes',
         'review' => 'Review',
+        'ai' => 'EstudyanteGO AI',
         _ => 'Grades',
       };
 
@@ -489,6 +506,8 @@ class _StudyTabState extends State<StudyTab> {
     final notes = await StudentStorage.loadList(StudentStorage.notesKey);
     final quizzes =
         await StudentStorage.loadList(StudentStorage.quizzesKey);
+    final cards =
+        await StudentStorage.loadList(StudentStorage.flashcardsKey);
     final shared = await _loadSharedWithMe();
     if (!mounted) return;
     setState(() {
@@ -499,6 +518,7 @@ class _StudyTabState extends State<StudyTab> {
       _notes = notes.map(Note.fromJson).toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
       _quizzes = quizzes.map(Quiz.fromJson).toList();
+      _cards = cards.map(Flashcard.fromJson).toList();
       _sharedWithMe = shared;
     });
   }
@@ -732,13 +752,17 @@ class _StudyTabState extends State<StudyTab> {
   /// equivalent). Grades has no "add subject" flow inside Study —
   /// subjects come from the Student tab — so its FAB opens the
   /// grade form for the first subject with no grade this semester.
+  /// Review opens the Quiz Page (AI Quiz is deleted). The AI panel
+  /// has no FAB — its chat has its own input and + attach menu.
   Future<void> _onFab() async {
     if (_panel == 'files') {
       await _addFile();
     } else if (_panel == 'notes') {
       await _openNoteCreateMenu();
     } else if (_panel == 'review') {
-      await _openReview(const AiQuizGenerateScreen());
+      await _openReview(QuizPage(walletController: widget.walletController));
+    } else if (_panel == 'ai') {
+      return;
     } else {
       await _fabGrades();
     }
@@ -760,7 +784,7 @@ class _StudyTabState extends State<StudyTab> {
     }
   }
 
-  /// Persist the notes list (same shape as NotesScreen._saveNotes).
+  /// Persist the notes list (same shape as the note view page).
   Future<void> _saveNotes() => StudentStorage.saveList(
       StudentStorage.notesKey, _notes.map((n) => n.toJson()).toList());
 
@@ -799,6 +823,46 @@ class _StudyTabState extends State<StudyTab> {
   @override
   Widget build(BuildContext context) {
     final tokens = _StudyTokens.of(context);
+    // The AI panel is a chat, not a scrolling list: its messages
+    // scroll inside the panel while the quick replies + input stay
+    // pinned above the bottom pill nav, so it gets a Column
+    // layout instead of the ListView the other panels share. The
+    // FAB is hidden here — the chat has its own input and +
+    // attach menu.
+    if (_panel == 'ai') {
+      return Stack(
+        children: [
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: _panelHeader(tokens),
+              ),
+              const SizedBox(height: AppSpacing.s16),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _aiPanel(tokens),
+                ),
+              ),
+              // Clears the floating bottom pill nav.
+              const SizedBox(height: 84),
+            ],
+          ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: _bottomNav(tokens),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Stack(
       children: [
         ListView(
@@ -854,6 +918,46 @@ class _StudyTabState extends State<StudyTab> {
       ],
     );
   }
+
+  /// The EstudyanteGO AI chat panel. Questions the AI generates
+  /// from a file land in the SAME deck the Flashcards and Quiz
+  /// pages share: they are saved here as a new quiz named after
+  /// the file, so the Review panel shows them at once.
+  Widget _aiPanel(_StudyTokens tokens) {
+    return AiChatPanel(
+      notes: _notes,
+      quizzes: _quizzes,
+      cards: _cardsForAi(),
+      subjects: _subjects.map((s) => s.name).toList(),
+      points: _points,
+      onQuestionsGenerated: (questions, sourceName) async {
+        final baseName = sourceName.contains('.')
+            ? sourceName.substring(0, sourceName.lastIndexOf('.'))
+            : sourceName;
+        setState(() {
+          _quizzes.insert(
+            0,
+            Quiz(
+              id: newId(),
+              title: baseName,
+              subject: '',
+              timeLimitSec: 0,
+              questions: questions,
+            ),
+          );
+        });
+        await _saveQuizzes();
+      },
+    );
+  }
+
+  /// Flashcards for the AI chat context: the user's real cards.
+  /// (The sample deck is a display-only fallback in the
+  /// Flashcards page, not part of the AI's working data.)
+  List<Flashcard> _cardsForAi() => _cards;
+
+  Future<void> _saveQuizzes() => StudentStorage.saveList(
+      StudentStorage.quizzesKey, _quizzes.map((q) => q.toJson()).toList());
 
   // ------------------------------------------------------- shared bits
 
@@ -988,19 +1092,22 @@ class _StudyTabState extends State<StudyTab> {
 
   /// Preview bottom pill nav: sheet-bg pill, radius 999, padding
   /// 6px, gap 4px; inactive buttons muted, active button brand
-  /// fill with white text. Order: Grades | Files | Notes | Review.
-  /// The four buttons share the pill width equally (Expanded):
-  /// the preview's content-sized pill overflows a 390px phone
-  /// by ~100px (widget_test, Nov 7), so equal widths — not
-  /// smaller text — keep the 13px labels and guarantee the fit
-  /// on narrow phones. Deviation from the preview, listed in
-  /// the file header.
+  /// fill with white text. Order: Grades | Files | Notes | Review
+  /// | AI. The AI tab is its own bottom-nav tab for EstudyanteGO
+  /// AI (labelled just "AI" so the five tabs fit); it is NOT a
+  /// row inside Review. The five buttons share the pill width
+  /// equally (Expanded): the preview's content-sized pill
+  /// overflows a 390px phone by ~100px (widget_test, Nov 7), so
+  /// equal widths — not smaller text — keep the 13px labels and
+  /// guarantee the fit on narrow phones. Deviation from the
+  /// preview, listed in the file header.
   Widget _bottomNav(_StudyTokens tokens) {
     const entries = [
       ('grades', 'Grades', Icons.workspace_premium_outlined),
       ('files', 'Files', Icons.folder_outlined),
       ('notes', 'Notes', Icons.note_alt_outlined),
       ('review', 'Review', Icons.help_outline),
+      ('ai', 'AI', Icons.auto_awesome_outlined),
     ];
     return Container(
       padding: const EdgeInsets.all(6),
@@ -2155,16 +2262,17 @@ class _StudyTabState extends State<StudyTab> {
             _emptyCard(
               tokens,
               'No quizzes yet.',
-              'Create one with AI or add a quiz from your notes.',
+              'Add a quiz from your notes.',
             )
           else
             for (var i = 0; i < _quizzes.length; i++) ...[
               if (i > 0) const SizedBox(height: 12),
               _deckCard(tokens, _quizzes[i], i),
             ],
-          // The preview's Review screen has no entry cards; the
-          // app keeps them below the decks — they are the only way
-          // to take a quiz or open flashcards.
+          // "Pick how to study" shows Flashcards and Quiz only.
+          // AI Quiz is deleted — it duplicated Quiz. Tapping either
+          // opens its own dedicated page (the old "Review Notes &
+          // Quizzes" screen is gone).
           const SizedBox(height: AppSpacing.s16),
           Text(
             'Pick how to study',
@@ -2177,7 +2285,8 @@ class _StudyTabState extends State<StudyTab> {
             icon: Icons.style_outlined,
             title: 'Flashcards',
             subtitle: 'Flip through questions one at a time',
-            onTap: () => _openReview(const NotesScreen(initialTab: 'cards')),
+            onTap: () =>
+                _openReview(const FlashcardsPage()),
           ),
           const SizedBox(height: 8),
           _entryCard(
@@ -2185,16 +2294,8 @@ class _StudyTabState extends State<StudyTab> {
             icon: Icons.quiz_outlined,
             title: 'Quiz',
             subtitle: 'Answer multiple-choice, get scored',
-            onTap: () => _openReview(const NotesScreen(initialTab: 'quizzes')),
-          ),
-          const SizedBox(height: 8),
-          _entryCard(
-            tokens,
-            icon: Icons.auto_awesome_outlined,
-            title: 'AI Quiz',
-            subtitle:
-                'Pick a PDF or photo of your notes and the app takes it from there',
-            onTap: () => _openReview(const AiQuizGenerateScreen()),
+            onTap: () => _openReview(
+                QuizPage(walletController: widget.walletController)),
           ),
         ] else ...[
           // The preview's Summary shows the same decks as summary
@@ -2208,7 +2309,7 @@ class _StudyTabState extends State<StudyTab> {
             _emptyCard(
               tokens,
               'No quizzes yet.',
-              'Create one with AI or add a quiz from your notes.',
+              'Add a quiz from your notes.',
             )
           else
             for (var i = 0; i < _quizzes.length; i++) ...[
@@ -2243,7 +2344,7 @@ class _StudyTabState extends State<StudyTab> {
             ),
           ),
           child: InkWell(
-            onTap: () => _openReview(const NotesScreen(initialTab: 'quizzes')),
+            onTap: () => _openReview(QuizPage(walletController: widget.walletController)),
             borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -2346,7 +2447,7 @@ class _StudyTabState extends State<StudyTab> {
             ),
           ),
           child: InkWell(
-            onTap: () => _openReview(const NotesScreen(initialTab: 'quizzes')),
+            onTap: () => _openReview(QuizPage(walletController: widget.walletController)),
             borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(18),

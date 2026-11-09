@@ -346,7 +346,9 @@ void main() {
     expect(find.text('Pick how to study'), findsOneWidget);
     expect(find.text('Flashcards'), findsOneWidget);
     expect(find.text('Quiz'), findsWidgets);
-    expect(find.text('AI Quiz'), findsOneWidget);
+    // AI Quiz is deleted — it duplicated Quiz. The AI lives in
+    // its own bottom-nav tab instead (see the AI tab test below).
+    expect(find.text('AI Quiz'), findsNothing);
     expect(find.text('No quizzes yet.'), findsOneWidget);
     // The preview's Drag & Drop mode has no app equivalent and is
     // not faked with a substitute.
@@ -415,6 +417,24 @@ void main() {
         findsNothing);
     expect(find.text('Audit Principles and Process'), findsNothing);
     expect(find.text('Computer Programming Fundamentals'), findsNothing);
+  });
+
+  testWidgets('AI tab is its own bottom-nav tab, chat only',
+      (tester) async {
+    await _pumpTab(tester);
+    // The pill has five tabs now: Grades, Files, Notes, Review, AI.
+    expect(find.byKey(const ValueKey('study-nav-ai')), findsOneWidget);
+    await _tapNav(tester, 'ai');
+    expect(find.text('EstudyanteGO AI'), findsOneWidget);
+    // On-device line, no Gemini, no Notes Lab tab.
+    expect(find.text('On-device · Offline · No Gemini'), findsOneWidget);
+    expect(find.text('Notes Lab'), findsNothing);
+    // Quick-reply chips are pinned above the input, plus the +
+    // attach button and the input field.
+    expect(find.text('Fare: Cabugao → Vigan?'), findsOneWidget);
+    expect(find.text('Are you an online AI?'), findsOneWidget);
+    expect(find.byIcon(Icons.add), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
   });
 
   testWidgets('heart chip counts favorited notes, honestly',
