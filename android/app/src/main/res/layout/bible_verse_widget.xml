@@ -4,12 +4,14 @@
 
   The photo is INSIDE the widget: the widget is a rounded-corner
   card (16dp) and the photo fills that card edge to edge as the
-  widget's own background. The photo ImageView is clipped to the
-  card's rounded rect (clipToOutline + the rounded card
-  background as its outline source); the scrim is rounded too,
-  so nothing squares the corners. If a launcher ever ignores
-  clipToOutline, the photo simply renders square-cornered —
-  never a crash, and the card still reads as a photo widget.
+  widget's own background. The photo is NOT clipped to the
+  rounded rect: clipToOutline + outlineProvider were REMOVED
+  Nov 8 — the EMUI launcher on Steven's Huawei P30 Lite
+  rejected those attributes and the whole widget failed to
+  load ("An error occurred when loading widget"). The photo may
+  render square-cornered on launchers that don't clip; the
+  scrim is rounded, and the card still reads as a photo widget.
+  Loading matters more than perfect rounded corners.
   There is NO floating dark panel in the center: the logo,
   verse, and green pill sit DIRECTLY on the photo, with only a
   subtle full-area scrim for readability.
@@ -56,8 +58,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/bible_widget_card_background"
-        android:clipToOutline="true"
-        android:outlineProvider="background"
         android:src="@drawable/verse_bg_sunset_cross"
         android:scaleType="centerCrop"
         android:contentDescription="@null" />

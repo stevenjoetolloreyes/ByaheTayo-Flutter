@@ -21,8 +21,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/bible_widget_card_background"
-        android:clipToOutline="true"
-        android:outlineProvider="background"
         android:src="@drawable/verse_bg_sunset_cross"
         android:scaleType="centerCrop"
         android:contentDescription="@null" />
