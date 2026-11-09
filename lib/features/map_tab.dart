@@ -1341,6 +1341,55 @@ enum _SheetSnap { peek, half }
 /// a failed Meta load.
 enum _MapStyleMode { meta, cartoFallback }
 
+/// DIAGNOSTIC TEST FLAG — Nov 9, 2026 (Huawei P30 Lite blank map).
+///
+/// The Map tab is blank on Steven's phone only (the tablet
+/// renders fine). Ruled out: signal, theme, old build, VPN,
+/// clock, corrupt cache. Decisive clue: on the updated build the
+/// "Couldn't load the map" banner never appears, which means the
+/// Meta style reported loaded and the tile probe passed — tiles
+/// DOWNLOAD fine, but the native MapLibre view does not DRAW the
+/// vector tiles on this phone.
+///
+/// While this flag is true, the Map tab STARTS on the
+/// theme-aware CartoDB raster basemap (Dark Matter / Positron)
+/// instead of Meta's Canterbury vector style, so we can test
+/// whether raster tiles render where vector does not. Theme
+/// switches swap the raster variant only and never jump back to
+/// Meta; Retry re-attempts raster too. Flip this to false to
+/// restore the Meta vector start — nothing else changes, the
+/// Meta path is untouched. DO NOT SHIP with this flag on without
+/// Steven's say-so: it is a diagnostic, not a product decision.
+const bool kMapStartsOnRaster = true;
+
+/// The basemap style the Map tab starts on — and returns to on a
+/// theme change or a Retry — for [dark] theme. While the Nov 9
+/// raster diagnostic ([kMapStartsOnRaster]) is on, this is the
+/// theme-aware CartoDB raster style document; with the flag off
+/// it is Meta's Canterbury vector style URL, as before. The
+/// [startsOnRaster] parameter exists so tests can exercise both
+/// branches; production callers omit it and use the flag.
+String mapStartStyle({
+  required bool dark,
+  bool startsOnRaster = kMapStartsOnRaster,
+}) => startsOnRaster
+    ? cartoFallbackStyleJson(dark: dark)
+    : metaMapStyleUrl(dark: dark);
+
+/// What the banner's Retry button re-attempts for [dark] theme:
+/// the style to set, and whether it is the raster basemap. While
+/// the raster diagnostic is on, Retry re-attempts the raster
+/// style (the thing under test) — if raster tiles also fail, the
+/// banner shows again, same honesty as before. With the flag off,
+/// Retry goes back to Meta. [startsOnRaster] is the test hook
+/// (see [mapStartStyle]).
+({bool isRaster, String style}) mapRetryTarget({
+  required bool dark,
+  bool startsOnRaster = kMapStartsOnRaster,
+}) => (
+  isRaster: startsOnRaster,
+  style: mapStartStyle(dark: dark, startsOnRaster: startsOnRaster),
+);
 
 /// Map view modes for the Map tab. Real Google Maps SDK
 /// functionality only — no simulated 3D graphics, no fake
@@ -1773,8 +1822,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // re-attempt the Meta style while the fallback is live.
   bool? _lastStyleDark;
   // Which basemap is live: Meta vector, or the CartoDB raster
-  // fallback after a failed Meta load.
-  _MapStyleMode _styleMode = _MapStyleMode.meta;
+  // fallback after a failed Meta load. While the Nov 9 raster
+  // diagnostic ([kMapStartsOnRaster]) is on, the tab STARTS on
+  // the raster basemap instead of Meta.
+  _MapStyleMode _styleMode = kMapStartsOnRaster
+      ? _MapStyleMode.cartoFallback
+      : _MapStyleMode.meta;
   // 2D/3D view mode (Steven, Nov 8: "Oo, lagyan mo ng 3D
   // toggle"): 2D = flat top-down (the default); 3D = perspective
   // tilt. The toggle only moves the camera — never the route,
@@ -2052,6 +2105,26 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     final dark = Theme.of(context).brightness == Brightness.dark;
     if (dark == _lastStyleDark) return;
     _lastStyleDark = dark;
+    if (kMapStartsOnRaster) {
+      // NOV 9 RASTER TEST: theme-aware CartoDB raster only — a
+      // theme switch swaps the raster variant (Dark Matter /
+      // Positron) and NEVER jumps back to Meta, or the test
+      // would silently re-test the vector style and confuse
+      // the result.
+      _activeStyleUrl = _cartoFallbackSentinel;
+      _styleMode = _MapStyleMode.cartoFallback;
+      _styleLoaded = false;
+      _fallbackLoaded = false;
+      _tilesFailed = false; // A style switch restarts the flow.
+      _styleLoadTimer?.cancel(); // No Meta timer on raster.
+      _fallbackLoadTimer?.cancel();
+      _tileWatchdogTimer?.cancel(); // No Meta watchdog on raster.
+      final controller = _mapController;
+      if (controller == null) return; // First build: initStyle covers it.
+      _armFallbackLoadTimer();
+      controller.setStyle(cartoFallbackStyleJson(dark: dark));
+      return;
+    }
     final desired = metaMapStyleUrl(dark: dark);
     if (desired == _activeStyleUrl) return;
     _activeStyleUrl = desired;
@@ -2089,9 +2162,16 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _activeStyleUrl = _cartoFallbackSentinel;
     _fallbackLoaded = false;
     controller.setStyle(cartoFallbackStyleJson(dark: _fallbackDark));
-    // The fallback style still has to load: if it never reports
-    // loaded within 8 s, both tile sources have failed — show
-    // the banner instead of sitting on a blank map silently.
+    _armFallbackLoadTimer();
+    setState(() {}); // Attribution chip switches to OSM + CARTO.
+  }
+
+  /// Arms the 8 s timer that verifies the CartoDB raster style
+  /// actually loaded after a switch to it (or after the tab
+  /// starts on it under the Nov 9 raster test): if it never
+  /// reports loaded, both tile sources have failed — show the
+  /// banner instead of sitting on a blank map silently.
+  void _armFallbackLoadTimer() {
     _fallbackLoadTimer?.cancel();
     _fallbackLoadTimer = Timer(const Duration(seconds: 8), () {
       if (!mounted ||
@@ -2101,7 +2181,6 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       }
       setState(() => _tilesFailed = true);
     });
-    setState(() {}); // Attribution chip switches to OSM + CARTO.
   }
 
   /// Starts (or restarts) the fallback timer for the Meta style
@@ -2211,35 +2290,47 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     if (_tilesFailed) setState(() => _tilesFailed = false);
   }
 
-  /// Retries the tile sources from scratch: back to the Meta
-  /// style (the primary), timers re-armed, banner cleared. The
-  /// normal flow re-runs from there — style timer, watchdog,
-  /// probe, fallback. Called by the banner's Retry button and
-  /// when the user returns to the tab after a failure.
+  /// Retries the tile sources from scratch: back to the start
+  /// style, timers re-armed, banner cleared. While the Nov 9
+  /// raster diagnostic is on, Retry re-attempts the raster style
+  /// (the thing under test), never Meta; with the flag off it
+  /// goes back to Meta (the primary) and the normal flow re-runs
+  /// from there — style timer, watchdog, probe, fallback. Called
+  /// by the banner's Retry button and when the user returns to
+  /// the tab after a failure.
   void _retryTileSources() {
     final controller = _mapController;
     if (!mounted || controller == null) return;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final metaUrl = metaMapStyleUrl(dark: dark);
+    final target = mapRetryTarget(dark: dark);
     _styleLoadTimer?.cancel();
     _tileWatchdogTimer?.cancel();
     _fallbackLoadTimer?.cancel();
-    _styleMode = _MapStyleMode.meta;
-    _activeStyleUrl = metaUrl;
+    _styleMode = target.isRaster
+        ? _MapStyleMode.cartoFallback
+        : _MapStyleMode.meta;
+    _activeStyleUrl = target.isRaster
+        ? _cartoFallbackSentinel
+        : metaMapStyleUrl(dark: dark);
     _styleLoaded = false;
     _fallbackLoaded = false;
     _lastStyleDark = dark;
     if (_tilesFailed) {
       setState(() => _tilesFailed = false);
     }
-    _armStyleFallbackTimer();
-    controller.setStyle(metaUrl);
+    if (target.isRaster) {
+      _armFallbackLoadTimer();
+    } else {
+      _armStyleFallbackTimer();
+    }
+    controller.setStyle(target.style);
   }
 
   /// "Couldn't load the map" banner (shown only when
   /// [_tilesFailed]): a card beside the top-right controls with
   /// a short message and a Retry button that re-attempts the
-  /// Meta style. English, matching the app's UI language.
+  /// start style (raster while the Nov 9 test flag is on, Meta
+  /// otherwise). English, matching the app's UI language.
   Widget _tilesFailedBanner(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
@@ -2313,6 +2404,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _mapController = controller;
     if (_styleMode == _MapStyleMode.meta && !_styleLoaded) {
       _armStyleFallbackTimer();
+    } else if (_styleMode == _MapStyleMode.cartoFallback &&
+        !_fallbackLoaded) {
+      // Nov 9 raster test: the tab starts on the raster style,
+      // so verify THAT style loads — otherwise a raster style
+      // that never reports loaded would sit blank with no banner.
+      _armFallbackLoadTimer();
     }
     _fitActiveRoute();
     // A 3D tap before the native map existed only stored the
@@ -5752,12 +5849,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         if (mapLibreSupported)
           MapLibreMap(
           options: MapOptions(
-            // Theme-driven style: Meta's Canterbury vector style
+            // Theme-driven style: while the Nov 9 raster test
+            // flag is on, the CartoDB raster style (dark / light);
+            // with the flag off, Meta's Canterbury vector style
             // (dark / light), the same map the preview renders.
             // If it fails to load — or loads but its tiles never
             // render — the timers switch to the theme-aware
             // CartoDB raster fallback style.
-            initStyle: metaMapStyleUrl(
+            initStyle: mapStartStyle(
               dark: scheme.brightness == Brightness.dark,
             ),
             initCenter: const Geographic(lon: 121.05, lat: 16.9),
@@ -5814,7 +5913,8 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         // map in both themes, current build, data available).
         // Shown only after Meta AND the CartoDB fallback have
         // failed — never during the normal 8–10 s load window.
-        // Retry re-attempts the Meta style. Pinned top-left,
+        // Retry re-attempts the start style (raster while the
+        // Nov 9 test flag is on, Meta otherwise). Pinned top-left,
         // ending before the top-right control cluster (right 88).
         if (_tilesFailed)
           Positioned(
