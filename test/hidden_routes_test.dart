@@ -158,7 +158,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Remove this route?'), findsOneWidget);
       await tester.tap(find.text('Remove'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsNothing);
       expect(find.text('Route hidden.'), findsOneWidget);
       await openHiddenRoutesSheet(tester);
@@ -186,7 +188,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Remove this route?'), findsOneWidget);
       await tester.tap(find.text('Remove'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Sinait → Cabugao'), findsNothing);
       expect(find.text('Route hidden.'), findsOneWidget);
     });
@@ -213,7 +217,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Delete this route?'), findsOneWidget);
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Sinait → Vigan Bus Terminal'), findsNothing);
       expect(find.text('Route deleted.'), findsOneWidget);
       // The seeded routes are untouched.
@@ -242,7 +248,9 @@ void main() {
       expect(find.text('Hidden routes'), findsOneWidget);
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);
       await tester.tap(find.text('Restore'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Route restored.'), findsOneWidget);
       // Back in the list — with the admin-set fare still applied.
       expect(find.text('Cabugao → Vigan Bus Terminal'), findsOneWidget);

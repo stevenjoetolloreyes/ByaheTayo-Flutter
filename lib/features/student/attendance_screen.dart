@@ -5,6 +5,7 @@
 // CSV export and a real PDF report (pdf package) share actual files
 // via share_plus.
 import 'dart:io';
+import '../top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
@@ -93,8 +94,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   void _snack(String m) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(m)));
+      TopPopup.show(context, message: m);
     }
   }
 
@@ -617,9 +617,7 @@ class _AttendanceFormState extends State<_AttendanceForm> {
             FilledButton(
               onPressed: () {
                 if (_subjectName.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Pick or type a subject.')));
+                  TopPopup.show(context, message: 'Pick or type a subject.');
                   return;
                 }
                 Navigator.pop(

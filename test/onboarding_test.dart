@@ -541,7 +541,9 @@ void main() {
         'a@b.com',
       );
       await tester.tap(find.text('Send link'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 100));
       expect(auth.resetEmailsSent, ['a@b.com']);
       expect(
         find.text('Password reset link sent. Check your email.'),
@@ -587,7 +589,9 @@ void main() {
       expect(find.textContaining('steven@example.com'), findsOneWidget);
 
       await tester.tap(find.text('Send verification email'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 100));
       expect(auth.verificationEmailSent, isTrue);
       expect(find.text('Verification email sent. Check your inbox.'),
           findsOneWidget);
@@ -602,13 +606,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(verified, isTrue);
 
-      // Snackbars queue ('Verification email sent', then
-      // 'Not verified yet') and the overlay sits over the bottom
-      // button; clear current + queued snackbars before tapping it.
-      ScaffoldMessenger.of(
-        tester.element(find.text('Use a different account')),
-      ).clearSnackBars();
-      await tester.pumpAndSettle();
+      // The reply popup is at the top and never covers the bottom
+      // button (the old SnackBar did, so this used to clear it).
       await tester.tap(find.text('Use a different account'));
       await tester.pumpAndSettle();
       expect(escaped, isTrue);

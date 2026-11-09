@@ -5,6 +5,7 @@
 // [AuthService.reloadUser]. The user is never trapped here: "Use a
 // different account" signs out and returns to sign-in.
 import 'package:flutter/material.dart';
+import '../top_popup.dart';
 
 import '../app_layout.dart';
 import 'auth_service.dart';
@@ -36,15 +37,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     try {
       await widget.service.sendEmailVerification();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Verification email sent. Check your inbox.'),
-        ),
-      );
+      TopPopup.show(context, message: 'Verification email sent. Check your inbox.');
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        TopPopup.show(context, message: e.message);
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -59,19 +55,11 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       if (fresh != null && fresh.emailVerified) {
         widget.onVerified(fresh);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Not verified yet. Open the link in your email, then '
-              'check again.',
-            ),
-          ),
-        );
+        TopPopup.show(context, message: 'Not verified yet. Open the link in your email, then ' 'check again.',);
       }
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        TopPopup.show(context, message: e.message);
       }
     } finally {
       if (mounted) setState(() => _checking = false);

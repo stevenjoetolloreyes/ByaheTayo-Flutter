@@ -353,7 +353,12 @@ void main() {
       final saveButton = find.text('Save Changes');
       await tester.ensureVisible(saveButton);
       await tester.tap(saveButton);
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): several short pumps let the
+      // save finish over a few frames while keeping the popup up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
     }
 
     testWidgets('admin sees Edit route in the breakdown sheet',
@@ -533,7 +538,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Delete this route?'), findsOneWidget);
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Route deleted.'), findsOneWidget);
       expect(find.text('Sinait → Vigan Bus Terminal'), findsNothing);
       expect(await customRepo.loadAll(), isEmpty);

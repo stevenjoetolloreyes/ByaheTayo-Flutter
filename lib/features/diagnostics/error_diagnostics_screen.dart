@@ -18,6 +18,7 @@
 // Initialization button, Safe Mode switch (skips ONLY nonessential
 // services, listed on the screen). No automatic upload exists.
 import 'dart:io';
+import '../top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -129,9 +130,7 @@ class _ErrorDiagnosticsScreenState extends State<ErrorDiagnosticsScreen> {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: entry.toJsonLine()));
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Error details copied.')),
-                );
+                TopPopup.show(context, message: 'Error details copied.');
               }
             },
             child: const Text('Copy details'),
@@ -182,8 +181,7 @@ class _ErrorDiagnosticsScreenState extends State<ErrorDiagnosticsScreen> {
       ], text: 'EstudyanteGO error log export');
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Export failed.')));
+        TopPopup.show(context, message: 'Export failed.');
       }
     }
   }
@@ -294,14 +292,7 @@ class _ErrorDiagnosticsScreenState extends State<ErrorDiagnosticsScreen> {
                           widget.onRetryInitialization!();
                         }
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Retry requested. See the newest log '
-                                'entries for the result.',
-                              ),
-                            ),
-                          );
+                          TopPopup.show(context, message: 'Retry requested. See the newest log ' 'entries for the result.',);
                           setState(() {});
                         }
                       },

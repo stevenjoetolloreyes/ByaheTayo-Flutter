@@ -6,6 +6,7 @@
 // so it survives cache clears, and its local path is stored in the
 // on-device profile. Nothing here touches a backend.
 import 'dart:io';
+import '../top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -213,9 +214,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not pick a photo.')),
-      );
+      TopPopup.show(context, message: 'Could not pick a photo.');
     }
   }
 
@@ -303,26 +302,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           }
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Saved on this device, but could not sync to the '
-                  'server (${studentProfileSyncErrorMessage(e)}). '
-                  'It will sync on your next sign-in.',
-                ),
-              ),
-            );
+            TopPopup.show(context, message: 'Saved on this device, but could not sync to the ' 'server (${studentProfileSyncErrorMessage(e)}). ' 'It will sync on your next sign-in.',);
           }
         }
         if (photoError != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Photo saved on this device, but could not upload it '
-                '($photoError). It will upload on your next sign-in.',
-              ),
-            ),
-          );
+          TopPopup.show(context, message: 'Photo saved on this device, but could not upload it ' '($photoError). It will upload on your next sign-in.',);
         }
       }
       if (!widget.isEdit) {

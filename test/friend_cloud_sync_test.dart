@@ -605,7 +605,9 @@ void main() {
 
       await tester.enterText(_codeField(), 'friend-code');
       await tester.tap(find.text('Send request'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Friend request sent.'), findsOneWidget);
       // Outgoing row shows the recipient (name falls back to code)
@@ -659,7 +661,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(_codeField(), 'esk-7k9p2x');
       await tester.tap(find.text('Send request'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Friend request sent.'), findsOneWidget);
       expect(repo.requests, isNotEmpty);
@@ -675,7 +679,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(_codeField(), '7k9p2x');
       await tester.tap(find.text('Send request'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Friend request sent.'), findsOneWidget);
       expect(repo.requests, isNotEmpty);
@@ -692,7 +698,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(_codeField(), legacy);
       await tester.tap(find.text('Send request'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Friend request sent.'), findsOneWidget);
       expect(repo.requests, isNotEmpty);
@@ -736,7 +744,9 @@ void main() {
 
       expect(find.text('Ana Santos'), findsOneWidget);
       await tester.tap(find.text('Accept'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Friend request accepted.'), findsOneWidget);
       expect(find.text('No incoming requests'), findsOneWidget);
@@ -759,7 +769,9 @@ void main() {
       await _pumpCloudFriends(tester, repo: repo);
 
       await tester.tap(find.text('Decline'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Friend request declined.'), findsOneWidget);
       expect(find.text('No incoming requests'), findsOneWidget);

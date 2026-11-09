@@ -9,6 +9,7 @@
 // Enumeration / Matching / Fill in the Blanks) with a timer,
 // automatic scoring, explanations, and saved history.
 import 'dart:async';
+import '../top_popup.dart';
 
 import 'package:flutter/material.dart';
 
@@ -76,8 +77,7 @@ class _NotesScreenState extends State<NotesScreen> {
 
   void _snack(String m) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(m)));
+      TopPopup.show(context, message: m);
     }
   }
 
@@ -581,8 +581,7 @@ class _NoteFormState extends State<_NoteForm> {
           FilledButton(
             onPressed: () {
               if (_title.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a title.')));
+                TopPopup.show(context, message: 'Enter a title.');
                 return;
               }
               Navigator.pop(
@@ -658,8 +657,7 @@ class _CardFormState extends State<_CardForm> {
             onPressed: () {
               if (_front.text.trim().isEmpty ||
                   _back.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Fill in both front and back.')));
+                TopPopup.show(context, message: 'Fill in both front and back.');
                 return;
               }
               Navigator.pop(
@@ -1298,13 +1296,11 @@ class _QuizEditorState extends State<_QuizEditor> {
           FilledButton(
             onPressed: () {
               if (_title.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a quiz title.')));
+                TopPopup.show(context, message: 'Enter a quiz title.');
                 return;
               }
               if (_questions.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Add at least one question.')));
+                TopPopup.show(context, message: 'Add at least one question.');
                 return;
               }
               final minutes = int.tryParse(_minutes.text) ?? 0;
@@ -1535,25 +1531,21 @@ class _QuestionFormState extends State<_QuestionForm> {
             FilledButton(
               onPressed: () {
                 if (_question.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Enter a question.')));
+                  TopPopup.show(context, message: 'Enter a question.');
                   return;
                 }
                 if (_type == 'mcq' &&
                     _options.any((c) => c.text.trim().isEmpty)) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Fill in all 4 options.')));
+                  TopPopup.show(context, message: 'Fill in all 4 options.');
                   return;
                 }
                 if (_type == 'id' && _answer.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Enter the correct answer.')));
+                  TopPopup.show(context, message: 'Enter the correct answer.');
                   return;
                 }
                 if (_type == 'enum' &&
                     answerLines(_answer.text).length < 2) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Enter at least 2 answers, one per line.')));
+                  TopPopup.show(context, message: 'Enter at least 2 answers, one per line.');
                   return;
                 }
                 if (_type == 'match') {
@@ -1563,19 +1555,13 @@ class _QuestionFormState extends State<_QuestionForm> {
                     final right = _rights[i].text.trim();
                     if (left.isEmpty && right.isEmpty) continue;
                     if (left.isEmpty || right.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  'Each matching row needs both a left and a right item.')));
+                      TopPopup.show(context, message: 'Each matching row needs both a left and a right item.');
                       return;
                     }
                     pairs++;
                   }
                   if (pairs < 2) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'Enter at least 2 matching pairs.')));
+                    TopPopup.show(context, message: 'Enter at least 2 matching pairs.');
                     return;
                   }
                 }
@@ -1584,16 +1570,11 @@ class _QuestionFormState extends State<_QuestionForm> {
                       '____'.allMatches(_question.text).length;
                   final answers = answerLines(_answer.text);
                   if (blanks == 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'Use ____ in the question for each blank.')));
+                    TopPopup.show(context, message: 'Use ____ in the question for each blank.');
                     return;
                   }
                   if (answers.length != blanks) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(
-                            'Enter $blanks blank answer(s), one per line.')));
+                    TopPopup.show(context, message: 'Enter $blanks blank answer(s), one per line.');
                     return;
                   }
                 }

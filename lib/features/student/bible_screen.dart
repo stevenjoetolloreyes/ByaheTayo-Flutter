@@ -10,6 +10,7 @@
 // Daily reading reminders surface in-app (Verse of the Day on the
 // dashboard and here); this app has no push-notification plugin.
 import 'dart:async';
+import '../top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -90,8 +91,7 @@ class _BibleScreenState extends State<BibleScreen> {
 
   void _snack(String m) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(m)));
+      TopPopup.show(context, message: m);
     }
   }
 
@@ -562,8 +562,7 @@ class _JournalFormState extends State<_JournalForm> {
           FilledButton(
             onPressed: () {
               if (_text.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Write something first.')));
+                TopPopup.show(context, message: 'Write something first.');
                 return;
               }
               Navigator.pop(

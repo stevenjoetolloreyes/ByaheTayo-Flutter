@@ -6,6 +6,7 @@
 // — as scheduled system notifications too: every save re-runs the
 // notification schedule (see local_notifications.dart).
 import 'package:flutter/material.dart';
+import '../top_popup.dart';
 
 import '../app_layout.dart';
 import '../ios_components.dart';
@@ -68,8 +69,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
 
   void _snack(String m) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(m)));
+      TopPopup.show(context, message: m);
     }
   }
 
@@ -482,18 +482,15 @@ class _SubjectFormState extends State<_SubjectForm> {
             FilledButton(
               onPressed: () {
                 if (_name.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Enter a subject name.')));
+                  TopPopup.show(context, message: 'Enter a subject name.');
                   return;
                 }
                 if (_days.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Pick at least one day.')));
+                  TopPopup.show(context, message: 'Pick at least one day.');
                   return;
                 }
                 if (_endMin <= _startMin) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('End time must be after start time.')));
+                  TopPopup.show(context, message: 'End time must be after start time.');
                   return;
                 }
                 final candidate = Subject(
@@ -510,9 +507,7 @@ class _SubjectFormState extends State<_SubjectForm> {
                 final conflict = findConflict(widget.subjects, candidate,
                     excludeId: widget.existing?.id);
                 if (conflict != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                          'Schedule conflict with $conflict. Pick another time.')));
+                  TopPopup.show(context, message: 'Schedule conflict with $conflict. Pick another time.');
                   return;
                 }
                 Navigator.pop(context, candidate);
@@ -611,8 +606,7 @@ class _ItemFormState extends State<_ItemForm> {
           FilledButton(
             onPressed: () {
               if (_title.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a title.')));
+                TopPopup.show(context, message: 'Enter a title.');
                 return;
               }
               Navigator.pop(

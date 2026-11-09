@@ -187,8 +187,10 @@ String greetingFor(DateTime now) {
 
 /// Dashboard header: emerald gradient banner with the greeting,
 /// title, subtitle, profile photo, and a notification bell.
-/// The bell shows a real empty state (this app has no notification
-/// system, so there is never a fake unread dot).
+/// The bell shows a real unread badge ([unreadNotifications], the
+/// count of unread admin-reply notifications — 0 hides the badge,
+/// so there is never a fake unread dot) and opens the Notifications
+/// sheet.
 ///
 /// The profile circle shows the EXACT SAME photo the Account Profile
 /// shows: one shared rule (see profile_avatar.dart) — local file →
@@ -200,6 +202,7 @@ Widget studentHeader({
   required String greetingName,
   required VoidCallback onBell,
   UserProfile? profile,
+  int unreadNotifications = 0,
 }) {
   final photoImage = resolveProfilePhotoImage(profile);
   final hasPhoto = photoImage != null;
@@ -254,10 +257,52 @@ Widget studentHeader({
             ],
           ),
         ),
-        IconButton(
-          onPressed: onBell,
-          icon: const Icon(Icons.notifications_outlined,
-              color: Colors.white),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              onPressed: onBell,
+              icon: const Icon(Icons.notifications_outlined,
+                  color: Colors.white),
+            ),
+            if (unreadNotifications > 0)
+              Positioned(
+                right: 6,
+                top: 6,
+                // The badge must not swallow taps: it overlaps the
+                // bell button's corner, so it is pointer-transparent
+                // and taps pass through to the bell below.
+                child: IgnorePointer(
+                  child: Container(
+                    key: const ValueKey('notification-badge'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 18,
+                      minHeight: 18,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53935),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      unreadNotifications > 9
+                          ? '9+'
+                          : '$unreadNotifications',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     ),

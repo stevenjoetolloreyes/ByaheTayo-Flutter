@@ -5,6 +5,7 @@
 // no push-notification plugin, so alerts surface here, not as system
 // notifications). CSV export shares a real file via share_plus.
 import 'dart:io';
+import '../top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -69,8 +70,7 @@ class _AllowanceScreenState extends State<AllowanceScreen> {
 
   void _snack(String m) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(m)));
+      TopPopup.show(context, message: m);
     }
   }
 
@@ -690,8 +690,7 @@ class _TxnFormState extends State<_TxnForm> {
             onPressed: () {
               final amount = double.tryParse(_amount.text) ?? 0;
               if (amount <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Enter an amount greater than zero.')));
+                TopPopup.show(context, message: 'Enter an amount greater than zero.');
                 return;
               }
               Navigator.pop(

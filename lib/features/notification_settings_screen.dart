@@ -25,6 +25,7 @@
 // need the Full push system (FCM + Cloud Functions), which is not
 // approved and not built — the footer says so plainly.
 import 'package:flutter/material.dart';
+import 'top_popup.dart';
 
 import 'ios_components.dart';
 import 'local_notifications.dart';
@@ -93,8 +94,7 @@ class _NotificationSettingsScreenState
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    TopPopup.show(context, message: message);
   }
 
   Future<void> _onPermissionButton() async {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../top_popup.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -197,9 +198,7 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
 
   void _save() {
     if (_title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a title.')),
-      );
+      TopPopup.show(context, message: 'Enter a title.');
       return;
     }
     Navigator.pop(

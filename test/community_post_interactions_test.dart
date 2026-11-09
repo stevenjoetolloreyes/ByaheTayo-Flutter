@@ -506,7 +506,9 @@ void main() {
         user: _userA,
       );
       await tester.tap(find.text('Like'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Simulated network failure.'), findsOneWidget);
       expect(find.byIcon(Icons.thumb_up_outlined), findsOneWidget);
       expect(find.text('0'), findsNWidgets(3));
@@ -981,7 +983,9 @@ void main() {
       ];
       await openSheet(tester, fake);
       await tester.tap(find.text('Like').last);
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Simulated network failure.'), findsOneWidget);
       expect(find.byIcon(Icons.thumb_up), findsNothing);
     });

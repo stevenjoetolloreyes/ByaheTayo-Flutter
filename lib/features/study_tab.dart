@@ -83,12 +83,14 @@
 // No schema changes: grades + files are additive SharedPreferences
 // keys; existing records are untouched.
 import 'package:file_picker/file_picker.dart';
+import 'top_popup.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import 'ai_quiz_generate_screen.dart';
 import 'app_layout.dart';
+import 'app_rating.dart';
 import 'friend_cloud_repository.dart';
 import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
@@ -619,16 +621,11 @@ class _StudyTabState extends State<StudyTab> {
               final grade = double.tryParse(gradeController.text.trim());
               final units = int.tryParse(unitsController.text.trim());
               if (grade == null || grade < 1.0 || grade > 5.0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Enter a grade from 1.00 to 5.00.')),
-                );
+                TopPopup.show(context, message: 'Enter a grade from 1.00 to 5.00.');
                 return;
               }
               if (units == null || units < 1 || units > 12) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Enter units from 1 to 12.')),
-                );
+                TopPopup.show(context, message: 'Enter units from 1 to 12.');
                 return;
               }
               Navigator.pop(context, true);
@@ -652,8 +649,7 @@ class _StudyTabState extends State<StudyTab> {
     });
     await _saveGrades();
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Grade saved.')));
+      TopPopup.show(context, message: 'Grade saved.');
     }
   }
 
@@ -712,8 +708,7 @@ class _StudyTabState extends State<StudyTab> {
     });
     await _saveFiles();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added ${picked.name} to $folder.')));
+      TopPopup.show(context, message: 'Added ${picked.name} to $folder.');
     }
   }
 
@@ -723,6 +718,13 @@ class _StudyTabState extends State<StudyTab> {
     // Notes / quizzes / attempts may have changed while the screen
     // was open — reload so the tab never shows stale counts.
     await _load();
+  }
+
+  /// Opening a quiz / flashcard / AI-quiz flow counts as "starting
+  /// a review" for the app-rating prompt (a real user action).
+  Future<void> _openReview(Widget screen) async {
+    AppRatingTracker.instance.recordAction(AppRatingAction.startedReview);
+    await _open(screen);
   }
 
   /// The + FAB goes straight to the panel's real create flow (the
@@ -736,7 +738,7 @@ class _StudyTabState extends State<StudyTab> {
     } else if (_panel == 'notes') {
       await _openNoteCreateMenu();
     } else if (_panel == 'review') {
-      await _open(const AiQuizGenerateScreen());
+      await _openReview(const AiQuizGenerateScreen());
     } else {
       await _fabGrades();
     }
@@ -754,8 +756,7 @@ class _StudyTabState extends State<StudyTab> {
     setState(() => _notes.insert(0, created));
     await _saveNotes();
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Note saved!')));
+      TopPopup.show(context, message: 'Note saved!');
     }
   }
 
@@ -766,6 +767,9 @@ class _StudyTabState extends State<StudyTab> {
   /// Open a note in its full-screen view page; when the page
   /// returns an edited note, replace it in the list and save.
   Future<void> _openNoteDetail(Note note) async {
+    // Rating prompt (Nov 9): opening a note to read it is a real
+    // action — opening notes.
+    AppRatingTracker.instance.recordAction(AppRatingAction.openedNotes);
     final updated = await Navigator.of(context).push<Note>(
       MaterialPageRoute(builder: (_) => NoteDetailPage(note: note)),
     );
@@ -784,13 +788,7 @@ class _StudyTabState extends State<StudyTab> {
   Future<void> _fabGrades() async {
     if (_subjects.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Add subjects from the Student tab → Classes & Timetable first.',
-          ),
-        ),
-      );
+      TopPopup.show(context, message: 'Add subjects from the Student tab → Classes & Timetable first.',);
       return;
     }
     final ungraded = _subjects.where((s) => _gradeFor(s.id) == null);
@@ -1695,14 +1693,10 @@ class _StudyTabState extends State<StudyTab> {
     try {
       await _saveFiles();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File renamed.')),
-      );
+      TopPopup.show(context, message: 'File renamed.');
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not rename the file.')),
-      );
+      TopPopup.show(context, message: 'Could not rename the file.');
     }
   }
 
@@ -1836,14 +1830,10 @@ class _StudyTabState extends State<StudyTab> {
         user,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Shared with ${friend.displayName}.')),
-      );
+      TopPopup.show(context, message: 'Shared with ${friend.displayName}.');
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not share this file.')),
-      );
+      TopPopup.show(context, message: 'Could not share this file.');
     }
   }
 
@@ -1913,9 +1903,7 @@ class _StudyTabState extends State<StudyTab> {
       setState(() => _sharedWithMe.removeWhere((s) => s.id == share.id));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not remove this file.')),
-      );
+      TopPopup.show(context, message: 'Could not remove this file.');
     }
   }
 
@@ -2189,7 +2177,7 @@ class _StudyTabState extends State<StudyTab> {
             icon: Icons.style_outlined,
             title: 'Flashcards',
             subtitle: 'Flip through questions one at a time',
-            onTap: () => _open(const NotesScreen(initialTab: 'cards')),
+            onTap: () => _openReview(const NotesScreen(initialTab: 'cards')),
           ),
           const SizedBox(height: 8),
           _entryCard(
@@ -2197,7 +2185,7 @@ class _StudyTabState extends State<StudyTab> {
             icon: Icons.quiz_outlined,
             title: 'Quiz',
             subtitle: 'Answer multiple-choice, get scored',
-            onTap: () => _open(const NotesScreen(initialTab: 'quizzes')),
+            onTap: () => _openReview(const NotesScreen(initialTab: 'quizzes')),
           ),
           const SizedBox(height: 8),
           _entryCard(
@@ -2206,7 +2194,7 @@ class _StudyTabState extends State<StudyTab> {
             title: 'AI Quiz',
             subtitle:
                 'Pick a PDF or photo of your notes and the app takes it from there',
-            onTap: () => _open(const AiQuizGenerateScreen()),
+            onTap: () => _openReview(const AiQuizGenerateScreen()),
           ),
         ] else ...[
           // The preview's Summary shows the same decks as summary
@@ -2255,7 +2243,7 @@ class _StudyTabState extends State<StudyTab> {
             ),
           ),
           child: InkWell(
-            onTap: () => _open(const NotesScreen(initialTab: 'quizzes')),
+            onTap: () => _openReview(const NotesScreen(initialTab: 'quizzes')),
             borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -2358,7 +2346,7 @@ class _StudyTabState extends State<StudyTab> {
             ),
           ),
           child: InkWell(
-            onTap: () => _open(const NotesScreen(initialTab: 'quizzes')),
+            onTap: () => _openReview(const NotesScreen(initialTab: 'quizzes')),
             borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(18),

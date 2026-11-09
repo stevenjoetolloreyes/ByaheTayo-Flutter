@@ -94,12 +94,14 @@
 // cannot double-count; the widget additionally ignores taps while a
 // reaction write is in flight.
 import 'dart:convert';
+import 'top_popup.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_layout.dart';
+import 'app_rating.dart';
 import 'community_posts.dart';
 import 'onboarding/auth_service.dart';
 
@@ -1276,11 +1278,13 @@ class _CommunityPostInteractionWidgetState
         tapped: tapped,
       );
       await _reload();
+      // Rating prompt (Nov 9): a successful Like/Dislike is a real
+      // action — interacting with a Communities post.
+      AppRatingTracker.instance
+          .recordAction(AppRatingAction.interactedWithPost);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(interactionErrorMessage(e))),
-      );
+      TopPopup.show(context, message: interactionErrorMessage(e));
     } finally {
       if (mounted) setState(() => _reacting = null);
     }
@@ -1622,9 +1626,7 @@ class _CommentSheetState extends State<_CommentSheet> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(interactionErrorMessage(e))),
-      );
+      TopPopup.show(context, message: interactionErrorMessage(e));
     } finally {
       if (mounted) setState(() => _reactingCommentId = null);
     }
@@ -1641,9 +1643,7 @@ class _CommentSheetState extends State<_CommentSheet> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(interactionErrorMessage(e))),
-      );
+      TopPopup.show(context, message: interactionErrorMessage(e));
     } finally {
       if (mounted) setState(() => _deletingId = null);
     }

@@ -20,6 +20,7 @@
 // Overpriced Fare flow), the saved-complaints list, and the LGU
 // directory admin entry.
 import 'dart:convert';
+import 'top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -877,18 +878,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
     if (created == null || !mounted) return;
     await _loadSharedPosts();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          created.photoDropped
-              ? 'Post shared — In Review. Your post is being '
-                  'reviewed by the admin. Shared without its photo '
-                  '(too large).'
-              : 'Post shared — In Review. Your post is being '
-                  'reviewed by the admin.',
-        ),
-      ),
-    );
+    TopPopup.show(context, message: created.photoDropped ? 'Post shared — In Review. Your post is being ' 'reviewed by the admin. Shared without its photo ' '(too large).' : 'Post shared — In Review. Your post is being ' 'reviewed by the admin.',);
   }
 }
 

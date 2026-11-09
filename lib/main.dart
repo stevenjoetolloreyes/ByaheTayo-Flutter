@@ -37,6 +37,9 @@ import 'features/diagnostics/diagnostics.dart';
 import 'features/account_tab.dart';
 import 'features/ad_service.dart';
 import 'features/app_layout.dart';
+import 'features/app_rating_overlay.dart';
+import 'features/app_reply_popup.dart';
+import 'features/app_review_notifications.dart';
 import 'features/bus_companies.dart';
 import 'features/bus_stops.dart';
 import 'features/communities_tab.dart';
@@ -1215,6 +1218,14 @@ class _HomeShellState extends State<_HomeShell>
             walletController: _walletController,
             creditsController: _creditsController,
             adService: _adService,
+            // Admin-reply notifications (Nov 9, 2026): cloud repo
+            // only when Firebase is configured; otherwise the
+            // Notifications sheet keeps its empty state and the
+            // bell shows no badge.
+            reviewNotificationRepository:
+                widget.authService.isConfigured
+                    ? FirestoreAppReviewNotificationRepository()
+                    : null,
           ),
         ),
         StudyTab(
@@ -1325,6 +1336,31 @@ class _HomeShellState extends State<_HomeShell>
       child: body,
     );
 
+    // Rating prompt (Nov 9): the floating pill + card + popup
+    // overlay every tab — the overlay wraps the tab content once
+    // and is used by both the wide and phone shells below. The
+    // card header names the tab it floats over.
+    final ratedBody = AppRatingOverlay(
+      currentUserId: widget.user?.uid,
+      currentTabLabel: _destinations[widget.selectedIndex].label,
+      child: animatedBody,
+    );
+
+    // Admin-reply popup (Nov 9): when the admin replies to the
+    // student's review while the app is open, a dark card pops up
+    // at the top of the screen (same style as the rating flow's
+    // "Thank you!" popup). The bell badge and the Notifications
+    // sheet carry the reply persistently; the popup is the visible
+    // alert. Same wrapping as the rating overlay above — one
+    // instance, used by both shells.
+    final replyBody = AppReplyPopupOverlay(
+      repository: widget.authService.isConfigured
+          ? FirestoreAppReviewNotificationRepository()
+          : null,
+      userId: widget.user?.uid,
+      child: ratedBody,
+    );
+
     if (wide) {
       return Scaffold(
         appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
@@ -1343,7 +1379,7 @@ class _HomeShellState extends State<_HomeShell>
               ),
               // Expanded content stays responsive while the sidebar
               // animates; no overflow, no layout shift of the content.
-              Expanded(child: animatedBody),
+              Expanded(child: replyBody),
             ],
           ),
         ),
@@ -1369,7 +1405,7 @@ class _HomeShellState extends State<_HomeShell>
                   TopNavDestination(d.label, d.icon, d.selectedIcon),
               ],
             ),
-            Expanded(child: animatedBody),
+            Expanded(child: replyBody),
           ],
         ),
       ),

@@ -8,6 +8,7 @@
 // notifications are NOT included — this app has no push-notification
 // plugin, so the Daily quote surfaces on the dashboard and here.
 import 'package:flutter/material.dart';
+import '../top_popup.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -62,8 +63,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
   void _snack(String m) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(m)));
+      TopPopup.show(context, message: m);
     }
   }
 

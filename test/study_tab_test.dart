@@ -458,7 +458,9 @@ void main() {
       '6.00',
     );
     await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
+    // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
     expect(
       find.text('Enter a grade from 1.00 to 5.00.'),
       findsOneWidget,
@@ -581,7 +583,12 @@ void main() {
       'Lecture 1 revised.pdf',
     );
     await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
+    // Top popup (was a SnackBar): several short pumps let the
+    // rename finish over a few frames while keeping the popup up —
+    // pumpAndSettle would fast-forward past its 5 seconds.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(find.text('Lecture 1 revised.pdf'), findsOneWidget);
     expect(find.text('Lecture 1.pdf'), findsNothing);
     expect(find.text('File renamed.'), findsOneWidget);
@@ -715,7 +722,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Share "Lecture 1.pdf"'), findsOneWidget);
     await tester.tap(find.text('Ben'));
-    await tester.pumpAndSettle();
+    // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Shared with Ben.'), findsOneWidget);
     final shared = await repo.fetchSharedWithMe('u-ben');
     expect(shared.length, 1);

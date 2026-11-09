@@ -336,7 +336,12 @@ void main() {
       await tester.ensureVisible(find.text('Save changes'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Save changes'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): several short pumps let the
+      // save finish over a few frames while keeping the popup up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
     }
 
     testWidgets('edit save writes the remote document', (tester) async {
@@ -383,7 +388,6 @@ void main() {
           onSaved: (profile) => saved = profile,
         ),
       ));
-      await tester.pumpAndSettle();
       await tapSave(tester);
       // Local data intact and the flow completes (never trapped).
       expect(saved, isNotNull);
@@ -409,7 +413,9 @@ void main() {
           onSaved: (profile) => saved = profile,
         ),
       ));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       await tapSave(tester);
       expect(saved, isNotNull);
       expect(store.loadProfile(_user.uid)?.school, _school);

@@ -212,7 +212,9 @@ void main() {
       faresAdminActionRequest.value = action;
       await tester.pump();
       await tester.pump();
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
     }
 
     testWidgets('the Fares tab body has no admin buttons anymore',
@@ -273,7 +275,11 @@ void main() {
       await request(tester, FaresAdminAction.resetDirections);
       expect(find.text('Reset all directions?'), findsOneWidget);
       await tester.tap(find.text('Reset all'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(
         find.text('Reset 1 direction(s). Fares were not changed.'),
         findsOneWidget,
@@ -288,7 +294,9 @@ void main() {
       expect(find.text('Add company'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Farinas Transit');
       await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Company added.'), findsOneWidget);
       final companies = await companyRepo.loadAll();
       expect(companies.map((c) => c.name), contains('Farinas Transit'));

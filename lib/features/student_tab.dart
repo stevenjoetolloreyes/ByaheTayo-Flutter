@@ -20,6 +20,8 @@
 //   exists; no photo is baked into the app.
 // - Greeting name "Steven" matches the reference mockup; it becomes
 //   dynamic when an account system exists.
+import 'dart:async';
+import 'top_popup.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -28,6 +30,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ad_service.dart';
 import 'app_layout.dart';
+import 'app_review_notifications.dart';
 import 'credits_repository.dart';
 import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
@@ -65,6 +68,7 @@ class StudentTab extends StatefulWidget {
     this.creditsController,
     this.walkingController,
     this.adService,
+    this.reviewNotificationRepository,
   });
 
   /// Switches the shell to the Map tab (used by My Commute jumps).
@@ -101,6 +105,12 @@ class StudentTab extends StatefulWidget {
   /// the Rewards screen keeps its honest no-ads notice and no login
   /// popup is attempted).
   final AdService? adService;
+
+  /// Reads the student's admin-reply notifications (null in bare
+  /// widget tests and when Firebase is not configured, in which
+  /// case the Notifications sheet keeps its empty state and the
+  /// bell shows no badge).
+  final AppReviewNotificationRepository? reviewNotificationRepository;
 
   @override
   State<StudentTab> createState() => _StudentTabState();
@@ -317,28 +327,96 @@ class _StudentTabState extends State<StudentTab> {
     return null;
   }
 
+  /// Notifications bottom sheet (bell in the Student Hub header).
+  /// Bottom sheet, not a page. It shows the student's admin-reply
+  /// notifications (AppReviewNotificationsSheet) — an admin reply
+  /// to one of the student's reviews appears here with an unread
+  /// dot, replacing the empty state. The empty state shows only
+  /// when there are no notifications. When the sheet closes, the
+  /// notifications are marked read, so the bell badge clears.
   void _showNotifications() {
+    final repository = widget.reviewNotificationRepository;
+    final userId = widget.user?.uid;
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => const Padding(
-        padding: AppLayout.pagePaddingLarge,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Notifications',
-                style: AppText.headingStrong),
-            SizedBox(height: AppSpacing.s8),
-            Text('No notifications yet.'),
-            SizedBox(height: AppSpacing.s4),
-            Text(
-              'This app does not have a notification system yet, so there is nothing to show here.',
-              style: AppText.caption,
-            ),
-          ],
-        ),
+      builder: (_) => AppReviewNotificationsSheet(
+        repository: repository,
+        userId: userId,
       ),
+    ).then((_) {
+      if (repository != null && userId != null) {
+        unawaited(repository.markAllRead(userId));
+      }
+    });
+  }
+
+  /// The Student Hub header with a live unread badge on the bell.
+  /// When there is no notification repository or no signed-in user,
+  /// the plain header (no badge) is used.
+  Widget _headerWithNotifications(DateTime now) {
+    final stream = _headerNotificationStream();
+    if (stream == null) {
+      return studentHeader(
+        greetingName: greetingFor(now),
+        onBell: _showNotifications,
+        profile: widget.profile,
+      );
+    }
+    return StreamBuilder<List<AppReviewNotification>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        final unread = (snapshot.data ?? const <AppReviewNotification>[])
+            .where((n) => !n.read)
+            .length;
+        return studentHeader(
+          greetingName: greetingFor(now),
+          onBell: _showNotifications,
+          profile: widget.profile,
+          unreadNotifications: unread,
+        );
+      },
     );
+  }
+
+  /// The student's reply-notification streams — one per consumer.
+  /// The header badge and the section card each need their OWN
+  /// stream instance (a stream instance serves one listener), so
+  /// two are cached, one per consumer. Created once per signed-in
+  /// user and reused across rebuilds — never created in build, or
+  /// every rebuild would resubscribe and re-emit. (Firestore's own
+  /// snapshots() is broadcast, so sharing would work there — but a
+  /// separate instance per consumer is correct for any stream.)
+  Stream<List<AppReviewNotification>>? _headerNotificationsStream;
+  Stream<List<AppReviewNotification>>? _cardNotificationsStream;
+  String? _notificationsStreamUserId;
+
+  void _ensureNotificationStreams() {
+    final repository = widget.reviewNotificationRepository;
+    final userId = widget.user?.uid;
+    if (repository == null || userId == null) {
+      _headerNotificationsStream = null;
+      _cardNotificationsStream = null;
+      _notificationsStreamUserId = null;
+      return;
+    }
+    if (_notificationsStreamUserId == userId &&
+        _headerNotificationsStream != null &&
+        _cardNotificationsStream != null) {
+      return;
+    }
+    _notificationsStreamUserId = userId;
+    _headerNotificationsStream = repository.watchForUser(userId);
+    _cardNotificationsStream = repository.watchForUser(userId);
+  }
+
+  Stream<List<AppReviewNotification>>? _headerNotificationStream() {
+    _ensureNotificationStreams();
+    return _headerNotificationsStream;
+  }
+
+  Stream<List<AppReviewNotification>>? _cardNotificationStream() {
+    _ensureNotificationStreams();
+    return _cardNotificationsStream;
   }
 
   @override
@@ -399,11 +477,7 @@ class _StudentTabState extends State<StudentTab> {
         // 24px between sections.
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         children: [
-          studentHeader(
-            greetingName: greetingFor(now),
-            onBell: _showNotifications,
-            profile: widget.profile,
-          ),
+          _headerWithNotifications(now),
           const SizedBox(height: 16),
           _atAGlanceWidget(context, now),
           for (final g in groups) ...[
@@ -2038,8 +2112,7 @@ class _StudentTabState extends State<StudentTab> {
                 onPressed: () {
                   Clipboard.setData(ClipboardData(
                       text: '"${daily.text}" — ${daily.author}'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Quote copied.')));
+                  TopPopup.show(context, message: 'Quote copied.');
                 },
                 icon: const Icon(Icons.copy, size: 18),
                 label: const Text('Copy'),
@@ -2082,25 +2155,82 @@ class _StudentTabState extends State<StudentTab> {
 
   // -------------------------------------------------------- notifications
   // Preview port (Nov 6): Notifications as its own section in the
-  // Inspiration & Calendar group. Opens the same honest empty
-  // sheet as the bells — the app has no notification system, so
-  // there is never a fake unread dot.
+  // Inspiration & Calendar group. Opens the same sheet as the bell.
+  // When the student has admin-reply notifications, the card shows
+  // the latest one (with its unread count); otherwise the honest
+  // empty state.
 
   Widget _notificationsWidget(BuildContext context) {
+    final stream = _cardNotificationStream();
+    if (stream == null) {
+      return _notificationsCard(context, notifications: null);
+    }
+    return StreamBuilder<List<AppReviewNotification>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        return _notificationsCard(
+          context,
+          notifications: snapshot.data,
+        );
+      },
+    );
+  }
+
+  /// The Notifications section card. [notifications] is null while
+  /// the stream is loading (or unavailable) — the empty state
+  /// shows then, as it does when the list is empty. The stream is
+  /// newest first, so the first entry is the latest reply.
+  Widget _notificationsCard(
+    BuildContext context, {
+    required List<AppReviewNotification>? notifications,
+  }) {
+    final list = notifications ?? const <AppReviewNotification>[];
+    final unreadCount = list.where((n) => !n.read).length;
+    final latest = list.isEmpty ? null : list.first;
+    final children = <Widget>[];
+    if (latest == null) {
+      children.addAll(const [
+        Text('No notifications yet.'),
+        SizedBox(height: AppSpacing.s4),
+        Text(
+          'When EstudyanteGO replies to one of your reviews, it will appear here.',
+          style: AppText.caption,
+        ),
+      ]);
+    } else {
+      children.addAll(const [
+        Text(
+          'EstudyanteGO replied to your review.',
+          style: AppText.labelStrong,
+        ),
+        SizedBox(height: AppSpacing.s4),
+      ]);
+      children.add(
+        Text(
+          latest.replyText,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+      final caption = unreadCount > 0
+          ? '$unreadCount unread'
+          : latest.createdAt == null
+              ? ''
+              : formatDate(latest.createdAt!);
+      if (caption.isNotEmpty) {
+        children.addAll([
+          const SizedBox(height: AppSpacing.s4),
+          Text(caption, style: AppText.caption),
+        ]);
+      }
+    }
     return _widgetCard(
       context,
       icon: Icons.notifications_outlined,
       title: 'Notifications',
       subtitle: 'Stay in the loop.',
       onOpen: _showNotifications,
-      children: const [
-        Text('No notifications yet.'),
-        SizedBox(height: AppSpacing.s4),
-        Text(
-          'This app does not have a notification system yet, so there is nothing to show here.',
-          style: AppText.caption,
-        ),
-      ],
+      children: children,
     );
   }
 

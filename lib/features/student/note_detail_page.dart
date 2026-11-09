@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../top_popup.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
 import 'note_rich_text.dart';
@@ -190,9 +191,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
   void _save() {
     final title = _title.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a title.')),
-      );
+      TopPopup.show(context, message: 'Enter a title.');
       return;
     }
     final doc = _controller.document;

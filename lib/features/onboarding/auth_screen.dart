@@ -24,6 +24,7 @@
 // a clear banner and all submit buttons stay disabled — the app never
 // crashes and never fakes a sign-in.
 import 'package:flutter/material.dart';
+import '../top_popup.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -298,24 +299,17 @@ class _AuthScreenState extends State<AuthScreen> {
     final email = emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid email address.')),
-        );
+        TopPopup.show(context, message: 'Enter a valid email address.');
       }
       return;
     }
     try {
       await widget.service.sendPasswordReset(email: email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset link sent. Check your email.'),
-        ),
-      );
+      TopPopup.show(context, message: 'Password reset link sent. Check your email.');
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        TopPopup.show(context, message: e.message);
       }
     }
   }

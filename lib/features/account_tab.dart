@@ -14,12 +14,15 @@
 // Firebase re-authentication to be safe).
 
 import 'package:flutter/material.dart';
+import 'top_popup.dart';
 
 import '../theme_preference.dart';
 import 'about_screen.dart';
 import 'ad_service.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
+import 'app_reviews.dart';
+import 'app_reviews_admin_screen.dart';
 import 'bus_stops.dart';
 import 'credits_repository.dart';
 import 'custom_routes.dart';
@@ -263,8 +266,7 @@ class _AccountTabState extends State<AccountTab> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    TopPopup.show(context, message: message);
   }
 
   void _showInfoDialog(String title, String body) {
@@ -384,6 +386,29 @@ class _AccountTabState extends State<AccountTab> {
             cloudUserId: widget.user?.uid,
             cloudUserName:
                 widget.user?.displayName ?? widget.user?.email,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// App Reviews (Nov 9, 2026): the admin-only screen that reads
+  /// the student ratings in Firestore `app_ratings` and lets an
+  /// admin reply. Same shape as _openFriends — the screen is a
+  /// body-only widget wrapped in a Scaffold here. The repository
+  /// is created only when Firebase is configured (an admin is
+  /// always signed in, so this is normally non-null); when null
+  /// the screen shows an honest unavailable state.
+  void _openAppReviews() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('App Reviews')),
+          body: AppReviewsScreen(
+            repository: widget.authService.isConfigured
+                ? FirestoreAppReviewsRepository()
+                : null,
+            adminEmail: widget.user?.email,
           ),
         ),
       ),
@@ -1747,6 +1772,14 @@ class _AccountTabState extends State<AccountTab> {
           title: 'LGU directory',
           subtitle: 'Manage LGU directory entries',
           onTap: () => widget.onViewCommunities?.call(),
+          glass: glass,
+        ),
+        _adminSubheader('Feedback', glass),
+        _infoTile(
+          icon: Icons.rate_review_outlined,
+          title: 'App Reviews',
+          subtitle: 'Read student ratings and reply',
+          onTap: _openAppReviews,
           glass: glass,
         ),
         _adminSubheader('Routes & fares', glass),

@@ -42,6 +42,7 @@
 // with safe-area handling. The app shell and 6-tab navigation are
 // untouched — this tab is only the Friends destination's content.
 import 'package:flutter/material.dart';
+import 'top_popup.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -272,8 +273,7 @@ class _FriendsTabState extends State<FriendsTab> {
       _incoming.where((r) => r.isPending).toList();
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    TopPopup.show(context, message: message);
   }
 
   Future<void> _copyCode() async {

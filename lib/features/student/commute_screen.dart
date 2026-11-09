@@ -8,6 +8,7 @@
 // estimateTripMinutes model. Trip history = the commute expense log
 // (the app has no backend trip log to read).
 import 'package:flutter/material.dart';
+import '../top_popup.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -65,8 +66,7 @@ class _CommuteScreenState extends State<CommuteScreen> {
 
   void _snack(String m) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(m)));
+      TopPopup.show(context, message: m);
     }
   }
 
@@ -415,8 +415,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
             onPressed: () {
               final amount = double.tryParse(_amount.text) ?? 0;
               if (amount <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Enter an amount greater than zero.')));
+                TopPopup.show(context, message: 'Enter an amount greater than zero.');
                 return;
               }
               Navigator.pop(

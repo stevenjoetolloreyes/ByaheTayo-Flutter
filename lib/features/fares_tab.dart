@@ -10,6 +10,7 @@
 // Map/Trips path. No dummy data: every number shown comes from the
 // rate table below or from the distance the user actually picked.
 import 'dart:math' as math;
+import 'top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -18,6 +19,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'add_route_sheet.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
+import 'app_rating.dart';
 import 'bus_companies.dart';
 import 'bus_stops.dart';
 import 'custom_routes.dart';
@@ -1217,14 +1219,10 @@ class _FaresTabState extends State<FaresTab> {
       );
       await _loadRouteData();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Company added.')));
+      TopPopup.show(context, message: 'Company added.');
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not add the company.')),
-      );
+      TopPopup.show(context, message: 'Could not add the company.');
     }
   }
 
@@ -1318,17 +1316,7 @@ class _FaresTabState extends State<FaresTab> {
     }
     await _loadRouteData();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.deleted
-              ? 'Route deleted.'
-              : existing == null
-              ? 'Route added.'
-              : 'Route updated.',
-        ),
-      ),
-    );
+    TopPopup.show(context, message: result.deleted ? 'Route deleted.' : existing == null ? 'Route added.' : 'Route updated.',);
   }
 
   /// Opens the edit sheet for one Popular Route (admin only —
@@ -1384,15 +1372,7 @@ class _FaresTabState extends State<FaresTab> {
     }
     await _loadRouteData();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.deleted
-              ? 'Route reset to its built-in fare.'
-              : 'Route updated.',
-        ),
-      ),
-    );
+    TopPopup.show(context, message: result.deleted ? 'Route reset to its built-in fare.' : 'Route updated.',);
   }
 
   /// Remove a route (admin only — the entry points are hidden
@@ -1431,14 +1411,10 @@ class _FaresTabState extends State<FaresTab> {
         await repo.delete(custom, user);
         await _loadRouteData();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Route deleted.')),
-        );
+        TopPopup.show(context, message: 'Route deleted.');
       } catch (_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not delete the route.')),
-        );
+        TopPopup.show(context, message: 'Could not delete the route.');
       }
       return;
     }
@@ -1464,20 +1440,10 @@ class _FaresTabState extends State<FaresTab> {
       await repo.hide(key, user);
       await _loadRouteData();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Route hidden.'),
-          action: SnackBarAction(
-            label: 'View hidden',
-            onPressed: _showHiddenRoutes,
-          ),
-        ),
-      );
+      TopPopup.show(context, message: 'Route hidden.', actionLabel: 'View hidden', onAction: _showHiddenRoutes);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not hide the route.')),
-      );
+      TopPopup.show(context, message: 'Could not hide the route.');
     }
   }
 
@@ -1776,6 +1742,13 @@ class _FaresTabState extends State<FaresTab> {
     double? fromLng,
     bool startLive = false,
   }) {
+    // Rating prompt (Nov 9): jumping to the Map with a route is a
+    // real action; Start Ride (startLive) counts separately.
+    AppRatingTracker.instance.recordAction(
+      startLive
+          ? AppRatingAction.startedRide
+          : AppRatingAction.viewedRouteOnMap,
+    );
     faresMapJump.value = (
       from: from,
       to: to,
@@ -1789,6 +1762,9 @@ class _FaresTabState extends State<FaresTab> {
   /// Tapping a Popular Route loads it into the calculator (hub
   /// routes only) and opens the fare breakdown sheet for it.
   void _openRouteSheet(PopularRoute route) {
+    // Rating prompt (Nov 9): opening a fare breakdown sheet is a
+    // real action — checking a fare.
+    AppRatingTracker.instance.recordAction(AppRatingAction.checkedFare);
     _loadRouteIntoCalculator(route);
     final override = route.customRouteId == null
         ? _fareOverrides[seededRouteKey(route.from, route.to)]
@@ -2131,25 +2107,11 @@ class _FaresTabState extends State<FaresTab> {
                                     await _loadRouteData();
                                     if (mounted) setSheetState(() {});
                                     if (mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Route restored.'),
-                                        ),
-                                      );
+                                      TopPopup.show(context, message: 'Route restored.');
                                     }
                                   } catch (_) {
                                     if (mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Could not restore the route.',
-                                          ),
-                                        ),
-                                      );
+                                      TopPopup.show(context, message: 'Could not restore the route.',);
                                     }
                                   }
                                 },
@@ -2225,9 +2187,7 @@ class _FaresTabState extends State<FaresTab> {
       return updated;
     } catch (_) {
       if (!mounted) return null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save the stop.')),
-      );
+      TopPopup.show(context, message: 'Could not save the stop.');
       return null;
     }
   }
@@ -2250,14 +2210,7 @@ class _FaresTabState extends State<FaresTab> {
         );
     if (referenced) {
       if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '"${stop.name}" is still used by a route — remove it '
-            'from the route first.',
-          ),
-        ),
-      );
+      TopPopup.show(context, message: '"${stop.name}" is still used by a route — remove it ' 'from the route first.',);
       return false;
     }
     final confirmed = await showIosAlert<bool>(
@@ -2281,9 +2234,7 @@ class _FaresTabState extends State<FaresTab> {
       return true;
     } catch (_) {
       if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not delete the stop.')),
-      );
+      TopPopup.show(context, message: 'Could not delete the stop.');
       return false;
     }
   }
@@ -2315,9 +2266,7 @@ class _FaresTabState extends State<FaresTab> {
     );
     if (plan.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No saved directions to reset.')),
-      );
+      TopPopup.show(context, message: 'No saved directions to reset.');
       return;
     }
     final confirmed = await showIosAlert<bool>(
@@ -2349,25 +2298,11 @@ class _FaresTabState extends State<FaresTab> {
       }
       await _loadRouteData();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Reset ${plan.affectedCount} direction(s). '
-            'Fares were not changed.',
-          ),
-        ),
-      );
+      TopPopup.show(context, message: 'Reset ${plan.affectedCount} direction(s). ' 'Fares were not changed.',);
     } catch (_) {
       await _loadRouteData();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Some directions could not be reset. Check the routes '
-            'and try again.',
-          ),
-        ),
-      );
+      TopPopup.show(context, message: 'Some directions could not be reset. Check the routes ' 'and try again.',);
     }
   }
 
@@ -2453,11 +2388,7 @@ class _FaresTabState extends State<FaresTab> {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Turn on Location (GPS) on your phone first.'),
-            ),
-          );
+          TopPopup.show(context, message: 'Turn on Location (GPS) on your phone first.');
         }
         return;
       }
@@ -2468,13 +2399,7 @@ class _FaresTabState extends State<FaresTab> {
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Location permission is needed to see where you are.',
-              ),
-            ),
-          );
+          TopPopup.show(context, message: 'Location permission is needed to see where you are.',);
         }
         return;
       }

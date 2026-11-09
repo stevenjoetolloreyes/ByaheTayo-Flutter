@@ -7,6 +7,7 @@
 // detail sheet's "Mark as sent" asks "Did you send it?" and only a Yes
 // marks it Submitted with a timestamp.
 import 'dart:convert';
+import 'top_popup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -471,9 +472,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
       ClipboardData(text: formatComplaintMessage(_complaint, lgu: _matchedLgu)),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Complaint copied.')),
-    );
+    TopPopup.show(context, message: 'Complaint copied.');
   }
 
   Future<void> _openPage(String url) async {
@@ -483,11 +482,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open that page. Copy the message instead.'),
-        ),
-      );
+      TopPopup.show(context, message: 'Could not open that page. Copy the message instead.');
     }
     // Deliberately NO status change here: opening Facebook does not
     // prove the message was sent.

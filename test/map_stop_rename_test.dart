@@ -164,7 +164,12 @@ void main() {
         'Sinait Market',
       );
       await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): several short pumps let the
+      // rename finish over a few frames while keeping the popup up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       // The disposed-controller error (if the dialog still
       // disposes its controller right after showDialog returns)
       // is reported during the pop animation's rebuilds.

@@ -649,7 +649,9 @@ void main() {
         permission: NotificationPermissionStatus.denied,
       );
       await tester.tap(find.byKey(const Key('send-test-notification-button')));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(scheduler.shown, isEmpty);
       expect(find.text('Allow notifications first.'), findsOneWidget);
     });

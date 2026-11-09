@@ -9,6 +9,7 @@
 // re-created).
 // Rejected posts stay visible here until approved again or deleted.
 import 'package:flutter/material.dart';
+import 'top_popup.dart';
 
 import 'app_layout.dart';
 import 'community_post_repository.dart';
@@ -237,9 +238,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
       widget.onSharedChanged?.call();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(sharedPostsErrorMessage(e))),
-      );
+      TopPopup.show(context, message: sharedPostsErrorMessage(e));
     }
   }
 
@@ -297,9 +296,6 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
   ) async {
     final repository = widget.postRepository;
     if (repository == null) return;
-    // Captured before any await: the parameter context must not be
-    // used across async gaps.
-    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await _confirmDelete(context, post, local: false);
     if (confirmed != true) return;
     try {
@@ -311,9 +307,9 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
       widget.onSharedChanged?.call();
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(sharedPostsErrorMessage(e))),
-      );
+      // State context (not the parameter): the mounted check above
+      // guards it, so the overlay lookup is safe after the await.
+      TopPopup.show(this.context, message: sharedPostsErrorMessage(e));
     }
   }
 

@@ -16,6 +16,7 @@
 // bare widget tests), the screen keeps its legacy local-only
 // behavior: device dates, local records, local points.
 import 'dart:async';
+import '../top_popup.dart';
 
 import 'package:flutter/material.dart';
 
@@ -142,13 +143,7 @@ class _SigninScreenState extends State<SigninScreen> {
     });
     await _save();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(dayIndex == 7
-            ? 'Day 7 complete! +$points points.'
-            : 'Checked in! Day $dayIndex · +$points points.'),
-      ),
-    );
+    TopPopup.show(context, message: dayIndex == 7 ? 'Day 7 complete! +$points points.' : 'Checked in! Day $dayIndex · +$points points.');
     _maybeShowLoginPopupAd();
   }
 
@@ -176,29 +171,15 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _claiming = false);
     switch (outcome.status) {
       case ClaimStatus.credited:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(outcome.dayIndex == 7
-                ? 'Day 7 complete! +${outcome.points} points.'
-                : 'Checked in! Day ${outcome.dayIndex} '
-                    '· +${outcome.points} points.'),
-          ),
-        );
+        TopPopup.show(context, message: outcome.dayIndex == 7 ? 'Day 7 complete! +${outcome.points} points.' : 'Checked in! Day ${outcome.dayIndex} ' '· +${outcome.points} points.');
         // Eligible login: signed in and today's award is final.
         _maybeShowLoginPopupAd();
       case ClaimStatus.alreadyClaimed:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Already checked in today.')),
-        );
+        TopPopup.show(context, message: 'Already checked in today.');
         // Today's award already exists: same eligible login.
         _maybeShowLoginPopupAd();
       case ClaimStatus.failed:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not sync your check-in. Check your '
-                'connection and try again.'),
-          ),
-        );
+        TopPopup.show(context, message: 'Could not sync your check-in. Check your ' 'connection and try again.');
       case ClaimStatus.unavailable:
         break;
     }

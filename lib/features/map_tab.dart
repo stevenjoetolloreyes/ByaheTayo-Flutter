@@ -40,6 +40,7 @@
 //   Terminal. The dashed direct line is the fallback when OSRM is
 //   unreachable.
 import 'dart:async';
+import 'top_popup.dart';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
@@ -2624,8 +2625,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    TopPopup.show(context, message: message);
   }
 
   /// Shared location gate with the exact strings the app already uses.
@@ -2702,19 +2702,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       }
       if (permission == LocationPermission.deniedForever) {
         if (!mounted) return false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Location is blocked for EstudyanteGO. Turn it on in '
-              'Settings > Apps > EstudyanteGO > Permissions > '
-              'Location.',
-            ),
-            action: SnackBarAction(
-              label: 'Open Settings',
-              onPressed: () => Geolocator.openAppSettings(),
-            ),
-          ),
-        );
+        TopPopup.show(context, message: 'Location is blocked for EstudyanteGO. Turn it on in ' 'Settings > Apps > EstudyanteGO > Permissions > ' 'Location.', actionLabel: 'Open Settings', onAction: () => Geolocator.openAppSettings());
         return false;
       }
     } catch (_) {

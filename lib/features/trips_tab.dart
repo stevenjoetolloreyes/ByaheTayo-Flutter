@@ -16,6 +16,7 @@
 // list is honestly just First stop -> Last stop — no invented
 // intermediate stops, no Davao routes, no timetable claims.
 import 'package:flutter/material.dart';
+import 'top_popup.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -87,8 +88,7 @@ class _TripsTabState extends State<TripsTab> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    TopPopup.show(context, message: message);
   }
 
   Future<void> _fetchLocation() async {

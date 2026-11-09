@@ -161,7 +161,9 @@ void main() {
       expect(qr.size, 180);
 
       await tester.tap(find.text('Copy').first);
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(sharing.copied, [_testCode]);
       expect(find.text('Friend code copied.'), findsOneWidget);
 
@@ -228,7 +230,9 @@ void main() {
         'byahetayo_friends': '[{"name":"Ana Santos"}]',
       });
       await tester.tap(find.byTooltip('Message Ana Santos'));
-      await tester.pumpAndSettle();
+      // Top popup (was a SnackBar): assert while it is still up —
+      // pumpAndSettle would fast-forward past its 5 seconds.
+      await tester.pump(const Duration(milliseconds: 500));
       expect(
         find.text('Chats need cloud sync, which is not enabled yet.'),
         findsOneWidget,
