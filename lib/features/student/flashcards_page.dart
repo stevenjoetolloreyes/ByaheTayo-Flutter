@@ -150,7 +150,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                     child: ListTile(
                       title: Text('No flashcards yet.'),
                       subtitle: Text(
-                          'Add a card with a question on the front and the answer on the back.'),
+                          'Add a card with the definition on the front and the term on the back.'),
                     ),
                   )
                 else
@@ -214,11 +214,11 @@ class _CardFormState extends State<_CardForm> {
           const SizedBox(height: AppLayout.cardGap),
           TextField(
               controller: _front,
-              decoration: const InputDecoration(labelText: 'Front (question)')),
+              decoration: const InputDecoration(labelText: 'Front (definition)')),
           const SizedBox(height: AppSpacing.s8),
           TextField(
               controller: _back,
-              decoration: const InputDecoration(labelText: 'Back (answer)')),
+              decoration: const InputDecoration(labelText: 'Back (term)')),
           const SizedBox(height: AppSpacing.s8),
           TextField(
               controller: _subject,
@@ -350,7 +350,7 @@ class _StudyModeState extends State<_StudyMode> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              _flipped ? 'Answer' : 'Question',
+                              _flipped ? 'Term' : 'Definition',
                               style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700),
@@ -362,8 +362,12 @@ class _StudyModeState extends State<_StudyMode> {
                               style: const TextStyle(fontSize: 22),
                             ),
                             const SizedBox(height: AppLayout.headerGap),
-                            const Text('Tap the card to flip',
-                                style: TextStyle(fontSize: 12)),
+                            Text(
+                              _flipped
+                                  ? 'Tap the card to flip back'
+                                  : 'Tap the card to reveal the term',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           ],
                         ),
                       ),

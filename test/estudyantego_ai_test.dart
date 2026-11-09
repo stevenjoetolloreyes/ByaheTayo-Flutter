@@ -52,17 +52,66 @@ void main() {
       expect(points.length, greaterThan(0));
     });
 
-    test('flashcardsFromText builds flip cards from the same terms', () {
+    test('flashcardsFromText is definition-first: front shows the definition, back reveals the term', () {
       final cards = flashcardsFromText(_defs);
       expect(cards.length, greaterThan(0));
-      expect(cards.first.front, isNotEmpty);
-      expect(cards.first.back, isNotEmpty);
+      expect(cards.first.front, contains('Central Processing Unit'));
+      expect(cards.first.back, 'CPU');
+    });
+
+    // Resume-like content: the exact shape that produced the random
+    // "What is 2019?" quiz (bare years, place fragments, label lines).
+    test('no question is built around a bare year, date, or number', () {
+      const resumeLike = 'Steven Joe T. Reyes\n'
+          'Cabugao, Ilocos Sur, Philippines\n'
+          '2019 - Inventory Management System\n'
+          'Location: Cabugao, Ilocos Sur, Philippines\n'
+          'Tech: Places & Routes APIs, Meta / Facebook API\n'
+          'Graduation: 2026\n'
+          'CPU is the Central Processing Unit. RAM is temporary memory. '
+          'ROM is read-only memory. SSD is fast storage.';
+      final questions = questionsFromText(resumeLike, questionCount: 5);
+      expect(questions, isNotEmpty);
+      for (final q in questions) {
+        expect(q.question, isNot(contains('2019')),
+            reason: 'question built around a bare year: ${q.question}');
+        expect(q.question, isNot(contains('2026')),
+            reason: 'question built around a bare year: ${q.question}');
+        // No bare year/number among the options either.
+        for (final option in q.options) {
+          expect(option.trim(), isNot('2019'));
+          expect(option.trim(), isNot('2026'));
+        }
+        // Options are distinct, and the explanation quotes the
+        // exact source line from the notes.
+        expect(q.options.toSet().length, q.options.length);
+        expect(q.explanation, isNotEmpty);
+        expect(resumeLike, contains(q.explanation));
+      }
+    });
+
+    test('extractKeyTerms skips bare years and fragment values', () {
+      const resumeLike = '2019 - Inventory Management System\n'
+          'Location: Cabugao, Ilocos Sur, Philippines\n'
+          'Graduation: 2026\n'
+          'CPU is the Central Processing Unit.';
+      final terms = extractKeyTerms(resumeLike);
+      expect(terms.map((t) => t.term), isNot(contains('2019')));
+      expect(terms.map((t) => t.term), isNot(contains('Graduation')));
+      expect(terms.map((t) => t.term), isNot(contains('Location')));
+      expect(terms.map((t) => t.term), isNot(contains('Cabugao')));
+      expect(terms.map((t) => t.term), contains('CPU'));
+      expect(terms.map((t) => t.definition), isNot(contains('2026')));
     });
 
     test('sample Computer Basics deck has 5 cards and 5 questions', () {
       expect(sampleComputerBasicsDeck.flashcards.length, 5);
       expect(sampleComputerBasicsDeck.questions.length, 5);
-      expect(sampleComputerBasicsDeck.flashcards.first.front, 'CPU');
+      // Definition-first: the front shows the definition and the
+      // back reveals the term.
+      expect(sampleComputerBasicsDeck.flashcards.first.front,
+          'Central Processing Unit — it processes instructions');
+      expect(sampleComputerBasicsDeck.flashcards.first.back, 'CPU');
       expect(sampleComputerBasicsDeck.quiz.id, 'sample-computer-basics');
     });
 
@@ -167,7 +216,11 @@ void main() {
       expect(find.text('Sample deck'), findsOneWidget);
       expect(find.textContaining('Computer Basics'), findsWidgets);
       expect(find.text('Study all cards'), findsOneWidget);
-      expect(find.text('CPU'), findsOneWidget);
+      // Definition-first: the list shows the definition, and the
+      // term is the answer in the subtitle.
+      expect(find.textContaining('Central Processing Unit'),
+          findsOneWidget);
+      expect(find.textContaining('Answer: CPU'), findsOneWidget);
     });
 
     testWidgets('Study all cards opens the flip mode with progress',
@@ -180,6 +233,30 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Card 1 of 5'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsWidgets);
+    });
+
+    testWidgets('flip mode shows the definition first, term on flip',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: FlashcardsPage()),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Study all cards'));
+      await tester.pumpAndSettle();
+      // Definition-first: the front is labelled Definition and
+      // shows the definition, not the term.
+      expect(find.text('Definition'), findsOneWidget);
+      expect(find.textContaining('Central Processing Unit'),
+          findsOneWidget);
+      expect(find.text('CPU'), findsNothing);
+      expect(find.text('Tap the card to reveal the term'),
+          findsOneWidget);
+      // Tap to flip: the term is revealed.
+      await tester.tap(find.textContaining('Central Processing Unit'));
+      await tester.pumpAndSettle();
+      expect(find.text('Term'), findsOneWidget);
+      expect(find.text('CPU'), findsOneWidget);
+      expect(find.text('Tap the card to flip back'), findsOneWidget);
     });
   });
 

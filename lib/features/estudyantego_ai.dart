@@ -87,6 +87,70 @@ const Set<String> _stopwords = {
   'any', 'some', 'more', 'most', 'other', 'into', 'over', 'under',
 };
 
+/// A bare year / date / number — not a real term or definition.
+/// A question is never built around one of these, and one is never
+/// a correct answer or a distractor. Matches: "2019", "2026", "42",
+/// "1,000", "3.14", "2019-2020", "2019 - 2026", "Nov 2019",
+/// "November 2019", "12/31/2019", "2019-12-31". A real term that
+/// merely contains digits (e.g. "Windows 11", "COVID-19") does NOT
+/// match — only a value that IS a date or number.
+bool _isBareDateOrNumber(String value) {
+  final v = value.trim();
+  if (v.isEmpty) return true;
+  // Pure number: digits with optional commas, decimal points, spaces.
+  if (RegExp(r'^[\d.,\s]+$').hasMatch(v)) return true;
+  // A 4-digit year, optionally a range ("2019", "2019-2020", "2019 - 26").
+  if (RegExp(r'^(19|20)\d{2}(\s*[-–/]\s*(19|20)?\d{2})?$').hasMatch(v)) {
+    return true;
+  }
+  // Month + year ("Nov 2019", "November 2019").
+  if (RegExp(
+    r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(19|20)\d{2}$',
+    caseSensitive: false,
+  ).hasMatch(v)) {
+    return true;
+  }
+  // A full date ("12/31/2019", "31-12-2019", "2019-12-31").
+  if (RegExp(r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$').hasMatch(v)) return true;
+  if (RegExp(r'^(19|20)\d{2}[/-]\d{1,2}[/-]\d{1,2}$').hasMatch(v)) {
+    return true;
+  }
+  return false;
+}
+
+/// A definition that is only a comma-separated list of proper-noun
+/// items — an address, a list of names, a list of places — not an
+/// explanation of the term. E.g. "Cabugao, Ilocos Sur, Philippines"
+/// or "Places & Routes APIs, Meta / Facebook API". A real definition
+/// either has no comma ("Central Processing Unit") or continues
+/// with a descriptive clause ("..., which processes instructions").
+/// A list of common nouns ("militarism, alliances, imperialism")
+/// is kept — only a list of proper nouns is a fragment value.
+/// A segment counts as a proper-noun phrase when every word in it
+/// starts with an uppercase letter (Title Case / ALL-CAPS).
+bool _isProperNounList(String value) {
+  final segments = value.split(',');
+  if (segments.length < 2) return false;
+  for (final seg in segments) {
+    final s = seg.trim();
+    if (s.isEmpty) return false;
+    // A proper-noun segment has no word starting with a
+    // lowercase letter. (Title Case words like "Cabugao" DO
+    // contain lowercase letters, so testing for any lowercase
+    // letter would never match — the word's first letter is
+    // what matters.)
+    final words =
+        RegExp(r'[A-Za-z]+').allMatches(s).map((m) => m.group(0)!);
+    var sawWord = false;
+    for (final w in words) {
+      sawWord = true;
+      if (RegExp(r'^[a-z]').hasMatch(w)) return false;
+    }
+    if (!sawWord) return false;
+  }
+  return true;
+}
+
 /// Extract (term, definition, source) triples from study text.
 ///
 /// Definition patterns, in order:
@@ -100,6 +164,14 @@ const Set<String> _stopwords = {
 /// Terms are de-duplicated case-insensitively. Only terms with a
 /// non-empty definition are kept, so every generated question has
 /// a real answer in the text.
+///
+/// Only REAL term-and-definition pairs are kept (the improved
+/// generation rules): a bare year / date / number is never a term
+/// ("What is 2019?") and never a definition (a bare year as the
+/// answer or a distractor), and a comma-separated list of proper
+/// nouns (an address, a list of names) is a value, not a
+/// definition. Pairs that fail these checks are skipped, never
+/// turned into a question.
 List<AiKeyTerm> extractKeyTerms(String text) {
   final terms = <AiKeyTerm>[];
   final seen = <String>{};
@@ -109,6 +181,13 @@ List<AiKeyTerm> extractKeyTerms(String text) {
     final t = term.trim();
     final d = definition.trim();
     if (t.isEmpty || d.isEmpty) return;
+    // Never a bare year / date / number as the term ("What is
+    // 2019?") or as the definition (a bare year as the answer or
+    // a distractor, e.g. "2026").
+    if (_isBareDateOrNumber(t) || _isBareDateOrNumber(d)) return;
+    // A comma-separated list of proper nouns is a value (an
+    // address, a list of names), not a definition of the term.
+    if (_isProperNounList(d)) return;
     // Keep terms short (a term is a name, not a sentence).
     if (t.length > 48) return;
     final key = t.toLowerCase();
@@ -212,16 +291,18 @@ List<String> keyPoints(String text, {int maxPoints = 3}) {
   return picked;
 }
 
-/// Flashcards from text: one card per extracted key term (front =
-/// the term, back = its definition). At most [maxCards].
+/// Flashcards from text: one card per extracted key term.
+/// Definition-first: the FRONT shows the definition (read it,
+/// recall the term) and the BACK reveals the term. At most
+/// [maxCards].
 List<Flashcard> flashcardsFromText(String text, {int maxCards = 8}) {
   final terms = extractKeyTerms(text);
   final cards = <Flashcard>[];
   for (final t in terms.take(maxCards)) {
     cards.add(Flashcard(
       id: newId(),
-      front: t.term,
-      back: t.definition,
+      front: t.definition,
+      back: t.term,
       subject: '',
     ));
   }
@@ -230,10 +311,19 @@ List<Flashcard> flashcardsFromText(String text, {int maxCards = 8}) {
 
 /// Build up to [questionCount] questions from study text.
 ///
+/// Improved generation rules (approved Nov 9):
+/// * Questions come ONLY from real term-and-definition pairs:
+///   a term that has a definition in the notes. A bare year /
+///   date / number or a standalone fragment is never a question
+///   (enforced in [extractKeyTerms]).
 /// * Multiple-choice definition questions: "What is <term>?" with
-///   the term's definition as the answer and three other
-///   definitions from the SAME text as distractors. Only built
-///   when at least 4 terms exist, so distractors are real.
+///   the term's definition as the answer and three OTHER
+///   definitions from the SAME text as distractors — never random
+///   unrelated fragments. Distractors are distinct from the
+///   correct answer and from each other. Only built when at
+///   least 4 terms exist, so distractors are real.
+/// * Every question's [explanation] quotes the exact source
+///   sentence from the notes (see [AiKeyTerm.sourceSentence]).
 /// * Fill-in-the-blank: a source sentence with its key term
 ///   replaced by ____, the term as the answer.
 /// * When fewer than 4 terms exist, fill-in-the-blank questions
@@ -259,9 +349,14 @@ List<AiQuizQuestion> questionsFromText(
     for (final term in shuffled) {
       if (out.length >= count) break;
       if (usedTerms.contains(term.term.toLowerCase())) continue;
+      // Distractors are other REAL definitions from the same text,
+      // distinct from the correct answer and from each other — so
+      // a duplicated definition can never appear twice as options.
       final others = terms
           .where((t) => t.term.toLowerCase() != term.term.toLowerCase())
           .map((t) => t.definition)
+          .where((d) => d != term.definition)
+          .toSet()
           .toList()
         ..shuffle(rng);
       final distractors = others.take(3).toList();
@@ -329,11 +424,13 @@ class SampleDeck {
   /// flashcards and the quiz, so the two pages share one deck.
   final List<(String, String)> terms;
 
+  /// Definition-first, like [flashcardsFromText]: the front shows
+  /// the definition and the back reveals the term.
   List<Flashcard> get flashcards => terms
       .map((t) => Flashcard(
             id: 'sample-${t.$1.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
-            front: t.$1,
-            back: t.$2,
+            front: t.$2,
+            back: t.$1,
             subject: subject,
           ))
       .toList();
