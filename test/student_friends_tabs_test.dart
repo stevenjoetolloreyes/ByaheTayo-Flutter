@@ -44,7 +44,10 @@ void main() {
     // request — it must not render anymore (the Review screen itself
     // stays reachable via the Notes segmented control's Review segment).
     expect(find.text('Review Notes & Quizzes'), findsNothing);
-    expect(find.text('My Commute'), findsOneWidget);
+    // The Commute section was removed Nov 9 at Steven's request
+    // — it must not render anymore (the Commute screen itself
+    // stays in the codebase).
+    expect(find.text('My Commute'), findsNothing);
     expect(find.text('Daily Quotes'), findsOneWidget);
     expect(find.text('Bible Verse'), findsOneWidget);
     // The dashboard attendance card was retitled 'School Calendar'
@@ -62,10 +65,22 @@ void main() {
     // Real zero state, not an invented amount.
     expect(find.text('Available Balance'), findsOneWidget);
     expect(find.textContaining('₱0'), findsWidgets);
-    expect(find.text('No classes today.'), findsOneWidget);
+    // No subjects are seeded here, but the mock Google Calendar
+    // sync seeds its sample events on first load, so the Today
+    // list shows them instead of the "No classes today." empty
+    // state (that state only appears when the Google list is
+    // explicitly stored empty).
+    expect(find.text('No classes today.'), findsNothing);
+    expect(
+      find.text('Thu · 3:00 PM–4:30 PM · Discrete Mathematics'),
+      findsOneWidget,
+    );
+    // The "Saved routes are shared with the Map tab." note lived
+    // in the removed Commute section — it no longer renders on
+    // the Hub (the Commute screen itself still has it).
     expect(
       find.textContaining('Saved routes are shared with the Map tab.'),
-      findsOneWidget,
+      findsNothing,
     );
     // 'No recent study activity.' was the removed Review card's empty
     // state — gone with the card (Nov 8).
@@ -196,14 +211,19 @@ void main() {
   );
 
   testWidgets(
-    'Student Hub is graph-first: week bars, donuts, Add school',
+    'Student Hub removals (Nov 9): no Commute, no Add school, '
+    'no Subject breakdown, no Monthly report',
     (tester) async {
-      // Preview parity (Nov 6): Commute stat panels + week bars,
-      // calendar legend + Add school chip, Subject breakdown +
-      // Monthly report donuts — all from real (empty) data. The old
-      // holiday text list is gone. The Review ring + gauge left with
-      // the Review Notes & Quizzes card, removed Nov 8 at Steven's
-      // request.
+      // Nov 9, 2026: Steven asked to remove the Commute section,
+      // the Add school chip, and the Subject breakdown / Monthly
+      // report donuts from the Hub. The School Calendar itself
+      // stays. (Nov 10: the calendar card gained an Edit button,
+      // a day-detail line, and a Coming up list below it whose
+      // rows carry type pills — so the bare word "Holiday" now
+      // appears more than once on the Hub, and the legend
+      // assertion below is scoped to the card itself.) The
+      // Review ring + gauge left with the Review Notes & Quizzes
+      // card, removed Nov 8 at Steven's request.
       tester.view.physicalSize = const Size(390, 10000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -217,23 +237,35 @@ void main() {
       expect(find.text('No quizzes taken'), findsNothing);
       expect(find.text('Quizzes this week'), findsNothing);
       expect(find.text('0 of 0 completed'), findsNothing);
-      // Commute card: stat panels + week bars.
-      expect(find.text('Routes'), findsOneWidget);
-      expect(find.text('0 Trips this week'), findsOneWidget);
-      // Calendar: legend + Add school chip, no holiday text list.
-      expect(find.text('Holiday'), findsOneWidget);
-      expect(find.text('Add school'), findsOneWidget);
+      // Commute section: gone (Nov 9).
+      expect(find.text('My Commute'), findsNothing);
+      expect(find.text('Routes'), findsNothing);
+      expect(find.text('0 Trips this week'), findsNothing);
+      // Calendar: legend stays, Add school chip is gone (Nov 9).
+      expect(find.text('School Calendar'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find
+              .ancestor(
+                of: find.text('School Calendar'),
+                matching: find.byType(Card),
+              )
+              .first,
+          matching: find.text('Holiday'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Add school'), findsNothing);
       expect(find.text('Holidays this month'), findsNothing);
       expect(find.textContaining('No school saved'), findsNothing);
-      // Donuts with honest empty centres.
-      expect(find.text('Subject breakdown'), findsOneWidget);
-      expect(find.text('0 Subjects'), findsOneWidget);
-      expect(find.text('0 Records'), findsOneWidget);
-      expect(find.text('Monthly report'), findsOneWidget);
-      expect(find.text('0.0%'), findsOneWidget);
-      // 'Present' is both the donut centre label and a legend row.
-      expect(find.text('Present'), findsWidgets);
-      expect(find.text('Absent'), findsOneWidget);
+      // Subject breakdown + Monthly report donuts: gone (Nov 9).
+      expect(find.text('Subject breakdown'), findsNothing);
+      expect(find.text('0 Subjects'), findsNothing);
+      expect(find.text('0 Records'), findsNothing);
+      expect(find.text('Monthly report'), findsNothing);
+      expect(find.text('0.0%'), findsNothing);
+      expect(find.text('Present'), findsNothing);
+      expect(find.text('Absent'), findsNothing);
     },
   );
 }

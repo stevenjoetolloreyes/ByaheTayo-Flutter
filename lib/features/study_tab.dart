@@ -899,11 +899,15 @@ class _StudyTabState extends State<StudyTab> {
             ),
           ],
         ),
-        Positioned(
-          right: 18,
-          bottom: 84,
-          child: _fab(tokens),
-        ),
+        // No FAB on the Review panel (Nov 9): the Review screen
+        // (Quiz tab + Summary tab) has no floating + button — the
+        // deck list, Flashcards/Quiz rows, and bottom nav stay.
+        if (_panel != 'review')
+          Positioned(
+            right: 18,
+            bottom: 84,
+            child: _fab(tokens),
+          ),
         Positioned(
           left: 16,
           right: 16,

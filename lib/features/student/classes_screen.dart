@@ -11,6 +11,7 @@ import '../top_popup.dart';
 import '../app_layout.dart';
 import '../ios_components.dart';
 import '../local_notifications.dart';
+import 'google_events.dart';
 import 'student_data.dart';
 
 const _subjectColors = [
@@ -34,6 +35,10 @@ class ClassesScreen extends StatefulWidget {
 class _ClassesScreenState extends State<ClassesScreen> {
   List<Subject> _subjects = [];
   List<AssignmentItem> _items = [];
+
+  /// Synced Google Calendar events (mock sync — the sample set,
+  /// stored locally; same stored set the Hub card renders).
+  List<GoogleCalendarEvent> _googleEvents = [];
   String _view = 'today';
 
   @override
@@ -47,12 +52,37 @@ class _ClassesScreenState extends State<ClassesScreen> {
         await StudentStorage.loadList(StudentStorage.subjectsKey);
     final items =
         await StudentStorage.loadList(StudentStorage.assignmentsKey);
+    final googleEvents = await loadGoogleEvents();
     if (!mounted) return;
     setState(() {
       _subjects = subjects.map(Subject.fromJson).toList();
+      _googleEvents = googleEvents;
       _items = items.map(AssignmentItem.fromJson).toList()
         ..sort((a, b) => a.due.compareTo(b.due));
     });
+  }
+
+  /// Google-event tap (its list card): the Edit / Remove sheet.
+  /// Edits and removals save locally and re-render this screen;
+  /// the Hub reloads the same stored set when it opens.
+  Future<void> _onGoogleEventTap(GoogleCalendarEvent event) async {
+    await showGoogleEventActionSheet(
+      context,
+      event: event,
+      onUpdated: (updated) async {
+        setState(() {
+          final i =
+              _googleEvents.indexWhere((e) => e.id == updated.id);
+          if (i >= 0) _googleEvents[i] = updated;
+        });
+        await saveGoogleEvents(_googleEvents);
+      },
+      onRemoved: (removed) async {
+        setState(
+            () => _googleEvents.removeWhere((e) => e.id == removed.id));
+        await saveGoogleEvents(_googleEvents);
+      },
+    );
   }
 
   Future<void> _saveSubjects() async {
@@ -147,7 +177,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final next = nextClass(_subjects, now);
-    final todays = classesOnDay(_subjects, now.weekday);
     final upcoming =
         _items.where((i) => !i.done).toList()..sort((a, b) => a.due.compareTo(b.due));
     final done = _items.where((i) => i.done).toList();
@@ -190,22 +219,36 @@ class _ClassesScreenState extends State<ClassesScreen> {
           ),
           const SizedBox(height: AppLayout.cardGap),
           if (_view == 'today') ...[
-            if (todays.isEmpty)
+            // Today list: today's classes + every synced Google
+            // event, time order — the same merged entries the Hub
+            // card's Today list renders, so the two can never
+            // diverge. Google cards carry the G badge, their day
+            // prefix, and open the Edit / Remove sheet on tap.
+            if (todayListEntries(_subjects, _googleEvents, now.weekday)
+                .isEmpty)
               const Card(
                   child: ListTile(title: Text('No classes today.')))
             else
-              for (final s in todays) _subjectTile(s),
+              for (final entry in todayListEntries(
+                  _subjects, _googleEvents, now.weekday))
+                entry.isGoogle && entry.googleEvent != null
+                    ? _googleTile(entry.googleEvent!)
+                    : _subjectTile(entry.subject!),
           ] else ...[
             for (var day = 1; day <= 7; day++)
-              if (classesOnDay(_subjects, day).isNotEmpty) ...[
+              if (entriesForDay(_subjects, _googleEvents, day)
+                  .isNotEmpty) ...[
                 Text(weekdayName(day),
                     style: const TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: AppSpacing.s4),
-                for (final s in classesOnDay(_subjects, day))
-                  _subjectTile(s),
+                for (final entry
+                    in entriesForDay(_subjects, _googleEvents, day))
+                  entry.isGoogle && entry.googleEvent != null
+                      ? _googleTile(entry.googleEvent!)
+                      : _subjectTile(entry.subject!),
                 const SizedBox(height: AppLayout.cardGap),
               ],
-            if (_subjects.isEmpty)
+            if (_subjects.isEmpty && _googleEvents.isEmpty)
               const Card(
                   child: ListTile(title: Text('No subjects yet.'))),
           ],
@@ -234,6 +277,33 @@ class _ClassesScreenState extends State<ClassesScreen> {
           ],
           const SizedBox(height: 72),
         ],
+      ),
+    );
+  }
+
+  /// One synced Google Calendar event as a list card: white G
+  /// badge, "Google Calendar" source, time range, place/teacher.
+  /// Tapping opens the Edit / Remove sheet (the same sheet as
+  /// the Hub card's blocks and rows).
+  Widget _googleTile(GoogleCalendarEvent event) {
+    final detail = [
+      'Google Calendar',
+      googleEventRange(event),
+      if (event.place.isNotEmpty) event.place,
+      if (event.teacher.isNotEmpty) event.teacher,
+    ].join(' · ');
+    return Card(
+      child: ListTile(
+        leading: const GBadge(size: 34),
+        title: Row(
+          children: [
+            Expanded(child: Text(event.title)),
+            const SizedBox(width: 6),
+            const GBadge(),
+          ],
+        ),
+        subtitle: Text(detail),
+        onTap: () => _onGoogleEventTap(event),
       ),
     );
   }

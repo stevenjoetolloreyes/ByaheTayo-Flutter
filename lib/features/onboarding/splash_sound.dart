@@ -36,6 +36,14 @@ class SplashSound {
     unawaited(_play(_toneWav(freq, 0.05, 0.03)));
   }
 
+  /// Insert pop: soft sine pop, 660 Hz / 0.09 s / gain 0.09 — the
+  /// chime that plays the moment a scanned transaction lands in
+  /// the Allowance list (never on menu open, scan, or finish).
+  /// Best-effort like the rest of this class: silence on failure.
+  static void pop() {
+    unawaited(_play(_toneWav(660, 0.09, 0.09)));
+  }
+
   static Future<void> _play(Uint8List wav) async {
     try {
       final player = AudioPlayer();

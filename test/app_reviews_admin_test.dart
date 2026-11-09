@@ -515,12 +515,10 @@ void main() {
 
   group('Student Hub notifications wiring', () {
     testWidgets(
-        'badge + section card show the reply; opening the sheet marks it read',
+        'badge shows the reply; opening the sheet marks it read',
         (WidgetTester tester) async {
-      // Very tall viewport: the Notifications section sits deep in
-      // the Hub (Inspiration & Calendar group), and the ListView
-      // only builds what is in view — 6000px is not enough to
-      // reach it.
+      // Very tall viewport: the Hub ListView only builds what is
+      // in view — 6000px is not enough to reach the deep cards.
       tester.view.physicalSize = const Size(390, 15000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -556,12 +554,17 @@ void main() {
         find.byKey(const ValueKey('notification-badge')),
         findsOneWidget,
       );
-      // Section card previews the latest reply.
-      expect(find.text('We fixed the crash — thanks!'), findsOneWidget);
-      expect(find.text('1 unread'), findsOneWidget);
+      // The Notifications section card was removed Nov 9 at
+      // Steven's request — the reply is no longer previewed on
+      // the Hub itself; it reaches the student through the bell
+      // badge, the top popup, and the Notifications sheet.
+      expect(find.text('We fixed the crash — thanks!'), findsNothing);
+      expect(find.text('1 unread'), findsNothing);
+      expect(find.text('EstudyanteGO replied to your review.'),
+          findsNothing);
+      expect(find.text('Notifications'), findsNothing);
       // Tapping the bell opens the sheet with the full reply.
-      // Scroll the header bell into view first (the section card
-      // check above may have scrolled it out), then tap the bell
+      // Scroll the header bell into view first, then tap the bell
       // icon itself.
       await tester.ensureVisible(
         find.byIcon(Icons.notifications_outlined).first,
@@ -570,11 +573,12 @@ void main() {
       await tester.tap(find.byIcon(Icons.notifications_outlined).first);
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsOneWidget);
-      // The sheet entry shows the review's topics and date — the
-      // section card preview does not, so this proves the sheet
-      // (not just the card) is showing the full reply.
+      // The sheet entry shows the review's topics and date — this
+      // proves the sheet (not a Hub card) is showing the reply.
+      expect(find.text('We fixed the crash — thanks!'), findsOneWidget);
       expect(find.text('Bugs & Crashes'), findsOneWidget);
       expect(find.text('Nov 9, 2026'), findsOneWidget);
+      expect(find.text('Notifications'), findsOneWidget);
       // Closing the sheet marks it read — the badge clears. The
       // sheet is a modal: tapping the scrim above it dismisses it
       // (pageBack needs an AppBar back button, which this screen

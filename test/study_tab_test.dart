@@ -419,6 +419,22 @@ void main() {
     expect(find.text('Computer Programming Fundamentals'), findsNothing);
   });
 
+  testWidgets('Review panel has no floating + button on Quiz or Summary',
+      (tester) async {
+    await _pumpTab(tester, prefs: {
+      'byahetayo_student_quizzes': _quizJson,
+    });
+    await _tapNav(tester, 'review');
+    // Quiz tab: deck list + "Pick how to study" stay, but no FAB.
+    expect(find.text('My first quiz'), findsOneWidget);
+    expect(find.byIcon(Icons.add), findsNothing);
+    // Summary tab: same decks as summary cards, still no FAB.
+    await tester.tap(find.text('Summary'));
+    await tester.pumpAndSettle();
+    expect(find.text('My first quiz'), findsOneWidget);
+    expect(find.byIcon(Icons.add), findsNothing);
+  });
+
   testWidgets('AI tab is its own bottom-nav tab, chat only',
       (tester) async {
     await _pumpTab(tester);

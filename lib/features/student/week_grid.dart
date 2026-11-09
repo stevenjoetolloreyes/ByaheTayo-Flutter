@@ -5,14 +5,38 @@
 // red now-line at the current time, and the grid opens scrolled to
 // the current hour. Monday-first; dates come from the device clock.
 //
-// Event blocks come ONLY from real [Subject] data (days + start/end
-// minutes); with no subjects the grid is empty by design — nothing
-// is invented. Event-block styling (color bar, title, time range)
-// is ready for real classes.
+// Event blocks come from real [Subject] data (days + start/end
+// minutes) AND the synced Google Calendar events — the same merged
+// set the hub lists render, so grid and list can never diverge.
+// Google blocks carry the small white G badge and are tappable
+// (edit / remove via the action sheet). Blocks that overlap in
+// time share the day column side by side (lane split); with no
+// overlaps every block is full width. With no subjects and no
+// Google events the grid is empty by design — nothing is invented.
+// Event-block styling (color bar, title, time range) is ready for
+// real classes.
 
 import 'package:flutter/material.dart';
 
+import 'google_events.dart';
 import 'student_data.dart';
+
+/// One positioned block on the grid: a class or a Google event.
+class _GridBlock {
+  _GridBlock({
+    required this.entry,
+    required this.lane,
+    required this.laneCount,
+  });
+
+  final TimetableEntry entry;
+
+  /// 0-based lane within its day column (0 when nothing overlaps).
+  final int lane;
+
+  /// Lanes in this day column (1 when nothing overlaps).
+  final int laneCount;
+}
 
 /// Google Calendar-style grid over [days] (1 day = Today view,
 /// 7 days starting Monday = This Week view).
@@ -22,11 +46,28 @@ class ClassWeekGrid extends StatefulWidget {
     required this.subjects,
     required this.days,
     required this.now,
+    this.googleEvents = const [],
+    this.viewportHeight = 420,
+    this.onGoogleEventTap,
   });
 
   final List<Subject> subjects;
   final List<DateTime> days;
   final DateTime now;
+
+  /// Synced Google Calendar events, drawn on the grid with G
+  /// badges (same merged set as the hub lists).
+  final List<GoogleCalendarEvent> googleEvents;
+
+  /// Visible viewport height. Today is the compact 4x5
+  /// widget-size box (5 hour-rows); This Week is the full-size
+  /// grid (14 hour-rows). The whole 24-hour day is inside the
+  /// scroll in both cases.
+  final double viewportHeight;
+
+  /// Tapped Google block (edit / remove sheet). Null when the
+  /// grid is read-only.
+  final ValueChanged<GoogleCalendarEvent>? onGoogleEventTap;
 
   @override
   State<ClassWeekGrid> createState() => _ClassWeekGridState();
@@ -35,18 +76,19 @@ class ClassWeekGrid extends StatefulWidget {
 class _ClassWeekGridState extends State<ClassWeekGrid> {
   static const double _hourHeight = 48;
   static const double _gutterWidth = 44;
-  static const double _gridHeight = 420;
 
   late final ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
-    // Open scrolled to the current hour (one hour of context above
-    // the now-line), clamped to the grid bounds.
-    final offset = ((widget.now.hour - 1) * _hourHeight).clamp(
+    // Open scrolled to the current time (~1.5 hours of context
+    // above the now-line), clamped to the grid bounds. The scroll
+    // position is set once here — the 30s now-line refresh only
+    // rebuilds, it never re-scrolls under the reader.
+    final offset = ((widget.now.hour - 1.5) * _hourHeight).clamp(
       0.0,
-      24 * _hourHeight - _gridHeight,
+      24 * _hourHeight - widget.viewportHeight,
     );
     _scrollController = ScrollController(initialScrollOffset: offset);
   }
@@ -62,6 +104,38 @@ class _ClassWeekGridState extends State<ClassWeekGrid> {
     if (hour24 < 12) return '$hour24 AM';
     if (hour24 == 12) return '12 PM';
     return '${hour24 - 12} PM';
+  }
+
+  /// Merged blocks for one day, with lanes: blocks overlapping in
+  /// time split the column side by side. Greedy interval coloring
+  /// by start time gives the minimum lane count (the max overlap
+  /// depth), so non-overlapping blocks always stay full width.
+  List<_GridBlock> _blocksForDay(int weekday) {
+    final entries = entriesForDay(widget.subjects, widget.googleEvents, weekday)
+      ..sort((a, b) => a.startMin.compareTo(b.startMin));
+    final laneEnds = <int>[];
+    final blocks = <_GridBlock>[];
+    for (final entry in entries) {
+      var lane = -1;
+      for (var i = 0; i < laneEnds.length; i++) {
+        if (laneEnds[i] <= entry.startMin) {
+          lane = i;
+          break;
+        }
+      }
+      if (lane < 0) {
+        lane = laneEnds.length;
+        laneEnds.add(entry.endMin);
+      } else {
+        laneEnds[lane] = entry.endMin;
+      }
+      blocks.add(_GridBlock(entry: entry, lane: lane, laneCount: 0));
+    }
+    final laneCount = laneEnds.length;
+    return [
+      for (final b in blocks)
+        _GridBlock(entry: b.entry, lane: b.lane, laneCount: laneCount),
+    ];
   }
 
   @override
@@ -127,7 +201,7 @@ class _ClassWeekGridState extends State<ClassWeekGrid> {
         ),
         const SizedBox(height: 4),
         SizedBox(
-          height: _gridHeight,
+          height: widget.viewportHeight,
           child: SingleChildScrollView(
             controller: _scrollController,
             child: LayoutBuilder(
@@ -203,64 +277,29 @@ class _ClassWeekGridState extends State<ClassWeekGrid> {
                             ),
                         ],
                       ),
-                      // Real class event blocks.
+                      // Real class + Google event blocks.
                       for (var i = 0; i < days.length; i++)
-                        for (final subject
-                            in classesOnDay(widget.subjects, days[i].weekday))
+                        for (final block
+                            in _blocksForDay(days[i].weekday))
                           Positioned(
                             left: _gutterWidth +
                                 i * colWidth +
+                                block.lane *
+                                    (colWidth / block.laneCount) +
                                 2,
-                            width: colWidth - 4,
-                            top: subject.startMin / 60 * _hourHeight + 1,
+                            width: colWidth / block.laneCount - 4,
+                            top: block.entry.startMin / 60 * _hourHeight + 1,
                             height:
-                                ((subject.endMin - subject.startMin) /
+                                ((block.entry.endMin - block.entry.startMin) /
                                         60 *
                                         _hourHeight -
                                     2)
                                 .clamp(18.0, double.infinity),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Color(
-                                  subject.color,
-                                ).withValues(alpha: isDark ? 0.30 : 0.18),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border(
-                                  left: BorderSide(
-                                    color: Color(subject.color),
-                                    width: 3,
-                                  ),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    subject.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: scheme.onSurface,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${formatMinutes(subject.startMin)}–${formatMinutes(subject.endMin)}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            child: _BlockContent(
+                              entry: block.entry,
+                              isDark: isDark,
+                              scheme: scheme,
+                              onGoogleTap: widget.onGoogleEventTap,
                             ),
                           ),
                       // Red now-line at the current time.
@@ -297,6 +336,89 @@ class _ClassWeekGridState extends State<ClassWeekGrid> {
         ),
       ],
     );
+  }
+}
+
+/// One event block: color bar, title, time range, and the white G
+/// badge on Google events (tappable — opens the edit/remove
+/// sheet). Class blocks stay untappable, as before.
+class _BlockContent extends StatelessWidget {
+  const _BlockContent({
+    required this.entry,
+    required this.isDark,
+    required this.scheme,
+    required this.onGoogleTap,
+  });
+
+  final TimetableEntry entry;
+  final bool isDark;
+  final ColorScheme scheme;
+  final ValueChanged<GoogleCalendarEvent>? onGoogleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: Color(entry.color).withValues(alpha: isDark ? 0.30 : 0.18),
+        borderRadius: BorderRadius.circular(6),
+        border: Border(
+          left: BorderSide(
+            color: Color(entry.color),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                entry.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+              Text(
+                entry.isGoogle && entry.googleEvent != null
+                    ? googleEventRange(entry.googleEvent!)
+                    : '${formatMinutes(entry.startMin)}–${formatMinutes(entry.endMin)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          if (entry.isGoogle)
+            const Positioned(
+              top: 0,
+              right: 0,
+              child: GBadge(size: 14),
+            ),
+        ],
+      ),
+    );
+    if (entry.isGoogle && entry.googleEvent != null && onGoogleTap != null) {
+      final event = entry.googleEvent!;
+      return GestureDetector(
+        onTap: () => onGoogleTap!(event),
+        child: content,
+      );
+    }
+    return content;
   }
 }
 

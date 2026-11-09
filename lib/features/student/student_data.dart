@@ -1010,6 +1010,19 @@ class StudentStorage {
     } catch (_) {}
   }
 
+/// Raw stored string for [key], or null when nothing was ever
+  /// stored. Unlike [loadList] (which returns [] for both), this
+  /// tells "never stored" apart from "explicitly stored empty" —
+  /// the Google events seed needs that distinction.
+  static Future<String?> loadRaw(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> loadList(String key) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1139,6 +1152,53 @@ List<({String label, double amount})> lastMonthsExpense(
     out.add((label: short[month.month - 1], amount: totals.expense));
   }
   return out;
+}
+
+/// "Jun – Nov 2026" for the last [count] months ending at [now];
+/// spans the year when the range crosses January
+/// ("Nov 2025 – Apr 2026"). Used under the spending total.
+String spendingRangeLabel(DateTime now, int count) {
+  const short = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final first = DateTime(now.year, now.month - (count - 1), 1);
+  if (first.year == now.year) {
+    return '${short[first.month - 1]} – ${short[now.month - 1]} ${now.year}';
+  }
+  return '${short[first.month - 1]} ${first.year} – '
+      '${short[now.month - 1]} ${now.year}';
+}
+
+/// "Nov 9" — the short date header for one day's transaction group.
+String dayHeaderLabel(DateTime d) {
+  const short = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${short[d.month - 1]} ${d.day}';
+}
+
+/// Groups transactions by calendar day, newest day first, newest
+/// transaction first inside each day. The hub card and the
+/// Allowance screen render the same groups, so the two can never
+/// disagree about the order.
+List<({DateTime day, List<AllowanceTxn> txns})> groupTxnsByDay(
+    List<AllowanceTxn> txns) {
+  final byDay = <DateTime, List<AllowanceTxn>>{};
+  for (final t in txns) {
+    final day = DateTime(t.date.year, t.date.month, t.date.day);
+    byDay.putIfAbsent(day, () => []).add(t);
+  }
+  final days = byDay.keys.toList()
+    ..sort((a, b) => b.compareTo(a));
+  return [
+    for (final day in days)
+      (
+        day: day,
+        txns: (byDay[day]!..sort((a, b) => b.date.compareTo(a.date))),
+      ),
+  ];
 }
 
 /// Returns the name of the first conflicting subject, or null.

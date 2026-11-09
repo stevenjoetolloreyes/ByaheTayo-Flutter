@@ -22,7 +22,6 @@
 //   dynamic when an account system exists.
 import 'dart:async';
 import 'top_popup.dart';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,11 +38,12 @@ import 'ph_holidays.dart';
 import 'points_wallet_repository.dart';
 import 'rewards_center.dart';
 import 'rewards_screen.dart';
-import 'school_events.dart';
 import 'student/allowance_screen.dart';
 import 'student/bible_screen.dart';
 import 'student/classes_screen.dart';
-import 'student/commute_screen.dart';
+import 'student/custom_school_days.dart';
+import 'student/edit_school_calendar_screen.dart';
+import 'student/google_events.dart';
 import 'student/quotes_screen.dart';
 import 'student/share_card.dart';
 import 'student/signin_screen.dart';
@@ -54,8 +54,6 @@ import 'student/walking_goal_card.dart';
 import 'student/walking_goal_screen.dart';
 import 'student/walking_repository.dart';
 import 'student/week_grid.dart';
-import 'fares_tab.dart' as fares;
-import 'map_tab.dart' as maps;
 
 class StudentTab extends StatefulWidget {
   const StudentTab({
@@ -124,16 +122,36 @@ class _StudentTabState extends State<StudentTab> {
   List<SavingsGoal> _goals = [];
   List<BudgetLimit> _budgets = [];
   List<Subject> _subjects = [];
-  List<AssignmentItem> _assignments = [];
-  List<AttendanceRecord> _attendance = [];
 
-  List<String> _savedKeys = [];
-  List<String> _commuteFavs = [];
-  List<CommuteExpense> _commuteExpenses = [];
+  /// Synced Google Calendar events (mock sync — the sample set,
+  /// stored locally; see google_events.dart).
+  List<GoogleCalendarEvent> _googleEvents = [];
+
+  /// Red now-line refresh: every 30s the hub rebuilds so the
+  /// now-line follows the real clock. Rebuilding never moves the
+  /// grids' scroll (their ScrollControllers live in the grid
+  /// states, set once in initState).
+  Timer? _nowTimer;
+
   List<CheckinRecord> _checkins = [];
   Set<String> _quoteFavs = {};
   List<String> _quoteHistory = [];
   String? _school;
+
+  /// Custom marked days + holiday overrides for the School
+  /// Calendar (loaded with the rest of the hub state; the Edit
+  /// page writes them, _load re-reads them when it pops, so the
+  /// calendar updates immediately after a save).
+  List<CustomSchoolDay> _customDays = [];
+  List<HolidayOverride> _overrides = [];
+
+  /// The month the calendar card shows (defaults to this month)
+  /// and the tapped day whose detail line shows below the grid
+  /// (defaults to today). Both survive _load — flipping months
+  /// or saving an edit never resets the view.
+  DateTime? _calendarMonth;
+  DateTime? _selectedDay;
+
   final _quoteKey = GlobalKey();
 
   late final WalkingController _walking;
@@ -163,11 +181,15 @@ class _StudentTabState extends State<StudentTab> {
     _walkingOwned = widget.walkingController == null;
     _walking.addListener(_onWalkingChanged);
     _walking.init();
+    _nowTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
     _load();
   }
 
   @override
   void dispose() {
+    _nowTimer?.cancel();
     widget.walletController?.removeListener(_onWalletChanged);
     widget.creditsController?.removeListener(_onWalletChanged);
     _walking.removeListener(_onWalkingChanged);
@@ -260,15 +282,9 @@ class _StudentTabState extends State<StudentTab> {
         await StudentStorage.loadList(StudentStorage.budgetsKey);
     final subjects =
         await StudentStorage.loadList(StudentStorage.subjectsKey);
-    final assignments =
-        await StudentStorage.loadList(StudentStorage.assignmentsKey);
-    final attendance =
-        await StudentStorage.loadList(StudentStorage.attendanceKey);
-
-    final commuteFavs =
-        await StudentStorage.loadStrings(StudentStorage.commuteFavsKey);
-    final commuteExpenses =
-        await StudentStorage.loadList(StudentStorage.commuteExpensesKey);
+    final googleEvents = await loadGoogleEvents();
+    final customDays = await SchoolCalendarStore.loadCustomDays();
+    final overrides = await SchoolCalendarStore.loadOverrides();
     final checkins =
         await StudentStorage.loadList(StudentStorage.checkinsKey);
     final quoteFavs =
@@ -281,14 +297,11 @@ class _StudentTabState extends State<StudentTab> {
       _goals = goals.map(SavingsGoal.fromJson).toList();
       _budgets = budgets.map(BudgetLimit.fromJson).toList();
       _subjects = subjects.map(Subject.fromJson).toList();
-      _assignments = assignments.map(AssignmentItem.fromJson).toList();
-      _attendance = attendance.map(AttendanceRecord.fromJson).toList();
+      _googleEvents = googleEvents;
+      _customDays = customDays;
+      _overrides = overrides;
 
-      _savedKeys = prefs.getStringList('byahetayo_saved_routes') ?? [];
       _school = prefs.getString('byahetayo_profile_school');
-      _commuteFavs = commuteFavs;
-      _commuteExpenses =
-          commuteExpenses.map(CommuteExpense.fromJson).toList();
       _checkins = checkins.map(CheckinRecord.fromJson).toList();
       _quoteFavs = quoteFavs.toSet();
       _quoteHistory = quoteHistory;
@@ -318,13 +331,6 @@ class _StudentTabState extends State<StudentTab> {
     });
     await StudentStorage.saveStrings(
         StudentStorage.quoteFavsKey, _quoteFavs.toList());
-  }
-
-  fares.Hub? _hubByName(String name) {
-    for (final h in fares.hubs) {
-      if (h.name == name) return h;
-    }
-    return null;
   }
 
   /// Notifications bottom sheet (bell in the Student Hub header).
@@ -378,16 +384,14 @@ class _StudentTabState extends State<StudentTab> {
     );
   }
 
-  /// The student's reply-notification streams — one per consumer.
-  /// The header badge and the section card each need their OWN
-  /// stream instance (a stream instance serves one listener), so
-  /// two are cached, one per consumer. Created once per signed-in
-  /// user and reused across rebuilds — never created in build, or
-  /// every rebuild would resubscribe and re-emit. (Firestore's own
-  /// snapshots() is broadcast, so sharing would work there — but a
-  /// separate instance per consumer is correct for any stream.)
+  /// The student's reply-notification stream for the header bell
+  /// badge. Created once per signed-in user and reused across
+  /// rebuilds — never created in build, or every rebuild would
+  /// resubscribe and re-emit. (The Notifications section card
+  /// that used a second stream was removed Nov 9 at Steven's
+  /// request; admin replies still reach the student through the
+  /// bell badge, the top popup, and the Notifications sheet.)
   Stream<List<AppReviewNotification>>? _headerNotificationsStream;
-  Stream<List<AppReviewNotification>>? _cardNotificationsStream;
   String? _notificationsStreamUserId;
 
   void _ensureNotificationStreams() {
@@ -395,28 +399,20 @@ class _StudentTabState extends State<StudentTab> {
     final userId = widget.user?.uid;
     if (repository == null || userId == null) {
       _headerNotificationsStream = null;
-      _cardNotificationsStream = null;
       _notificationsStreamUserId = null;
       return;
     }
     if (_notificationsStreamUserId == userId &&
-        _headerNotificationsStream != null &&
-        _cardNotificationsStream != null) {
+        _headerNotificationsStream != null) {
       return;
     }
     _notificationsStreamUserId = userId;
     _headerNotificationsStream = repository.watchForUser(userId);
-    _cardNotificationsStream = repository.watchForUser(userId);
   }
 
   Stream<List<AppReviewNotification>>? _headerNotificationStream() {
     _ensureNotificationStreams();
     return _headerNotificationsStream;
-  }
-
-  Stream<List<AppReviewNotification>>? _cardNotificationStream() {
-    _ensureNotificationStreams();
-    return _cardNotificationsStream;
   }
 
   @override
@@ -428,13 +424,14 @@ class _StudentTabState extends State<StudentTab> {
     // 12:09 correction: the tablet 2/3-column grid looked sparse
     // with mismatched card heights — "wag ganito").
     //
-    // Preview port (Nov 6): the same sections, reorganized into 5
-    // headed groups — Rewards & Goals, Study, Money, Commute,
-    // Inspiration & Calendar. NOTHING is removed; only the order
-    // changes. (The Quick Buttons section was removed Nov 5 at
-    // his request; Classes/Notes/Allowance/Tasks stay one tap away
-    // via their summary cards, but Attendance has no Hub entry
-    // point anymore.)
+    // Preview port (Nov 6): the same sections, reorganized into 4
+    // headed groups — Rewards & Goals, Study, Money,
+    // Inspiration & Calendar. (The Quick Buttons section was
+    // removed Nov 5 at his request; Classes/Notes/Allowance/Tasks
+    // stay one tap away via their summary cards, but Attendance
+    // has no Hub entry point anymore. The Commute, Subject
+    // breakdown, and Notifications sections were removed Nov 9 at
+    // his request.)
     final now = DateTime.now();
     final groups = <({String title, List<Widget> sections})>[
       (
@@ -456,16 +453,11 @@ class _StudentTabState extends State<StudentTab> {
         sections: [_allowanceWidget(context)],
       ),
       (
-        title: 'Commute',
-        sections: [_commuteWidget(context)],
-      ),
-      (
         title: 'Inspiration & Calendar',
         sections: [
           _bibleWidget(context),
           _quotesWidget(context),
           _attendanceWidget(context),
-          _notificationsWidget(context),
         ],
       ),
     ];
@@ -588,6 +580,7 @@ class _StudentTabState extends State<StudentTab> {
     required String title,
     String? subtitle,
     VoidCallback? onOpen,
+    Widget? trailing,
     required List<Widget> children,
   }) {
     final scheme = Theme.of(context).colorScheme;
@@ -610,6 +603,7 @@ class _StudentTabState extends State<StudentTab> {
             ],
           ),
         ),
+        if (trailing != null) trailing,
         if (onOpen != null) const Icon(Icons.chevron_right),
       ],
     );
@@ -950,8 +944,6 @@ class _StudentTabState extends State<StudentTab> {
       }
     }
     final bars = lastMonthsExpense(_txns, now, 6);
-    final maxBar =
-        bars.fold<double>(0, (m, b) => b.amount > m ? b.amount : m);
     final totalSpent =
         bars.fold<double>(0, (s, b) => s + b.amount);
     var budgetedSpent = 0.0;
@@ -1179,72 +1171,10 @@ class _StudentTabState extends State<StudentTab> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: scheme.outline.withValues(alpha: 0.6)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 96,
-                child: Stack(
-                  children: [
-                    // Grid lines.
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        for (var i = 0; i < 3; i++)
-                          Container(
-                            height: 1,
-                            color: scheme.outline.withValues(alpha: 0.5),
-                          ),
-                      ],
-                    ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        for (final b in bars)
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Text(
-                                  peso(b.amount),
-                                  style: AppText.micro.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Container(
-                                  height: maxBar > 0
-                                      ? 56 * (b.amount / maxBar)
-                                      : 2,
-                                  width: 18,
-                                  decoration: BoxDecoration(
-                                    color: scheme.primary,
-                                    borderRadius: BorderRadius.circular(5),
-                                  ),
-                                ),
-                                const SizedBox(height: AppSpacing.s2),
-                                Text(b.label, style: AppText.micro),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s4),
-              Text(
-                '${peso(totalSpent)} Total spent',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              if (totalSpent == 0)
-                Text(
-                  'No spending recorded in the last 6 months.',
-                  style: AppText.caption.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
+          child: MoneySpendingChart(
+            bars: bars,
+            totalSpent: totalSpent,
+            now: now,
           ),
         ),
         const SizedBox(height: AppSpacing.s8),
@@ -1294,6 +1224,11 @@ class _StudentTabState extends State<StudentTab> {
                         style: AppText.caption.copyWith(
                           color: scheme.onSurfaceVariant,
                         )),
+                    const SizedBox(height: AppSpacing.s8),
+                    FilledButton(
+                      onPressed: () => _open(const AllowanceScreen()),
+                      child: const Text('Set limit'),
+                    ),
                   ] else ...[
                     Text('Budgets set: ${_budgets.length}',
                         style: AppText.caption.copyWith(
@@ -1346,6 +1281,11 @@ class _StudentTabState extends State<StudentTab> {
             value: 0,
             backgroundColor: scheme.outline.withValues(alpha: 0.5),
           ),
+          const SizedBox(height: AppSpacing.s8),
+          FilledButton(
+            onPressed: () => _open(const AllowanceScreen()),
+            child: const Text('New goal'),
+          ),
         ] else ...[
           Text(
             'Saved ${peso(totalSaved)} / Goal: ${peso(_goals.fold<double>(0, (s, g) => s + g.target))}',
@@ -1394,84 +1334,146 @@ class _StudentTabState extends State<StudentTab> {
             ),
           )
         else
-          for (final t in recent.take(3))
-            _row(
-              '${t.category} · ${formatDate(t.date)}',
-              '${t.kind == 'income' ? '+' : '−'}${peso(t.amount)}',
+          for (final group in groupTxnsByDay(recent.take(3).toList())) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 2),
+              child: Text(
+                dayHeaderLabel(group.day),
+                style: AppText.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             ),
+            for (final t in group.txns)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor:
+                          scheme.primary.withValues(alpha: 0.12),
+                      child: Icon(
+                        allowanceTxnIcon(t),
+                        color: scheme.primary,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            t.note.isEmpty ? t.category : t.note,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            t.note.isEmpty
+                                ? formatDate(t.date)
+                                : '${t.category} · ${formatDate(t.date)}',
+                            style: AppText.caption.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${t.kind == 'income' ? '+' : '−'}${peso(t.amount)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: t.kind == 'income'
+                            ? scheme.primary
+                            : scheme.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
       ],
     );
   }
 
   // ----------------------------------------------------------- classes
 
+  /// Classes & Timetable hub card — redesigned Nov 9, 2026 to the
+  /// approved hub-card preview: Today / This Week tabs only (the
+  /// All Classes tab, the "Your week at a glance" chart, Upcoming
+  /// Exams, Assignment Deadlines, and the View Timetable button
+  /// are gone). Today is the compact 4x5 widget-size timeline
+  /// (5 hour-rows, whole 24h day inside) with the red now-line
+  /// and auto-scroll to now; This Week is the full-size Mon–Sun
+  /// grid (14-row viewport) with a day-grouped list under it.
+  /// Google Calendar events (mock sync) sit ON both timelines
+  /// with white G badges, and in both lists — timeline, grid,
+  /// and lists all render the same merged entries, so they can
+  /// never diverge. The header opens the full Classes &
+  /// Timetable screen; the + menu for adding classes is a
+  /// separate preview and is NOT built here.
   Widget _classesWidget(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final now = DateTime.now();
-    final todays = classesOnDay(_subjects, now.weekday);
     final next = nextClass(_subjects, now);
-    final upcomingExams = _assignments
-        .where((a) => !a.done && a.kind == 'exam')
-        .toList()
-      ..sort((a, b) => a.due.compareTo(b.due));
-    final upcomingAssignments = _assignments
-        .where((a) => !a.done && a.kind == 'assignment')
-        .toList()
-      ..sort((a, b) => a.due.compareTo(b.due));
+    // The Today list: today's classes + every synced Google
+    // event, time order, Google rows carrying their day prefix.
+    final todayEntries =
+        todayListEntries(_subjects, _googleEvents, now.weekday);
 
-    String subjectName(String id) {
-      for (final s in _subjects) {
-        if (s.id == id) return s.name;
-      }
-      return 'Subject';
-    }
-
-    // Google Calendar-style grids (preview port, Nov 6): Today =
-    // day grid, This Week = full Monday-first week grid, All
-    // Classes = subjects list. Grids render real subjects only;
-    // with none, the grid is empty and the honest empty state
-    // below it stays. Both grids show the red now-line and open
-    // scrolled to the current hour.
     Widget tabBody;
     if (_classesTab == 'today') {
       tabBody = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClassWeekGrid(subjects: _subjects, days: [now], now: now),
+          ClassWeekGrid(
+            key: const ValueKey('today-grid'),
+            subjects: _subjects,
+            days: [now],
+            now: now,
+            googleEvents: _googleEvents,
+            viewportHeight: 5 * 48,
+            onGoogleEventTap: _onGoogleEventTap,
+          ),
           const SizedBox(height: AppSpacing.s8),
           if (next != null) ...[
             _nextClassBanner(context, next),
             const SizedBox(height: AppSpacing.s8),
           ],
-          if (todays.isEmpty) ...[
+          if (todayEntries.isEmpty)
             _emptyRow(
               context,
               Icons.event_available_outlined,
               'No classes today.',
               'Relax, study, or get ahead on your tasks!',
-            ),
-          ] else
-            for (final s in todays)
-              _dotRow(
-                color: Color(s.color),
-                label:
-                    '${formatMinutes(s.startMin)}–${formatMinutes(s.endMin)} · ${s.name}',
-                value:
-                    '${s.room.isEmpty ? '' : '${s.room} '}${s.teacher}',
-              ),
+            )
+          else
+            for (final entry in todayEntries) _timetableRow(entry),
         ],
       );
-    } else if (_classesTab == 'week') {
+    } else {
       final monday = mondayOfWeek(now);
       final weekDays = [
         for (var i = 0; i < 7; i++)
           DateTime(monday.year, monday.month, monday.day + i),
       ];
-      final hasAny = _subjects.isNotEmpty;
+      final hasAny =
+          _subjects.isNotEmpty || _googleEvents.isNotEmpty;
       tabBody = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClassWeekGrid(subjects: _subjects, days: weekDays, now: now),
+          ClassWeekGrid(
+            key: const ValueKey('week-grid'),
+            subjects: _subjects,
+            days: weekDays,
+            now: now,
+            googleEvents: _googleEvents,
+            viewportHeight: 14 * 48,
+            onGoogleEventTap: _onGoogleEventTap,
+          ),
           if (!hasAny) ...[
             const SizedBox(height: AppSpacing.s8),
             _emptyRow(
@@ -1480,28 +1482,22 @@ class _StudentTabState extends State<StudentTab> {
               'No classes this week.',
               null,
             ),
+          ] else ...[
+            const SizedBox(height: AppSpacing.s8),
+            for (final day in weekDays)
+              if (entriesForDay(_subjects, _googleEvents, day.weekday)
+                  .isNotEmpty) ...[
+                Text(
+                  '${weekdayName(day.weekday).toUpperCase()} · ${day.day}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.s4),
+                for (final entry in entriesForDay(
+                    _subjects, _googleEvents, day.weekday))
+                  _timetableRow(entry),
+                const SizedBox(height: AppSpacing.s4),
+              ],
           ],
-        ],
-      );
-    } else {
-      tabBody = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_subjects.isEmpty)
-            _emptyRow(
-              context,
-              Icons.school_outlined,
-              'No subjects yet.',
-              null,
-            )
-          else
-            for (final s in _subjects)
-              _dotRow(
-                color: Color(s.color),
-                label: s.code.isEmpty ? s.name : '${s.name} (${s.code})',
-                value:
-                    '${s.teacher}${s.room.isEmpty ? '' : ' · ${s.room}'}',
-              ),
         ],
       );
     }
@@ -1592,61 +1588,96 @@ class _StudentTabState extends State<StudentTab> {
               segments: const [
                 IosSegment(value: 'today', label: 'Today'),
                 IosSegment(value: 'week', label: 'This Week'),
-                IosSegment(value: 'all', label: 'All Classes'),
               ],
               groupValue: _classesTab,
               onValueChanged: (value) => setState(() => _classesTab = value),
             ),
             const SizedBox(height: AppSpacing.s8),
             tabBody,
-            const SizedBox(height: AppSpacing.s8),
-            _weekLoadGraph(context, now),
-            const SizedBox(height: AppSpacing.s8),
-            _sectionHeader(
-              context,
-              Icons.quiz_outlined,
-              kStudentInfo,
-              'Upcoming Exams',
-            ),
-            const SizedBox(height: AppSpacing.s4),
-            if (upcomingExams.isEmpty)
-              const Text('No upcoming exams.')
-            else
-              for (final e in upcomingExams.take(2))
-                _dotRow(
-                  color: kStudentInfo,
-                  label: subjectName(e.subjectId),
-                  value: '${e.title} · ${formatDate(e.due)}',
-                ),
-            const SizedBox(height: AppSpacing.s4),
-            _sectionHeader(
-              context,
-              Icons.assignment_outlined,
-              kStudentWarning,
-              'Assignment Deadlines',
-            ),
-            const SizedBox(height: AppSpacing.s4),
-            if (upcomingAssignments.isEmpty)
-              const Text('No upcoming assignments.')
-            else
-              for (final a in upcomingAssignments.take(2))
-                _dotRow(
-                  color: kStudentWarning,
-                  label: subjectName(a.subjectId),
-                  value: '${a.title} · ${formatDate(a.due)}',
-                ),
-            const SizedBox(height: AppSpacing.s8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => _open(const ClassesScreen()),
-                icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                label: const Text('View Timetable'),
-              ),
-            ),
           ],
         ),
       ),
+    );
+  }
+
+  /// One timetable row (hub lists): "7:30 AM–9:00 AM ·
+  /// Introduction Of Computing" on the left, "UNP · Sir Supnet"
+  /// on the right, with the subject's color dot. Google rows
+  /// carry their day prefix in the Today list ("Thu · 3:00
+  /// PM–4:30 PM · Discrete Mathematics") plus the white G badge,
+  /// and open the Edit / Remove sheet on tap. The row renders the
+  /// same merged entry as the timeline block above it.
+  Widget _timetableRow(TimetableEntry entry) {
+    final row = Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            margin: const EdgeInsets.only(top: 5, right: 8),
+            decoration: BoxDecoration(
+              color: Color(entry.color),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(entry.label),
+                ),
+                if (entry.isGoogle) ...[
+                  const SizedBox(width: 6),
+                  const GBadge(),
+                ],
+              ],
+            ),
+          ),
+          if (entry.detail.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                entry.detail,
+                textAlign: TextAlign.end,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (!entry.isGoogle || entry.googleEvent == null) return row;
+    final event = entry.googleEvent!;
+    return InkWell(
+      onTap: () => _onGoogleEventTap(event),
+      borderRadius: BorderRadius.circular(8),
+      child: row,
+    );
+  }
+
+  /// Google-event tap (block on either timeline, or its list
+  /// row): the Edit / Remove sheet. Edits and removals save
+  /// locally and re-render both hub views; the full screen
+  /// reloads the same stored set when it opens.
+  Future<void> _onGoogleEventTap(GoogleCalendarEvent event) async {
+    await showGoogleEventActionSheet(
+      context,
+      event: event,
+      onUpdated: (updated) async {
+        setState(() {
+          final i =
+              _googleEvents.indexWhere((e) => e.id == updated.id);
+          if (i >= 0) _googleEvents[i] = updated;
+        });
+        await saveGoogleEvents(_googleEvents);
+      },
+      onRemoved: (removed) async {
+        setState(
+            () => _googleEvents.removeWhere((e) => e.id == removed.id));
+        await saveGoogleEvents(_googleEvents);
+      },
     );
   }
 
@@ -1709,41 +1740,6 @@ class _StudentTabState extends State<StudentTab> {
     );
   }
 
-  /// Label/value row with a leading color dot (the subject's own
-  /// color for class rows; the section color for exams/deadlines).
-  /// Same label/value data as the old plain [_row].
-  Widget _dotRow({
-    required Color color,
-    required String label,
-    required String value,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            margin: const EdgeInsets.only(top: 5, right: 8),
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          Expanded(child: Text(label)),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// Empty state under the calendar grid: icon + bold title, with
   /// an optional second line. The strings are the card's exact
   /// honest empty states — only the styling is new.
@@ -1771,302 +1767,6 @@ class _StudentTabState extends State<StudentTab> {
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  /// Icon + bold title for a card section (Exams, Deadlines, the
-  /// week graph). Icons are Material icons — never emoji.
-  Widget _sectionHeader(
-    BuildContext context,
-    IconData icon,
-    Color color,
-    String title,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 6),
-        // Expanded so a long title wraps instead of overflowing
-        // the row (the test font measures wider than Inter).
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// "Your week at a glance" — a 7-bar chart of REAL class hours
-  /// per day (Mon–Sun) from [classHoursByWeekday]: each bar is the
-  /// subject's (endMin - startMin) summed over its meeting days.
-  /// Today is the solid emerald bar; other days are the same color
-  /// at 45% alpha. The total line is the real weekly sum + the real
-  /// meeting count. With no subjects (or no scheduled hours) there
-  /// is no fake chart — the honest empty state instead. Same
-  /// container/bar pattern as the allowance card's monthly chart.
-  Widget _weekLoadGraph(BuildContext context, DateTime now) {
-    final scheme = Theme.of(context).colorScheme;
-    final hours = classHoursByWeekday(_subjects);
-    final total = totalWeeklyClassHours(_subjects);
-    final count = weeklyClassCount(_subjects);
-    final maxHours =
-        hours.fold<double>(0, (m, h) => h > m ? h : m);
-    final todayIndex = now.weekday - 1; // Mon = 0 .. Sun = 6.
-    const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(
-          context,
-          Icons.bar_chart_outlined,
-          scheme.primary,
-          'Your week at a glance',
-        ),
-        const SizedBox(height: AppSpacing.s4),
-        Container(
-          key: const ValueKey('week-load-graph'),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: scheme.outline.withValues(alpha: 0.6),
-            ),
-          ),
-          child: _subjects.isEmpty
-              ? Text(
-                  'No subjects yet — add your classes to see your weekly load.',
-                  style: AppText.caption.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                )
-              : total <= 0
-                  ? Text(
-                      'No class hours scheduled this week.',
-                      style: AppText.caption.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: 96,
-                          child: Stack(
-                            children: [
-                              Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  for (var i = 0; i < 3; i++)
-                                    Container(
-                                      height: 1,
-                                      color: scheme.outline
-                                          .withValues(alpha: 0.5),
-                                    ),
-                                ],
-                              ),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  for (var i = 0; i < 7; i++)
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            hours[i] > 0
-                                                ? formatHours(hours[i])
-                                                : '',
-                                            style: AppText.micro.copyWith(
-                                              color:
-                                                  scheme.onSurfaceVariant,
-                                              // Tight line height: the
-                                              // test font measures ~2x
-                                              // tall, which overflowed
-                                              // the 96px chart box.
-                                              height: 1.0,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Container(
-                                            height: maxHours > 0
-                                                ? 56 * (hours[i] / maxHours)
-                                                : 2,
-                                            width: 18,
-                                            decoration: BoxDecoration(
-                                              color: i == todayIndex
-                                                  ? scheme.primary
-                                                  : scheme.primary
-                                                      .withValues(alpha: 0.45),
-                                              borderRadius:
-                                                  BorderRadius.circular(5),
-                                            ),
-                                          ),
-                                          const SizedBox(height: AppSpacing.s2),
-                                          Text(
-                                            dayLetters[i],
-                                            style: AppText.micro.copyWith(
-                                              color: i == todayIndex
-                                                  ? scheme.primary
-                                                  : null,
-                                              fontWeight: i == todayIndex
-                                                  ? FontWeight.w700
-                                                  : null,
-                                              // Same tight line height
-                                              // as the value label.
-                                              height: 1.0,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.s4),
-                        Text(
-                          '${formatHours(total)} total · $count ${count == 1 ? 'class' : 'classes'} this week',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-        ),
-      ],
-    );
-  }
-
-  // ------------------------------------------------------------ notes
-
-  /// True when [d] falls in the current Mon–Sun week.
-  bool _isThisWeek(DateTime d) {
-    final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-    final day = DateTime(d.year, d.month, d.day);
-    final diff = day.difference(monday).inDays;
-    return diff >= 0 && diff < 7;
-  }
-
-  /// Mon–Sun counts for the week-bars (preview viz-bars): how many
-  /// of [dates] fall on each day of the current week. Dates outside
-  /// this week count nowhere — a quiet week draws flat bars.
-  List<int> _weekCounts(Iterable<DateTime> dates) {
-    final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-    final counts = List<int>.filled(7, 0);
-    for (final d in dates) {
-      final day = DateTime(d.year, d.month, d.day);
-      final diff = day.difference(monday).inDays;
-      if (diff >= 0 && diff < 7) counts[diff]++;
-    }
-    return counts;
-  }
-
-  // ----------------------------------------------------------- commute
-  // (Preserved from the previous dashboard so the module stays
-  // reachable; it adapts to the light theme automatically.)
-
-  Widget _commuteWidget(BuildContext context) {
-    final rate = fares.fareRates.firstWhere((r) => r.id == 'trad-jeep');
-    String? firstDistance;
-    double? maxFare;
-    for (final key in _savedKeys) {
-      final parts = key.split('>');
-      if (parts.length < 2) continue;
-      final origin = _hubByName(parts[0]);
-      final dest = _hubByName(parts[1]);
-      if (origin == null || dest == null) continue;
-      final roadKm = maps.roadKmBetween(
-          origin.lat, origin.lng, dest.lat, dest.lng);
-      firstDistance ??= '${roadKm.toStringAsFixed(1)} km';
-      final fare = fares.computeFare(rate, roadKm, false).regular;
-      if (maxFare == null || fare > maxFare) maxFare = fare;
-    }
-    final sortedExpenses = List.of(_commuteExpenses)
-      ..sort((a, b) => b.date.compareTo(a.date));
-    final counts = <String, int>{};
-    for (final e in _commuteExpenses) {
-      counts[e.routeKey] = (counts[e.routeKey] ?? 0) + 1;
-    }
-    final frequent = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return _widgetCard(
-      context,
-      icon: Icons.route_outlined,
-      title: 'My Commute',
-      subtitle: 'Favorites, expenses, and map shortcuts.',
-      onOpen: () => _open(CommuteScreen(onViewOnMap: widget.onViewOnMap)),
-      children: [
-        // Graph-first (preview parity, Nov 6): Saved Routes +
-        // Est. Fare stat panels, then the week's trips as bars —
-        // all from the real saved routes and logged expenses.
-        Row(
-          children: [
-            _StatPanel(
-              value: '${_savedKeys.length}',
-              label: 'Routes',
-              sub: 'Saved Routes · Shared with Map tab',
-            ),
-            const SizedBox(width: AppSpacing.s8),
-            _StatPanel(
-              value: maxFare == null ? '₱0' : peso(maxFare),
-              label: 'max',
-              sub: 'Est. Fare · Jeepney',
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        _row('Trip distance', firstDistance ?? 'No hub route saved'),
-        const Text(
-          'Fares shown for traditional jeepney. Saved routes are shared with the Map tab.',
-          style: TextStyle(fontSize: 12),
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        Text(
-          '${sortedExpenses.where((e) => _isThisWeek(e.date)).length} Trips this week',
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        _WeekBars(
-            values: _weekCounts(sortedExpenses.map((e) => e.date))),
-        const SizedBox(height: AppSpacing.s8),
-        const Text('Recent trips',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        if (sortedExpenses.isEmpty)
-          const Text('No trips logged yet.')
-        else
-          for (final e in sortedExpenses.take(3))
-            _row('${e.routeKey} · ${formatDate(e.date)}', peso(e.amount)),
-        const SizedBox(height: AppSpacing.s4),
-        const Text('Frequently visited',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        if (frequent.isEmpty && _commuteFavs.isEmpty)
-          const Text('No frequent destinations yet.')
-        else ...[
-          for (final f in frequent.take(2))
-            _row(f.key, '${f.value} trip${f.value == 1 ? '' : 's'}'),
-          if (_commuteFavs.isNotEmpty)
-            Text('Favorites: ${_commuteFavs.join(', ')}'),
-        ],
-        const SizedBox(height: AppSpacing.s4),
-        const Text('Recent commute history',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        if (sortedExpenses.isEmpty)
-          const Text('Log a commute expense to build your history.')
-        else
-          Text(
-              '${sortedExpenses.length} logged trip${sortedExpenses.length == 1 ? '' : 's'} · latest ${formatDate(sortedExpenses.first.date)}'),
       ],
     );
   }
@@ -2153,117 +1853,99 @@ class _StudentTabState extends State<StudentTab> {
     );
   }
 
-  // -------------------------------------------------------- notifications
-  // Preview port (Nov 6): Notifications as its own section in the
-  // Inspiration & Calendar group. Opens the same sheet as the bell.
-  // When the student has admin-reply notifications, the card shows
-  // the latest one (with its unread count); otherwise the honest
-  // empty state.
-
-  Widget _notificationsWidget(BuildContext context) {
-    final stream = _cardNotificationStream();
-    if (stream == null) {
-      return _notificationsCard(context, notifications: null);
-    }
-    return StreamBuilder<List<AppReviewNotification>>(
-      stream: stream,
-      builder: (context, snapshot) {
-        return _notificationsCard(
-          context,
-          notifications: snapshot.data,
-        );
-      },
-    );
-  }
-
-  /// The Notifications section card. [notifications] is null while
-  /// the stream is loading (or unavailable) — the empty state
-  /// shows then, as it does when the list is empty. The stream is
-  /// newest first, so the first entry is the latest reply.
-  Widget _notificationsCard(
-    BuildContext context, {
-    required List<AppReviewNotification>? notifications,
-  }) {
-    final list = notifications ?? const <AppReviewNotification>[];
-    final unreadCount = list.where((n) => !n.read).length;
-    final latest = list.isEmpty ? null : list.first;
-    final children = <Widget>[];
-    if (latest == null) {
-      children.addAll(const [
-        Text('No notifications yet.'),
-        SizedBox(height: AppSpacing.s4),
-        Text(
-          'When EstudyanteGO replies to one of your reviews, it will appear here.',
-          style: AppText.caption,
-        ),
-      ]);
-    } else {
-      children.addAll(const [
-        Text(
-          'EstudyanteGO replied to your review.',
-          style: AppText.labelStrong,
-        ),
-        SizedBox(height: AppSpacing.s4),
-      ]);
-      children.add(
-        Text(
-          latest.replyText,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
-      final caption = unreadCount > 0
-          ? '$unreadCount unread'
-          : latest.createdAt == null
-              ? ''
-              : formatDate(latest.createdAt!);
-      if (caption.isNotEmpty) {
-        children.addAll([
-          const SizedBox(height: AppSpacing.s4),
-          Text(caption, style: AppText.caption),
-        ]);
-      }
-    }
-    return _widgetCard(
-      context,
-      icon: Icons.notifications_outlined,
-      title: 'Notifications',
-      subtitle: 'Stay in the loop.',
-      onOpen: _showNotifications,
-      children: children,
-    );
-  }
-
   // -------------------------------------------------------- attendance
-  // (Preserved so the calendar, breakdown, and monthly report stay
-  // reachable from the dashboard.)
+  // (Preserved so the School Calendar stays reachable from the
+  // dashboard. The Subject breakdown and Monthly report donuts
+  // were removed Nov 9 at Steven's request; attendance detail
+  // still lives in the Attendance screen.)
 
   Widget _attendanceWidget(BuildContext context) {
     final now = DateTime.now();
-    final monthRecords = _attendance
-        .where((r) => r.date.year == now.year && r.date.month == now.month)
-        .toList();
-    final monthStats = attendanceStats(monthRecords);
-    final bySubject = <String, List<AttendanceRecord>>{};
-    for (final r in _attendance) {
-      bySubject.putIfAbsent(r.subject, () => []).add(r);
-    }
-    final monthStart = DateTime(now.year, now.month, 1);
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final today = DateTime(now.year, now.month, now.day);
+    final month = _calendarMonth ?? DateTime(now.year, now.month);
+    final selected = _selectedDay ?? today;
+    final monthStart = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final firstWeekday = monthStart.weekday; // 1 = Mon
     final schoolLabel = _school?.trim();
     final scheme = Theme.of(context).colorScheme;
 
-    return _widgetCard(
+    // The visible month's effective entries drive the dynamic
+    // legend; the next marked days drive Coming up below the
+    // card. Both come from the same effective list the Edit page
+    // writes (holidays + school events + custom days, overrides
+    // applied), so a save updates everything at once.
+    final monthEntries = effectiveMarkedDays(
+      school: _school,
+      custom: _customDays,
+      overrides: _overrides,
+    )
+        .where((e) =>
+            e.date.year == month.year && e.date.month == month.month)
+        .toList();
+    final upcoming = comingUpMarkedDays(
+      school: _school,
+      custom: _customDays,
+      overrides: _overrides,
+      from: now,
+    );
+    final selectedEntry = markedDayOn(
+      selected,
+      school: _school,
+      custom: _customDays,
+      overrides: _overrides,
+    );
+
+    final card = _widgetCard(
       context,
       icon: Icons.calendar_month_outlined,
       title: 'School Calendar',
       subtitle: schoolLabel == null || schoolLabel.isEmpty
           ? 'School days and no-school days — holidays in red.'
           : '$schoolLabel · School days and no-school days',
+      trailing: TextButton.icon(
+        key: const ValueKey('school-calendar-edit'),
+        onPressed: () => _open(
+          EditSchoolCalendarScreen(
+            school: _school,
+            days: groupMarkedDays(effectiveMarkedDays(
+              school: _school,
+              custom: _customDays,
+              overrides: _overrides,
+            )),
+          ),
+          darkAware: true,
+        ),
+        icon: const Icon(Icons.edit_outlined, size: 16),
+        label: const Text('Edit'),
+        style: TextButton.styleFrom(
+          foregroundColor: scheme.primary,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        ),
+      ),
       children: [
-        Text('${monthName(now.month)} ${now.year}',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+        Row(
+          children: [
+            Expanded(
+              child: Text('${monthName(month.month)} ${month.year}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            IconButton(
+              key: const ValueKey('calendar-prev-month'),
+              icon: const Icon(Icons.chevron_left),
+              tooltip: 'Previous month',
+              onPressed: () => setState(() => _calendarMonth =
+                  DateTime(month.year, month.month - 1)),
+            ),
+            IconButton(
+              key: const ValueKey('calendar-next-month'),
+              icon: const Icon(Icons.chevron_right),
+              tooltip: 'Next month',
+              onPressed: () => setState(() => _calendarMonth =
+                  DateTime(month.year, month.month + 1)),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.s4),
         Row(
           children: [
@@ -2287,343 +1969,210 @@ class _StudentTabState extends State<StudentTab> {
           itemBuilder: (_, i) {
             if (i < firstWeekday - 1) return const SizedBox.shrink();
             final day = i - (firstWeekday - 1) + 1;
-            final dayDate = DateTime(now.year, now.month, day);
+            final dayDate = DateTime(month.year, month.month, day);
+            // The effective entry for this date — custom days and
+            // overrides included, so a renamed/removed holiday or
+            // an added school day shows here immediately.
+            final entry = markedDayOn(
+              dayDate,
+              school: _school,
+              custom: _customDays,
+              overrides: _overrides,
+            );
             final kind = schoolDayKind(dayDate);
-            final dayEvents = schoolEventsOnDay(_school, dayDate);
-            final hasNoClassEvent = dayEvents.any((e) => e.noClasses);
-            final isToday = day == now.day;
-            final isHoliday = kind == SchoolDayKind.holiday;
-            final Color? dayColor = switch (kind) {
-              SchoolDayKind.holiday => scheme.error,
-              SchoolDayKind.weekend => scheme.onSurfaceVariant,
-              SchoolDayKind.schoolDay =>
-                hasNoClassEvent ? scheme.onSurfaceVariant : null,
+            final isToday = dayDate == today;
+            final isSelected = dayDate == selected;
+            final Color? dayColor = switch (entry?.type) {
+              MarkedDayType.holiday => scheme.error,
+              MarkedDayType.noClasses => scheme.onSurfaceVariant,
+              MarkedDayType.event => null,
+              null => kind == SchoolDayKind.weekend
+                  ? scheme.onSurfaceVariant
+                  : null,
             };
+            final dotColor = entry == null
+                ? null
+                : markedDayTypeColor(entry.type);
             return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Google Calendar style: today is a filled emerald
-                  // circle with white text.
-                  Container(
-                    width: 26,
-                    height: 26,
-                    alignment: Alignment.center,
-                    decoration: isToday
-                        ? const BoxDecoration(
-                            color: kStudentEmerald,
-                            shape: BoxShape.circle,
-                          )
-                        : null,
-                    child: Text(
-                      '$day',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isToday ? Colors.white : dayColor,
-                        fontWeight: isToday || isHoliday
-                            ? FontWeight.w800
-                            : null,
+              child: InkWell(
+                key: ValueKey('calendar-day-$day'),
+                onTap: () => setState(() => _selectedDay = dayDate),
+                borderRadius: BorderRadius.circular(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Google Calendar style: today is a filled
+                    // emerald circle with white text; the tapped
+                    // day gets an emerald ring.
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: isToday
+                          ? const BoxDecoration(
+                              color: kStudentEmerald,
+                              shape: BoxShape.circle,
+                            )
+                          : isSelected
+                              ? BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: scheme.primary, width: 2),
+                                )
+                              : null,
+                      child: Text(
+                        '$day',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isToday ? Colors.white : dayColor,
+                          fontWeight: isToday ||
+                                  entry?.type == MarkedDayType.holiday
+                              ? FontWeight.w800
+                              : null,
+                        ),
                       ),
                     ),
-                  ),
-                  // Red dot under real holidays; blue dot under
-                  // school events.
-                  if (isHoliday)
-                    const Icon(Icons.circle, size: 6, color: Colors.red)
-                  else if (dayEvents.isNotEmpty)
-                    const Icon(Icons.circle, size: 6, color: kStudentInfo),
-                ],
+                    // A fixed 6px slot keeps dotted and undotted
+                    // numbers aligned. Dot colour follows the
+                    // entry type (holiday red, no classes amber,
+                    // event blue) — same as the legend.
+                    SizedBox(
+                      height: 6,
+                      child: dotColor == null
+                          ? null
+                          : Icon(Icons.circle, size: 6, color: dotColor),
+                    ),
+                  ],
+                ),
               ),
             );
           },
         ),
-        // Legend (preview parity, Nov 6): holidays are red numbers
-        // + dots on the dates themselves — no holiday text list —
-        // and the Add school chip opens the Account tab, where the
-        // school lives under Student Information.
+        // Legend (dynamic): only the types present in the visible
+        // month show, plus Today. Dot colours match the edit
+        // page (holiday red, no classes amber, event blue).
+        // (The Add school chip was removed Nov 9 at Steven's
+        // request; the school itself is set under Student
+        // Information in the Account tab, and edited from the
+        // Edit button above.)
         const SizedBox(height: AppSpacing.s8),
         Wrap(
           spacing: 12,
           runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.circle, size: 8, color: scheme.error),
-                const SizedBox(width: AppSpacing.s4),
-                const Text('Holiday'),
-              ],
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.circle,
-                    size: 8, color: kStudentEmerald),
-                const SizedBox(width: AppSpacing.s4),
-                const Text('Today'),
-              ],
-            ),
-            ActionChip(
-              label: const Text('Add school'),
-              onPressed: widget.onViewAccount,
-            ),
+            if (monthEntries
+                .any((e) => e.type == MarkedDayType.holiday))
+              _legendItem(
+                  markedDayTypeColor(MarkedDayType.holiday), 'Holiday'),
+            if (monthEntries
+                .any((e) => e.type == MarkedDayType.noClasses))
+              _legendItem(
+                  markedDayTypeColor(MarkedDayType.noClasses), 'No classes'),
+            if (monthEntries.any((e) => e.type == MarkedDayType.event))
+              _legendItem(
+                  markedDayTypeColor(MarkedDayType.event), 'Event'),
+            _legendItem(kStudentEmerald, 'Today'),
           ],
         ),
+        // Day detail: the tapped day (today by default). A marked
+        // day shows its name + type; a weekend says so — a plain
+        // weekday is a regular school day.
         const SizedBox(height: AppSpacing.s8),
-        const Text('Subject breakdown',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: AppSpacing.s8),
-        Center(
-          child: _VizDonut(
-            segments: [
-              for (var i = 0; i < bySubject.entries.length; i++)
-                (
-                  color: _vizPalette[i % _vizPalette.length],
-                  value: bySubject.entries
-                      .elementAt(i)
-                      .value
-                      .length
-                      .toDouble(),
-                ),
-            ],
-            centerTop: '${bySubject.length} Subjects',
-            centerBottom: '${_attendance.length} Records',
-          ),
+        Text(
+          '${monthName(selected.month)} ${selected.day}, '
+          '${selected.year}${selected == today ? ' · Today' : ''}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: AppSpacing.s8),
-        if (bySubject.isEmpty)
-          const Text('No records yet.')
+        const SizedBox(height: 2),
+        if (selectedEntry != null)
+          Text(
+            '${selectedEntry.name} · ${selectedEntry.type.label}',
+            style: TextStyle(color: scheme.onSurfaceVariant),
+          )
+        else if (isWeekend(selected))
+          Text(
+            'Weekend — no classes.',
+            style: TextStyle(color: scheme.onSurfaceVariant),
+          )
         else
-          for (var i = 0; i < bySubject.entries.length; i++)
-            _row(
-              bySubject.entries.elementAt(i).key,
-              '${attendanceStats(bySubject.entries.elementAt(i).value).percent.toStringAsFixed(1)}% · ${bySubject.entries.elementAt(i).value.length} records',
-            ),
-        const SizedBox(height: AppSpacing.s4),
-        const Text('Monthly report',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: AppSpacing.s8),
-        Center(
-          child: _VizDonut(
-            segments: [
-              (color: kStudentEmerald, value: monthStats.present.toDouble()),
-              (color: scheme.error, value: monthStats.absent.toDouble()),
-            ],
-            centerTop:
-                '${monthStats.percent.toStringAsFixed(1)}%',
-            centerBottom: 'Present',
+          Text(
+            'Regular school day — classes as usual.',
+            style: TextStyle(color: scheme.onSurfaceVariant),
           ),
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        _row('Present', '${monthStats.present}'),
-        _row('Absent', '${monthStats.absent}'),
-        Text('${monthRecords.length} records',
-            style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        card,
+        // Coming up — no-school days & events (next 5 from
+        // today), below the card, exactly like the preview.
+        if (upcoming.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text('Coming up — no-school days & events',
+              style: kStudentCardHeading),
+          const SizedBox(height: 8),
+          for (final entry in upcoming) _comingUpRow(context, entry),
+        ],
       ],
     );
   }
-}
 
-// ------------------------------------------------------------ viz
-// (Preview graph-first Student sections, Nov 6, 2026.)
-//
-// Ring / gauge / donut / week-bars drawn with CustomPainter —
-// pure draws, no animation controller, so they are reduced-motion
-// safe by construction and show the final value immediately.
-// Every value comes from the app's real data; empty data draws an
-// empty track with a "0" centre, never invented numbers.
-
-/// Palette for donut segments (subject breakdown, monthly report).
-const _vizPalette = <Color>[
-  Color(0xFF16A34A),
-  Color(0xFF2563EB),
-  Color(0xFFF59E0B),
-  Color(0xFF8B5CF6),
-  Color(0xFF06B6D4),
-  Color(0xFFEC4899),
-];
-
-
-class _DonutPainter extends CustomPainter {
-  _DonutPainter({required this.segments, required this.trackColor});
-
-  /// (color, value) segments; empty or all-zero draws the track only.
-  final List<({Color color, double value})> segments;
-  final Color trackColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const strokeWidth = 14.0;
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (math.min(size.width, size.height) / 2) - strokeWidth / 2;
-    final track = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-    canvas.drawCircle(center, radius, track);
-    final total = segments.fold<double>(0, (s, e) => s + e.value);
-    if (total <= 0) return;
-    var start = -math.pi / 2;
-    for (final seg in segments) {
-      if (seg.value <= 0) continue;
-      final sweep = math.pi * 2 * (seg.value / total);
-      final fill = Paint()
-        ..color = seg.color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        start,
-        sweep,
-        false,
-        fill,
-      );
-      start += sweep;
-    }
+  Widget _legendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.circle, size: 8, color: color),
+        const SizedBox(width: AppSpacing.s4),
+        Text(label),
+      ],
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant _DonutPainter old) =>
-      old.segments != segments;
-}
-
-
-/// Donut with a two-line centre label (preview "viz-donut":
-/// Subject breakdown, Monthly report).
-class _VizDonut extends StatelessWidget {
-  const _VizDonut({
-    required this.segments,
-    required this.centerTop,
-    required this.centerBottom,
-  });
-
-  final List<({Color color, double value})> segments;
-  final String centerTop;
-  final String centerBottom;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _comingUpRow(BuildContext context, MarkedDayEntry entry) {
     final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 120,
-      height: 120,
-      child: Stack(
-        alignment: Alignment.center,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
         children: [
-          CustomPaint(
-            size: const Size(120, 120),
-            painter: _DonutPainter(
-              segments: segments,
-              trackColor: scheme.outlineVariant,
+          Icon(Icons.circle,
+              size: 8, color: markedDayTypeColor(entry.type)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(entry.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  formatMarkedDayRange(entry),
+                  style: TextStyle(
+                      color: scheme.onSurfaceVariant, fontSize: 12),
+                ),
+              ],
             ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(centerTop,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w800)),
-              Text(centerBottom,
-                  textAlign: TextAlign.center, style: AppText.small),
-            ],
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: markedDayTypeColor(entry.type)
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              entry.type.label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: markedDayTypeColor(entry.type),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 }
-
-/// Mon–Sun bar chart (preview "viz-bars": Trips this week,
-/// Quizzes this week). Bars scale to the week's max; zero weeks
-/// draw flat tracks, never fake heights.
-class _WeekBars extends StatelessWidget {
-  const _WeekBars({required this.values});
-
-  /// 7 counts, Monday first.
-  final List<int> values;
-
-  static const _labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final max = values.fold<int>(0, (m, v) => v > m ? v : m);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        for (var i = 0; i < 7; i++)
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('${values[i]}', style: AppText.small),
-                const SizedBox(height: 2),
-                Container(
-                  height: 36,
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    width: 14,
-                    height: max == 0
-                        ? 2
-                        : 4 + 32 * (values[i] / max),
-                    decoration: BoxDecoration(
-                      color: values[i] == 0
-                          ? scheme.outlineVariant
-                          : kStudentEmerald,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(_labels[i], style: AppText.small),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// Big-value stat panel (preview "viz-panel": Saved Routes,
-/// Est. Fare).
-class _StatPanel extends StatelessWidget {
-  const _StatPanel({
-    required this.value,
-    required this.label,
-    this.sub,
-  });
-
-  final String value;
-  final String label;
-  final String? sub;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: scheme.primary.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(value,
-                style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.w800)),
-            Text(label,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            if (sub != null)
-              Text(sub!, style: AppText.small),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-
