@@ -1,12 +1,14 @@
-// Tests for the Nov 9, 2026 raster diagnostic (Huawei P30 Lite
-// blank map): the Map tab starts on the CartoDB raster basemap
-// instead of Meta's Canterbury vector style, so we can tell
-// whether raster tiles render where vector does not.
+// Tests for the Map tab start style. The Nov 9, 2026 raster
+// diagnostic (Huawei P30 Lite blank map) is OVER: the flag is
+// off, so the tab starts on Meta's Canterbury vector style again.
+// The CartoDB raster path still exists as the fallback, and the
+// [startsOnRaster] parameter lets these tests exercise both
+// branches — the raster-branch tests pass it explicitly.
 //
 // Pure decision tests (no native map view — it cannot render in
 // flutter test) plus widget tests for what the tab shows on its
-// first build: no failure banner, and OSM + CARTO attribution
-// from the start.
+// first build: no failure banner, and Meta attribution from
+// the start.
 import 'dart:convert';
 
 import 'package:estudyantego/features/fares_tab.dart';
@@ -29,21 +31,26 @@ Future<void> _pumpMap(WidgetTester tester) async {
 
 void main() {
   group('raster diagnostic flag', () {
-    test('the flag is ON while the diagnostic is live', () {
-      expect(kMapStartsOnRaster, isTrue);
+    test('the flag is OFF — the raster diagnostic is over', () {
+      expect(kMapStartsOnRaster, isFalse);
     });
   });
 
   group('mapStartStyle', () {
+    test('with the flag off, the default start style is Meta', () {
+      expect(mapStartStyle(dark: true), metaDarkMapStyleUrl);
+      expect(mapStartStyle(dark: false), metaLightMapStyleUrl);
+    });
+
     test('starts on the CartoDB raster style in dark theme', () {
-      final style = mapStartStyle(dark: true);
+      final style = mapStartStyle(dark: true, startsOnRaster: true);
       expect(style, cartoFallbackStyleJson(dark: true));
       expect(style, contains('basemaps.cartocdn.com/dark_all'));
       expect(style, isNot(contains('fbcdn')));
     });
 
     test('starts on the CartoDB raster style in light theme', () {
-      final style = mapStartStyle(dark: false);
+      final style = mapStartStyle(dark: false, startsOnRaster: true);
       expect(style, cartoFallbackStyleJson(dark: false));
       expect(style, contains('basemaps.cartocdn.com/light_all'));
       expect(style, isNot(contains('fbcdn')));
@@ -54,7 +61,7 @@ void main() {
       // jump back to Meta, or the test would silently re-test
       // the vector style and confuse the result.
       for (final dark in [true, false]) {
-        final style = mapStartStyle(dark: dark);
+        final style = mapStartStyle(dark: dark, startsOnRaster: true);
         expect(style, contains('basemaps.cartocdn.com'));
         expect(style, isNot(contains('fbcdn')));
       }
@@ -76,8 +83,8 @@ void main() {
       // style under test must fetch its tiles from the same
       // endpoint the probe fetches — otherwise a failed probe
       // would not prove the style's tiles failed.
-      final decoded =
-          jsonDecode(mapStartStyle(dark: true)) as Map<String, dynamic>;
+      final decoded = jsonDecode(
+          mapStartStyle(dark: true, startsOnRaster: true)) as Map<String, dynamic>;
       final sources = decoded['sources'] as Map<String, dynamic>;
       final darkSource = sources['carto-dark'] as Map<String, dynamic>;
       final tiles = darkSource['tiles'] as List<dynamic>;
@@ -92,11 +99,11 @@ void main() {
   group('mapRetryTarget', () {
     test('Retry re-attempts the raster style while the flag is on',
         () {
-      final darkRetry = mapRetryTarget(dark: true);
+      final darkRetry = mapRetryTarget(dark: true, startsOnRaster: true);
       expect(darkRetry.isRaster, isTrue);
       expect(darkRetry.style, cartoFallbackStyleJson(dark: true));
 
-      final lightRetry = mapRetryTarget(dark: false);
+      final lightRetry = mapRetryTarget(dark: false, startsOnRaster: true);
       expect(lightRetry.isRaster, isTrue);
       expect(lightRetry.style, cartoFallbackStyleJson(dark: false));
     });
@@ -108,21 +115,21 @@ void main() {
     });
   });
 
-  group('MapTab widget (raster start)', () {
+  group('MapTab widget (Meta start)', () {
     testWidgets('no "couldn\'t load" banner at startup', (tester) async {
       await _pumpMap(tester);
       expect(find.text("Couldn't load the map"), findsNothing);
     });
 
-    testWidgets('attribution is OSM + CARTO from the first build',
+    testWidgets('attribution is Meta from the first build',
         (tester) async {
       await _pumpMap(tester);
       // The attribution chip only shows while the sheet is hidden;
       // the logo toggle hides it without losing any state.
       await tester.tap(find.byTooltip('Hide bottom panel'));
       await tester.pumpAndSettle();
-      expect(find.text('© OpenStreetMap contributors'), findsOneWidget);
-      expect(find.text('© Meta'), findsNothing);
+      expect(find.text('© Meta'), findsOneWidget);
+      expect(find.text('© OpenStreetMap contributors'), findsNothing);
     });
   });
 }

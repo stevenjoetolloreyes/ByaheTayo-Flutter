@@ -1360,7 +1360,7 @@ enum _MapStyleMode { meta, cartoFallback }
 /// restore the Meta vector start — nothing else changes, the
 /// Meta path is untouched. DO NOT SHIP with this flag on without
 /// Steven's say-so: it is a diagnostic, not a product decision.
-const bool kMapStartsOnRaster = true;
+const bool kMapStartsOnRaster = false;
 
 /// The basemap style the Map tab starts on — and returns to on a
 /// theme change or a Retry — for [dark] theme. While the Nov 9
