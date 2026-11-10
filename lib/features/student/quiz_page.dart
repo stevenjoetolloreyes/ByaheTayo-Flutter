@@ -6,14 +6,14 @@
 // screen that awards 10 pts per correct answer to the header
 // chips), quiz history, and the + menu.
 //
-// The + is an ICON ONLY (floating circular button, bottom right —
-// no label). Tapping it expands a floating menu with two buttons:
-// "Add Question manually" (a form: question, choices A–D, correct
-// answer) and "Files" (the on-device AI: pick a PDF or photo of
-// notes, the AI reads it and generates questions; a "reading your
-// file" state shows first, then the questions are added, the
-// count updates, and a confirmation card names the file). The +
-// rotates to a close icon while the menu is open. The control
+// The + is an ICON ONLY (blocky 58px grass button, bottom
+// right — no label). Tapping it expands a floating menu with two
+// buttons: "Add Question manually" (a form: question, choices
+// A–D, correct answer) and "Files" (the on-device AI: pick a PDF
+// or photo of notes, the AI reads it and generates questions; a
+// "reading your file" state shows first, then the questions are
+// added, the count updates, and a confirmation card names the
+// file). The + rotates to a close icon while the menu is open. The control
 // hides during a quiz and on the results screen (those are
 // separate pushed screens, so the FAB is not there).
 //
@@ -31,10 +31,10 @@ import 'package:flutter/material.dart';
 
 import '../ai_quiz_service.dart';
 import '../estudyantego_ai.dart';
+import '../minecraft_theme.dart';
 import '../points_wallet_repository.dart';
 import '../top_popup.dart';
 import '../app_layout.dart';
-import '../ios_components.dart';
 import 'note_extract_service.dart';
 import 'student_data.dart';
 
@@ -77,11 +77,9 @@ class _QuizPageState extends State<QuizPage> {
   String? _lastGeneratedFile;
   int _lastGeneratedCount = 0;
 
-  AiQuizGenerator get _ai =>
-      widget.aiGenerator ?? OnDeviceAiQuizGenerator();
+  AiQuizGenerator get _ai => widget.aiGenerator ?? OnDeviceAiQuizGenerator();
 
-  NoteExtractService get _extractor =>
-      widget.extractor ?? NoteExtractService();
+  NoteExtractService get _extractor => widget.extractor ?? NoteExtractService();
 
   @override
   void initState() {
@@ -90,10 +88,8 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Future<void> _load() async {
-    final quizzes =
-        await StudentStorage.loadList(StudentStorage.quizzesKey);
-    final attempts =
-        await StudentStorage.loadList(StudentStorage.attemptsKey);
+    final quizzes = await StudentStorage.loadList(StudentStorage.quizzesKey);
+    final attempts = await StudentStorage.loadList(StudentStorage.attemptsKey);
     if (!mounted) return;
     setState(() {
       _quizzes = quizzes.map(Quiz.fromJson).toList();
@@ -104,11 +100,14 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Future<void> _saveQuizzes() => StudentStorage.saveList(
-      StudentStorage.quizzesKey, _quizzes.map((q) => q.toJson()).toList());
+    StudentStorage.quizzesKey,
+    _quizzes.map((q) => q.toJson()).toList(),
+  );
 
   Future<void> _saveAttempts() => StudentStorage.saveList(
-      StudentStorage.attemptsKey,
-      _attempts.map((a) => a.toJson()).toList());
+    StudentStorage.attemptsKey,
+    _attempts.map((a) => a.toJson()).toList(),
+  );
 
   /// Quizzes to show: the user's real quizzes, or the sample quiz
   /// while they have none.
@@ -174,13 +173,15 @@ class _QuizPageState extends State<QuizPage> {
           randomize: old.randomize,
         );
       } else {
-        _quizzes.add(Quiz(
-          id: result.quizId,
-          title: result.quizTitle,
-          subject: '',
-          timeLimitSec: 0,
-          questions: [result.question],
-        ));
+        _quizzes.add(
+          Quiz(
+            id: result.quizId,
+            title: result.quizTitle,
+            subject: '',
+            timeLimitSec: 0,
+            questions: [result.question],
+          ),
+        );
       }
     });
     await _saveQuizzes();
@@ -233,7 +234,8 @@ class _QuizPageState extends State<QuizPage> {
       final extracted = await _extractor.extract(file);
       if (extracted.outcome != NoteExtractOutcome.ok ||
           extracted.text.trim().isEmpty) {
-        error = 'I could not read any text from that file. '
+        error =
+            'I could not read any text from that file. '
             'Try a clearer photo or a PDF with a text layer.';
       } else {
         final result = await _ai.generateFromText(
@@ -274,8 +276,7 @@ class _QuizPageState extends State<QuizPage> {
     if (mounted) {
       TopPopup.show(
         context,
-        message:
-            'Added ${generated.length} question(s) from ${picked.name}.',
+        message: 'Added ${generated.length} question(s) from ${picked.name}.',
       );
     }
   }
@@ -313,66 +314,110 @@ class _QuizPageState extends State<QuizPage> {
               padding: AppLayout.pagePaddingTab,
               children: [
                 if (_showingSample)
-                  Card(
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
                     child: ListTile(
-                      leading: const Icon(Icons.info_outline),
-                      title: const Text('Sample quiz'),
-                      subtitle: const Text(
-                          'Computer Basics — try it below. Add your '
-                          'first question or file and this sample goes away.'),
+                      leading: const MinecraftIconBadge(
+                        icon: Icons.info_outline,
+                        backgroundColor: MinecraftColors.skyBlue,
+                      ),
+                      title: Text(
+                        'Sample quiz',
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Computer Basics — try it below. Add your '
+                        'first question or file and this sample goes away.',
+                        style: MinecraftText.body(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
                     ),
                   ),
                 if (_showingSample) const SizedBox(height: AppSpacing.s8),
                 if (_lastGeneratedFile != null)
-                  Card(
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
                     child: ListTile(
-                      leading: const Icon(Icons.check_circle,
-                          color: Colors.green),
+                      leading: const MinecraftIconBadge(
+                        icon: Icons.check_circle,
+                        backgroundColor: MinecraftColors.grassGreen,
+                      ),
                       title: Text(
-                          'Added $_lastGeneratedCount question(s) from $_lastGeneratedFile'),
-                      subtitle: const Text(
-                          'The AI read your file and built questions from it.'),
+                        'Added $_lastGeneratedCount question(s) from $_lastGeneratedFile',
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'The AI read your file and built questions from it.',
+                        style: MinecraftText.body(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
                       trailing: IconButton(
                         icon: const Icon(Icons.close, size: 20),
-                        onPressed: () => setState(
-                            () => _lastGeneratedFile = null),
+                        onPressed: () =>
+                            setState(() => _lastGeneratedFile = null),
                       ),
                     ),
                   ),
                 if (_lastGeneratedFile != null)
                   const SizedBox(height: AppSpacing.s8),
                 if (quizzes.isEmpty)
-                  const Card(
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
                     child: ListTile(
-                      title: Text('No quizzes yet.'),
-                      subtitle:
-                          Text('Add a quiz from your notes.'),
+                      title: Text(
+                        'No quizzes yet.',
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Add a quiz from your notes.',
+                        style: MinecraftText.body(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
                     ),
                   )
                 else
                   for (final quiz in quizzes)
-                    Card(
-                      child: Padding(
-                        padding: AppLayout.cardPadding,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: MinecraftCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               quiz.title,
-                              style: const TextStyle(
-                                  fontSize: 16.5,
-                                  fontWeight: FontWeight.bold),
+                              style: MinecraftText.title(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
                             if (quiz.subject.isNotEmpty) ...[
                               const SizedBox(height: 4),
-                              Text(quiz.subject,
-                                  style: AppText.caption),
+                              Text(
+                                quiz.subject,
+                                style: MinecraftText.caption(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
                             ],
                             const SizedBox(height: 4),
                             Text(
                               '${quiz.questions.length} questions · '
                               'Multiple choice · 10 pts each',
-                              style: AppText.caption,
+                              style: MinecraftText.caption(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                             ),
                             const SizedBox(height: AppSpacing.s8),
                             FilledButton.icon(
@@ -386,38 +431,60 @@ class _QuizPageState extends State<QuizPage> {
                     ),
                 if (_attempts.isNotEmpty) ...[
                   const SizedBox(height: AppLayout.headerGap),
-                  const Text('Quiz history',
-                      style: AppText.sectionTitle),
+                  Text(
+                    'Quiz history',
+                    style: MinecraftText.heading(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontSize: 17,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.s8),
                   for (final attempt in _attempts)
-                    Card(
-                      child: ListTile(
-                        title: Text(attempt.quizTitle),
-                        subtitle: Text(
-                            '${formatDate(attempt.date)} · ${attempt.percentage}%${attempt.durationSec > 0 ? ' · ${attempt.durationSec ~/ 60}m ${attempt.durationSec % 60}s' : ''}'),
-                        trailing: Text(
-                          '${attempt.score}/${attempt.total}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700),
-                        ),
-                        onTap: () {
-                          final quiz = _quizForAttempt(attempt);
-                          if (quiz == null) {
-                            TopPopup.show(
-                              context,
-                              message:
-                                  'That quiz is no longer saved, so its questions cannot be reviewed.',
-                            );
-                            return;
-                          }
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => _AttemptReviewScreen(
-                                  attempt: attempt, quiz: quiz),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: MinecraftCard(
+                        padding: EdgeInsets.zero,
+                        child: ListTile(
+                          title: Text(
+                            attempt.quizTitle,
+                            style: MinecraftText.title(
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
-                          );
-                        },
+                          ),
+                          subtitle: Text(
+                            '${formatDate(attempt.date)} · ${attempt.percentage}%${attempt.durationSec > 0 ? ' · ${attempt.durationSec ~/ 60}m ${attempt.durationSec % 60}s' : ''}',
+                            style: MinecraftText.body(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                          trailing: Text(
+                            '${attempt.score}/${attempt.total}',
+                            style: MinecraftText.button(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                          onTap: () {
+                            final quiz = _quizForAttempt(attempt);
+                            if (quiz == null) {
+                              TopPopup.show(
+                                context,
+                                message: 'That quiz is no longer saved, so its questions cannot be reviewed.',
+                              );
+                              return;
+                            }
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => _AttemptReviewScreen(
+                                  attempt: attempt,
+                                  quiz: quiz,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                 ],
@@ -428,7 +495,8 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   /// One floating-menu button (Add Question manually / Files):
-  /// brand-soft pill with an icon, a label, and an optional AI badge.
+  /// blocky white/dark pill with a 3px ink border, grass icon,
+  /// Baloo 2 label, and an optional gold AI badge.
   Widget _menuButton({
     required IconData icon,
     required String label,
@@ -441,57 +509,46 @@ class _QuizPageState extends State<QuizPage> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: isDark
-                ? const Color(0xFF1A2C22)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(999),
+            color: isDark ? MinecraftColors.darkCard : Colors.white,
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isDark
-                  ? const Color.fromRGBO(238, 245, 241, 0.12)
-                  : const Color.fromRGBO(16, 35, 26, 0.12),
+                  ? MinecraftColors.darkBorder
+                  : MinecraftColors.border,
+              width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
             ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color.fromRGBO(0, 0, 0, 0.3),
-                blurRadius: 16,
-                offset: Offset(0, 6),
-              ),
-            ],
+            boxShadow: isDark ? null : const [MinecraftShapes.cardShadow],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: const Color(0xFF34D399)),
+              Icon(icon, size: 18, color: MinecraftColors.grassGreen),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: isDark
-                      ? const Color(0xFFEEF5F1)
-                      : const Color(0xFF10231A),
-                ),
+                style: MinecraftText.button(color: theme.colorScheme.onSurface),
               ),
               if (badge != null) ...[
                 const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16A34A),
-                    borderRadius: BorderRadius.circular(999),
+                    color: MinecraftColors.gold,
+                    borderRadius: BorderRadius.circular(8),
+                    border: MinecraftShapes.chipBorder,
                   ),
                   child: Text(
                     badge,
-                    style: const TextStyle(
+                    style: MinecraftText.button(
+                      color: MinecraftColors.ink,
                       fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -503,36 +560,16 @@ class _QuizPageState extends State<QuizPage> {
     );
   }
 
-  /// The + icon ONLY (floating circular button, bottom right — no
-  /// label). Rotates 45° into a close icon while the menu is open.
+  /// The + icon ONLY (blocky 58px grass button, bottom right —
+  /// no label). Rotates 45° into a close icon while the menu is
+  /// open.
   Widget _plusButton() {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFF16A34A),
-        boxShadow: [
-          BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.4),
-            blurRadius: 28,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () => setState(() => _menuOpen = !_menuOpen),
-          child: Center(
-            child: AnimatedRotation(
-              turns: _menuOpen ? 0.125 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: const Icon(Icons.add, size: 24, color: Colors.white),
-            ),
-          ),
-        ),
+    return MinecraftFabButton(
+      onPressed: () => setState(() => _menuOpen = !_menuOpen),
+      child: AnimatedRotation(
+        turns: _menuOpen ? 0.125 : 0,
+        duration: const Duration(milliseconds: 200),
+        child: const Icon(Icons.add, size: 24, color: Colors.white),
       ),
     );
   }
@@ -574,8 +611,7 @@ class _AddQuestionSheetState extends State<_AddQuestionSheet> {
   @override
   void initState() {
     super.initState();
-    _quizChoice =
-        widget.quizzes.isEmpty ? '__new__' : widget.quizzes.first.id;
+    _quizChoice = widget.quizzes.isEmpty ? '__new__' : widget.quizzes.first.id;
   }
 
   @override
@@ -602,8 +638,13 @@ class _AddQuestionSheetState extends State<_AddQuestionSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Add question manually',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(
+              'Add question manually',
+              style: MinecraftText.heading(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 20,
+              ),
+            ),
             const SizedBox(height: AppLayout.cardGap),
             DropdownButtonFormField<String>(
               value: _quizChoice,
@@ -612,7 +653,9 @@ class _AddQuestionSheetState extends State<_AddQuestionSheet> {
                 for (final q in widget.quizzes)
                   DropdownMenuItem(value: q.id, child: Text(q.title)),
                 const DropdownMenuItem(
-                    value: '__new__', child: Text('New quiz…')),
+                  value: '__new__',
+                  child: Text('New quiz…'),
+                ),
               ],
               onChanged: (v) {
                 if (v != null) setState(() => _quizChoice = v);
@@ -622,15 +665,13 @@ class _AddQuestionSheetState extends State<_AddQuestionSheet> {
               const SizedBox(height: AppSpacing.s8),
               TextField(
                 controller: _newQuizTitle,
-                decoration: const InputDecoration(
-                    labelText: 'New quiz title'),
+                decoration: const InputDecoration(labelText: 'New quiz title'),
               ),
             ],
             const SizedBox(height: AppSpacing.s8),
             TextField(
               controller: _question,
-              decoration:
-                  const InputDecoration(labelText: 'Question'),
+              decoration: const InputDecoration(labelText: 'Question'),
             ),
             const SizedBox(height: AppSpacing.s8),
             for (var i = 0; i < 4; i++)
@@ -647,8 +688,8 @@ class _AddQuestionSheetState extends State<_AddQuestionSheet> {
                       child: TextField(
                         controller: _options[i],
                         decoration: InputDecoration(
-                            labelText:
-                                'Choice ${String.fromCharCode(65 + i)}'),
+                          labelText: 'Choice ${String.fromCharCode(65 + i)}',
+                        ),
                       ),
                     ),
                   ],
@@ -656,45 +697,47 @@ class _AddQuestionSheetState extends State<_AddQuestionSheet> {
               ),
             const Text('Pick the radio of the correct choice.'),
             const SizedBox(height: AppLayout.cardGap),
-            FilledButton(
-              onPressed: () {
-                if (_question.text.trim().isEmpty) {
-                  TopPopup.show(context, message: 'Enter a question.');
-                  return;
-                }
-                if (_options.any((c) => c.text.trim().isEmpty)) {
-                  TopPopup.show(context, message: 'Fill in all 4 choices.');
-                  return;
-                }
-                final isNew = _quizChoice == '__new__';
-                final title = isNew
-                    ? _newQuizTitle.text.trim()
-                    : widget.quizzes
-                        .firstWhere((q) => q.id == _quizChoice)
-                        .title;
-                if (isNew && title.isEmpty) {
-                  TopPopup.show(context, message: 'Enter a quiz title.');
-                  return;
-                }
-                Navigator.pop(
-                  context,
-                  _ManualQuestionResult(
-                    quizId:
-                        isNew ? newId() : _quizChoice,
-                    quizTitle: title,
-                    question: QuizQuestion(
-                      type: 'mcq',
-                      question: _question.text.trim(),
-                      options:
-                          _options.map((c) => c.text.trim()).toList(),
-                      correctIndex: _correct,
-                      answer: _options[_correct].text.trim(),
-                      explanation: '',
+            SizedBox(
+              width: double.infinity,
+              child: MinecraftBlockButton(
+                label: 'Save question',
+                icon: Icons.save_outlined,
+                onPressed: () {
+                  if (_question.text.trim().isEmpty) {
+                    TopPopup.show(context, message: 'Enter a question.');
+                    return;
+                  }
+                  if (_options.any((c) => c.text.trim().isEmpty)) {
+                    TopPopup.show(context, message: 'Fill in all 4 choices.');
+                    return;
+                  }
+                  final isNew = _quizChoice == '__new__';
+                  final title = isNew
+                      ? _newQuizTitle.text.trim()
+                      : widget.quizzes
+                            .firstWhere((q) => q.id == _quizChoice)
+                            .title;
+                  if (isNew && title.isEmpty) {
+                    TopPopup.show(context, message: 'Enter a quiz title.');
+                    return;
+                  }
+                  Navigator.pop(
+                    context,
+                    _ManualQuestionResult(
+                      quizId: isNew ? newId() : _quizChoice,
+                      quizTitle: title,
+                      question: QuizQuestion(
+                        type: 'mcq',
+                        question: _question.text.trim(),
+                        options: _options.map((c) => c.text.trim()).toList(),
+                        correctIndex: _correct,
+                        answer: _options[_correct].text.trim(),
+                        explanation: '',
+                      ),
                     ),
-                  ),
-                );
-              },
-              child: const Text('Save question'),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -709,7 +752,11 @@ class _AddQuestionSheetState extends State<_AddQuestionSheet> {
 /// "Ask AI to Explain More" uses the on-device AI, which returns
 /// the stored explanation (never an invented one).
 class _QuizRunner extends StatefulWidget {
-  const _QuizRunner({required this.quiz, this.onAttemptSaved, this.aiGenerator});
+  const _QuizRunner({
+    required this.quiz,
+    this.onAttemptSaved,
+    this.aiGenerator,
+  });
 
   final Quiz quiz;
 
@@ -741,8 +788,7 @@ class _QuizRunnerState extends State<_QuizRunner> {
   final Map<int, String> _aiExplanations = {};
   final Set<int> _aiLoading = {};
 
-  AiQuizGenerator get _ai =>
-      widget.aiGenerator ?? OnDeviceAiQuizGenerator();
+  AiQuizGenerator get _ai => widget.aiGenerator ?? OnDeviceAiQuizGenerator();
 
   @override
   void initState() {
@@ -803,9 +849,11 @@ class _QuizRunnerState extends State<_QuizRunner> {
     for (var i = 0; i < _workingQuiz.questions.length; i++) {
       final q = _workingQuiz.questions[i];
       if (q.type == 'mcq' || q.type == 'tf') {
-        given.add(_selected[i] < 0 || _selected[i] >= q.options.length
-            ? ''
-            : q.options[_selected[i]]);
+        given.add(
+          _selected[i] < 0 || _selected[i] >= q.options.length
+              ? ''
+              : q.options[_selected[i]],
+        );
       } else {
         given.add(_typed[i].trim());
       }
@@ -816,11 +864,13 @@ class _QuizRunnerState extends State<_QuizRunner> {
   List<bool> get _correctFlags {
     final flags = <bool>[];
     for (var i = 0; i < _workingQuiz.questions.length; i++) {
-      flags.add(isQuestionCorrect(
-        _workingQuiz.questions[i],
-        selected: _selected[i],
-        typed: _typed[i],
-      ));
+      flags.add(
+        isQuestionCorrect(
+          _workingQuiz.questions[i],
+          selected: _selected[i],
+          typed: _typed[i],
+        ),
+      );
     }
     return flags;
   }
@@ -844,18 +894,20 @@ class _QuizRunnerState extends State<_QuizRunner> {
     _attemptSaved = true;
     final callback = widget.onAttemptSaved;
     if (callback == null) return;
-    await callback(QuizAttempt(
-      id: newId(),
-      quizId: widget.quiz.id,
-      quizTitle: widget.quiz.title,
-      score: _score,
-      total: _workingQuiz.questions.length,
-      date: finished,
-      startedAt: _startedAt,
-      finishedAt: finished,
-      correctFlags: _correctFlags,
-      givenAnswers: _givenAnswers,
-    ));
+    await callback(
+      QuizAttempt(
+        id: newId(),
+        quizId: widget.quiz.id,
+        quizTitle: widget.quiz.title,
+        score: _score,
+        total: _workingQuiz.questions.length,
+        date: finished,
+        startedAt: _startedAt,
+        finishedAt: finished,
+        correctFlags: _correctFlags,
+        givenAnswers: _givenAnswers,
+      ),
+    );
   }
 
   Future<void> _confirmSubmit() async {
@@ -864,9 +916,11 @@ class _QuizRunnerState extends State<_QuizRunner> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Submit quiz?'),
-        content: Text(unanswered == 0
-            ? 'You answered every question. Submit now?'
-            : 'You have $unanswered unanswered question(s). Unanswered questions count as incorrect. Submit anyway?'),
+        content: Text(
+          unanswered == 0
+              ? 'You answered every question. Submit now?'
+              : 'You have $unanswered unanswered question(s). Unanswered questions count as incorrect. Submit anyway?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -895,8 +949,8 @@ class _QuizRunnerState extends State<_QuizRunner> {
       setState(() {
         _aiExplanations[index] = text.trim().isEmpty
             ? (q.explanation.isNotEmpty
-                ? q.explanation
-                : 'No explanation available.')
+                  ? q.explanation
+                  : 'No explanation available.')
             : text.trim();
         _aiLoading.remove(index);
       });
@@ -961,29 +1015,43 @@ class _QuizRunnerState extends State<_QuizRunner> {
         body: ListView(
           padding: AppLayout.pagePaddingTab,
           children: [
-            Card(
-              child: Padding(
-                padding: AppLayout.cardPadding,
-                child: Column(
-                  children: [
-                    Text('$_score/$total',
-                        style: const TextStyle(
-                            fontSize: 32, fontWeight: FontWeight.w800)),
+            MinecraftCard(
+              child: Column(
+                children: [
+                  Text(
+                    '$_score/$total',
+                    style: MinecraftText.heading(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontSize: 32,
+                    ),
+                  ),
+                  Text(
+                    '$percentage% · $correctCount correct · $incorrectCount incorrect · ${_durationText()}',
+                    style: MinecraftText.body(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  Text(
+                    'Performance Summary: '
+                    '${performanceSummaryForPct(percentage)}',
+                    style: MinecraftText.body(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  if (earnedPts > 0)
                     Text(
-                        '$percentage% · $correctCount correct · $incorrectCount incorrect · ${_durationText()}'),
-                    Text(
-                        'Performance Summary: '
-                        '${performanceSummaryForPct(percentage)}'),
-                    if (earnedPts > 0)
-                      Text(
-                        'You earned $earnedPts pts',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF16A34A)),
+                      'You earned $earnedPts pts',
+                      style: MinecraftText.button(
+                        color: MinecraftColors.grassGreen,
                       ),
-                    const Text('Your score'),
-                  ],
-                ),
+                    ),
+                  Text(
+                    'Your score',
+                    style: MinecraftText.caption(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: AppLayout.cardGap),
@@ -993,147 +1061,169 @@ class _QuizRunnerState extends State<_QuizRunner> {
                 ChoiceChip(
                   label: const Text('All answers'),
                   selected: !_showMistakesOnly,
-                  onSelected: (_) =>
-                      setState(() => _showMistakesOnly = false),
+                  onSelected: (_) => setState(() => _showMistakesOnly = false),
                 ),
                 ChoiceChip(
                   label: const Text('Review Mistakes'),
                   selected: _showMistakesOnly,
-                  onSelected: (_) =>
-                      setState(() => _showMistakesOnly = true),
+                  onSelected: (_) => setState(() => _showMistakesOnly = true),
                 ),
               ],
             ),
             const SizedBox(height: AppLayout.cardGap),
             if (visibleIndices.isEmpty)
-              const Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
-                  title: Text('No mistakes — great work!'),
-                  subtitle: Text('Every answer was correct.'),
+                  title: Text(
+                    'No mistakes — great work!',
+                    style: MinecraftText.title(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Every answer was correct.',
+                    style: MinecraftText.body(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
                 ),
               ),
             for (final i in visibleIndices)
-              Builder(builder: (_) {
-                final q = quiz.questions[i];
-                final correct = _correctFlags[i];
-                final given = questionGivenAnswer(
-                  q,
-                  selected: _selected[i],
-                  typed: _typed[i],
-                );
-                final right = questionCorrectAnswer(q);
-                final aiText = _aiExplanations[i];
-                final aiLoading = _aiLoading.contains(i);
-                return Card(
-                  child: Padding(
-                    padding: AppLayout.cardPadding,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              correct ? Icons.check_circle : Icons.cancel,
+              Builder(
+                builder: (_) {
+                  final q = quiz.questions[i];
+                  final correct = _correctFlags[i];
+                  final given = questionGivenAnswer(
+                    q,
+                    selected: _selected[i],
+                    typed: _typed[i],
+                  );
+                  final right = questionCorrectAnswer(q);
+                  final aiText = _aiExplanations[i];
+                  final aiLoading = _aiLoading.contains(i);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: MinecraftCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                correct ? Icons.check_circle : Icons.cancel,
+                                color: correct ? Colors.green : Colors.red,
+                              ),
+                              const SizedBox(width: AppSpacing.s8),
+                              Expanded(
+                                child: Text(
+                                  q.question,
+                                  style: MinecraftText.title(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            correct ? 'Correct Answer' : 'Incorrect Answer',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
                               color: correct ? Colors.green : Colors.red,
                             ),
-                            const SizedBox(width: AppSpacing.s8),
-                            Expanded(
-                              child: Text(q.question,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          correct ? 'Correct Answer' : 'Incorrect Answer',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: correct ? Colors.green : Colors.red),
-                        ),
-                        const SizedBox(height: 4),
-                        Text('Your answer: $given'),
-                        Text('Correct answer: $right'),
-                        if (q.type == 'match') ...[
-                          const SizedBox(height: 6),
-                          for (var p = 0;
-                              p < q.options.length;
-                              p++) ...[
-                            Builder(builder: (_) {
-                              final pairs = matchPairResults(q, _typed[i]);
-                              final pairOk =
-                                  p < pairs.length && pairs[p];
-                              final expected = p <
-                                      expectedAnswerLines(q).length
-                                  ? expectedAnswerLines(q)[p]
-                                  : '';
-                              final givenPair = p <
-                                      answerLines(_typed[i]).length
-                                  ? answerLines(_typed[i])[p]
-                                  : '(no answer)';
-                              return Text(
-                                '${q.options[p]} → $givenPair${pairOk ? '' : ' (correct: $expected)'}',
-                                style: TextStyle(
-                                    color: pairOk
-                                        ? Colors.green
-                                        : Colors.red),
-                              );
-                            }),
-                          ],
-                        ],
-                        if (q.explanation.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text('Why: ${q.explanation}',
-                              style: AppText.caption),
-                        ],
-                        if (q.learningTip.isNotEmpty) ...[
+                          ),
                           const SizedBox(height: 4),
-                          Text('Tip: ${q.learningTip}',
-                              style: AppText.caption),
-                        ],
-                        if (aiText != null) ...[
-                          const SizedBox(height: 6),
-                          Text('AI explanation: $aiText',
-                              style: AppText.caption),
-                        ],
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            TextButton.icon(
-                              onPressed: aiLoading
-                                  ? null
-                                  : () => _askAiMore(i, q),
-                              icon: aiLoading
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : const Icon(
-                                      Icons.auto_awesome_outlined,
-                                      size: 18),
-                              label: const Text('Ask AI to Explain More'),
-                            ),
-                            if (!correct)
-                              TextButton(
-                                onPressed: () => setState(_startAttempt),
-                                child: const Text('Try Again'),
+                          Text('Your answer: $given'),
+                          Text('Correct answer: $right'),
+                          if (q.type == 'match') ...[
+                            const SizedBox(height: 6),
+                            for (var p = 0; p < q.options.length; p++) ...[
+                              Builder(
+                                builder: (_) {
+                                  final pairs = matchPairResults(q, _typed[i]);
+                                  final pairOk = p < pairs.length && pairs[p];
+                                  final expected =
+                                      p < expectedAnswerLines(q).length
+                                      ? expectedAnswerLines(q)[p]
+                                      : '';
+                                  final givenPair =
+                                      p < answerLines(_typed[i]).length
+                                      ? answerLines(_typed[i])[p]
+                                      : '(no answer)';
+                                  return Text(
+                                    '${q.options[p]} → $givenPair${pairOk ? '' : ' (correct: $expected)'}',
+                                    style: TextStyle(
+                                      color: pairOk ? Colors.green : Colors.red,
+                                    ),
+                                  );
+                                },
                               ),
+                            ],
                           ],
-                        ),
-                      ],
+                          if (q.explanation.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Why: ${q.explanation}',
+                              style: AppText.caption,
+                            ),
+                          ],
+                          if (q.learningTip.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tip: ${q.learningTip}',
+                              style: AppText.caption,
+                            ),
+                          ],
+                          if (aiText != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'AI explanation: $aiText',
+                              style: AppText.caption,
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              TextButton.icon(
+                                onPressed: aiLoading
+                                    ? null
+                                    : () => _askAiMore(i, q),
+                                icon: aiLoading
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.auto_awesome_outlined,
+                                        size: 18,
+                                      ),
+                                label: const Text('Ask AI to Explain More'),
+                              ),
+                              if (!correct)
+                                TextButton(
+                                  onPressed: () => setState(_startAttempt),
+                                  child: const Text('Try Again'),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                },
+              ),
             const SizedBox(height: AppLayout.cardGap),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () =>
-                        setState(() => _showMistakesOnly = false),
+                    onPressed: () => setState(() => _showMistakesOnly = false),
                     child: const Text('Review Answers'),
                   ),
                 ),
@@ -1167,8 +1257,10 @@ class _QuizRunnerState extends State<_QuizRunner> {
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(right: 16),
-                child: Text(_timeText(),
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  _timeText(),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
         ],
@@ -1178,20 +1270,42 @@ class _QuizRunnerState extends State<_QuizRunner> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            LinearProgressIndicator(
-              value: quiz.questions.isEmpty
-                  ? 0
-                  : (_index + 1) / quiz.questions.length,
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? MinecraftColors.darkBorder
+                      : MinecraftColors.border,
+                  width: MinecraftShapes.cardBorderWidth,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: LinearProgressIndicator(
+                  value: quiz.questions.isEmpty
+                      ? 0
+                      : (_index + 1) / quiz.questions.length,
+                  backgroundColor: MinecraftColors.cream,
+                  color: MinecraftColors.grassGreen,
+                  minHeight: 10,
+                ),
+              ),
             ),
             const SizedBox(height: AppLayout.cardGap),
-            Text(q.question, style: const TextStyle(fontSize: 20)),
+            Text(
+              q.question,
+              style: MinecraftText.heading(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 20,
+              ),
+            ),
             const SizedBox(height: AppLayout.headerGap),
             if (q.type == 'id')
               TextFormField(
                 key: ValueKey('typed-$_index'),
                 initialValue: _typed[_index],
-                decoration:
-                    const InputDecoration(labelText: 'Your answer'),
+                decoration: const InputDecoration(labelText: 'Your answer'),
                 onChanged: (v) => _typed[_index] = v,
               )
             else if (q.type == 'enum')
@@ -1201,14 +1315,13 @@ class _QuizRunnerState extends State<_QuizRunner> {
                 minLines: 3,
                 maxLines: 6,
                 decoration: const InputDecoration(
-                    labelText: 'Your answers, one per line',
-                    hintText: 'Answer 1\nAnswer 2'),
+                  labelText: 'Your answers, one per line',
+                  hintText: 'Answer 1\nAnswer 2',
+                ),
                 onChanged: (v) => _typed[_index] = v,
               )
             else if (q.type == 'fill')
-              for (var b = 0;
-                  b < '____'.allMatches(q.question).length;
-                  b++)
+              for (var b = 0; b < '____'.allMatches(q.question).length; b++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: TextFormField(
@@ -1216,8 +1329,7 @@ class _QuizRunnerState extends State<_QuizRunner> {
                     initialValue: b < answerLines(_typed[_index]).length
                         ? answerLines(_typed[_index])[b]
                         : '',
-                    decoration: InputDecoration(
-                        labelText: 'Blank ${b + 1}'),
+                    decoration: InputDecoration(labelText: 'Blank ${b + 1}'),
                     onChanged: (v) => _setFillLine(_index, b, v),
                   ),
                 )
@@ -1232,17 +1344,20 @@ class _QuizRunnerState extends State<_QuizRunner> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           key: ValueKey('match-$_index-$li'),
-                          value: li < answerLines(_typed[_index]).length &&
+                          value:
+                              li < answerLines(_typed[_index]).length &&
                                   answerLines(_typed[_index])[li].isNotEmpty
                               ? answerLines(_typed[_index])[li]
                               : null,
                           hint: const Text('Choose'),
                           items: expectedAnswerLines(q)
-                              .map((r) => DropdownMenuItem(
-                                  value: r, child: Text(r)))
+                              .map(
+                                (r) =>
+                                    DropdownMenuItem(value: r, child: Text(r)),
+                              )
                               .toList(),
-                          onChanged: (v) => setState(
-                              () => _setMatchLine(_index, li, v)),
+                          onChanged: (v) =>
+                              setState(() => _setMatchLine(_index, li, v)),
                         ),
                       ),
                     ],
@@ -1255,8 +1370,7 @@ class _QuizRunnerState extends State<_QuizRunner> {
                   child: ChoiceChip(
                     label: Text(q.options[i]),
                     selected: _selected[_index] == i,
-                    onSelected: (_) =>
-                        setState(() => _selected[_index] = i),
+                    onSelected: (_) => setState(() => _selected[_index] = i),
                   ),
                 ),
             const Spacer(),
@@ -1276,9 +1390,9 @@ class _QuizRunnerState extends State<_QuizRunner> {
                     onPressed: _index == quiz.questions.length - 1
                         ? _confirmSubmit
                         : () => setState(() => _index++),
-                    child: Text(_index == quiz.questions.length - 1
-                        ? 'Submit'
-                        : 'Next'),
+                    child: Text(
+                      _index == quiz.questions.length - 1 ? 'Submit' : 'Next',
+                    ),
                   ),
                 ),
               ],
@@ -1306,57 +1420,71 @@ class _AttemptReviewScreen extends StatelessWidget {
       body: ListView(
         padding: AppLayout.pagePaddingTab,
         children: [
-          Card(
+          MinecraftCard(
+            padding: EdgeInsets.zero,
             child: ListTile(
-              title: Text('${attempt.score}/${attempt.total}'),
+              title: Text(
+                '${attempt.score}/${attempt.total}',
+                style: MinecraftText.title(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
               subtitle: Text(
-                  '${formatDate(attempt.date)} · ${attempt.percentage}%'),
+                '${formatDate(attempt.date)} · ${attempt.percentage}%',
+                style: MinecraftText.body(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: AppLayout.cardGap),
           for (var i = 0; i < quiz.questions.length; i++)
-            Builder(builder: (_) {
-              final q = quiz.questions[i];
-              final correct =
-                  i < flags.length ? flags[i] : false;
-              final given = i < attempt.givenAnswers.length
-                  ? attempt.givenAnswers[i]
-                  : '(no answer)';
-              final right = questionCorrectAnswer(q);
-              return Card(
-                child: Padding(
-                  padding: AppLayout.cardPadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            correct ? Icons.check_circle : Icons.cancel,
-                            color:
-                                correct ? Colors.green : Colors.red,
-                          ),
-                          const SizedBox(width: AppSpacing.s8),
-                          Expanded(
-                            child: Text(q.question,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text('Your answer: $given'),
-                      Text('Correct answer: $right'),
-                      if (q.explanation.isNotEmpty) ...[
+            Builder(
+              builder: (_) {
+                final q = quiz.questions[i];
+                final correct = i < flags.length ? flags[i] : false;
+                final given = i < attempt.givenAnswers.length
+                    ? attempt.givenAnswers[i]
+                    : '(no answer)';
+                final right = questionCorrectAnswer(q);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: MinecraftCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              correct ? Icons.check_circle : Icons.cancel,
+                              color: correct ? Colors.green : Colors.red,
+                            ),
+                            const SizedBox(width: AppSpacing.s8),
+                            Expanded(
+                              child: Text(
+                                q.question,
+                                style: MinecraftText.title(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 6),
-                        Text('Why: ${q.explanation}',
-                            style: AppText.caption),
+                        Text('Your answer: $given'),
+                        Text('Correct answer: $right'),
+                        if (q.explanation.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text('Why: ${q.explanation}', style: AppText.caption),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              },
+            ),
           const SizedBox(height: 72),
         ],
       ),

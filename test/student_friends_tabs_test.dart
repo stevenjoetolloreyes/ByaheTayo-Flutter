@@ -4,6 +4,7 @@
 // (a zero balance is shown as ₱0, never an invented amount); module
 // cards open real screens.
 import 'package:estudyantego/features/friends_tab.dart';
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:estudyantego/features/student/student_theme.dart';
 import 'package:estudyantego/features/student_tab.dart';
 import 'package:estudyantego/features/top_nav.dart';
@@ -104,12 +105,11 @@ void main() {
     // themselves have different offsets from their leading icons.)
     final signinCard = find.ancestor(
       of: find.text('7-Day Sign-in'),
-      matching: find.byType(Card),
+      matching: find.byType(MinecraftCard),
     );
-    final bibleCard = find.ancestor(
-      of: find.text('Bible Verse'),
-      matching: find.byType(Card),
-    );
+    // The Bible card is a gradient block, not a MinecraftCard —
+    // scope it by its key instead.
+    final bibleCard = find.byKey(const ValueKey('bible-hub-card'));
     final signinTopLeft = tester.getTopLeft(signinCard);
     final bibleTopLeft = tester.getTopLeft(bibleCard);
     expect(bibleTopLeft.dx, signinTopLeft.dx);
@@ -248,7 +248,7 @@ void main() {
           of: find
               .ancestor(
                 of: find.text('School Calendar'),
-                matching: find.byType(Card),
+                matching: find.byType(MinecraftCard),
               )
               .first,
           matching: find.text('Holiday'),

@@ -1040,19 +1040,20 @@ void main() {
   });
 
   group('Entry theme (Modern Minimalist redesign)', () {
-    // Dark tokens follow the preview's dark emerald UI (Nov 7):
-    // #0c1410 page background, brand #16a34a primary with white text.
+    // Minecraft tokens (Feature 1): grass-green #58CC02 primary
+    // over deep leaves, paper light background, #0c1410 dark page
+    // background with white text.
     test('exact spec tokens, light and dark', () {
-      expect(EntryColors.light.primary, const Color(0xFF079B61));
-      expect(EntryColors.light.primaryDark, const Color(0xFF067A4D));
-      expect(EntryColors.light.background, const Color(0xFFF8FAFC));
+      expect(EntryColors.light.primary, const Color(0xFF58CC02));
+      expect(EntryColors.light.primaryDark, const Color(0xFF2F7A12));
+      expect(EntryColors.light.background, const Color(0xFFFFFEF7));
       expect(EntryColors.light.surface, const Color(0xFFFFFFFF));
-      expect(EntryColors.light.secondarySurface, const Color(0xFFF1F5F3));
-      expect(EntryColors.light.primaryText, const Color(0xFF17211D));
+      expect(EntryColors.light.secondarySurface, const Color(0xFFFFF8E1));
+      expect(EntryColors.light.primaryText, const Color(0xFF1A2E12));
       expect(EntryColors.light.secondaryText, const Color(0xFF64748B));
       expect(EntryColors.light.border, const Color(0xFFE2E8F0));
-      expect(EntryColors.dark.primary, const Color(0xFF16A34A));
-      expect(EntryColors.dark.primaryDark, const Color(0xFF079B61));
+      expect(EntryColors.dark.primary, const Color(0xFF58CC02));
+      expect(EntryColors.dark.primaryDark, const Color(0xFF2F7A12));
       expect(EntryColors.dark.background, const Color(0xFF0C1410));
       expect(EntryColors.dark.surface, const Color(0xFF19231F));
       expect(EntryColors.dark.secondarySurface, const Color(0xFF202D27));
@@ -1076,7 +1077,7 @@ void main() {
       ));
       expect(
         tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
-        const Color(0xFFF8FAFC),
+        const Color(0xFFFFFEF7),
       );
 
       await tester.pumpWidget(_wrap(
@@ -1312,7 +1313,7 @@ void main() {
       ));
       expect(
         tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
-        const Color(0xFFF8FAFC),
+        const Color(0xFFFFFEF7),
       );
       await tester.pumpWidget(_wrap(
         OnboardingScreen(

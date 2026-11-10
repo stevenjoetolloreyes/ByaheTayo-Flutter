@@ -1,14 +1,19 @@
 // Walking Goal hub card — full-width, visually matching the 7-Day
 // Sign-in card (icon tile header, progress bar, stats row).
 //
-// Every color comes from the ambient theme (hub light theme or the
-// dark-aware hub theme); nothing here hardcodes a light palette, so
-// the card reads correctly in both modes. All numbers are real
-// recorded steps or honest empty states — never fabricated counts.
+// Minecraft restyle (Feature 2): blocky card, grass icon badge,
+// Baloo 2 headings, and the XP-bar treatment for the steps
+// progress (the entrance still drives it frame by frame via
+// [progressOverride] — the bar renders it without its own
+// animation then). Every color comes from the ambient theme (hub
+// light theme or the dark-aware hub theme); nothing here hardcodes
+// a light palette, so the card reads correctly in both modes. All
+// numbers are real recorded steps or honest empty states — never
+// fabricated counts.
 import 'package:flutter/material.dart';
 
 import '../app_layout.dart';
-import 'student_theme.dart';
+import '../minecraft_theme.dart';
 import 'walking_repository.dart';
 
 /// Full-width Walking Goal card for the Student Hub.
@@ -37,9 +42,9 @@ class WalkingGoalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return MinecraftCard(
       key: const ValueKey('walking-hub-card'),
+      padding: EdgeInsets.zero,
       child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
@@ -47,7 +52,7 @@ class WalkingGoalCard extends StatelessWidget {
           return InkWell(
             onTap: ready ? onOpen : null,
             borderRadius:
-                BorderRadius.circular(kStudentCardRadius),
+                BorderRadius.circular(MinecraftShapes.cardRadius),
             child: Padding(
               padding: AppLayout.cardPadding,
               child: Column(
@@ -55,28 +60,30 @@ class WalkingGoalCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: scheme.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          Icons.directions_walk_rounded,
-                          color: scheme.primary,
-                          size: 24,
-                        ),
+                      const MinecraftIconBadge(
+                        icon: Icons.directions_walk_rounded,
+                        iconSize: 24,
                       ),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Walking Goal',
-                                style: kStudentCardHeading),
+                            Text(
+                              'Walking Goal',
+                              style: MinecraftText.title(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface,
+                              ),
+                            ),
                             Text(
                               'Stay active and reach your weekly goal!',
-                              style: AppText.caption,
+                              style: MinecraftText.caption(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -140,6 +147,7 @@ class WalkingGoalCard extends StatelessWidget {
               spacing: 8,
               children: [
                 FilledButton(
+                  style: minecraftBlockButtonStyle(),
                   onPressed: controller.requestHealthConnectPermission,
                   child: const Text('Connect Health Connect'),
                 ),
@@ -168,6 +176,7 @@ class WalkingGoalCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             FilledButton(
+              style: minecraftBlockButtonStyle(),
               onPressed: controller.requestPermission,
               child: const Text('Allow activity tracking'),
             ),
@@ -187,6 +196,7 @@ class WalkingGoalCard extends StatelessWidget {
               spacing: 8,
               children: [
                 FilledButton(
+                  style: minecraftBlockButtonStyle(),
                   onPressed: controller.openSettings,
                   child: const Text('Open settings'),
                 ),
@@ -206,6 +216,7 @@ class WalkingGoalCard extends StatelessWidget {
                 style: AppText.body),
             const SizedBox(height: 8),
             FilledButton(
+              style: minecraftBlockButtonStyle(),
               onPressed: controller.retry,
               child: const Text('Retry'),
             ),
@@ -235,34 +246,42 @@ class WalkingGoalCard extends StatelessWidget {
             Flexible(
               child: Text(
                 _formatNumber(steps),
-                style: kStudentPageTitle,
+                style: MinecraftText.heading(
+                  color: scheme.onSurface,
+                  fontSize: 26,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 6),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 3),
-              child: Text('Steps', style: AppText.caption),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text(
+                'Steps',
+                style: MinecraftText.caption(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             ),
             const Spacer(),
             Flexible(
               child: Text(
                 '${_formatNumber(steps)} / ${_formatNumber(goal)} steps',
-                style: AppText.captionSemiBold,
+                style: MinecraftText.bodySemiBold(
+                  color: scheme.onSurfaceVariant,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 10,
-            color: scheme.primary,
-            backgroundColor: scheme.primary.withValues(alpha: 0.15),
-          ),
+        // XP-bar treatment: the entrance drives [progressOverride]
+        // frame by frame, so the bar renders it without its own
+        // animation then; otherwise it eases 0 -> live progress.
+        MinecraftXpBar(
+          value: progress,
+          animate: progressOverride == null,
         ),
         const SizedBox(height: 12),
         Row(
@@ -288,19 +307,21 @@ class WalkingGoalCard extends StatelessWidget {
                                       .clamp(4.0, 36.0),
                           decoration: BoxDecoration(
                             color: entry.steps == null
-                                ? scheme.outline
+                                ? MinecraftColors.stone
                                 : entry.dateKey == controller.todayKey
-                                    ? scheme.primary
-                                    : scheme.primary
+                                    ? MinecraftColors.grassGreen
+                                    : MinecraftColors.grassGreen
                                         .withValues(alpha: 0.55),
-                            borderRadius: BorderRadius.circular(5),
+                            borderRadius: BorderRadius.circular(3),
                           ),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         dayLabels[_weekdayOf(entry.dateKey) - 1],
-                        style: AppText.caption,
+                        style: MinecraftText.caption(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -384,10 +405,16 @@ class WalkingGoalCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Icon(icon, color: scheme.primary, size: 20),
+        Icon(icon, color: MinecraftColors.grassGreen, size: 20),
         const SizedBox(height: 4),
-        Text(value, style: AppText.captionSemiBold),
-        Text(label, style: AppText.caption),
+        Text(
+          value,
+          style: MinecraftText.bodySemiBold(color: scheme.onSurface),
+        ),
+        Text(
+          label,
+          style: MinecraftText.caption(color: scheme.onSurfaceVariant),
+        ),
       ],
     );
   }

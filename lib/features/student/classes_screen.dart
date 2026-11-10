@@ -9,12 +9,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+
 import '../onboarding/splash_sound.dart';
 import '../top_popup.dart';
 
 import '../app_layout.dart';
-import '../ios_components.dart';
 import '../local_notifications.dart';
+import '../minecraft_tap_animation.dart';
+import '../minecraft_theme.dart';
 import 'classes_plus_menu.dart';
 import 'google_calendar_sync.dart';
 import 'google_events.dart';
@@ -33,8 +35,12 @@ const _subjectColors = [
 ];
 
 class ClassesScreen extends StatefulWidget {
-  const ClassesScreen(
-      {super.key, this.onPlacementChime, this.filesScanner, this.googleSync});
+  const ClassesScreen({
+    super.key,
+    this.onPlacementChime,
+    this.filesScanner,
+    this.googleSync,
+  });
 
   /// Test hook for the class-placement chime (Feature 2): when
   /// provided, a newly placed class calls this instead of
@@ -130,13 +136,12 @@ class _ClassesScreenState extends State<ClassesScreen>
     // Squash-bounce: the + dips to 0.84, then springs back past 1
     // (elastic overshoot) and settles. Plays in reverse on close.
     _fabScale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.84), weight: 30),
       TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 0.84),
-        weight: 30,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: 0.84, end: 1.0)
-            .chain(CurveTween(curve: Curves.elasticOut)),
+        tween: Tween(
+          begin: 0.84,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.elasticOut)),
         weight: 70,
       ),
     ]).animate(_menuController);
@@ -197,10 +202,8 @@ class _ClassesScreenState extends State<ClassesScreen>
   }
 
   Future<void> _load() async {
-    final subjects =
-        await StudentStorage.loadList(StudentStorage.subjectsKey);
-    final items =
-        await StudentStorage.loadList(StudentStorage.assignmentsKey);
+    final subjects = await StudentStorage.loadList(StudentStorage.subjectsKey);
+    final items = await StudentStorage.loadList(StudentStorage.assignmentsKey);
     final googleEvents = await loadGoogleEvents();
     if (!mounted) return;
     setState(() {
@@ -220,15 +223,13 @@ class _ClassesScreenState extends State<ClassesScreen>
       event: event,
       onUpdated: (updated) async {
         setState(() {
-          final i =
-              _googleEvents.indexWhere((e) => e.id == updated.id);
+          final i = _googleEvents.indexWhere((e) => e.id == updated.id);
           if (i >= 0) _googleEvents[i] = updated;
         });
         await saveGoogleEvents(_googleEvents);
       },
       onRemoved: (removed) async {
-        setState(
-            () => _googleEvents.removeWhere((e) => e.id == removed.id));
+        setState(() => _googleEvents.removeWhere((e) => e.id == removed.id));
         await saveGoogleEvents(_googleEvents);
       },
     );
@@ -236,13 +237,17 @@ class _ClassesScreenState extends State<ClassesScreen>
 
   Future<void> _saveSubjects() async {
     await StudentStorage.saveList(
-        StudentStorage.subjectsKey, _subjects.map((s) => s.toJson()).toList());
+      StudentStorage.subjectsKey,
+      _subjects.map((s) => s.toJson()).toList(),
+    );
     requestLocalNotificationRefresh();
   }
 
   Future<void> _saveItems() async {
     await StudentStorage.saveList(
-        StudentStorage.assignmentsKey, _items.map((i) => i.toJson()).toList());
+      StudentStorage.assignmentsKey,
+      _items.map((i) => i.toJson()).toList(),
+    );
     requestLocalNotificationRefresh();
   }
 
@@ -263,10 +268,7 @@ class _ClassesScreenState extends State<ClassesScreen>
     final result = await showModalBottomSheet<Subject>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _SubjectForm(
-        existing: existing,
-        subjects: _subjects,
-      ),
+      builder: (_) => _SubjectForm(existing: existing, subjects: _subjects),
     );
     if (result == null) return;
     final isNew = existing == null;
@@ -355,7 +357,9 @@ class _ClassesScreenState extends State<ClassesScreen>
   /// is skipped, never force-added, and the skip is reported in
   /// the final toast.
   Future<void> _placeScannedClasses(
-      List<ScannedClass> found, String fileName) async {
+    List<ScannedClass> found,
+    String fileName,
+  ) async {
     var placed = 0;
     var skipped = 0;
     var colorIndex = 0;
@@ -388,11 +392,14 @@ class _ClassesScreenState extends State<ClassesScreen>
       _snack('$placed $noun added from $fileName.');
     } else if (placed > 0) {
       _snack(
-          '$placed $noun added from $fileName. $skipped skipped (time conflict).');
+        '$placed $noun added from $fileName. $skipped skipped (time conflict).',
+      );
     } else {
-      _snack(skipped == 1
-          ? 'No classes added — the class conflicts with your schedule.'
-          : 'No classes added — all $skipped classes conflict with your schedule.');
+      _snack(
+        skipped == 1
+            ? 'No classes added — the class conflicts with your schedule.'
+            : 'No classes added — all $skipped classes conflict with your schedule.',
+      );
     }
   }
 
@@ -402,21 +409,21 @@ class _ClassesScreenState extends State<ClassesScreen>
   Future<void> _showScanEmptyState(ScheduleScanResult result) async {
     final (title, body) = switch (result.status) {
       ScheduleScanStatus.noClasses => (
-          'No classes found',
-          'We couldn\'t find any class entries in ${result.fileName}.\n\n'
-              'Each class needs its own line with days and a time, for example:\n'
-              'Discrete Math | Mon, Wed, Fri | 8:00 AM - 9:30 AM | Room 101\n\n'
-              'Photos, PDFs with text, and text files (.txt, .md, .csv) work best.',
-        ),
+        'No classes found',
+        'We couldn\'t find any class entries in ${result.fileName}.\n\n'
+            'Each class needs its own line with days and a time, for example:\n'
+            'Discrete Math | Mon, Wed, Fri | 8:00 AM - 9:30 AM | Room 101\n\n'
+            'Photos, PDFs with text, and text files (.txt, .md, .csv) work best.',
+      ),
       ScheduleScanStatus.noText => (
-          'No text found',
-          'We couldn\'t read any text from ${result.fileName}. '
-              'If this is a scanned PDF with no text layer, try a photo of the page instead — photos are read on-device.',
-        ),
+        'No text found',
+        'We couldn\'t read any text from ${result.fileName}. '
+            'If this is a scanned PDF with no text layer, try a photo of the page instead — photos are read on-device.',
+      ),
       ScheduleScanStatus.unsupported => (
-          'File type not supported',
-          'This file type can\'t be scanned yet. Try a photo, a PDF, or a text file (.txt, .md, .csv).',
-        ),
+        'File type not supported',
+        'This file type can\'t be scanned yet. Try a photo, a PDF, or a text file (.txt, .md, .csv).',
+      ),
       _ => ('Nothing to add', 'No classes were found in ${result.fileName}.'),
     };
     await showDialog<void>(
@@ -462,7 +469,8 @@ class _ClassesScreenState extends State<ClassesScreen>
           await _showGoogleSetupMissing();
         case GoogleCalendarSyncStatus.failed:
           _snack(
-              'Couldn\'t sync Google Calendar. Check your connection and try again.');
+            'Couldn\'t sync Google Calendar. Check your connection and try again.',
+          );
         case GoogleCalendarSyncStatus.noEvents:
           await _showGoogleSyncEmpty(result.accountEmail);
         case GoogleCalendarSyncStatus.synced:
@@ -490,7 +498,8 @@ class _ClassesScreenState extends State<ClassesScreen>
   ///   the merged list would hide it anyway) and reported in the
   ///   final toast.
   Future<void> _placeSyncedGoogleEvents(
-      List<GoogleCalendarEvent> fetched) async {
+    List<GoogleCalendarEvent> fetched,
+  ) async {
     final firstRealSync = !await isGoogleCalendarRealSyncDone();
     if (firstRealSync) {
       setState(() => _googleEvents = []);
@@ -501,8 +510,7 @@ class _ClassesScreenState extends State<ClassesScreen>
     var skipped = 0;
     for (var i = 0; i < fetched.length; i++) {
       final event = fetched[i];
-      if (existingIds.contains(event.id) ||
-          classNames.contains(event.title)) {
+      if (existingIds.contains(event.id) || classNames.contains(event.title)) {
         skipped++;
         continue;
       }
@@ -525,12 +533,16 @@ class _ClassesScreenState extends State<ClassesScreen>
     if (placed > 0 && skipped == 0) {
       _snack('$placed $noun synced from Google Calendar.');
     } else if (placed > 0) {
-      _snack('$placed $noun synced from Google Calendar. '
-          '$skipped already on your timetable.');
+      _snack(
+        '$placed $noun synced from Google Calendar. '
+        '$skipped already on your timetable.',
+      );
     } else {
-      _snack(skipped == 1
-          ? 'No classes added — the synced event is already on your timetable.'
-          : 'No classes added — the synced events are already on your timetable.');
+      _snack(
+        skipped == 1
+            ? 'No classes added — the synced event is already on your timetable.'
+            : 'No classes added — the synced events are already on your timetable.',
+      );
     }
   }
 
@@ -597,14 +609,17 @@ class _ClassesScreenState extends State<ClassesScreen>
       builder: (_) => AlertDialog(
         title: const Text('Delete subject?'),
         content: Text(
-            '${s.name} and its assignments and exams will also be removed.'),
+          '${s.name} and its assignments and exams will also be removed.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -640,8 +655,8 @@ class _ClassesScreenState extends State<ClassesScreen>
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final next = nextClass(_subjects, now);
-    final upcoming =
-        _items.where((i) => !i.done).toList()..sort((a, b) => a.due.compareTo(b.due));
+    final upcoming = _items.where((i) => !i.done).toList()
+      ..sort((a, b) => a.due.compareTo(b.due));
     final done = _items.where((i) => i.done).toList();
 
     // Stack (not Scaffold.floatingActionButton): the menu overlay
@@ -655,94 +670,193 @@ class _ClassesScreenState extends State<ClassesScreen>
           body: ListView(
             padding: AppLayout.pagePaddingTab,
             children: [
-          if (next != null)
-            Card(
-              child: ListTile(
-                leading: Icon(Icons.upcoming_outlined,
-                    color: Theme.of(context).colorScheme.primary),
-                title: Text('Upcoming: ${next.subject.name}'),
-                subtitle: Text(
-                    '${weekdayName(next.date.weekday)} · ${formatMinutes(next.subject.startMin)}–${formatMinutes(next.subject.endMin)}${next.subject.room.isEmpty ? '' : ' · ${next.subject.room}'}'),
+              if (next != null)
+                MinecraftCard(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      const MinecraftIconBadge(
+                        icon: Icons.upcoming_outlined,
+                        backgroundColor: MinecraftColors.skyBlue,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Upcoming: ${next.subject.name}',
+                              style: MinecraftText.title(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${weekdayName(next.date.weekday)} · ${formatMinutes(next.subject.startMin)}–${formatMinutes(next.subject.endMin)}${next.subject.room.isEmpty ? '' : ' · ${next.subject.room}'}',
+                              style: MinecraftText.body(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const MinecraftStatusChip('Next up'),
+                    ],
+                  ),
+                )
+              else
+                MinecraftCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    title: Text(
+                      'No upcoming classes.',
+                      style: MinecraftText.title(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Add a subject to build your timetable.',
+                      style: MinecraftText.body(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: AppLayout.headerGap),
+              _MinecraftSegmented(
+                options: const [('today', 'Today'), ('week', 'Week')],
+                groupValue: _view,
+                onChanged: (value) => setState(() => _view = value),
               ),
-            )
-          else
-            const Card(
-              child: ListTile(
-                title: Text('No upcoming classes.'),
-                subtitle: Text('Add a subject to build your timetable.'),
-              ),
-            ),
-          const SizedBox(height: AppLayout.headerGap),
-          IosSegmentedControl<String>(
-            segments: const [
-              IosSegment(value: 'today', label: 'Today'),
-              IosSegment(value: 'week', label: 'Week'),
-            ],
-            groupValue: _view,
-            onValueChanged: (value) => setState(() => _view = value),
-          ),
-          const SizedBox(height: AppLayout.cardGap),
-          if (_view == 'today') ...[
-            // Today list: today's classes + every synced Google
-            // event, time order — the same merged entries the Hub
-            // card's Today list renders, so the two can never
-            // diverge. Google cards carry the G badge, their day
-            // prefix, and open the Edit / Remove sheet on tap.
-            if (todayListEntries(_subjects, _googleEvents, now.weekday)
-                .isEmpty)
-              const Card(
-                  child: ListTile(title: Text('No classes today.')))
-            else
-              for (final entry in todayListEntries(
-                  _subjects, _googleEvents, now.weekday))
-                entry.isGoogle && entry.googleEvent != null
-                    ? _googleTile(entry.googleEvent!)
-                    : _subjectTile(entry.subject!),
-          ] else ...[
-            for (var day = 1; day <= 7; day++)
-              if (entriesForDay(_subjects, _googleEvents, day)
-                  .isNotEmpty) ...[
-                Text(weekdayName(day),
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: AppSpacing.s4),
-                for (final entry
-                    in entriesForDay(_subjects, _googleEvents, day))
-                  entry.isGoogle && entry.googleEvent != null
-                      ? _googleTile(entry.googleEvent!)
-                      : _subjectTile(entry.subject!),
-                const SizedBox(height: AppLayout.cardGap),
+              const SizedBox(height: AppLayout.cardGap),
+              if (_view == 'today') ...[
+                // Today list: today's classes + every synced Google
+                // event, time order — the same merged entries the Hub
+                // card's Today list renders, so the two can never
+                // diverge. Google cards carry the G badge, their day
+                // prefix, and open the Edit / Remove sheet on tap.
+                if (todayListEntries(
+                  _subjects,
+                  _googleEvents,
+                  now.weekday,
+                ).isEmpty)
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
+                    child: ListTile(
+                      title: Text(
+                        'No classes today.',
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  for (final entry in todayListEntries(
+                    _subjects,
+                    _googleEvents,
+                    now.weekday,
+                  ))
+                    entry.isGoogle && entry.googleEvent != null
+                        ? _googleTile(entry.googleEvent!)
+                        : _subjectTile(
+                            entry.subject!,
+                            isNext:
+                                // 'Next up' only when the next class
+                                // is TODAY — the same subject meeting
+                                // tomorrow is not next up (its id
+                                // matches, its date does not).
+                                next != null &&
+                                next.subject.id == entry.subject!.id &&
+                                next.date.year == now.year &&
+                                next.date.month == now.month &&
+                                next.date.day == now.day,
+                          ),
+              ] else ...[
+                for (var day = 1; day <= 7; day++)
+                  if (entriesForDay(
+                    _subjects,
+                    _googleEvents,
+                    day,
+                  ).isNotEmpty) ...[
+                    Text(
+                      weekdayName(day),
+                      style: MinecraftText.heading(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontSize: 17,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.s4),
+                    for (final entry in entriesForDay(
+                      _subjects,
+                      _googleEvents,
+                      day,
+                    ))
+                      entry.isGoogle && entry.googleEvent != null
+                          ? _googleTile(entry.googleEvent!)
+                          : _subjectTile(entry.subject!),
+                    const SizedBox(height: AppLayout.cardGap),
+                  ],
+                if (_subjects.isEmpty && _googleEvents.isEmpty)
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
+                    child: ListTile(
+                      title: Text(
+                        'No subjects yet.',
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
-            if (_subjects.isEmpty && _googleEvents.isEmpty)
-              const Card(
-                  child: ListTile(title: Text('No subjects yet.'))),
-          ],
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Expanded(
-                child: Text('Assignments & Exams',
-                    style:
-                        AppText.sectionTitle),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(
+                    child: MinecraftSectionHeader(
+                      icon: Icons.assignment_outlined,
+                      title: 'Assignments & Exams',
+                      iconColor: MinecraftColors.gold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _openItemForm,
+                    child: const Text('Add'),
+                  ),
+                ],
               ),
-              TextButton(onPressed: _openItemForm, child: const Text('Add')),
+              if (upcoming.isEmpty && done.isEmpty)
+                MinecraftCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    title: Text(
+                      'No assignments yet.',
+                      style: MinecraftText.title(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                )
+              else ...[
+                for (final i in upcoming) _itemTile(i),
+                if (done.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.s8),
+                  Text(
+                    'Done',
+                    style: MinecraftText.heading(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontSize: 17,
+                    ),
+                  ),
+                  for (final i in done) _itemTile(i),
+                ],
+              ],
+              const SizedBox(height: 72),
             ],
           ),
-          if (upcoming.isEmpty && done.isEmpty)
-            const Card(
-                child: ListTile(title: Text('No assignments or exams yet.')))
-          else ...[
-            for (final i in upcoming) _itemTile(i),
-            if (done.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.s8),
-              const Text('Done',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              for (final i in done) _itemTile(i),
-            ],
-          ],
-          const SizedBox(height: 72),
-        ],
-      ),
-    ),
+        ),
         if (_menuOpen) ...[
           // Tap-outside barrier: transparent, closes the menu.
           Positioned.fill(
@@ -773,24 +887,24 @@ class _ClassesScreenState extends State<ClassesScreen>
             ),
           ),
         ],
-        // Round + button at bottom right (same spot as the old
-        // "+ Add subject" pill): squash-bounces and rotates to x
-        // while the menu is open.
+        // Blocky 58px grass + button at bottom right (same spot
+        // as the old round + button): squash-bounces and rotates
+        // to x while the menu is open.
         Positioned(
           right: 16,
           bottom: 16,
-          child: FloatingActionButton(
-            key: const Key('classes-plus-fab'),
-            heroTag: 'classes-plus-fab',
-            tooltip: 'Add',
-            backgroundColor: const Color(0xFF16A34A),
-            foregroundColor: Colors.white,
-            onPressed: _toggleMenu,
-            child: ScaleTransition(
-              scale: _fabScale,
-              child: RotationTransition(
-                turns: _fabTurns,
-                child: const Icon(Icons.add),
+          child: Hero(
+            tag: 'classes-plus-fab',
+            child: MinecraftFabButton(
+              key: const Key('classes-plus-fab'),
+              tooltip: 'Add',
+              onPressed: _toggleMenu,
+              child: ScaleTransition(
+                scale: _fabScale,
+                child: RotationTransition(
+                  turns: _fabTurns,
+                  child: const Icon(Icons.add, color: Colors.white, size: 28),
+                ),
               ),
             ),
           ),
@@ -824,56 +938,75 @@ class _ClassesScreenState extends State<ClassesScreen>
     return _googleTileBody(event);
   }
 
-  Widget _googleTileBody(GoogleCalendarEvent event,
-      {Animation<double>? badgePop}) {
+  Widget _googleTileBody(
+    GoogleCalendarEvent event, {
+    Animation<double>? badgePop,
+  }) {
     final detail = [
       'Google Calendar',
       googleEventRange(event),
       if (event.place.isNotEmpty) event.place,
       if (event.teacher.isNotEmpty) event.teacher,
     ].join(' · ');
-    final badge = const GBadge(size: 34);
-    return Card(
-      child: ListTile(
-        leading: badgePop == null
-            ? badge
-            : ScaleTransition(scale: badgePop, child: badge),
-        title: Row(
-          children: [
-            Expanded(child: Text(event.title)),
-            const SizedBox(width: 6),
-            const GBadge(),
-            // Feature 4: events placed by the Google sync carry a
-            // "New" badge for the rest of the session.
-            if (_syncedNewIds.contains(event.id)) ...[
-              const SizedBox(width: 6),
-              Container(
-                key: Key('synced-new-${event.id}'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16A34A),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'New',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
+    // Quest badge: the G mark in a 46px block with a 3px ink
+    // border, matching the subject tiles' letter blocks.
+    final badge = Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? MinecraftColors.darkBorder
+              : MinecraftColors.border,
+          width: MinecraftShapes.cardBorderWidth,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: const GBadge(size: 30),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: MinecraftCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: badgePop == null
+              ? badge
+              : ScaleTransition(scale: badgePop, child: badge),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  event.title,
+                  style: MinecraftText.title(
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ),
+              const SizedBox(width: 6),
+              const GBadge(),
+              // Feature 4: events placed by the Google sync carry a
+              // "New" badge for the rest of the session.
+              if (_syncedNewIds.contains(event.id)) ...[
+                const SizedBox(width: 6),
+                MinecraftStatusChip('New', key: Key('synced-new-${event.id}')),
+              ],
             ],
-          ],
+          ),
+          subtitle: Text(
+            detail,
+            style: MinecraftText.body(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          onTap: () => _onGoogleEventTap(event),
         ),
-        subtitle: Text(detail),
-        onTap: () => _onGoogleEventTap(event),
       ),
     );
   }
 
-  Widget _subjectTile(Subject s) {
+  Widget _subjectTile(Subject s, {bool isNext = false}) {
     // Feature 3: the scanned class currently landing springs in
     // with flash + popping avatar; every other scanned class
     // keeps its "New" badge and renders plainly.
@@ -887,7 +1020,8 @@ class _ClassesScreenState extends State<ClassesScreen>
             setState(() => _justScannedId = null);
           }
         },
-        builder: (avatarPop) => _subjectTileBody(s, avatarPop: avatarPop),
+        builder: (avatarPop) =>
+            _subjectTileBody(s, avatarPop: avatarPop, isNext: isNext),
       );
     }
     // Feature 2: the class that was just placed springs into the
@@ -903,116 +1037,227 @@ class _ClassesScreenState extends State<ClassesScreen>
             setState(() => _justPlacedId = null);
           }
         },
-        child: _subjectTileBody(s),
+        child: _subjectTileBody(s, isNext: isNext),
       );
     }
-    return _subjectTileBody(s);
+    return _subjectTileBody(s, isNext: isNext);
   }
 
-  Widget _subjectTileBody(Subject s, {Animation<double>? avatarPop}) {
-    final avatar = CircleAvatar(
-      backgroundColor: Color(s.color),
+  /// One class as a quest card (Minecraft restyle, Feature 3):
+  /// the subject's color as a 46px letter block with a 3px ink
+  /// border, Baloo 2 title, code/time/teacher/room details, and
+  /// the real status chips — 'Next up' for the next class, 'New'
+  /// for a class the Files scan just placed. There is no per-class
+  /// XP in the app, so no XP number is shown (never invented).
+  ///
+  /// The tile stays a [ListTile] inside the blocky card: the
+  /// existing tests find class tiles as ListTiles.
+  Widget _subjectTileBody(
+    Subject s, {
+    Animation<double>? avatarPop,
+    bool isNext = false,
+  }) {
+    final badge = Container(
+      key: const Key('quest-badge'),
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: Color(s.color),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? MinecraftColors.darkBorder
+              : MinecraftColors.border,
+          width: MinecraftShapes.cardBorderWidth,
+        ),
+      ),
+      alignment: Alignment.center,
       child: Text(
         s.name.isEmpty ? '?' : s.name[0].toUpperCase(),
-        style: const TextStyle(
-            color: Colors.white, fontWeight: FontWeight.w700),
+        style: MinecraftText.heading(color: Colors.white, fontSize: 22),
       ),
     );
-    return Card(
-      child: ListTile(
-        leading: avatarPop == null
-            ? avatar
-            : ScaleTransition(scale: avatarPop, child: avatar),
-        title: Row(
-          children: [
-            Expanded(child: Text(s.name)),
-            // Feature 3: classes placed by the Files scan carry a
-            // "New" badge for the rest of the session.
-            if (_scannedNewIds.contains(s.id)) ...[
-              const SizedBox(width: 6),
-              Container(
-                key: Key('scanned-new-${s.id}'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16A34A),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'New',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: MinecraftCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: avatarPop == null
+              ? badge
+              : ScaleTransition(scale: avatarPop, child: badge),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  s.name,
+                  style: MinecraftText.title(
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ),
+              if (isNext) ...[
+                const SizedBox(width: 6),
+                const MinecraftStatusChip('Next up'),
+              ],
+              // Feature 3: classes placed by the Files scan carry a
+              // "New" badge for the rest of the session.
+              if (_scannedNewIds.contains(s.id)) ...[
+                const SizedBox(width: 6),
+                MinecraftStatusChip('New', key: Key('scanned-new-${s.id}')),
+              ],
             ],
-          ],
-        ),
-        subtitle: Text(
-            '${s.code.isEmpty ? '' : '${s.code} · '}${formatMinutes(s.startMin)}–${formatMinutes(s.endMin)}${s.teacher.isEmpty ? '' : ' · ${s.teacher}'}${s.room.isEmpty ? '' : ' · ${s.room}'}'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              onPressed: () => _openSubjectForm(existing: s),
+          ),
+          subtitle: Text(
+            '${s.code.isEmpty ? '' : '${s.code} · '}${formatMinutes(s.startMin)}–${formatMinutes(s.endMin)}${s.teacher.isEmpty ? '' : ' · ${s.teacher}'}${s.room.isEmpty ? '' : ' · ${s.room}'}',
+            style: MinecraftText.body(
+              color: Theme.of(context).colorScheme.onSurface,
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              onPressed: () => _deleteSubject(s),
-            ),
-          ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                onPressed: () => _openSubjectForm(existing: s),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                onPressed: () => _deleteSubject(s),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _itemTile(AssignmentItem i) {
-    return Card(
-      child: ListTile(
-        leading: Icon(
-            i.kind == 'exam' ? Icons.quiz_outlined : Icons.assignment_outlined),
-        title: Text(
-          i.title,
-          style: i.done
-              ? const TextStyle(decoration: TextDecoration.lineThrough)
-              : null,
-        ),
-        subtitle: Text(
-            '${_subjectName(i.subjectId)} · ${i.kind == 'exam' ? 'Exam' : 'Assignment'} · due ${formatDate(i.due)}'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Checkbox(
-              value: i.done,
-              onChanged: (v) async {
-                setState(() {
-                  final idx = _items.indexWhere((x) => x.id == i.id);
-                  if (idx >= 0) {
-                    _items[idx] = AssignmentItem(
-                      id: i.id,
-                      subjectId: i.subjectId,
-                      title: i.title,
-                      kind: i.kind,
-                      due: i.due,
-                      done: v ?? false,
-                    );
-                  }
-                });
-                await _saveItems();
-              },
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: MinecraftCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: MinecraftIconBadge(
+            icon: i.kind == 'exam'
+                ? Icons.quiz_outlined
+                : Icons.assignment_outlined,
+            backgroundColor: i.kind == 'exam'
+                ? MinecraftColors.gold
+                : MinecraftColors.skyBlue,
+            iconColor: i.kind == 'exam' ? MinecraftColors.ink : Colors.white,
+          ),
+          title: Text(
+            i.title,
+            style: MinecraftText.title(
+              color: Theme.of(context).colorScheme.onSurface,
+            ).copyWith(decoration: i.done ? TextDecoration.lineThrough : null),
+          ),
+          subtitle: Text(
+            '${_subjectName(i.subjectId)} · ${i.kind == 'exam' ? 'Exam' : 'Assignment'} · due ${formatDate(i.due)}',
+            style: MinecraftText.body(
+              color: Theme.of(context).colorScheme.onSurface,
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              onPressed: () async {
-                setState(() => _items.removeWhere((x) => x.id == i.id));
-                await _saveItems();
-              },
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                value: i.done,
+                onChanged: (v) async {
+                  setState(() {
+                    final idx = _items.indexWhere((x) => x.id == i.id);
+                    if (idx >= 0) {
+                      _items[idx] = AssignmentItem(
+                        id: i.id,
+                        subjectId: i.subjectId,
+                        title: i.title,
+                        kind: i.kind,
+                        due: i.due,
+                        done: v ?? false,
+                      );
+                    }
+                  });
+                  await _saveItems();
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                onPressed: () async {
+                  setState(() => _items.removeWhere((x) => x.id == i.id));
+                  await _saveItems();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Blocky Today / Week segmented control (Minecraft restyle,
+/// Feature 3): 3px ink border, 14px corners, grass-green active
+/// segment with a white Baloo 2 label. Same values and callback
+/// as the iOS segmented control it replaces — look only.
+class _MinecraftSegmented extends StatelessWidget {
+  const _MinecraftSegmented({
+    required this.options,
+    required this.groupValue,
+    required this.onChanged,
+  });
+
+  final List<(String, String)> options;
+  final String groupValue;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? MinecraftColors.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
+        ),
+        boxShadow: isDark ? null : const [MinecraftShapes.cardShadow],
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: ValueKey('classes-view-${options[i].$1}'),
+                  onTap: () => onChanged(options[i].$1),
+                  borderRadius: BorderRadius.circular(11),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: options[i].$1 == groupValue
+                          ? MinecraftColors.grassGreen
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Text(
+                      options[i].$2,
+                      textAlign: TextAlign.center,
+                      style: MinecraftText.button(
+                        color: options[i].$1 == groupValue
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1218,8 +1463,8 @@ class _ScannedSpringInState extends State<_ScannedSpringIn>
                 child: IgnorePointer(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16A34A).withValues(
-                          alpha: _flash.value.clamp(0.0, 1.0)),
+                      color: const Color(0xFF16A34A)
+                          .withValues(alpha: _flash.value.clamp(0.0, 1.0)),
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
@@ -1261,9 +1506,10 @@ class _ScanProgressDialogState extends State<_ScanProgressDialog>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     );
-    _sweepY = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _sweep, curve: Curves.easeInOut),
-    );
+    _sweepY = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _sweep, curve: Curves.easeInOut));
     widget.scan().then(
       (result) {
         if (mounted) Navigator.pop(context, result);
@@ -1336,7 +1582,9 @@ class _ScanProgressDialogState extends State<_ScanProgressDialog>
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1396,15 +1644,15 @@ class _GoogleSyncProgressDialog extends StatefulWidget {
 
   final Future<GoogleCalendarSyncResult> Function({
     required void Function(GoogleCalendarSyncPhase phase) onPhase,
-  }) sync;
+  })
+  sync;
 
   @override
   State<_GoogleSyncProgressDialog> createState() =>
       _GoogleSyncProgressDialogState();
 }
 
-class _GoogleSyncProgressDialogState
-    extends State<_GoogleSyncProgressDialog> {
+class _GoogleSyncProgressDialogState extends State<_GoogleSyncProgressDialog> {
   GoogleCalendarSyncPhase _phase = GoogleCalendarSyncPhase.connecting;
 
   @override
@@ -1412,26 +1660,27 @@ class _GoogleSyncProgressDialogState
     super.initState();
     widget
         .sync(
-      onPhase: (phase) {
-        if (mounted) setState(() => _phase = phase);
-      },
-    )
+          onPhase: (phase) {
+            if (mounted) setState(() => _phase = phase);
+          },
+        )
         .then(
-      (result) {
-        if (mounted) Navigator.pop(context, result);
-      },
-      onError: (_) {
-        // The sync maps its own failures to a status, but a
-        // rejected future must never leave this dialog hanging.
-        if (mounted) {
-          Navigator.pop(
-            context,
-            const GoogleCalendarSyncResult(
-                status: GoogleCalendarSyncStatus.failed),
-          );
-        }
-      },
-    );
+          (result) {
+            if (mounted) Navigator.pop(context, result);
+          },
+          onError: (_) {
+            // The sync maps its own failures to a status, but a
+            // rejected future must never leave this dialog hanging.
+            if (mounted) {
+              Navigator.pop(
+                context,
+                const GoogleCalendarSyncResult(
+                  status: GoogleCalendarSyncStatus.failed,
+                ),
+              );
+            }
+          },
+        );
   }
 
   @override
@@ -1505,8 +1754,9 @@ class _SubjectFormState extends State<_SubjectForm> {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(
-          hour: (isStart ? _startMin : _endMin) ~/ 60,
-          minute: (isStart ? _startMin : _endMin) % 60),
+        hour: (isStart ? _startMin : _endMin) ~/ 60,
+        minute: (isStart ? _startMin : _endMin) % 60,
+      ),
     );
     if (picked == null) return;
     setState(() {
@@ -1521,6 +1771,14 @@ class _SubjectFormState extends State<_SubjectForm> {
 
   @override
   Widget build(BuildContext context) {
+    // Minecraft restyle (Feature 3): blocky sheet — Baloo 2 title,
+    // grass day toggles, blocky time tiles and color blocks, and
+    // the save button labelled 'Place Block (Save)'. The fields
+    // are the SAME Manual form (subject, code, teacher, room,
+    // days, start/end, color) — NO Repeat option is added here:
+    // Repeat exists only in the preview and is not approved.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -1533,44 +1791,77 @@ class _SubjectFormState extends State<_SubjectForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.existing == null ? 'Add subject' : 'Edit subject',
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            Row(
+              children: [
+                const MinecraftIconBadge(
+                  icon: Icons.view_in_ar_outlined,
+                  backgroundColor: MinecraftColors.grassGreen,
+                  size: 40,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.existing == null
+                            ? 'Add Subject Block'
+                            : 'Edit Subject Block',
+                        style: MinecraftText.heading(
+                          color: onSurface,
+                          fontSize: 20,
+                        ),
+                      ),
+                      Text(
+                        widget.existing == null
+                            ? 'Place a new class block into your week.'
+                            : 'Change this class block.',
+                        style: MinecraftText.body(color: onSurface),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppLayout.cardGap),
             TextField(
-                controller: _name,
-                decoration: const InputDecoration(labelText: 'Subject name')),
+              controller: _name,
+              decoration: const InputDecoration(labelText: 'Subject name'),
+            ),
             const SizedBox(height: AppSpacing.s8),
             TextField(
-                controller: _code,
-                decoration:
-                    const InputDecoration(labelText: 'Subject code')),
+              controller: _code,
+              decoration: const InputDecoration(labelText: 'Subject code'),
+            ),
             const SizedBox(height: AppSpacing.s8),
             TextField(
-                controller: _teacher,
-                decoration: const InputDecoration(labelText: 'Teacher')),
+              controller: _teacher,
+              decoration: const InputDecoration(labelText: 'Teacher'),
+            ),
             const SizedBox(height: AppSpacing.s8),
             TextField(
-                controller: _room,
-                decoration:
-                    const InputDecoration(labelText: 'Classroom / location')),
+              controller: _room,
+              decoration: const InputDecoration(
+                labelText: 'Classroom / location',
+              ),
+            ),
             const SizedBox(height: AppLayout.cardGap),
-            const Text('Days',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+            Text('Days', style: MinecraftText.title(color: onSurface)),
+            const SizedBox(height: 6),
             Wrap(
               spacing: 6,
+              runSpacing: 6,
               children: [
                 for (var day = 1; day <= 7; day++)
-                  FilterChip(
-                    label: Text(weekdayName(day)),
+                  _DayToggle(
+                    label: weekdayName(day),
                     selected: _days.contains(day),
-                    onSelected: (v) => setState(() {
-                      if (v) {
-                        _days.add(day);
-                      } else {
+                    onTap: () => setState(() {
+                      if (_days.contains(day)) {
                         _days.remove(day);
+                      } else {
+                        _days.add(day);
                       }
                     }),
                   ),
@@ -1580,80 +1871,204 @@ class _SubjectFormState extends State<_SubjectForm> {
             Row(
               children: [
                 Expanded(
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('Start: ${formatMinutes(_startMin)}'),
-                    trailing: const Icon(Icons.schedule),
+                  child: _TimeTile(
+                    label: 'Start: ${formatMinutes(_startMin)}',
                     onTap: () => _pickTime(true),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('End: ${formatMinutes(_endMin)}'),
-                    trailing: const Icon(Icons.schedule),
+                  child: _TimeTile(
+                    label: 'End: ${formatMinutes(_endMin)}',
                     onTap: () => _pickTime(false),
                   ),
                 ),
               ],
             ),
-            const Text('Color',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: AppSpacing.s8),
+            Text('Color', style: MinecraftText.title(color: onSurface)),
+            const SizedBox(height: 6),
             Wrap(
               spacing: 8,
               children: [
                 for (final c in _subjectColors)
                   GestureDetector(
                     onTap: () => setState(() => _color = c),
-                    child: CircleAvatar(
-                      backgroundColor: Color(c),
-                      radius: _color == c ? 20 : 16,
+                    child: Container(
+                      width: _color == c ? 40 : 32,
+                      height: _color == c ? 40 : 32,
+                      decoration: BoxDecoration(
+                        color: Color(c),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDark
+                              ? MinecraftColors.darkBorder
+                              : MinecraftColors.border,
+                          width: _color == c ? 3 : 2,
+                        ),
+                      ),
+                      alignment: Alignment.center,
                       child: _color == c
-                          ? const Icon(Icons.check,
-                              color: Colors.white, size: 18)
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 18,
+                            )
                           : null,
                     ),
                   ),
               ],
             ),
             const SizedBox(height: AppLayout.headerGap),
-            FilledButton(
-              onPressed: () {
-                if (_name.text.trim().isEmpty) {
-                  TopPopup.show(context, message: 'Enter a subject name.');
-                  return;
-                }
-                if (_days.isEmpty) {
-                  TopPopup.show(context, message: 'Pick at least one day.');
-                  return;
-                }
-                if (_endMin <= _startMin) {
-                  TopPopup.show(context, message: 'End time must be after start time.');
-                  return;
-                }
-                final candidate = Subject(
-                  id: widget.existing?.id ?? newId(),
-                  name: _name.text.trim(),
-                  code: _code.text.trim(),
-                  teacher: _teacher.text.trim(),
-                  room: _room.text.trim(),
-                  days: _days.toList()..sort(),
-                  startMin: _startMin,
-                  endMin: _endMin,
-                  color: _color,
-                );
-                final conflict = findConflict(widget.subjects, candidate,
-                    excludeId: widget.existing?.id);
-                if (conflict != null) {
-                  TopPopup.show(context, message: 'Schedule conflict with $conflict. Pick another time.');
-                  return;
-                }
-                Navigator.pop(context, candidate);
-              },
-              child: const Text('Save'),
+            SizedBox(
+              width: double.infinity,
+              child: MinecraftBlockButton(
+                label: 'Place Block (Save)',
+                icon: Icons.save_outlined,
+                // Feature 6: saving a class plays the level-up
+                // fanfare.
+                sound: MinecraftSoundKind.levelup,
+                onPressed: () {
+                  if (_name.text.trim().isEmpty) {
+                    TopPopup.show(context, message: 'Enter a subject name.');
+                    return;
+                  }
+                  if (_days.isEmpty) {
+                    TopPopup.show(context, message: 'Pick at least one day.');
+                    return;
+                  }
+                  if (_endMin <= _startMin) {
+                    TopPopup.show(
+                      context,
+                      message: 'End time must be after start time.',
+                    );
+                    return;
+                  }
+                  final candidate = Subject(
+                    id: widget.existing?.id ?? newId(),
+                    name: _name.text.trim(),
+                    code: _code.text.trim(),
+                    teacher: _teacher.text.trim(),
+                    room: _room.text.trim(),
+                    days: _days.toList()..sort(),
+                    startMin: _startMin,
+                    endMin: _endMin,
+                    color: _color,
+                  );
+                  final conflict = findConflict(
+                    widget.subjects,
+                    candidate,
+                    excludeId: widget.existing?.id,
+                  );
+                  if (conflict != null) {
+                    TopPopup.show(
+                      context,
+                      message:
+                          'Schedule conflict with $conflict. Pick another time.',
+                    );
+                    return;
+                  }
+                  Navigator.pop(context, candidate);
+                },
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One blocky day toggle for the Add Subject sheet (Feature 3):
+/// grass fill + white Baloo 2 label when selected, paper fill +
+/// ink border when not. Same selection state as the FilterChip
+/// it replaces — look only.
+class _DayToggle extends StatelessWidget {
+  const _DayToggle({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Feature 6: day toggles play select. The wrapper only
+    // observes the pointer; the InkWell still owns the toggle.
+    return MinecraftTapAnimation(
+      sound: MinecraftSoundKind.select,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? MinecraftColors.grassGreen
+                  : (isDark ? MinecraftColors.darkCard : Colors.white),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark
+                    ? MinecraftColors.darkBorder
+                    : MinecraftColors.border,
+                width: 2.5,
+              ),
+            ),
+            child: Text(
+              label,
+              style: MinecraftText.button(
+                color: selected
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurface,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One blocky start/end time tile for the Add Subject sheet
+/// (Feature 3): the 'Start: 8:00 AM' / 'End: 9:00 AM' label in
+/// Baloo 2 plus a clock badge; tapping opens the same time
+/// picker as before — look only.
+class _TimeTile extends StatelessWidget {
+  const _TimeTile({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return MinecraftCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: MinecraftText.button(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const MinecraftIconBadge(
+            icon: Icons.schedule,
+            backgroundColor: MinecraftColors.skyBlue,
+            size: 32,
+            iconSize: 18,
+          ),
+        ],
       ),
     );
   }
@@ -1699,15 +2114,20 @@ class _ItemFormState extends State<_ItemForm> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Add deadline',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            'Add deadline',
+            style: MinecraftText.heading(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 20,
+            ),
+          ),
           const SizedBox(height: AppLayout.cardGap),
           DropdownButtonFormField<String>(
             value: _subjectId,
             decoration: const InputDecoration(labelText: 'Subject'),
             items: [
               for (final s in widget.subjects)
-                DropdownMenuItem(value: s.id, child: Text(s.name))
+                DropdownMenuItem(value: s.id, child: Text(s.name)),
             ],
             onChanged: (v) {
               if (v != null) setState(() => _subjectId = v);
@@ -1715,21 +2135,29 @@ class _ItemFormState extends State<_ItemForm> {
           ),
           const SizedBox(height: AppSpacing.s8),
           TextField(
-              controller: _title,
-              decoration: const InputDecoration(labelText: 'Title')),
+            controller: _title,
+            decoration: const InputDecoration(labelText: 'Title'),
+          ),
           const SizedBox(height: AppSpacing.s8),
-          IosSegmentedControl<String>(
-            segments: const [
-              IosSegment(value: 'assignment', label: 'Assignment'),
-              IosSegment(value: 'exam', label: 'Exam'),
-            ],
+          _MinecraftSegmented(
+            options: const [('assignment', 'Assignment'), ('exam', 'Exam')],
             groupValue: _kind,
-            onValueChanged: (value) => setState(() => _kind = value),
+            onChanged: (value) => setState(() => _kind = value),
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text('Due: ${formatDate(_due)}'),
-            trailing: const Icon(Icons.calendar_month),
+            title: Text(
+              'Due: ${formatDate(_due)}',
+              style: MinecraftText.button(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            trailing: const MinecraftIconBadge(
+              icon: Icons.calendar_month,
+              backgroundColor: MinecraftColors.skyBlue,
+              size: 32,
+              iconSize: 18,
+            ),
             onTap: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -1741,25 +2169,29 @@ class _ItemFormState extends State<_ItemForm> {
             },
           ),
           const SizedBox(height: AppSpacing.s8),
-          FilledButton(
-            onPressed: () {
-              if (_title.text.trim().isEmpty) {
-                TopPopup.show(context, message: 'Enter a title.');
-                return;
-              }
-              Navigator.pop(
-                context,
-                AssignmentItem(
-                  id: newId(),
-                  subjectId: _subjectId,
-                  title: _title.text.trim(),
-                  kind: _kind,
-                  due: _due,
-                  done: false,
-                ),
-              );
-            },
-            child: const Text('Save'),
+          SizedBox(
+            width: double.infinity,
+            child: MinecraftBlockButton(
+              label: 'Save',
+              icon: Icons.save_outlined,
+              onPressed: () {
+                if (_title.text.trim().isEmpty) {
+                  TopPopup.show(context, message: 'Enter a title.');
+                  return;
+                }
+                Navigator.pop(
+                  context,
+                  AssignmentItem(
+                    id: newId(),
+                    subjectId: _subjectId,
+                    title: _title.text.trim(),
+                    kind: _kind,
+                    due: _due,
+                    done: false,
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),

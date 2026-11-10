@@ -66,15 +66,15 @@ Future<void> _openManualForm(WidgetTester tester) async {
   await tester.pumpAndSettle();
   // Menu closed, form open.
   expect(_menu, findsNothing);
-  expect(find.text('Add subject'), findsOneWidget);
+  expect(find.text('Add Subject Block'), findsOneWidget);
 }
 
 /// The form is taller than the 600px test viewport, so the Save
 /// button sits below the fold until scrolled into view.
 Future<void> _tapSave(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Save'));
+  await tester.ensureVisible(find.text('Place Block (Save)'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Save'));
+  await tester.tap(find.text('Place Block (Save)'));
 }
 
 /// Dismiss the bottom sheet via the system back button
@@ -105,7 +105,7 @@ void main() {
     // Start/end time pickers (defaults 8:00–9:00).
     expect(find.textContaining('Start:'), findsOneWidget);
     expect(find.textContaining('End:'), findsOneWidget);
-    expect(find.text('Save'), findsOneWidget);
+    expect(find.text('Place Block (Save)'), findsOneWidget);
   });
 
   testWidgets('saving a class adds it, springs it in, and chimes', (
@@ -122,9 +122,9 @@ void main() {
     // Today, so the class lands in the Today list.
     await tester.tap(find.text(weekdayName(DateTime.now().weekday)));
     await tester.pump();
-    await tester.ensureVisible(find.text('Save'));
+    await tester.ensureVisible(find.text('Place Block (Save)'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
+    await tester.tap(find.text('Place Block (Save)'));
     // Step forward 50 ms at a time until the tile lands: the
     // spring starts the frame the sheet finishes popping, so
     // catching it here proves the spring-in runs.
@@ -209,7 +209,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('Edit subject'), findsOneWidget);
+    expect(find.text('Edit Subject Block'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).at(0), 'Coding 2');
     await _tapSave(tester);
@@ -244,7 +244,7 @@ void main() {
     // Conflict popup shows immediately (validation is synchronous);
     // assert it before pumpAndSettle fast-forwards its 5 s life.
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Add subject'), findsOneWidget);
+    expect(find.text('Add Subject Block'), findsOneWidget);
     expect(find.textContaining('Schedule conflict'), findsOneWidget);
     expect(chimes, 0);
     // Dismiss the form: no Clash tile was ever added.

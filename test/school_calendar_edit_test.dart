@@ -7,6 +7,7 @@
 // and duplicate guard, Save persisting through the store).
 // Data is seeded through SharedPreferences exactly as the app
 // stores it. Dates are November 2026 (today) unless stated.
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:estudyantego/features/student/student_theme.dart';
 import 'package:estudyantego/features/student_tab.dart';
 import 'package:flutter/material.dart';
@@ -40,7 +41,7 @@ Finder _inCalendarCard(String text) => find.descendant(
       of: find
           .ancestor(
             of: find.text('School Calendar'),
-            matching: find.byType(Card),
+            matching: find.byType(MinecraftCard),
           )
           .first,
       matching: find.text(text),

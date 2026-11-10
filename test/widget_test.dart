@@ -130,13 +130,16 @@ void main() {
     expect(find.text('Student Hub', skipOffstage: true), findsOneWidget);
 
     // Communities sits after Study: switching shows the moved section.
-    // (The section title sits below the share card, so the finder needs
-    // skipOffstage: false in this phone viewport even though the tab
-    // is selected and the content is in the tree.)
+    // (The section sits below the share card, so the test scrolls the
+    // Communities list until it is visible — the Minecraft theme's
+    // 3px card borders + Baloo 2/Nunito text push it just past the
+    // ListView's pre-built range on a 390x844 phone.)
     await tester.tap(find.byKey(const Key('top-nav-item-Communities')));
     await tester.pumpAndSettle();
-    expect(find.text('Community', skipOffstage: false), findsOneWidget);
     expect(find.text('Share info', skipOffstage: true), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Community'), 200);
+    await tester.pumpAndSettle();
+    expect(find.text('Community'), findsOneWidget);
   });
 
   testWidgets('Study is the second tab; Friends is not a tab anymore', (

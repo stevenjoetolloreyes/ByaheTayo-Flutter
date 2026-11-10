@@ -26,8 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _subjectJson =
     '[{"id":"s1","name":"Math 101","code":"MATH101","teacher":"","room":"","days":[1,3],"startMin":480,"endMin":540,"color":4278190080}]';
-const _gradeJson =
-    '[{"subjectId":"s1","grade":1.5,"units":3,"semester":1}]';
+const _gradeJson = '[{"subjectId":"s1","grade":1.5,"units":3,"semester":1}]';
 const _noteJson =
     '[{"id":"n1","title":"My note","subject":"Math","body":"hello","favorite":false,"updated":"2026-11-06T00:00:00.000"}]';
 const _favNoteJson =
@@ -64,13 +63,8 @@ Future<void> _pumpTab(
   await tester.pumpAndSettle();
 }
 
-const _me = AuthUser(
-  uid: 'u-me',
-  email: 'me@example.com',
-  displayName: 'Me',
-);
-const _benFriend =
-    CloudFriend(uid: 'u-ben', code: 'ESK-BEN123', name: 'Ben');
+const _me = AuthUser(uid: 'u-me', email: 'me@example.com', displayName: 'Me');
+const _benFriend = CloudFriend(uid: 'u-ben', code: 'ESK-BEN123', name: 'Ben');
 
 /// Fake cloud friends: only fetchFriends is implemented; the rest
 /// of the interface is never touched by the share sheet.
@@ -86,14 +80,10 @@ class _FakeFriendCloudRepository implements FriendCloudRepository {
   Future<String> ensureCloudCode({
     required String uid,
     required String localCode,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
-  Future<String> ensureInviteCode({
-    required String uid,
-    String? localCode,
-  }) =>
+  Future<String> ensureInviteCode({required String uid, String? localCode}) =>
       throw UnimplementedError();
 
   @override
@@ -107,8 +97,7 @@ class _FakeFriendCloudRepository implements FriendCloudRepository {
     required String fromCode,
     required String toUid,
     required String toCode,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<List<FriendRequest>> fetchIncoming(String uid) =>
@@ -123,8 +112,7 @@ class _FakeFriendCloudRepository implements FriendCloudRepository {
     required String requestId,
     required String uid,
     required bool accept,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 }
 
 /// Opens the three-dot menu of the row showing [fileName].
@@ -133,10 +121,7 @@ Future<void> _tapFileMenu(WidgetTester tester, String fileName) async {
     of: find.text(fileName),
     matching: find.byType(ListTile),
   );
-  final menu = find.descendant(
-    of: row,
-    matching: find.byIcon(Icons.more_vert),
-  );
+  final menu = find.descendant(of: row, matching: find.byIcon(Icons.more_vert));
   await tester.ensureVisible(menu);
   await tester.pumpAndSettle();
   await tester.tap(menu);
@@ -149,8 +134,9 @@ Future<void> _tapNav(WidgetTester tester, String panel) async {
 }
 
 void main() {
-  testWidgets('Grades is the default panel with honest empty states',
-      (tester) async {
+  testWidgets('Grades is the default panel with honest empty states', (
+    tester,
+  ) async {
     await _pumpTab(tester);
     // Per-panel title (the preview's page title) + bottom nav.
     expect(find.text('Grades'), findsNWidgets(2)); // title + nav
@@ -178,12 +164,14 @@ void main() {
     expect(find.byIcon(Icons.add), findsOneWidget);
   });
 
-  testWidgets('a recorded grade computes a real weighted GWA',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_subjects': _subjectJson,
-      'byahetayo_student_grades': _gradeJson,
-    });
+  testWidgets('a recorded grade computes a real weighted GWA', (tester) async {
+    await _pumpTab(
+      tester,
+      prefs: {
+        'byahetayo_student_subjects': _subjectJson,
+        'byahetayo_student_grades': _gradeJson,
+      },
+    );
     expect(find.text('Math 101'), findsOneWidget);
     expect(find.text('1.50'), findsWidgets);
     expect(find.text('Excellent'), findsOneWidget);
@@ -194,8 +182,7 @@ void main() {
     expect(find.text('No grade yet'), findsOneWidget);
   });
 
-  testWidgets('Files panel starts empty: 0 files, 0 B of 5 GB',
-      (tester) async {
+  testWidgets('Files panel starts empty: 0 files, 0 B of 5 GB', (tester) async {
     await _pumpTab(tester);
     await _tapNav(tester, 'files');
     expect(find.text('Study files'), findsOneWidget);
@@ -210,11 +197,10 @@ void main() {
     }
   });
 
-  testWidgets('tapping a file row opens its details (metadata only)',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('tapping a file row opens its details (metadata only)', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
     expect(find.text('Activity 1.docx'), findsOneWidget);
@@ -225,10 +211,7 @@ void main() {
     // Dialog rows: type / size / folder / added. 'PDF' also labels
     // a filter pill, so scope the dialog assertions to the dialog.
     expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('PDF'),
-      ),
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('PDF')),
       findsOneWidget,
     );
     expect(find.text('2.0 KB'), findsOneWidget);
@@ -247,11 +230,10 @@ void main() {
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
   });
 
-  testWidgets('tapping a folder filters the file list to that folder',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('tapping a folder filters the file list to that folder', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
     expect(find.text('Activity 1.docx'), findsOneWidget);
@@ -273,11 +255,10 @@ void main() {
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
   });
 
-  testWidgets('tapping a file trash asks for confirmation first',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('tapping a file trash asks for confirmation first', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     // Rows sort most-recent-first, so target f1's own trash (not
     // the first trash on screen, which is f2's). The row sits low
@@ -316,11 +297,8 @@ void main() {
     expect(find.text('Close'), findsNothing);
   });
 
-  testWidgets('Notes panel lists real notes, searchable',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_notes': _noteJson,
-    });
+  testWidgets('Notes panel lists real notes, searchable', (tester) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_notes': _noteJson});
     await _tapNav(tester, 'notes');
     expect(find.text('Search notes'), findsOneWidget);
     expect(find.text('My note'), findsOneWidget);
@@ -337,8 +315,9 @@ void main() {
     expect(find.text('No notes yet.'), findsOneWidget);
   });
 
-  testWidgets('Review panel shows real study entry points, empty states',
-      (tester) async {
+  testWidgets('Review panel shows real study entry points, empty states', (
+    tester,
+  ) async {
     await _pumpTab(tester);
     await _tapNav(tester, 'review');
     // Per-panel title + nav both read "Review".
@@ -366,11 +345,10 @@ void main() {
     expect(find.text('No quizzes yet.'), findsOneWidget);
   });
 
-  testWidgets('Summary shows deck summary cards from real quizzes',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_quizzes': _quizJson,
-    });
+  testWidgets('Summary shows deck summary cards from real quizzes', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_quizzes': _quizJson});
     await _tapNav(tester, 'review');
     await tester.tap(find.text('Summary'));
     await tester.pumpAndSettle();
@@ -387,8 +365,7 @@ void main() {
     expect(find.text('Notes saved'), findsNothing);
     expect(find.text('Recent attempts'), findsNothing);
     expect(find.text('No quiz attempts yet.'), findsNothing);
-    expect(find.text('11 Nursing Theorists and Their Theories'),
-        findsNothing);
+    expect(find.text('11 Nursing Theorists and Their Theories'), findsNothing);
     expect(find.text('Audit Principles and Process'), findsNothing);
     expect(find.text('Computer Programming Fundamentals'), findsNothing);
     // Quiz pill still shows the question-count deck card.
@@ -400,11 +377,10 @@ void main() {
     expect(find.text('Math'), findsOneWidget);
   });
 
-  testWidgets('Review deck card shows a real quiz, never sample decks',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_quizzes': _quizJson,
-    });
+  testWidgets('Review deck card shows a real quiz, never sample decks', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_quizzes': _quizJson});
     await _tapNav(tester, 'review');
     expect(find.text('My first quiz'), findsOneWidget);
     expect(find.text('MULTIPLE CHOICE'), findsOneWidget);
@@ -413,17 +389,15 @@ void main() {
     expect(find.text('Math'), findsOneWidget);
     expect(find.text('No quizzes yet.'), findsNothing);
     // The preview's sample decks are never hardcoded.
-    expect(find.text('11 Nursing Theorists and Their Theories'),
-        findsNothing);
+    expect(find.text('11 Nursing Theorists and Their Theories'), findsNothing);
     expect(find.text('Audit Principles and Process'), findsNothing);
     expect(find.text('Computer Programming Fundamentals'), findsNothing);
   });
 
-  testWidgets('Review panel has no floating + button on Quiz or Summary',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_quizzes': _quizJson,
-    });
+  testWidgets('Review panel has no floating + button on Quiz or Summary', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_quizzes': _quizJson});
     await _tapNav(tester, 'review');
     // Quiz tab: deck list + "Pick how to study" stay, but no FAB.
     expect(find.text('My first quiz'), findsOneWidget);
@@ -435,8 +409,7 @@ void main() {
     expect(find.byIcon(Icons.add), findsNothing);
   });
 
-  testWidgets('AI tab is its own bottom-nav tab, chat only',
-      (tester) async {
+  testWidgets('AI tab is its own bottom-nav tab, chat only', (tester) async {
     await _pumpTab(tester);
     // The pill has five tabs now: Grades, Files, Notes, Review, AI.
     expect(find.byKey(const ValueKey('study-nav-ai')), findsOneWidget);
@@ -453,11 +426,8 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
   });
 
-  testWidgets('heart chip counts favorited notes, honestly',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_notes': _favNoteJson,
-    });
+  testWidgets('heart chip counts favorited notes, honestly', (tester) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_notes': _favNoteJson});
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('study-hearts-chip')),
@@ -468,8 +438,9 @@ void main() {
     expect(find.text('15'), findsNothing);
   });
 
-  testWidgets('Grades FAB points at the Student tab with no subjects',
-      (tester) async {
+  testWidgets('Grades FAB points at the Student tab with no subjects', (
+    tester,
+  ) async {
     await _pumpTab(tester);
     await tester.tap(find.byIcon(Icons.add));
     await tester.pump();
@@ -483,9 +454,7 @@ void main() {
   });
 
   testWidgets('grade form validates the 1.00–5.00 range', (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_subjects': _subjectJson,
-    });
+    await _pumpTab(tester, prefs: {'byahetayo_student_subjects': _subjectJson});
     expect(find.text('No grade yet'), findsOneWidget);
     await tester.tap(find.text('Add grade'));
     await tester.pumpAndSettle();
@@ -495,12 +464,9 @@ void main() {
     );
     await tester.tap(find.text('Save'));
     // Top popup (was a SnackBar): assert while it is still up —
-      // pumpAndSettle would fast-forward past its 5 seconds.
-      await tester.pump(const Duration(milliseconds: 500));
-    expect(
-      find.text('Enter a grade from 1.00 to 5.00.'),
-      findsOneWidget,
-    );
+    // pumpAndSettle would fast-forward past its 5 seconds.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Enter a grade from 1.00 to 5.00.'), findsOneWidget);
     // Dialog stays open; a valid grade saves.
     await tester.enterText(
       find.widgetWithText(TextField, 'Grade (1.00 – 5.00)'),
@@ -509,15 +475,18 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.text('2.00'), findsWidgets);
-    expect(jsonDecode(
-      (await SharedPreferences.getInstance())
-              .getString('byahetayo_student_grades') ??
-          '[]',
-    ), isNotEmpty);
+    expect(
+      jsonDecode(
+        (await SharedPreferences.getInstance()).getString(
+              'byahetayo_student_grades',
+            ) ??
+            '[]',
+      ),
+      isNotEmpty,
+    );
   });
 
-  testWidgets('reloads subjects when it becomes visible again',
-      (tester) async {
+  testWidgets('reloads subjects when it becomes visible again', (tester) async {
     // A subject added in Student → Classes & Timetable while the
     // Study tab is hidden must appear in Grades when the user
     // comes back — no app restart (cross-tab staleness, Fares ×
@@ -538,8 +507,7 @@ void main() {
       const MaterialApp(home: Scaffold(body: StudyTab(visible: false))),
     );
     await tester.pumpAndSettle();
-    final subjects =
-        List<Map<String, dynamic>>.from(jsonDecode(_subjectJson));
+    final subjects = List<Map<String, dynamic>>.from(jsonDecode(_subjectJson));
     subjects.add({
       'id': 's2',
       'name': 'Science 101',
@@ -561,12 +529,10 @@ void main() {
     expect(find.text('Science 101'), findsOneWidget);
   });
 
-  testWidgets(
-      'file row three-dot menu offers Details, Rename, Share, Delete',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('file row three-dot menu offers Details, Rename, Share, Delete', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     await _tapFileMenu(tester, 'Lecture 1.pdf');
     expect(find.text('Details'), findsOneWidget);
@@ -582,21 +548,15 @@ void main() {
     expect(find.text('Details'), findsNothing);
   });
 
-  testWidgets('menu Details opens the same details dialog',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('menu Details opens the same details dialog', (tester) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     await _tapFileMenu(tester, 'Lecture 1.pdf');
     await tester.tap(find.text('Details'));
     await tester.pumpAndSettle();
     expect(find.text('Lecture 1.pdf'), findsNWidgets(2));
     expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('PDF'),
-      ),
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('PDF')),
       findsOneWidget,
     );
     await tester.tap(find.text('Close'));
@@ -604,11 +564,8 @@ void main() {
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
   });
 
-  testWidgets('menu Rename renames the file and saves it',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('menu Rename renames the file and saves it', (tester) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     await _tapFileMenu(tester, 'Lecture 1.pdf');
     await tester.tap(find.text('Rename file'));
@@ -629,8 +586,9 @@ void main() {
     expect(find.text('Lecture 1.pdf'), findsNothing);
     expect(find.text('File renamed.'), findsOneWidget);
     final stored = jsonDecode(
-      (await SharedPreferences.getInstance())
-              .getString('byahetayo_student_files') ??
+      (await SharedPreferences.getInstance()).getString(
+            'byahetayo_student_files',
+          ) ??
           '[]',
     ) as List;
     expect(
@@ -639,19 +597,15 @@ void main() {
     );
   });
 
-  testWidgets('menu Rename validates empty and over-long names',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('menu Rename validates empty and over-long names', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     await _tapFileMenu(tester, 'Lecture 1.pdf');
     await tester.tap(find.text('Rename file'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(TextField, 'File name'),
-      '   ',
-    );
+    await tester.enterText(find.widgetWithText(TextField, 'File name'), '   ');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.text('Enter a name for the file.'), findsOneWidget);
@@ -673,11 +627,10 @@ void main() {
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
   });
 
-  testWidgets('menu Rename re-derives the kind from the new extension',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('menu Rename re-derives the kind from the new extension', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     await _tapFileMenu(tester, 'Lecture 1.pdf');
     await tester.tap(find.text('Rename file'));
@@ -699,11 +652,10 @@ void main() {
     expect(find.text('Lecture 1.docx'), findsNothing);
   });
 
-  testWidgets('menu Delete asks for confirmation before deleting',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('menu Delete asks for confirmation before deleting', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     await _tapFileMenu(tester, 'Lecture 1.pdf');
     await tester.tap(find.text('Delete'));
@@ -723,11 +675,10 @@ void main() {
     expect(find.text('Activity 1.docx'), findsOneWidget);
   });
 
-  testWidgets('menu Share with no signed-in user says so honestly',
-      (tester) async {
-    await _pumpTab(tester, prefs: {
-      'byahetayo_student_files': _filesJson,
-    });
+  testWidgets('menu Share with no signed-in user says so honestly', (
+    tester,
+  ) async {
+    await _pumpTab(tester, prefs: {'byahetayo_student_files': _filesJson});
     await _tapNav(tester, 'files');
     await _tapFileMenu(tester, 'Lecture 1.pdf');
     await tester.tap(find.text('Share this file'));
@@ -742,8 +693,9 @@ void main() {
     expect(find.text('Lecture 1.pdf'), findsOneWidget);
   });
 
-  testWidgets('menu Share with a friend shares the file with them',
-      (tester) async {
+  testWidgets('menu Share with a friend shares the file with them', (
+    tester,
+  ) async {
     final repo = LocalSharedStudyFileRepository();
     await _pumpTab(
       tester,
@@ -759,8 +711,8 @@ void main() {
     expect(find.text('Share "Lecture 1.pdf"'), findsOneWidget);
     await tester.tap(find.text('Ben'));
     // Top popup (was a SnackBar): assert while it is still up —
-      // pumpAndSettle would fast-forward past its 5 seconds.
-      await tester.pump(const Duration(milliseconds: 500));
+    // pumpAndSettle would fast-forward past its 5 seconds.
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Shared with Ben.'), findsOneWidget);
     final shared = await repo.fetchSharedWithMe('u-ben');
     expect(shared.length, 1);
@@ -769,8 +721,9 @@ void main() {
     expect(shared.first.toUid, 'u-ben');
   });
 
-  testWidgets('menu Share with no friends shows the honest empty state',
-      (tester) async {
+  testWidgets('menu Share with no friends shows the honest empty state', (
+    tester,
+  ) async {
     await _pumpTab(
       tester,
       prefs: {'byahetayo_student_files': _filesJson},
@@ -783,16 +736,13 @@ void main() {
     await tester.tap(find.text('Share this file'));
     await tester.pumpAndSettle();
     expect(
-      find.text(
-        'No friends yet. Add a friend from the Friends tab first.',
-      ),
+      find.text('No friends yet. Add a friend from the Friends tab first.'),
       findsOneWidget,
     );
     expect(find.text('Ben'), findsNothing);
   });
 
-  testWidgets('Shared with me shows files shared to the user',
-      (tester) async {
+  testWidgets('Shared with me shows files shared to the user', (tester) async {
     // Ben shares a file with me before the tab opens: the mock
     // prefs must be set before seeding, or the seed is wiped.
     SharedPreferences.setMockInitialValues({});
@@ -816,10 +766,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: StudyTab(
-            currentUser: _me,
-            sharedFileRepository: repo,
-          ),
+          body: StudyTab(currentUser: _me, sharedFileRepository: repo),
         ),
       ),
     );
@@ -828,15 +775,17 @@ void main() {
     expect(find.text('SHARED WITH ME'), findsOneWidget);
     expect(find.text('Shared Lecture.pdf'), findsOneWidget);
     expect(find.text('Shared by Ben · 4.0 KB · Lectures'), findsOneWidget);
-    // Tapping the shared row opens details with the sender.
+    // Tapping the shared row opens details with the sender. The
+    // row sits at the bottom of the scrollable Files list, so
+    // scroll it above the floating nav first (the list's bottom
+    // padding leaves it fully reachable).
+    await tester.ensureVisible(find.text('Shared Lecture.pdf'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Shared Lecture.pdf'));
     await tester.pumpAndSettle();
     expect(find.text('Shared Lecture.pdf'), findsNWidgets(2));
     expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('Ben'),
-      ),
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('Ben')),
       findsOneWidget,
     );
     await tester.tap(find.text('Close'));

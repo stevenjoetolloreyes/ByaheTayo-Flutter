@@ -37,6 +37,7 @@ import 'onboarding/auth_service.dart';
 import 'vehicle_categories.dart';
 import 'lgu_complaint_ui.dart';
 import 'lgu_complaints.dart';
+import 'minecraft_theme.dart';
 
 // Communities' OWN design tokens — Premium Dark + Emerald Green.
 //
@@ -236,9 +237,13 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.s2),
-        const Text(
+        // Feature 4: Baloo 2 page title (Minecraft heading).
+        Text(
           'Communities',
-          style: kCommunityPageTitle,
+          style: MinecraftText.heading(
+            color: scheme.onSurface,
+            fontSize: 26,
+          ),
         ),
         const SizedBox(height: 24),
         _shareInfoCard(scheme),
@@ -255,48 +260,49 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
     );
   }
 
-  /// Reference-style "Share info" card. It opens the local-only
-  /// Create form: the button does something real (saves a post on this
-  /// device) instead of reporting no backend.
+  /// Reference-style "Share info" card (Feature 4: blocky
+  /// Minecraft card + grass icon badge + Baloo 2 title). It opens
+  /// the local-only Create form: the button does something real
+  /// (saves a post on this device) instead of reporting no backend.
   Widget _shareInfoCard(ColorScheme scheme) {
-    return Card(
-      child: Padding(
-        padding: AppLayout.cardPadding,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.edit_outlined, color: scheme.primary),
-            const SizedBox(width: AppLayout.cardGap),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Know something that can help commuters?',
-                    style: kCommunityCardHeading,
-                  ),
-                  const SizedBox(height: AppSpacing.s4),
-                  Text(
-                    'Share local transport coverage or terminal details so other commuters can plan with better context.',
-                    style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
+    return MinecraftCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const MinecraftIconBadge(icon: Icons.edit_outlined),
+          const SizedBox(width: AppLayout.cardGap),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Know something that can help commuters?',
+                  style: MinecraftText.title(color: scheme.onSurface),
+                ),
+                const SizedBox(height: AppSpacing.s4),
+                Text(
+                  'Share local transport coverage or terminal details so other commuters can plan with better context.',
+                  style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
             ),
-            const SizedBox(width: AppLayout.cardGap),
-            OutlinedButton(
-              onPressed: _openCreateSheet,
-              child: const Text('Share info'),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: AppLayout.cardGap),
+          OutlinedButton(
+            onPressed: _openCreateSheet,
+            child: const Text('Share info'),
+          ),
+        ],
       ),
     );
   }
 
   /// Community section: shared posts first, then the author's local
   /// posts — every card chipped so the two kinds are never confused.
-  /// No invented posts, no badges, no counts.
+  /// No invented posts, no badges, no counts. Feature 4: blocky
+  /// Minecraft card shell + section header; a flat queue card
+  /// appears above the shared list while one of the current user's
+  /// own posts waits for admin approval.
   Widget _communitySection() {
     final scheme = Theme.of(context).colorScheme;
     final visibleLocal =
@@ -305,36 +311,42 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
         visibleLocal.isEmpty &&
         !_sharedLoading &&
         _sharedError == null;
-    return Card(
-      child: Padding(
-        padding: AppLayout.cardPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.groups_outlined, color: scheme.primary),
-                const SizedBox(width: AppLayout.cardGap),
-                const Expanded(
-                  child: Text(
-                    'Community',
-                    style: kCommunitySectionHeading,
-                  ),
-                ),
-              ],
-            ),
+    // The author's own posts still waiting for approval (live
+    // data only — never a sample). Admins also see other users'
+    // pending posts, but the queue card is about YOUR post.
+    final ownPending = widget.currentUser == null
+        ? const <CommunityPost>[]
+        : _sharedPosts
+              .where(
+                (p) =>
+                    p.status == PostStatus.pending &&
+                    p.authorUid == widget.currentUser!.uid,
+              )
+              .toList();
+    return MinecraftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const MinecraftSectionHeader(
+            icon: Icons.groups_outlined,
+            title: 'Community',
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          Text(
+            'Shared posts are visible to everyone once approved. '
+            'Posts marked Local stay on this device.',
+            style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppLayout.cardGap),
+          Text(
+            'Shared posts',
+            style: MinecraftText.title(color: scheme.onSurface),
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          if (ownPending.isNotEmpty) ...[
+            _approvalQueueCard(scheme),
             const SizedBox(height: AppSpacing.s8),
-            Text(
-              'Shared posts are visible to everyone once approved. '
-              'Posts marked Local stay on this device.',
-              style: AppText.caption.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppLayout.cardGap),
-            const Text(
-              'Shared posts',
-              style: AppText.labelStrong,
-            ),
-            const SizedBox(height: AppSpacing.s8),
+          ],
             if (widget.currentUser == null)
               Text(
                 'Sign in to see posts shared by the community.',
@@ -370,9 +382,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               ],
             if (visibleLocal.isNotEmpty) ...[
               const SizedBox(height: AppLayout.cardGap),
-              const Text(
+              Text(
                 'Your local posts',
-                style: AppText.labelStrong,
+                style: MinecraftText.title(color: scheme.onSurface),
               ),
               const SizedBox(height: AppSpacing.s4),
               Text(
@@ -396,9 +408,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
             ],
             if (_complaints.isNotEmpty) ...[
               const SizedBox(height: AppLayout.cardGap),
-              const Text(
+              Text(
                 'My fare complaints',
-                style: AppText.labelStrong,
+                style: MinecraftText.title(color: scheme.onSurface),
               ),
               const SizedBox(height: AppSpacing.s4),
               Text(
@@ -457,6 +469,39 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               ),
           ],
         ),
+      );
+  }
+
+  /// Flat approval queue card (Feature 4, preview parity): shown
+  /// while one of the current user's own posts waits for admin
+  /// approval. Flat = no hard shadow. Live data only — the card
+  /// appears only when [ownPending] in [_communitySection] is
+  /// non-empty, and never for other users' pending posts.
+  Widget _approvalQueueCard(ColorScheme scheme) {
+    return Container(
+      key: const Key('approval-queue-card'),
+      decoration: MinecraftDecorations.flatCardFor(
+        Theme.of(context).brightness,
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const MinecraftIconBadge(
+            icon: Icons.hourglass_top,
+            backgroundColor: MinecraftColors.gold,
+            iconColor: MinecraftColors.ink,
+            size: 36,
+            iconSize: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Your post is in the queue — Waiting for admin approval before it publishes.',
+              style: MinecraftText.bodySemiBold(color: scheme.onSurface),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -470,12 +515,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
     // tints are light-mode only; dark mode uses deep semantic
     // tints so the badge stays readable on a dark card.
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: scheme.outline),
-        borderRadius: BorderRadius.circular(kCommunityCardRadius),
-      ),
-      padding: AppLayout.cardPadding,
+    // Feature 4: blocky Minecraft card shell (3px ink border,
+    // hard shadow, dark-aware) around the unchanged post content.
+    return MinecraftCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -497,13 +539,17 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               Expanded(
                 child: Text(
                   post.displayTitle,
-                  style: kCommunityCardHeading,
+                  style: MinecraftText.title(color: scheme.onSurface),
                 ),
               ),
-              Chip(
-                label: Text(post.isShared ? 'Shared post' : 'Local post'),
-                visualDensity: VisualDensity.compact,
-                labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+              MinecraftStatusChip(
+                post.isShared ? 'Shared post' : 'Local post',
+                backgroundColor: post.isShared
+                    ? MinecraftColors.skyBlue
+                    : MinecraftColors.gold,
+                textColor: post.isShared
+                    ? Colors.white
+                    : MinecraftColors.ink,
               ),
             ],
           ),
@@ -513,20 +559,14 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
           // still show — they carry real status information.
           if (post.status != PostStatus.approved) ...[
             const SizedBox(height: AppSpacing.s4),
-            Chip(
-              label: Text(
-                post.status == PostStatus.rejected
-                    ? 'Rejected'
-                    : 'In Review',
-              ),
+            MinecraftStatusChip(
+              post.status == PostStatus.rejected ? 'Rejected' : 'In Review',
               backgroundColor: post.status == PostStatus.rejected
-                  ? (dark
-                      ? const Color(0xFF7F1D1D)
-                      : const Color(0xFFFEE2E2))
-                  : (dark
-                      ? const Color(0xFF78350F)
-                      : const Color(0xFFFEF9C3)),
-              visualDensity: VisualDensity.compact,
+                  ? MinecraftColors.heartRed
+                  : MinecraftColors.gold,
+              textColor: post.status == PostStatus.rejected
+                  ? Colors.white
+                  : MinecraftColors.ink,
             ),
           ],
           // Rejected shared posts reach this card only for their
@@ -550,6 +590,14 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                     ? kCommunityEmerald
                     : const Color(0xFFDCFCE7),
                 borderRadius: BorderRadius.circular(12),
+                // Feature 4: blocky 2.5px border on the
+                // description box.
+                border: Border.all(
+                  color: dark
+                      ? MinecraftColors.darkBorder
+                      : MinecraftColors.border,
+                  width: 2.5,
+                ),
               ),
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -567,12 +615,11 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                       const SizedBox(width: 6),
                       Text(
                         'Description',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                        style: MinecraftText.title(
                           color: dark
                               ? const Color(0xFFBBF7D0)
                               : kCommunityEmerald,
+                          fontSize: 16,
                         ),
                       ),
                     ],
@@ -665,28 +712,20 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
   /// One saved complaint: reference, route, status. Tapping opens the
   /// detail sheet (message, copy, open page, mark as sent). No
   /// complainant info is ever shown on a community card.
+  /// Feature 4: blocky Minecraft card shell + blocky status chip.
   Widget _complaintCard(FareComplaint complaint, ColorScheme scheme) {
     final submitted = complaint.status == ComplaintStatus.submitted;
-    // Same brightness-aware badge tints as the post status chip.
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: scheme.outline),
-        borderRadius: BorderRadius.circular(kCommunityCardRadius),
-      ),
+    return MinecraftCard(
+      padding: EdgeInsets.zero,
       child: ListTile(
         title: Text(complaint.reference),
         subtitle: Text('${complaint.from} → ${complaint.to}'),
-        trailing: Chip(
-          label: Text(submitted ? 'Submitted' : 'Prepared'),
+        trailing: MinecraftStatusChip(
+          submitted ? 'Submitted' : 'Prepared',
           backgroundColor: submitted
-              ? (dark
-                  ? kCommunityEmerald
-                  : const Color(0xFFDCFCE7))
-              : (dark
-                  ? const Color(0xFF78350F)
-                  : const Color(0xFFFEF9C3)),
-          visualDensity: VisualDensity.compact,
+              ? MinecraftColors.grassGreen
+              : MinecraftColors.gold,
+          textColor: submitted ? Colors.white : MinecraftColors.ink,
         ),
         onTap: () => _openComplaintDetail(complaint),
       ),
@@ -713,9 +752,9 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
                   Expanded(
                     child: Text(
                       post.displayTitle,
-                      style: const TextStyle(
+                      style: MinecraftText.heading(
+                        color: scheme.onSurface,
                         fontSize: 18,
-                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
@@ -967,9 +1006,12 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Share a route',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: MinecraftText.heading(
+                color: scheme.onSurface,
+                fontSize: 18,
+              ),
             ),
             const SizedBox(height: AppSpacing.s4),
             Text(

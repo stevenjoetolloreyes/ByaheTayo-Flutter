@@ -18,6 +18,7 @@
 // equal them, and the mid-flight states are below them.
 import 'dart:convert';
 
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:estudyantego/features/onboarding/onboarding_state.dart';
 import 'package:estudyantego/features/points_wallet_repository.dart';
@@ -232,12 +233,18 @@ String _pointsText(WidgetTester tester) =>
     tester.widget<Text>(find.byKey(const ValueKey('at-a-glance-points'))).data!;
 
 /// The Walking Goal bar's fill right now (0..1).
+///
+/// Reads the Minecraft XP bar's value (Feature 2 restyle — the
+/// bar is a [MinecraftXpBar] now, not a LinearProgressIndicator).
+/// During the entrance the tab drives the value frame by frame
+/// (no own animation), so this is the current fill; otherwise it
+/// is the live progress target.
 double _walkingBarValue(WidgetTester tester) {
   final bar = find.descendant(
     of: find.byKey(const ValueKey('walking-hub-card')),
-    matching: find.byType(LinearProgressIndicator),
+    matching: find.byType(MinecraftXpBar),
   );
-  return tester.widget<LinearProgressIndicator>(bar).value ?? -1;
+  return tester.widget<MinecraftXpBar>(bar).value;
 }
 
 /// How many sign-in day tiles are ticked in right now.

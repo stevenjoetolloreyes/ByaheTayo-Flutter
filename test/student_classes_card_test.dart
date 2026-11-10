@@ -9,6 +9,7 @@
 // that wants no Google events stores an explicit empty list.
 import 'dart:convert';
 
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:estudyantego/features/student/google_events.dart';
 import 'package:estudyantego/features/student/student_data.dart';
 import 'package:estudyantego/features/student/student_theme.dart';
@@ -63,7 +64,7 @@ Finder _inClassesCard(String text) => find.descendant(
       of: find
           .ancestor(
             of: find.text('Classes & Timetable'),
-            matching: find.byType(Card),
+            matching: find.byType(MinecraftCard),
           )
           .first,
       matching: find.text(text),

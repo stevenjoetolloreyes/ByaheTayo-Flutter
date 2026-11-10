@@ -14,6 +14,7 @@
 import 'package:flutter/material.dart';
 
 import '../estudyantego_ai.dart';
+import '../minecraft_theme.dart';
 import '../top_popup.dart';
 import '../app_layout.dart';
 import 'student_data.dart';
@@ -36,8 +37,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
   }
 
   Future<void> _load() async {
-    final cards =
-        await StudentStorage.loadList(StudentStorage.flashcardsKey);
+    final cards = await StudentStorage.loadList(StudentStorage.flashcardsKey);
     if (!mounted) return;
     setState(() {
       _cards = cards.map(Flashcard.fromJson).toList();
@@ -46,7 +46,9 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
   }
 
   Future<void> _saveCards() => StudentStorage.saveList(
-      StudentStorage.flashcardsKey, _cards.map((c) => c.toJson()).toList());
+    StudentStorage.flashcardsKey,
+    _cards.map((c) => c.toJson()).toList(),
+  );
 
   /// Cards to show: the user's real cards, or the sample deck
   /// while they have none.
@@ -77,11 +79,13 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
         content: Text(card.front),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -113,9 +117,30 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
     await _load();
   }
 
+  /// Cards grouped into decks by subject, in first-appearance
+  /// order (Minecraft restyle, Feature 3): the preview's
+  /// 'Flashcard Chests' are decks saved per subject, and the real
+  /// cards already carry a subject — so the decks are the live
+  /// groups, never invented, never seeded. The list order inside
+  /// a deck is unchanged; only the grouping headers are new.
+  List<({String subject, List<Flashcard> cards})> get _decks {
+    final order = <String>[];
+    final bySubject = <String, List<Flashcard>>{};
+    for (final card in _visibleCards) {
+      final subject = card.subject.isEmpty ? 'No subject' : card.subject;
+      if (!bySubject.containsKey(subject)) {
+        bySubject[subject] = [];
+        order.add(subject);
+      }
+      bySubject[subject]!.add(card);
+    }
+    return [for (final s in order) (subject: s, cards: bySubject[s]!)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final cards = _visibleCards;
+    final decks = _decks;
     return Scaffold(
       appBar: AppBar(title: const Text('Flashcards')),
       floatingActionButton: FloatingActionButton.extended(
@@ -129,49 +154,127 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
               padding: AppLayout.pagePaddingTab,
               children: [
                 if (_showingSample)
-                  Card(
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
                     child: ListTile(
-                      leading: const Icon(Icons.info_outline),
-                      title: const Text('Sample deck'),
-                      subtitle: const Text(
-                          'Computer Basics — try the flip mode below. '
-                          'Add your first card and this sample goes away.'),
+                      leading: const MinecraftIconBadge(
+                        icon: Icons.info_outline,
+                        backgroundColor: MinecraftColors.skyBlue,
+                      ),
+                      title: Text(
+                        'Sample deck',
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Computer Basics — try the flip mode below. '
+                        'Add your first card and this sample goes away.',
+                        style: MinecraftText.body(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
                     ),
                   ),
                 if (_showingSample) const SizedBox(height: AppSpacing.s8),
-                FilledButton.icon(
-                  onPressed: cards.isEmpty ? null : _studyAll,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Study all cards'),
+                SizedBox(
+                  width: double.infinity,
+                  child: MinecraftBlockButton(
+                    label: 'Study all cards',
+                    icon: Icons.play_arrow,
+                    onPressed: cards.isEmpty ? null : _studyAll,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.s8),
                 if (cards.isEmpty)
-                  const Card(
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
                     child: ListTile(
-                      title: Text('No flashcards yet.'),
+                      title: Text(
+                        'No flashcards yet.',
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
                       subtitle: Text(
-                          'Add a card with the definition on the front and the term on the back.'),
+                        'Add a card with the definition on the front and the term on the back.',
+                        style: MinecraftText.body(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
                     ),
                   )
                 else
-                  for (final card in cards)
-                    Card(
-                      child: ListTile(
-                        title: Text(card.front),
-                        subtitle: Text(
-                            '${card.subject.isEmpty ? 'No subject' : card.subject} · Answer: ${card.back}'),
-                        trailing: _showingSample
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    size: 20),
-                                onPressed: () => _deleteCard(card),
+                  for (var i = 0; i < decks.length; i++) ...[
+                    if (i > 0) const SizedBox(height: AppSpacing.s12),
+                    _DeckChest(deck: decks[i], index: i),
+                    const SizedBox(height: AppSpacing.s8),
+                    for (final card in decks[i].cards)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: MinecraftCard(
+                          padding: EdgeInsets.zero,
+                          child: ListTile(
+                            title: Text(
+                              card.front,
+                              style: MinecraftText.title(
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
+                            ),
+                            subtitle: Text(
+                              '${card.subject.isEmpty ? 'No subject' : card.subject} · Answer: ${card.back}',
+                              style: MinecraftText.body(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            trailing: _showingSample
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => _deleteCard(card),
+                                  ),
+                          ),
+                        ),
                       ),
-                    ),
+                  ],
                 const SizedBox(height: 72),
               ],
             ),
+    );
+  }
+}
+
+/// One flashcard chest header (Minecraft restyle, Feature 3):
+/// the preview's deck card — a box / box-open badge by mastery,
+/// the subject as the deck title, the REAL card count and
+/// mastered count, and the REAL mastery % chip. The badge opens
+/// (gold) at 50% mastery or more and stays a closed box below
+/// that. The deck's cards list right below the chest.
+class _DeckChest extends StatelessWidget {
+  const _DeckChest({required this.deck, required this.index});
+
+  final ({String subject, List<Flashcard> cards}) deck;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = deck.cards.length;
+    final mastered = deck.cards
+        .where((c) => c.studyStatus == 'remembered')
+        .length;
+    final pct = total == 0 ? 0 : (mastered * 100 / total).round();
+    final open = total > 0 && pct >= 50;
+    return MinecraftQuestCard(
+      key: Key('flashcard-chest-$index'),
+      badgeIcon: open ? Icons.inbox : Icons.inventory_2,
+      badgeColor: open ? MinecraftColors.gold : MinecraftColors.purple,
+      badgeIconColor: open ? MinecraftColors.ink : Colors.white,
+      title: deck.subject,
+      details: '$total card${total == 1 ? '' : 's'} · $mastered mastered',
+      chip: MinecraftStatusChip('$pct%'),
     );
   }
 }
@@ -209,40 +312,53 @@ class _CardFormState extends State<_CardForm> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Add flashcard',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            'Add flashcard',
+            style: MinecraftText.heading(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 20,
+            ),
+          ),
           const SizedBox(height: AppLayout.cardGap),
           TextField(
-              controller: _front,
-              decoration: const InputDecoration(labelText: 'Front (definition)')),
+            controller: _front,
+            decoration: const InputDecoration(labelText: 'Front (definition)'),
+          ),
           const SizedBox(height: AppSpacing.s8),
           TextField(
-              controller: _back,
-              decoration: const InputDecoration(labelText: 'Back (term)')),
+            controller: _back,
+            decoration: const InputDecoration(labelText: 'Back (term)'),
+          ),
           const SizedBox(height: AppSpacing.s8),
           TextField(
-              controller: _subject,
-              decoration:
-                  const InputDecoration(labelText: 'Subject (optional)')),
+            controller: _subject,
+            decoration: const InputDecoration(labelText: 'Subject (optional)'),
+          ),
           const SizedBox(height: AppLayout.cardGap),
-          FilledButton(
-            onPressed: () {
-              if (_front.text.trim().isEmpty ||
-                  _back.text.trim().isEmpty) {
-                TopPopup.show(context, message: 'Fill in both front and back.');
-                return;
-              }
-              Navigator.pop(
-                context,
-                Flashcard(
-                  id: newId(),
-                  front: _front.text.trim(),
-                  back: _back.text.trim(),
-                  subject: _subject.text.trim(),
-                ),
-              );
-            },
-            child: const Text('Save'),
+          SizedBox(
+            width: double.infinity,
+            child: MinecraftBlockButton(
+              label: 'Save',
+              icon: Icons.save_outlined,
+              onPressed: () {
+                if (_front.text.trim().isEmpty || _back.text.trim().isEmpty) {
+                  TopPopup.show(
+                    context,
+                    message: 'Fill in both front and back.',
+                  );
+                  return;
+                }
+                Navigator.pop(
+                  context,
+                  Flashcard(
+                    id: newId(),
+                    front: _front.text.trim(),
+                    back: _back.text.trim(),
+                    subject: _subject.text.trim(),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -255,7 +371,11 @@ class _CardFormState extends State<_CardForm> {
 /// Marks persist through [onDeckChanged]; when [readOnly] is true
 /// (the sample deck) marks are session-only.
 class _StudyMode extends StatefulWidget {
-  const _StudyMode({required this.cards, this.onDeckChanged, this.readOnly = false});
+  const _StudyMode({
+    required this.cards,
+    this.onDeckChanged,
+    this.readOnly = false,
+  });
 
   final List<Flashcard> cards;
 
@@ -285,10 +405,8 @@ class _StudyModeState extends State<_StudyMode> {
     }
   }
 
-  int get _remembered =>
-      _marks.values.where((s) => s == 'remembered').length;
-  int get _needsReview =>
-      _marks.values.where((s) => s == 'needsReview').length;
+  int get _remembered => _marks.values.where((s) => s == 'remembered').length;
+  int get _needsReview => _marks.values.where((s) => s == 'needsReview').length;
   int get _remaining => _deck.length - _remembered - _needsReview;
 
   void _mark(String status) {
@@ -310,6 +428,7 @@ class _StudyModeState extends State<_StudyMode> {
   @override
   Widget build(BuildContext context) {
     final card = _deck[_index];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(title: Text('Card ${_index + 1} of ${_deck.length}')),
       body: Padding(
@@ -319,13 +438,35 @@ class _StudyModeState extends State<_StudyMode> {
             Text(
               'Remembered $_remembered · Needs review $_needsReview · '
               'Remaining $_remaining',
-              style: AppText.caption,
+              style: MinecraftText.caption(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 4),
-            LinearProgressIndicator(
-              value: _deck.isEmpty
-                  ? 0
-                  : (_remembered + _needsReview) / _deck.length,
+            // Blocky progress track around the same
+            // LinearProgressIndicator (kept as-is: the flip-mode
+            // tests find it by type).
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isDark
+                      ? MinecraftColors.darkBorder
+                      : MinecraftColors.border,
+                  width: MinecraftShapes.cardBorderWidth,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: LinearProgressIndicator(
+                  value: _deck.isEmpty
+                      ? 0
+                      : (_remembered + _needsReview) / _deck.length,
+                  backgroundColor: MinecraftColors.cream,
+                  color: MinecraftColors.grassGreen,
+                  minHeight: 10,
+                ),
+              ),
             ),
             const SizedBox(height: AppLayout.cardGap),
             Expanded(
@@ -336,13 +477,16 @@ class _StudyModeState extends State<_StudyMode> {
                   transitionBuilder: (child, animation) => FadeTransition(
                     opacity: animation,
                     child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.95, end: 1.0)
-                          .animate(animation),
+                      scale: Tween<double>(
+                        begin: 0.95,
+                        end: 1.0,
+                      ).animate(animation),
                       child: child,
                     ),
                   ),
-                  child: Card(
+                  child: MinecraftCard(
                     key: ValueKey(_flipped),
+                    padding: EdgeInsets.zero,
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
@@ -351,22 +495,31 @@ class _StudyModeState extends State<_StudyMode> {
                           children: [
                             Text(
                               _flipped ? 'Term' : 'Definition',
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700),
+                              style: MinecraftText.button(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                             ),
                             const SizedBox(height: AppLayout.cardGap),
                             Text(
                               _flipped ? card.back : card.front,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 22),
+                              style: MinecraftText.heading(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 22,
+                              ),
                             ),
                             const SizedBox(height: AppLayout.headerGap),
                             Text(
                               _flipped
                                   ? 'Tap the card to flip back'
                                   : 'Tap the card to reveal the term',
-                              style: const TextStyle(fontSize: 12),
+                              style: MinecraftText.caption(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -404,9 +557,9 @@ class _StudyModeState extends State<_StudyMode> {
                     onPressed: _index == 0
                         ? null
                         : () => setState(() {
-                              _index--;
-                              _flipped = false;
-                            }),
+                            _index--;
+                            _flipped = false;
+                          }),
                     child: const Text('Previous'),
                   ),
                 ),
@@ -427,9 +580,9 @@ class _StudyModeState extends State<_StudyMode> {
                     onPressed: _index == _deck.length - 1
                         ? null
                         : () => setState(() {
-                              _index++;
-                              _flipped = false;
-                            }),
+                            _index++;
+                            _flipped = false;
+                          }),
                     child: const Text('Next'),
                   ),
                 ),

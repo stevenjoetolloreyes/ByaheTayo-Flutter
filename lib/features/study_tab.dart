@@ -93,16 +93,33 @@
 //
 // No schema changes: grades + files are additive SharedPreferences
 // keys; existing records are untouched.
+//
+// Minecraft restyle (Feature 3, Nov 10, 2026): the panels keep
+// the preview's layout and the app's real data, but the surfaces
+// are blocky now — 3px ink borders, hard shadows, Baloo 2
+// headings, grass/dirt accents (see minecraft_theme.dart). The
+// Review panel gains the preview's 'Flashcard Chests' (one chest
+// per subject deck, with the REAL card count, mastered count and
+// mastery %) and the 'AI Quiz Forge' card ('Forge a Quiz' opens
+// the AI panel; the XP chip is the REAL max: up to 5 forged
+// questions × 10 pts per correct answer). No Repeat option, no
+// invented numbers, no new flows.
 import 'package:file_picker/file_picker.dart';
+
 import 'top_popup.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import 'app_layout.dart';
 import 'app_rating.dart';
+import 'estudyantego_ai.dart';
 import 'friend_cloud_repository.dart';
 import 'ios_components.dart';
+import 'minecraft_tap_animation.dart';
+import 'minecraft_theme.dart';
+import 'onboarding/splash_sound.dart';
 import 'onboarding/auth_service.dart';
 import 'points_wallet_repository.dart';
 import 'shared_study_files.dart';
@@ -278,18 +295,6 @@ const _tagVioletBg = Color.fromRGBO(154, 123, 255, 0.14);
 /// Heart-chip background (translucent; same in both themes).
 const _heartChipBg = Color.fromRGBO(251, 77, 109, 0.13);
 
-/// Floating-layer shadows from the preview (same in both themes).
-const _navShadow = BoxShadow(
-  color: Color.fromRGBO(0, 0, 0, 0.4),
-  blurRadius: 34,
-  offset: Offset(0, 14),
-);
-const _fabShadow = BoxShadow(
-  color: Color.fromRGBO(0, 0, 0, 0.4),
-  blurRadius: 28,
-  offset: Offset(0, 12),
-);
-
 const _months = [
   'Jan',
   'Feb',
@@ -429,6 +434,7 @@ class _StudyTabState extends State<StudyTab> {
   int _semester = 1;
   String _reviewMode = 'quiz';
   String _fileFilter = 'all';
+
   /// Folder tapped in the Files panel, or null for all folders.
   String? _selectedFolder;
   String _noteQuery = '';
@@ -490,24 +496,20 @@ class _StudyTabState extends State<StudyTab> {
   int get _favoriteCount => _notes.where((n) => n.favorite).length;
 
   String get _panelTitle => switch (_panel) {
-        'files' => 'Files',
-        'notes' => 'Notes',
-        'review' => 'Review',
-        'ai' => 'EstudyanteGO AI',
-        _ => 'Grades',
-      };
+    'files' => 'Files',
+    'notes' => 'Notes',
+    'review' => 'Review',
+    'ai' => 'EstudyanteGO AI',
+    _ => 'Grades',
+  };
 
   Future<void> _load() async {
-    final subjects =
-        await StudentStorage.loadList(StudentStorage.subjectsKey);
+    final subjects = await StudentStorage.loadList(StudentStorage.subjectsKey);
     final grades = await StudentStorage.loadList(StudentStorage.gradesKey);
-    final files =
-        await StudentStorage.loadList(StudentStorage.studyFilesKey);
+    final files = await StudentStorage.loadList(StudentStorage.studyFilesKey);
     final notes = await StudentStorage.loadList(StudentStorage.notesKey);
-    final quizzes =
-        await StudentStorage.loadList(StudentStorage.quizzesKey);
-    final cards =
-        await StudentStorage.loadList(StudentStorage.flashcardsKey);
+    final quizzes = await StudentStorage.loadList(StudentStorage.quizzesKey);
+    final cards = await StudentStorage.loadList(StudentStorage.flashcardsKey);
     final shared = await _loadSharedWithMe();
     if (!mounted) return;
     setState(() {
@@ -538,18 +540,22 @@ class _StudyTabState extends State<StudyTab> {
   }
 
   Future<void> _saveGrades() => StudentStorage.saveList(
-      StudentStorage.gradesKey, _grades.map((g) => g.toJson()).toList());
+    StudentStorage.gradesKey,
+    _grades.map((g) => g.toJson()).toList(),
+  );
 
   Future<void> _saveFiles() => StudentStorage.saveList(
-      StudentStorage.studyFilesKey, _files.map((f) => f.toJson()).toList());
+    StudentStorage.studyFilesKey,
+    _files.map((f) => f.toJson()).toList(),
+  );
 
   /// Animation length for panel switches; zero when the user asked
   /// for reduced motion (preview animations are fast/subtle and
   /// reduced-motion aware).
   Duration _animDuration(BuildContext context) =>
       MediaQuery.of(context).disableAnimations
-          ? Duration.zero
-          : const Duration(milliseconds: 180);
+      ? Duration.zero
+      : const Duration(milliseconds: 180);
 
   GradeRecord? _gradeFor(String subjectId) {
     for (final g in _grades) {
@@ -591,9 +597,11 @@ class _StudyTabState extends State<StudyTab> {
   Future<void> _openGradeForm(Subject subject) async {
     final existing = _gradeFor(subject.id);
     final gradeController = TextEditingController(
-        text: existing == null ? '' : existing.grade.toStringAsFixed(2));
+      text: existing == null ? '' : existing.grade.toStringAsFixed(2),
+    );
     final unitsController = TextEditingController(
-        text: existing == null ? '3' : '${existing.units}');
+      text: existing == null ? '3' : '${existing.units}',
+    );
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -602,13 +610,16 @@ class _StudyTabState extends State<StudyTab> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(subject.name,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              subject.name,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: AppSpacing.s12),
             TextField(
               controller: gradeController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Grade (1.00 – 5.00)',
                 border: OutlineInputBorder(),
@@ -641,7 +652,10 @@ class _StudyTabState extends State<StudyTab> {
               final grade = double.tryParse(gradeController.text.trim());
               final units = int.tryParse(unitsController.text.trim());
               if (grade == null || grade < 1.0 || grade > 5.0) {
-                TopPopup.show(context, message: 'Enter a grade from 1.00 to 5.00.');
+                TopPopup.show(
+                  context,
+                  message: 'Enter a grade from 1.00 to 5.00.',
+                );
                 return;
               }
               if (units == null || units < 1 || units > 12) {
@@ -660,12 +674,16 @@ class _StudyTabState extends State<StudyTab> {
     final units = int.parse(unitsController.text.trim());
     setState(() {
       _grades.removeWhere(
-          (g) => g.subjectId == subject.id && g.semester == _semester);
-      _grades.add(GradeRecord(
+        (g) => g.subjectId == subject.id && g.semester == _semester,
+      );
+      _grades.add(
+        GradeRecord(
           subjectId: subject.id,
           grade: grade,
           units: units,
-          semester: _semester));
+          semester: _semester,
+        ),
+      );
     });
     await _saveGrades();
     if (mounted) {
@@ -705,13 +723,10 @@ class _StudyTabState extends State<StudyTab> {
       ),
     );
     if (folder == null || !mounted) return;
-    final ext = picked.name.contains('.')
-        ? picked.name.split('.').last
-        : '';
+    final ext = picked.name.contains('.') ? picked.name.split('.').last : '';
     // file_picker 13 reports size via length() (async) with a
     // sync fallback; unknown size stores as 0, never guessed.
-    final sizeBytes =
-        await picked.length() ?? picked.lengthSync() ?? 0;
+    final sizeBytes = await picked.length() ?? picked.lengthSync() ?? 0;
     if (!mounted) return;
     setState(() {
       _files.insert(
@@ -733,8 +748,7 @@ class _StudyTabState extends State<StudyTab> {
   }
 
   Future<void> _open(Widget screen) async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => screen));
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     // Notes / quizzes / attempts may have changed while the screen
     // was open — reload so the tab never shows stale counts.
     await _load();
@@ -786,7 +800,9 @@ class _StudyTabState extends State<StudyTab> {
 
   /// Persist the notes list (same shape as the note view page).
   Future<void> _saveNotes() => StudentStorage.saveList(
-      StudentStorage.notesKey, _notes.map((n) => n.toJson()).toList());
+    StudentStorage.notesKey,
+    _notes.map((n) => n.toJson()).toList(),
+  );
 
   /// Open a note in its full-screen view page; when the page
   /// returns an edited note, replace it in the list and save.
@@ -794,9 +810,9 @@ class _StudyTabState extends State<StudyTab> {
     // Rating prompt (Nov 9): opening a note to read it is a real
     // action — opening notes.
     AppRatingTracker.instance.recordAction(AppRatingAction.openedNotes);
-    final updated = await Navigator.of(context).push<Note>(
-      MaterialPageRoute(builder: (_) => NoteDetailPage(note: note)),
-    );
+    final updated = await Navigator.of(
+      context,
+    ).push<Note>(MaterialPageRoute(builder: (_) => NoteDetailPage(note: note)));
     if (updated == null || !mounted) return;
     setState(() {
       final idx = _notes.indexWhere((n) => n.id == updated.id);
@@ -812,12 +828,15 @@ class _StudyTabState extends State<StudyTab> {
   Future<void> _fabGrades() async {
     if (_subjects.isEmpty) {
       if (!mounted) return;
-      TopPopup.show(context, message: 'Add subjects from the Student tab → Classes & Timetable first.',);
+      TopPopup.show(
+        context,
+        message:
+            'Add subjects from the Student tab → Classes & Timetable first.',
+      );
       return;
     }
     final ungraded = _subjects.where((s) => _gradeFor(s.id) == null);
-    await _openGradeForm(
-        ungraded.isEmpty ? _subjects.first : ungraded.first);
+    await _openGradeForm(ungraded.isEmpty ? _subjects.first : ungraded.first);
   }
 
   @override
@@ -887,14 +906,26 @@ class _StudyTabState extends State<StudyTab> {
                 ),
               ),
               child: switch (_panel) {
-                'files' =>
-                  _filesPanel(context, tokens, key: const ValueKey('files')),
-                'notes' =>
-                  _notesPanel(context, tokens, key: const ValueKey('notes')),
-                'review' => _reviewPanel(context, tokens,
-                    key: const ValueKey('review')),
-                _ => _gradesPanel(context, tokens,
-                    key: const ValueKey('grades')),
+                'files' => _filesPanel(
+                  context,
+                  tokens,
+                  key: const ValueKey('files'),
+                ),
+                'notes' => _notesPanel(
+                  context,
+                  tokens,
+                  key: const ValueKey('notes'),
+                ),
+                'review' => _reviewPanel(
+                  context,
+                  tokens,
+                  key: const ValueKey('review'),
+                ),
+                _ => _gradesPanel(
+                  context,
+                  tokens,
+                  key: const ValueKey('grades'),
+                ),
               },
             ),
           ],
@@ -903,11 +934,7 @@ class _StudyTabState extends State<StudyTab> {
         // (Quiz tab + Summary tab) has no floating + button — the
         // deck list, Flashcards/Quiz rows, and bottom nav stay.
         if (_panel != 'review')
-          Positioned(
-            right: 18,
-            bottom: 84,
-            child: _fab(tokens),
-          ),
+          Positioned(right: 18, bottom: 84, child: _fab(tokens)),
         Positioned(
           left: 16,
           right: 16,
@@ -960,13 +987,47 @@ class _StudyTabState extends State<StudyTab> {
   /// Flashcards page, not part of the AI's working data.)
   List<Flashcard> _cardsForAi() => _cards;
 
+  /// Flashcard decks grouped by subject, in first-appearance
+  /// order (Minecraft restyle, Feature 3): the preview's
+  /// 'Flashcard Chests' are decks saved per subject, and the real
+  /// cards already carry a subject — so the decks are the live
+  /// groups, never invented, never seeded. Cards with no subject
+  /// group under 'No subject'.
+  List<({String subject, List<Flashcard> cards})> get _flashcardDecks {
+    final order = <String>[];
+    final bySubject = <String, List<Flashcard>>{};
+    for (final card in _cards) {
+      final subject = card.subject.isEmpty ? 'No subject' : card.subject;
+      if (!bySubject.containsKey(subject)) {
+        bySubject[subject] = [];
+        order.add(subject);
+      }
+      bySubject[subject]!.add(card);
+    }
+    return [for (final s in order) (subject: s, cards: bySubject[s]!)];
+  }
+
+  /// Cards in [cards] marked 'remembered' in flip mode — the
+  /// live mastery count for a chest card.
+  static int _deckMastered(List<Flashcard> cards) =>
+      cards.where((c) => c.studyStatus == 'remembered').length;
+
+  /// The AI Quiz Forge's XP chip, derived from the app's own
+  /// numbers — never the preview's sample: the forge crafts at
+  /// most [kAiMaxQuestionsPerSet] questions and a correct answer
+  /// earns [kQuizPointsPerCorrect] points, so a perfect forged
+  /// quiz is worth at most this much XP.
+  static int get _forgeMaxXp => kAiMaxQuestionsPerSet * kQuizPointsPerCorrect;
+
   Future<void> _saveQuizzes() => StudentStorage.saveList(
-      StudentStorage.quizzesKey, _quizzes.map((q) => q.toJson()).toList());
+    StudentStorage.quizzesKey,
+    _quizzes.map((q) => q.toJson()).toList(),
+  );
 
   // ------------------------------------------------------- shared bits
 
-  /// Preview header row: panel title left, ❤️ / ⭐ chips right.
-  /// Title is Plus Jakarta Sans 30px / 800, letter-spacing -0.02em.
+  /// Minecraft header row (Feature 3): Baloo 2 panel title left,
+  /// blocky ❤️ / ⭐ chips right.
   Widget _panelHeader(_StudyTokens tokens) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -974,12 +1035,9 @@ class _StudyTabState extends State<StudyTab> {
         Expanded(
           child: Text(
             _panelTitle,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
+            style: MinecraftText.heading(
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 30,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.6,
-              color: tokens.text,
             ),
           ),
         ),
@@ -996,7 +1054,7 @@ class _StudyTabState extends State<StudyTab> {
           key: const ValueKey('study-points-chip'),
           icon: Icons.star,
           iconColor: tokens.gold,
-          background: tokens.brandSoft,
+          background: MinecraftColors.gold.withValues(alpha: 0.25),
           label: '$_points pts',
           textColor: tokens.accent,
         ),
@@ -1004,7 +1062,8 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview chip: 12.5px bold, padding 6px 11px, radius 999px.
+  /// Blocky chip (Feature 3): 2.5px ink border, 8px corners,
+  /// Baloo 2 label.
   Widget _chip({
     required Key key,
     required IconData icon,
@@ -1013,12 +1072,17 @@ class _StudyTabState extends State<StudyTab> {
     required String label,
     required Color textColor,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       key: key,
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: MinecraftShapes.chipBorderWidth,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1027,84 +1091,89 @@ class _StudyTabState extends State<StudyTab> {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
+            style: MinecraftText.button(color: textColor, fontSize: 13),
           ),
         ],
       ),
     );
   }
 
-  /// Preview surface card: Study surface, hairline border, no
-  /// elevation shadow (the app's shared CardTheme is #202B25 in
-  /// dark mode — the preview's Study surfaces are #13211a etc.).
-  Widget _studyCard(_StudyTokens tokens, Widget child,
-      {double radius = 15, EdgeInsetsGeometry? padding, Color? borderColor}) {
+  /// Blocky surface card (Minecraft restyle, Feature 3): 3px ink
+  /// border + hard shadow in light, 1px dark border in dark
+  /// ([MinecraftDecorations.blockCardFor]) — the same shell the
+  /// Student tab's hub cards use, so the two tabs match. The
+  /// [radius] and [borderColor] overrides stay for callers that
+  /// need them (folder active state).
+  Widget _studyCard(
+    _StudyTokens tokens,
+    Widget child, {
+    double radius = 15,
+    EdgeInsetsGeometry? padding,
+    Color? borderColor,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? tokens.line),
-      ),
+      decoration:
+          MinecraftDecorations.blockCardFor(
+            Theme.of(context).brightness,
+            color: borderColor == null
+                ? null
+                : (isDark ? MinecraftColors.darkCard : Colors.white),
+          ).copyWith(
+            borderRadius: BorderRadius.circular(radius),
+            border: borderColor == null
+                ? null
+                : Border.all(
+                    color: borderColor,
+                    width: MinecraftShapes.cardBorderWidth,
+                  ),
+          ),
       padding: padding,
       child: child,
     );
   }
 
-  /// Honest empty-state card (same surface language).
+  /// Honest empty-state card (same blocky surface language).
   Widget _emptyCard(_StudyTokens tokens, String title, String subtitle) {
     return _studyCard(
       tokens,
       ListTile(
-        title: Text(title, style: TextStyle(color: tokens.text)),
-        subtitle: Text(subtitle, style: TextStyle(color: tokens.muted)),
-      ),
-    );
-  }
-
-  /// Preview + FAB: 56px circle, brand fill, '+' 20px.
-  Widget _fab(_StudyTokens tokens) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: tokens.brand,
-        boxShadow: const [_fabShadow],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: _onFab,
-          child: Center(
-            child: AnimatedRotation(
-              // The + rotates 45° while the Notes menu is open
-              // (the preview's open-menu state).
-              turns: _notesMenuOpen ? 0.125 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: const Icon(Icons.add, size: 20, color: Colors.white),
-            ),
+        title: Text(
+          title,
+          style: MinecraftText.title(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: MinecraftText.body(
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ),
     );
   }
 
-  /// Preview bottom pill nav: sheet-bg pill, radius 999, padding
-  /// 6px, gap 4px; inactive buttons muted, active button brand
-  /// fill with white text. Order: Grades | Files | Notes | Review
-  /// | AI. The AI tab is its own bottom-nav tab for EstudyanteGO
-  /// AI (labelled just "AI" so the five tabs fit); it is NOT a
-  /// row inside Review. The five buttons share the pill width
-  /// equally (Expanded): the preview's content-sized pill
-  /// overflows a 390px phone by ~100px (widget_test, Nov 7), so
-  /// equal widths — not smaller text — keep the 13px labels and
-  /// guarantee the fit on narrow phones. Deviation from the
-  /// preview, listed in the file header.
+  /// Blocky + FAB (Feature 3): 58px grass block, 3.5px ink
+  /// border, hard shadow. The + still rotates 45° while the
+  /// Notes menu is open.
+  Widget _fab(_StudyTokens tokens) {
+    return MinecraftFabButton(
+      tooltip: 'Add',
+      onPressed: _onFab,
+      child: AnimatedRotation(
+        turns: _notesMenuOpen ? 0.125 : 0,
+        duration: const Duration(milliseconds: 200),
+        child: const Icon(Icons.add, size: 24, color: Colors.white),
+      ),
+    );
+  }
+
+  /// Blocky bottom pill nav (Feature 3): 3px ink border + hard
+  /// shadow, grass-green active button, Baloo 2 labels. Order:
+  /// Grades | Files | Notes | Review | AI. The five buttons still
+  /// share the pill width equally (Expanded) so the labels fit
+  /// on narrow phones.
   Widget _bottomNav(_StudyTokens tokens) {
     const entries = [
       ('grades', 'Grades', Icons.workspace_premium_outlined),
@@ -1113,13 +1182,17 @@ class _StudyTabState extends State<StudyTab> {
       ('review', 'Review', Icons.help_outline),
       ('ai', 'AI', Icons.auto_awesome_outlined),
     ];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: tokens.sheetBg,
+        color: isDark ? MinecraftColors.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: tokens.line),
-        boxShadow: const [_navShadow],
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: MinecraftShapes.cardBorderWidth,
+        ),
+        boxShadow: isDark ? null : const [MinecraftShapes.cardShadow],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.max,
@@ -1141,8 +1214,8 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview nav button: 44px tall, 13px bold, icon 15px;
-  /// active gets the brand fill + 14px side padding.
+  /// Blocky nav button: 44px tall, Baloo 2 13px, icon 15px;
+  /// active gets the grass fill + white text.
   Widget _navButton(
     _StudyTokens tokens, {
     required String value,
@@ -1150,7 +1223,9 @@ class _StudyTabState extends State<StudyTab> {
     required IconData icon,
     required bool active,
   }) {
-    final color = active ? Colors.white : tokens.muted;
+    final color = active
+        ? Colors.white
+        : Theme.of(context).colorScheme.onSurfaceVariant;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1159,11 +1234,16 @@ class _StudyTabState extends State<StudyTab> {
         borderRadius: BorderRadius.circular(999),
         child: Container(
           height: 44,
-          padding:
-              EdgeInsets.symmetric(horizontal: active ? 14 : 10),
+          padding: EdgeInsets.symmetric(horizontal: active ? 14 : 10),
           decoration: BoxDecoration(
-            color: active ? tokens.brand : Colors.transparent,
+            color: active ? MinecraftColors.grassGreen : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
+            border: active
+                ? Border.all(
+                    color: MinecraftColors.border,
+                    width: MinecraftShapes.chipBorderWidth,
+                  )
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1175,11 +1255,7 @@ class _StudyTabState extends State<StudyTab> {
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
+                  style: MinecraftText.button(color: color, fontSize: 13),
                 ),
               ),
             ],
@@ -1189,21 +1265,26 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview segmented control (.st-seg): surface-2 container,
-  /// radius 15px, padding 4px, gap 4px; the active button is
-  /// surface-3 with accent text — NOT a solid green fill.
+  /// Blocky segmented control (Feature 3): 3px ink border,
+  /// 14px corners; the active segment is a grass fill with white
+  /// Baloo 2 text.
   Widget _studySeg(
     _StudyTokens tokens, {
     required List<(String, String)> options,
     required String selected,
     required ValueChanged<String> onSelected,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: tokens.surface2,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: tokens.line),
+        color: isDark ? MinecraftColors.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
+        ),
+        boxShadow: isDark ? null : const [MinecraftShapes.cardShadow],
       ),
       child: Row(
         children: [
@@ -1217,22 +1298,22 @@ class _StudyTabState extends State<StudyTab> {
                   borderRadius: BorderRadius.circular(11),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        vertical: 9, horizontal: 6),
+                      vertical: 9,
+                      horizontal: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: options[i].$1 == selected
-                          ? tokens.surface3
+                          ? MinecraftColors.grassGreen
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(11),
                     ),
                     child: Text(
                       options[i].$2,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                      style: MinecraftText.button(
                         color: options[i].$1 == selected
-                            ? tokens.accent
-                            : tokens.muted,
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -1247,8 +1328,11 @@ class _StudyTabState extends State<StudyTab> {
 
   // ---------------------------------------------------------- Grades
 
-  Widget _gradesPanel(BuildContext context, _StudyTokens tokens,
-      {required Key key}) {
+  Widget _gradesPanel(
+    BuildContext context,
+    _StudyTokens tokens, {
+    required Key key,
+  }) {
     final gwa = _gwa;
     return Column(
       key: key,
@@ -1256,7 +1340,9 @@ class _StudyTabState extends State<StudyTab> {
       children: [
         Text(
           'Your standing for A.Y. 2026–2027, computed from the subjects below.',
-          style: TextStyle(fontSize: 13.5, color: tokens.muted),
+          style: MinecraftText.body(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: AppSpacing.s12),
         _studySeg(
@@ -1267,33 +1353,34 @@ class _StudyTabState extends State<StudyTab> {
         ),
         const SizedBox(height: AppSpacing.s16),
         Container(
-          decoration: const BoxDecoration(
-            borderRadius: BorderRadius.all(Radius.circular(20)),
-            gradient: LinearGradient(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(Radius.circular(20)),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? MinecraftColors.darkBorder
+                  : MinecraftColors.border,
+              width: Theme.of(context).brightness == Brightness.dark
+                  ? 1
+                  : MinecraftShapes.cardBorderWidth,
+            ),
+            boxShadow: Theme.of(context).brightness == Brightness.dark
+                ? null
+                : const [MinecraftShapes.cardShadow],
+            gradient: const LinearGradient(
               // CSS 140deg: top-left toward bottom-right.
               begin: Alignment(-0.643, -0.766),
               end: Alignment(0.643, 0.766),
               stops: [0.0, 0.55, 1.0],
-              colors: [
-                Color(0xFF14532D),
-                Color(0xFF16A34A),
-                Color(0xFF34D399),
-              ],
+              colors: [Color(0xFF14532D), Color(0xFF16A34A), Color(0xFF34D399)],
             ),
           ),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'GENERAL WEIGHTED AVERAGE',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.4,
-                  color: Colors.white,
-                ),
+                style: MinecraftText.button(color: Colors.white),
               ),
               const SizedBox(height: AppSpacing.s8),
               Row(
@@ -1301,10 +1388,10 @@ class _StudyTabState extends State<StudyTab> {
                 children: [
                   Text(
                     gwa == null ? '—' : gwa.toStringAsFixed(2),
-                    style: const TextStyle(
-                        fontSize: 44,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white),
+                    style: MinecraftText.heading(
+                      color: Colors.white,
+                      fontSize: 44,
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.s12),
                   Expanded(
@@ -1313,18 +1400,14 @@ class _StudyTabState extends State<StudyTab> {
                       children: [
                         Text(
                           gwa == null ? '—' : _gwaStanding(gwa),
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white),
+                          style: MinecraftText.title(color: Colors.white),
                         ),
                         Text(
                           gwa == null
                               ? '—'
                               : '$_gwaUnits units · $_gradedCount '
-                                  'graded',
-                          style: const TextStyle(
-                              fontSize: 12.5, color: Colors.white),
+                                    'graded',
+                          style: MinecraftText.body(color: Colors.white),
                         ),
                       ],
                     ),
@@ -1361,15 +1444,14 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview subject row: code 11px / 800 in blue, name 14px,
-  /// grade as a band-colored pill; Add grade / Edit stays.
+  /// Blocky subject row (Feature 3): Baloo 2 code + name, the
+  /// grade as a blocky band-colored pill; Add grade / Edit stays.
   Widget _subjectRow(_StudyTokens tokens, Subject subject) {
     final grade = _gradeFor(subject.id);
     return _studyCard(
       tokens,
       Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
         child: Row(
           children: [
             Expanded(
@@ -1379,15 +1461,16 @@ class _StudyTabState extends State<StudyTab> {
                   if (subject.code.isNotEmpty)
                     Text(
                       subject.code,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                      style: MinecraftText.button(
                         color: tokens.blue,
+                        fontSize: 12,
                       ),
                     ),
                   Text(
                     subject.name,
-                    style: TextStyle(fontSize: 14, color: tokens.text),
+                    style: MinecraftText.title(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ],
               ),
@@ -1395,8 +1478,9 @@ class _StudyTabState extends State<StudyTab> {
             if (grade == null)
               Text(
                 'No grade yet',
-                style: TextStyle(
-                    fontWeight: FontWeight.w700, color: tokens.muted),
+                style: MinecraftText.button(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               )
             else
               _gradePill(tokens, grade.grade),
@@ -1411,7 +1495,8 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview grade pill: band-tinted background, band-hue text.
+  /// Blocky grade pill (Feature 3): band-tinted background,
+  /// band-hue Baloo 2 text, 2.5px ink border.
   Widget _gradePill(_StudyTokens tokens, double grade) {
     final (Color, Color) colors = switch (_gwaStanding(grade)) {
       'Excellent' => (_gradeExcellentBg, tokens.ok),
@@ -1419,23 +1504,31 @@ class _StudyTabState extends State<StudyTab> {
       'Passing' => (_gradePassingBg, tokens.amber),
       _ => (_gradeFailedBg, tokens.bad),
     };
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: colors.$1,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: MinecraftShapes.chipBorderWidth,
+        ),
       ),
       child: Text(
         grade.toStringAsFixed(2),
-        style: TextStyle(fontWeight: FontWeight.w700, color: colors.$2),
+        style: MinecraftText.button(color: colors.$2),
       ),
     );
   }
 
   // ------------------------------------------------------------ Files
 
-  Widget _filesPanel(BuildContext context, _StudyTokens tokens,
-      {required Key key}) {
+  Widget _filesPanel(
+    BuildContext context,
+    _StudyTokens tokens, {
+    required Key key,
+  }) {
     final used = _files.fold<int>(0, (sum, f) => sum + f.sizeBytes);
     final filtered = _files
         .where((f) => _fileFilter == 'all' || f.kind == _fileFilter)
@@ -1455,14 +1548,17 @@ class _StudyTabState extends State<StudyTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Study files',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: tokens.text)),
+                    Text(
+                      'Study files',
+                      style: MinecraftText.title(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
                     Text(
                       '${_formatBytes(used)} of 5 GB used',
-                      style: TextStyle(
-                          fontSize: 12.5, color: tokens.muted),
+                      style: MinecraftText.caption(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -1480,18 +1576,19 @@ class _StudyTabState extends State<StudyTab> {
             children: [
               for (var i = 0; i < _fileFilters.length; i++) ...[
                 if (i > 0) const SizedBox(width: 8),
-                _filterPill(
-                    tokens, _fileFilters[i].$1, _fileFilters[i].$2),
+                _filterPill(tokens, _fileFilters[i].$1, _fileFilters[i].$2),
               ],
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.s16),
-        Text('FOLDERS',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: tokens.muted)),
+        Text(
+          'FOLDERS',
+          style: MinecraftText.button(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 12,
+          ),
+        ),
         const SizedBox(height: AppSpacing.s8),
         Row(
           children: [
@@ -1502,11 +1599,13 @@ class _StudyTabState extends State<StudyTab> {
           ],
         ),
         const SizedBox(height: AppSpacing.s16),
-        Text('RECENT FILES',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: tokens.muted)),
+        Text(
+          'RECENT FILES',
+          style: MinecraftText.button(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 12,
+          ),
+        ),
         const SizedBox(height: AppSpacing.s8),
         if (filtered.isEmpty)
           _emptyCard(
@@ -1527,11 +1626,13 @@ class _StudyTabState extends State<StudyTab> {
         // with me" is not a state worth a permanent header.
         if (_sharedWithMe.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s16),
-          Text('SHARED WITH ME',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: tokens.muted)),
+          Text(
+            'SHARED WITH ME',
+            style: MinecraftText.button(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
           const SizedBox(height: AppSpacing.s8),
           for (var i = 0; i < _sharedWithMe.length; i++) ...[
             if (i > 0) const SizedBox(height: 8),
@@ -1550,24 +1651,30 @@ class _StudyTabState extends State<StudyTab> {
     ('img', 'Images'),
   ];
 
-  /// Preview storage bar: surface-3 track, gradient fill
-  /// #14532d → #34d399.
+  /// Blocky storage bar (Feature 3): cream track with a 3px ink
+  /// border, grass gradient fill.
   Widget _storageBar(_StudyTokens tokens, int used) {
     final fraction = (used / _studyFilesQuotaBytes).clamp(0.0, 1.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      height: 8,
+      height: 14,
       alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
-        color: tokens.surface3,
-        borderRadius: BorderRadius.circular(999),
+        color: MinecraftColors.cream,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: MinecraftShapes.cardBorderWidth,
+        ),
       ),
       child: fraction <= 0
           ? null
           : FractionallySizedBox(
               widthFactor: fraction,
               child: Container(
+                margin: const EdgeInsets.all(2),
                 decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.all(Radius.circular(999)),
+                  borderRadius: BorderRadius.all(Radius.circular(4)),
                   gradient: LinearGradient(
                     colors: [Color(0xFF14532D), Color(0xFF34D399)],
                   ),
@@ -1577,30 +1684,39 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview filter pill: inactive surface-2 + muted text, active
-  /// brand fill + white text.
+  /// Blocky filter pill (Feature 3): inactive white/dark + ink
+  /// border + muted Baloo 2 text, active grass fill + white text.
   Widget _filterPill(_StudyTokens tokens, String value, String label) {
     final active = _fileFilter == value;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => setState(() => _fileFilter = value),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? tokens.brand : tokens.surface2,
-            borderRadius: BorderRadius.circular(999),
+            color: active
+                ? MinecraftColors.grassGreen
+                : (isDark ? MinecraftColors.darkCard : Colors.white),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
-                color: active ? tokens.brand : tokens.line),
+              color: active
+                  ? MinecraftColors.border
+                  : (isDark
+                        ? MinecraftColors.darkBorder
+                        : MinecraftColors.border),
+              width: MinecraftShapes.chipBorderWidth,
+            ),
           ),
           child: Text(
             label,
-            style: TextStyle(
+            style: MinecraftText.button(
+              color: active
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.onSurface,
               fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: active ? Colors.white : tokens.muted,
             ),
           ),
         ),
@@ -1608,9 +1724,10 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview folder card: amber folder icon, file count below.
-  /// Tapping filters the file list to that folder (tap again to
-  /// clear); the active folder gets a brand border.
+  /// Blocky folder card (Feature 3): grass folder badge, Baloo 2
+  /// name, file count below. Tapping filters the file list to
+  /// that folder (tap again to clear); the active folder gets a
+  /// grass border.
   Widget _folderCard(_StudyTokens tokens, String folder) {
     final active = _selectedFolder == folder;
     return _studyCard(
@@ -1618,28 +1735,36 @@ class _StudyTabState extends State<StudyTab> {
       Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () =>
-              setState(() => _selectedFolder = active ? null : folder),
+          onTap: () => setState(() => _selectedFolder = active ? null : folder),
           borderRadius: BorderRadius.circular(15),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
-                Icon(Icons.folder, color: tokens.amber),
+                const MinecraftIconBadge(
+                  icon: Icons.folder,
+                  backgroundColor: MinecraftColors.gold,
+                  iconColor: MinecraftColors.ink,
+                ),
                 const SizedBox(height: AppSpacing.s4),
-                Text(folder,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, color: tokens.text)),
+                Text(
+                  folder,
+                  style: MinecraftText.button(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
                 Text(
                   '${_files.where((f) => f.folder == folder).length} files',
-                  style: TextStyle(fontSize: 12.5, color: tokens.muted),
+                  style: MinecraftText.caption(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
         ),
       ),
-      borderColor: active ? tokens.brand : null,
+      borderColor: active ? MinecraftColors.grassGreen : null,
     );
   }
 
@@ -1660,10 +1785,17 @@ class _StudyTabState extends State<StudyTab> {
           borderRadius: BorderRadius.circular(15),
           child: ListTile(
             leading: _fileTile(tokens, file.kind),
-            title: Text(file.name, style: TextStyle(color: tokens.text)),
+            title: Text(
+              file.name,
+              style: MinecraftText.title(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
             subtitle: Text(
               '${_formatBytes(file.sizeBytes)} · ${file.folder}',
-              style: TextStyle(color: tokens.muted),
+              style: MinecraftText.body(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1699,9 +1831,7 @@ class _StudyTabState extends State<StudyTab> {
       context: context,
       builder: (sheetContext) => CupertinoActionSheet(
         title: Text(file.name),
-        message: Text(
-          '${_formatBytes(file.sizeBytes)} · ${file.folder}',
-        ),
+        message: Text('${_formatBytes(file.sizeBytes)} · ${file.folder}'),
         actions: [
           CupertinoActionSheetAction(
             onPressed: () => Navigator.of(sheetContext).pop('details'),
@@ -1743,8 +1873,7 @@ class _StudyTabState extends State<StudyTab> {
   /// Delete confirmation (all users): the file's name is in the
   /// dialog and Delete is iOS red. Every delete — the trash icon
   /// and the menu's Delete — goes through here first.
-  Future<bool> _confirmDeleteFile(
-      BuildContext context, StudyFile file) async {
+  Future<bool> _confirmDeleteFile(BuildContext context, StudyFile file) async {
     final confirmed = await showIosAlert<bool>(
       context: context,
       title: 'Delete file?',
@@ -1785,11 +1914,12 @@ class _StudyTabState extends State<StudyTab> {
   /// renamed to ".docx" filters as a Document); a name with no
   /// extension keeps the old kind.
   Future<void> _showRenameFileDialog(
-      _StudyTokens tokens, StudyFile file) async {
+    _StudyTokens tokens,
+    StudyFile file,
+  ) async {
     final result = await showDialog<String?>(
       context: context,
-      builder: (dialogContext) =>
-          _RenameFileDialog(initialName: file.name),
+      builder: (dialogContext) => _RenameFileDialog(initialName: file.name),
     );
     if (result == null || !mounted) return;
     final ext = result.contains('.') ? result.split('.').last : '';
@@ -1818,8 +1948,7 @@ class _StudyTabState extends State<StudyTab> {
   /// here. The shared record is the file's metadata snapshot
   /// (name, size, type, folder, added date) — never file bytes,
   /// and never a public link.
-  Future<void> _showShareFileSheet(
-      _StudyTokens tokens, StudyFile file) async {
+  Future<void> _showShareFileSheet(_StudyTokens tokens, StudyFile file) async {
     final user = widget.currentUser;
     final cloud = widget.friendCloudRepository;
     final repo = widget.sharedFileRepository;
@@ -1908,8 +2037,7 @@ class _StudyTabState extends State<StudyTab> {
                                   f.code,
                                   style: TextStyle(color: tokens.muted),
                                 ),
-                                onTap: () =>
-                                    Navigator.of(sheetContext).pop(f),
+                                onTap: () => Navigator.of(sheetContext).pop(f),
                               ),
                           ],
                         ),
@@ -1954,7 +2082,10 @@ class _StudyTabState extends State<StudyTab> {
   /// user's view after confirmation — the sender's file is never
   /// touched.
   Widget _sharedFileRow(
-      BuildContext context, _StudyTokens tokens, SharedStudyFile share) {
+    BuildContext context,
+    _StudyTokens tokens,
+    SharedStudyFile share,
+  ) {
     final file = StudyFile(
       id: share.fileId,
       name: share.name,
@@ -1968,15 +2099,22 @@ class _StudyTabState extends State<StudyTab> {
       Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _showFileDetails(context, tokens, file,
-              sharedBy: share.fromName),
+          onTap: () =>
+              _showFileDetails(context, tokens, file, sharedBy: share.fromName),
           borderRadius: BorderRadius.circular(15),
           child: ListTile(
             leading: _fileTile(tokens, share.kind),
-            title: Text(share.name, style: TextStyle(color: tokens.text)),
+            title: Text(
+              share.name,
+              style: MinecraftText.title(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
             subtitle: Text(
               'Shared by ${share.fromName} · ${_formatBytes(share.sizeBytes)} · ${share.folder}',
-              style: TextStyle(color: tokens.muted),
+              style: MinecraftText.body(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             trailing: IconButton(
               tooltip: 'Remove shared file',
@@ -2023,8 +2161,11 @@ class _StudyTabState extends State<StudyTab> {
   /// Entrance is a fade + gentle scale whose duration follows
   /// _animDuration (zero under reduced motion).
   Future<void> _showFileDetails(
-      BuildContext context, _StudyTokens tokens, StudyFile file,
-      {String? sharedBy}) {
+    BuildContext context,
+    _StudyTokens tokens,
+    StudyFile file, {
+    String? sharedBy,
+  }) {
     return showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -2039,10 +2180,12 @@ class _StudyTabState extends State<StudyTab> {
             _detailRow(tokens, 'Type', _fileKindLabel(file.kind)),
             _detailRow(tokens, 'Size', _formatBytes(file.sizeBytes)),
             _detailRow(tokens, 'Folder', file.folder),
-            _detailRow(tokens, 'Added',
-                '${_monthDay(file.added)}, ${file.added.year}'),
-            if (sharedBy != null)
-              _detailRow(tokens, 'Shared by', sharedBy),
+            _detailRow(
+              tokens,
+              'Added',
+              '${_monthDay(file.added)}, ${file.added.year}',
+            ),
+            if (sharedBy != null) _detailRow(tokens, 'Shared by', sharedBy),
           ],
         ),
         actions: [
@@ -2054,14 +2197,14 @@ class _StudyTabState extends State<StudyTab> {
       ),
       transitionBuilder: (context, animation, secondaryAnimation, child) =>
           FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.96, end: 1).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOut),
+              ),
+              child: child,
+            ),
           ),
-          child: child,
-        ),
-      ),
     );
   }
 
@@ -2074,19 +2217,24 @@ class _StudyTabState extends State<StudyTab> {
         children: [
           SizedBox(
             width: 56,
-            child: Text(label,
-                style: TextStyle(color: tokens.muted, fontSize: 13)),
+            child: Text(
+              label,
+              style: TextStyle(color: tokens.muted, fontSize: 13),
+            ),
           ),
           Expanded(
-            child:
-                Text(value, style: TextStyle(color: tokens.text, fontSize: 13)),
+            child: Text(
+              value,
+              style: TextStyle(color: tokens.text, fontSize: 13),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// Preview file-type icon tile: 40px, tinted background, hue icon.
+  /// Blocky file-type icon tile (Feature 3): 40px, tinted
+  /// background, 2.5px ink border, hue icon.
   Widget _fileTile(_StudyTokens tokens, String kind) {
     final (Color, Color) colors = switch (kind) {
       'pdf' => (_tilePdfBg, tokens.bad),
@@ -2095,12 +2243,17 @@ class _StudyTabState extends State<StudyTab> {
       'img' => (_tileImgBg, tokens.ok),
       _ => (tokens.surface3, tokens.muted),
     };
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
         color: colors.$1,
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: MinecraftShapes.chipBorderWidth,
+        ),
       ),
       child: Icon(_fileKindIcon(kind), size: 20, color: colors.$2),
     );
@@ -2108,8 +2261,11 @@ class _StudyTabState extends State<StudyTab> {
 
   // ------------------------------------------------------------ Notes
 
-  Widget _notesPanel(BuildContext context, _StudyTokens tokens,
-      {required Key key}) {
+  Widget _notesPanel(
+    BuildContext context,
+    _StudyTokens tokens, {
+    required Key key,
+  }) {
     final query = _noteQuery.toLowerCase();
     final filtered = _notes.where((n) {
       if (query.isEmpty) return true;
@@ -2129,16 +2285,29 @@ class _StudyTabState extends State<StudyTab> {
             filled: true,
             fillColor: tokens.surface2,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide(color: tokens.line),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? MinecraftColors.darkBorder
+                    : MinecraftColors.border,
+                width: MinecraftShapes.cardBorderWidth,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide(color: tokens.line),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? MinecraftColors.darkBorder
+                    : MinecraftColors.border,
+                width: MinecraftShapes.cardBorderWidth,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide(color: tokens.accent),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: MinecraftColors.grassGreen,
+                width: MinecraftShapes.cardBorderWidth,
+              ),
             ),
           ),
         ),
@@ -2158,9 +2327,9 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview note card: title 15px bold, 2-line clamped excerpt,
-  /// footer with subject tag + date ("Nov 4"). Tapping opens the
-  /// note's full-screen view page (Nov 8).
+  /// Blocky note card (Feature 3): Baloo 2 title, 2-line clamped
+  /// excerpt, footer with subject tag + date ("Nov 4"). Tapping
+  /// opens the note's full-screen view page (Nov 8).
   Widget _noteCard(_StudyTokens tokens, Note note) {
     return _studyCard(
       tokens,
@@ -2176,10 +2345,8 @@ class _StudyTabState extends State<StudyTab> {
               children: [
                 Text(
                   note.title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: tokens.text,
+                  style: MinecraftText.title(
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 if (note.body.isNotEmpty) ...[
@@ -2188,19 +2355,21 @@ class _StudyTabState extends State<StudyTab> {
                     note.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: tokens.muted),
+                    style: MinecraftText.body(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    if (note.subject.isNotEmpty)
-                      _tagPill(tokens, note.subject),
+                    if (note.subject.isNotEmpty) _tagPill(tokens, note.subject),
                     const Spacer(),
                     Text(
                       _monthDay(note.updated),
-                      style:
-                          TextStyle(fontSize: 11.5, color: tokens.faint),
+                      style: MinecraftText.caption(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -2213,31 +2382,32 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview note tag: tinted pill in the subject's color. The
-  /// color is a deterministic hash of the subject string, so a
-  /// subject keeps its color across restarts.
+  /// Blocky note tag (Feature 3): tinted pill in the subject's
+  /// color with a 2.5px ink border. The color is a deterministic
+  /// hash of the subject string, so a subject keeps its color
+  /// across restarts.
   Widget _tagPill(_StudyTokens tokens, String subject) {
     final (Color, Color) colors = _tagColors(tokens, subject);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: colors.$1,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: MinecraftShapes.chipBorderWidth,
+        ),
       ),
       child: Text(
         subject,
-        style: TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.bold,
-          color: colors.$2,
-        ),
+        style: MinecraftText.button(color: colors.$2, fontSize: 12),
       ),
     );
   }
 
   (Color, Color) _tagColors(_StudyTokens tokens, String subject) {
-    final slot =
-        subject.codeUnits.fold<int>(0, (sum, c) => sum + c) % 4;
+    final slot = subject.codeUnits.fold<int>(0, (sum, c) => sum + c) % 4;
     return switch (slot) {
       0 => (_tagBlueBg, tokens.blue),
       1 => (_tagGreenBg, tokens.ok),
@@ -2248,8 +2418,12 @@ class _StudyTabState extends State<StudyTab> {
 
   // ----------------------------------------------------------- Review
 
-  Widget _reviewPanel(BuildContext context, _StudyTokens tokens,
-      {required Key key}) {
+  Widget _reviewPanel(
+    BuildContext context,
+    _StudyTokens tokens, {
+    required Key key,
+  }) {
+    final decks = _flashcardDecks;
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2263,43 +2437,76 @@ class _StudyTabState extends State<StudyTab> {
         const SizedBox(height: AppSpacing.s16),
         if (_reviewMode == 'quiz') ...[
           if (_quizzes.isEmpty)
-            _emptyCard(
-              tokens,
-              'No quizzes yet.',
-              'Add a quiz from your notes.',
-            )
+            _emptyCard(tokens, 'No quizzes yet.', 'Add a quiz from your notes.')
           else
             for (var i = 0; i < _quizzes.length; i++) ...[
               if (i > 0) const SizedBox(height: 12),
               _deckCard(tokens, _quizzes[i], i),
             ],
-          // "Pick how to study" shows Flashcards and Quiz only.
-          // AI Quiz is deleted — it duplicated Quiz. Tapping either
-          // opens its own dedicated page (the old "Review Notes &
-          // Quizzes" screen is gone).
+          // Flashcard Chests (Minecraft restyle, Feature 3): the
+          // preview's deck list — one chest per subject deck with
+          // the REAL card count, mastered count, and mastery %.
+          // Tapping a chest opens the Flashcards page. With no
+          // cards yet, a single chest keeps the entry point.
+          const SizedBox(height: AppSpacing.s16),
+          const MinecraftSectionHeader(
+            icon: Icons.inventory_2_outlined,
+            title: 'Flashcard Chests',
+            iconColor: MinecraftColors.gold,
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          if (decks.isEmpty)
+            _flashcardChestCard(
+              tokens,
+              title: 'Flashcards',
+              details: 'No flashcards yet — add your first card.',
+              total: 0,
+              mastered: 0,
+            )
+          else
+            for (var i = 0; i < decks.length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              _flashcardChestCard(
+                tokens,
+                title: decks[i].subject,
+                details:
+                    '${decks[i].cards.length} card${decks[i].cards.length == 1 ? '' : 's'} · ${_deckMastered(decks[i].cards)} mastered',
+                total: decks[i].cards.length,
+                mastered: _deckMastered(decks[i].cards),
+                index: i,
+              ),
+            ],
+          // AI Quiz Forge (Minecraft restyle, Feature 3): the
+          // preview's forge card. The button switches to the AI
+          // panel, where the generation lives ('Make a quiz from
+          // my notes' / file attach) — the same flow, no new
+          // feature. The XP chip is the REAL max (see
+          // [_forgeMaxXp]), never the preview's sample.
+          const SizedBox(height: AppSpacing.s16),
+          const MinecraftSectionHeader(
+            icon: Icons.handyman_outlined,
+            title: 'AI Quiz Forge',
+            iconColor: MinecraftColors.purple,
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          _forgeCard(tokens),
           const SizedBox(height: AppSpacing.s16),
           Text(
             'Pick how to study',
-            style: TextStyle(
-                fontWeight: FontWeight.w700, color: tokens.text),
+            style: MinecraftText.heading(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 17,
+            ),
           ),
           const SizedBox(height: AppSpacing.s8),
-          _entryCard(
-            tokens,
-            icon: Icons.style_outlined,
-            title: 'Flashcards',
-            subtitle: 'Flip through questions one at a time',
-            onTap: () =>
-                _openReview(const FlashcardsPage()),
-          ),
-          const SizedBox(height: 8),
           _entryCard(
             tokens,
             icon: Icons.quiz_outlined,
             title: 'Quiz',
             subtitle: 'Answer multiple-choice, get scored',
             onTap: () => _openReview(
-                QuizPage(walletController: widget.walletController)),
+              QuizPage(walletController: widget.walletController),
+            ),
           ),
         ] else ...[
           // The preview's Summary shows the same decks as summary
@@ -2310,11 +2517,7 @@ class _StudyTabState extends State<StudyTab> {
           // the preview's Review tab, so they are gone — not moved
           // elsewhere.
           if (_quizzes.isEmpty)
-            _emptyCard(
-              tokens,
-              'No quizzes yet.',
-              'Add a quiz from your notes.',
-            )
+            _emptyCard(tokens, 'No quizzes yet.', 'Add a quiz from your notes.')
           else
             for (var i = 0; i < _quizzes.length; i++) ...[
               if (i > 0) const SizedBox(height: 12),
@@ -2325,93 +2528,184 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview quiz deck card: tinted gradient, MULTIPLE CHOICE
-  /// label in the deck hue, title, subject (where the preview
-  /// shows a date — Quiz stores no creation date), big question
-  /// count in the deck hue. Deck hues cycle blue → green → amber.
-  /// Tapping opens the quizzes list, as before.
+  /// One flashcard chest (Feature 3): the preview's deck card —
+  /// a box / box-open badge by mastery, the subject as the deck
+  /// title, the REAL card count and mastered count, and the REAL
+  /// mastery % chip. Tapping opens the Flashcards page. The
+  /// badge opens (gold) at 50% mastery or more — the preview's
+  /// 75% deck is open, its 29% and 22% decks are closed — and
+  /// stays a closed box below that.
+  Widget _flashcardChestCard(
+    _StudyTokens tokens, {
+    required String title,
+    required String details,
+    required int total,
+    required int mastered,
+    int? index,
+  }) {
+    final pct = total == 0 ? 0 : (mastered * 100 / total).round();
+    final open = total > 0 && pct >= 50;
+    return MinecraftQuestCard(
+      key: index == null ? null : Key('flashcard-chest-$index'),
+      badgeIcon: open ? Icons.inbox : Icons.inventory_2,
+      badgeColor: open ? MinecraftColors.gold : MinecraftColors.purple,
+      badgeIconColor: open ? MinecraftColors.ink : Colors.white,
+      title: title,
+      details: details,
+      chip: MinecraftStatusChip('$pct%'),
+      onTap: () => _openReview(const FlashcardsPage()),
+    );
+  }
+
+  /// The AI Quiz Forge card (Feature 3): the preview's forge —
+  /// 'Turn notes into a quiz', the real description, and a
+  /// 'Forge a Quiz' button with the REAL max XP chip
+  /// ([_forgeMaxXp]). Tapping switches to the AI panel, where
+  /// the forge lives — the same generation flow, no new feature.
+  Widget _forgeCard(_StudyTokens tokens) {
+    return MinecraftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const MinecraftIconBadge(
+                icon: Icons.handyman_outlined,
+                backgroundColor: MinecraftColors.purple,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Turn notes into a quiz',
+                  style: MinecraftText.title(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              MinecraftStatusChip('+$_forgeMaxXp XP'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Ask the AI or attach a file — the forge crafts up to $kAiMaxQuestionsPerSet questions with explanations from your own material.',
+            style: MinecraftText.body(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: MinecraftBlockButton(
+              label: 'Forge a Quiz',
+              icon: Icons.handyman_outlined,
+              // Feature 6: forging a quiz plays the forge clanks.
+              sound: MinecraftSoundKind.forge,
+              onPressed: () => setState(() => _panel = 'ai'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Blocky quiz deck card (Feature 3): tinted gradient, 3px ink
+  /// border, hard shadow, Baloo 2 title and big question count.
+  /// MULTIPLE CHOICE label in the deck hue, title, subject (where
+  /// the preview shows a date — Quiz stores no creation date),
+  /// big question count in the deck hue. Deck hues cycle blue →
+  /// green → amber. Tapping opens the quizzes list, as before.
   Widget _deckCard(_StudyTokens tokens, Quiz quiz, int index) {
     final hue = tokens.deckHues[index % tokens.deckHues.length];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
       child: Material(
         color: Colors.transparent,
         child: Ink(
           decoration: BoxDecoration(
-            border: Border.all(color: tokens.line),
-            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? MinecraftColors.darkBorder
+                  : MinecraftColors.border,
+              width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
+            ),
+            borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
             gradient: LinearGradient(
               // CSS 155deg: top-left toward bottom-right.
               begin: const Alignment(-0.423, -0.906),
               end: const Alignment(0.423, 0.906),
               colors: [hue.from, hue.to],
             ),
+            boxShadow: isDark ? null : const [MinecraftShapes.cardShadow],
           ),
           child: InkWell(
-            onTap: () => _openReview(QuizPage(walletController: widget.walletController)),
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'MULTIPLE CHOICE',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.4,
-                            color: hue.hue,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          quiz.title,
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.bold,
-                            color: tokens.text,
-                          ),
-                        ),
-                        if (quiz.subject.isNotEmpty) ...[
-                          const SizedBox(height: 6),
+            onTap: () => _openReview(
+              QuizPage(walletController: widget.walletController),
+            ),
+            borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
+            // Feature 5: tap squash + ring/bits. The wrapper only
+            // observes the pointer; the InkWell still owns the tap.
+            child: MinecraftTapAnimation(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            quiz.subject,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: tokens.muted,
+                            'MULTIPLE CHOICE',
+                            style: MinecraftText.button(
+                              color: hue.hue,
+                              fontSize: 11,
                             ),
                           ),
+                          const SizedBox(height: 6),
+                          Text(
+                            quiz.title,
+                            style: MinecraftText.title(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                          if (quiz.subject.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              quiz.subject,
+                              style: MinecraftText.body(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${quiz.questions.length}',
+                          style: MinecraftText.heading(
+                            color: hue.hue,
+                            fontSize: 32,
+                          ),
+                        ),
+                        Text(
+                          'questions',
+                          style: MinecraftText.caption(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '${quiz.questions.length}',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                          color: hue.hue,
-                        ),
-                      ),
-                      Text(
-                        'questions',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -2420,11 +2714,11 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Preview summary card: the same deck gradient as [_deckCard]
-  /// (hues cycle blue → green → amber), but a list icon + title +
-  /// teaser + chevron instead of the big question count — this is
-  /// what the preview's #stReviewSummary renders. The teaser is
-  /// the deck's real facts (subject · question count ·
+  /// Blocky summary card (Feature 3): the same deck gradient as
+  /// [_deckCard] (hues cycle blue → green → amber), 3px ink
+  /// border, hard shadow, Baloo 2 title — but a list icon + title
+  /// + teaser + chevron instead of the big question count. The
+  /// teaser is the deck's real facts (subject · question count ·
   /// difficulty): Quiz stores no prose summary/description, so
   /// no teaser text is invented. Tapping opens the quizzes list,
   /// where the deck's content lives — the app has no standalone
@@ -2435,57 +2729,69 @@ class _StudyTabState extends State<StudyTab> {
         '${quiz.subject.isEmpty ? 'No subject' : quiz.subject} · '
         '${quiz.questions.length} questions · '
         '${quizDifficultyLabel(quiz.difficulty)}';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
       child: Material(
         color: Colors.transparent,
         child: Ink(
           decoration: BoxDecoration(
-            border: Border.all(color: tokens.line),
-            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? MinecraftColors.darkBorder
+                  : MinecraftColors.border,
+              width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
+            ),
+            borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
             gradient: LinearGradient(
               // CSS 155deg: top-left toward bottom-right.
               begin: const Alignment(-0.423, -0.906),
               end: const Alignment(0.423, 0.906),
               colors: [hue.from, hue.to],
             ),
+            boxShadow: isDark ? null : const [MinecraftShapes.cardShadow],
           ),
           child: InkWell(
-            onTap: () => _openReview(QuizPage(walletController: widget.walletController)),
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.list_alt, size: 22, color: hue.hue),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          quiz.title,
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.bold,
-                            color: tokens.text,
+            onTap: () => _openReview(
+              QuizPage(walletController: widget.walletController),
+            ),
+            borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
+            // Feature 5: tap squash + ring/bits. The wrapper only
+            // observes the pointer; the InkWell still owns the tap.
+            child: MinecraftTapAnimation(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.list_alt, size: 22, color: hue.hue),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            quiz.title,
+                            style: MinecraftText.title(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          teaser,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: tokens.muted,
+                          const SizedBox(height: 6),
+                          Text(
+                            teaser,
+                            style: MinecraftText.body(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Icon(Icons.chevron_right, color: tokens.muted),
-                ],
+                    const SizedBox(width: 12),
+                    Icon(Icons.chevron_right, color: tokens.muted),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2494,8 +2800,8 @@ class _StudyTabState extends State<StudyTab> {
     );
   }
 
-  /// Study entry card (Flashcards / Quiz / AI Quiz): brand-soft
-  /// icon tile, title, subtitle, chevron.
+  /// Blocky study entry card (Feature 3): grass icon badge,
+  /// Baloo 2 title, subtitle, chevron.
   Widget _entryCard(
     _StudyTokens tokens, {
     required IconData icon,
@@ -2514,15 +2820,7 @@ class _StudyTabState extends State<StudyTab> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: tokens.brandSoft,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, size: 20, color: tokens.accent),
-                ),
+                MinecraftIconBadge(icon: icon),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -2530,14 +2828,15 @@ class _StudyTabState extends State<StudyTab> {
                     children: [
                       Text(
                         title,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: tokens.text),
+                        style: MinecraftText.title(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
                       Text(
                         subtitle,
-                        style:
-                            TextStyle(fontSize: 12.5, color: tokens.muted),
+                        style: MinecraftText.body(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -2550,7 +2849,6 @@ class _StudyTabState extends State<StudyTab> {
       ),
     );
   }
-
 }
 
 /// Rename dialog for one file. A StatefulWidget so the
@@ -2572,8 +2870,9 @@ class _RenameFileDialog extends StatefulWidget {
 }
 
 class _RenameFileDialogState extends State<_RenameFileDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialName);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  );
   String? _error;
 
   @override
@@ -2599,8 +2898,7 @@ class _RenameFileDialogState extends State<_RenameFileDialog> {
             const SizedBox(height: 12),
             Text(
               _error!,
-              style:
-                  TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
         ],

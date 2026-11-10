@@ -10,6 +10,7 @@
 // Map/Trips path. No dummy data: every number shown comes from the
 // rate table below or from the distance the user actually picked.
 import 'dart:math' as math;
+
 import 'top_popup.dart';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,8 @@ import 'bus_stops.dart';
 import 'custom_routes.dart';
 import 'hidden_routes.dart';
 import 'ios_components.dart';
+import 'minecraft_tap_animation.dart';
+import 'minecraft_theme.dart';
 import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
 import 'place_picker.dart';
@@ -39,14 +42,6 @@ const kFaresCardRadius = 20.0;
 const kFaresInputRadius = 14.0;
 const kFaresPageTitle = TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
 const kFaresCardHeading = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
-
-/// ChatGPT card geometry for Fares cards: 20dp corners, theme outline.
-ShapeBorder _faresCardShape(BuildContext context) {
-  return RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(kFaresCardRadius),
-    side: BorderSide(color: Theme.of(context).colorScheme.outline),
-  );
-}
 
 /// ChatGPT dark card surface (#202B25); light cards stay white.
 Color _faresCardColor(BuildContext context) {
@@ -79,14 +74,16 @@ double discountedFareOf(double fare) => (fare * 0.8 * 4).round() / 4;
 /// Null when the origin is a hub (the Map resolves it by name).
 /// [startLive] asks the Map tab to start Live Follow on the
 /// jumped route (Start Ride, Nov 8, 2026) — false for a plain jump.
-final faresMapJump = ValueNotifier<
-    ({
-      String from,
-      String to,
-      double? fromLat,
-      double? fromLng,
-      bool startLive,
-    })?>(null);
+final faresMapJump =
+    ValueNotifier<
+      ({
+        String from,
+        String to,
+        double? fromLat,
+        double? fromLng,
+        bool startLive,
+      })?
+    >(null);
 
 /// Web formatTripTime, mirrored here so the Fares sheet can show an
 /// ETA without importing map_tab.dart (which imports this file):
@@ -428,19 +425,12 @@ List<String> routeOperators(List<PopularRoute> routes) {
 /// admin-added routes first (newest [PopularRoute.createdAt]
 /// first), then the built-in routes in their own order — the
 /// built-ins have no creation date, so none is invented.
-const sortByOptions = <String>[
-  'Most Popular',
-  'Lowest Fare',
-  'Newest Routes',
-];
+const sortByOptions = <String>['Most Popular', 'Lowest Fare', 'Newest Routes'];
 
 /// Orders [routes] by [sortBy]. Pure, so the sort behaviour is
 /// unit-testable without widgets. Equal keys keep their relative
 /// order (stable sort via the original index).
-List<PopularRoute> sortPopularRoutes(
-  List<PopularRoute> routes,
-  String sortBy,
-) {
+List<PopularRoute> sortPopularRoutes(List<PopularRoute> routes, String sortBy) {
   if (sortBy == 'Most Popular') return List<PopularRoute>.of(routes);
   final indexed = List<MapEntry<int, PopularRoute>>.generate(
     routes.length,
@@ -498,8 +488,7 @@ const _regionDisplayLabels = <String, String>{
   'SOCCSKSARGEN': 'Region XII – SOCCSKSARGEN',
   'Caraga': 'Region XIII – Caraga',
   'Metro Manila': 'NCR – National Capital Region',
-  'Cordillera Administrative Region':
-      'CAR – Cordillera Administrative Region',
+  'Cordillera Administrative Region': 'CAR – Cordillera Administrative Region',
   'BARMM': 'BARMM – Bangsamoro Autonomous Region',
 };
 
@@ -1008,7 +997,8 @@ ResetAllDirectionsPlan resetAllDirectionsPlan({
   final clearedOverrides = <RouteFareOverride>[];
   final deletedOverrideKeys = <String>[];
   for (final override in overrides) {
-    final hasDirection = (override.viaHubs?.isNotEmpty == true) ||
+    final hasDirection =
+        (override.viaHubs?.isNotEmpty == true) ||
         (override.viaWaypoints?.isNotEmpty == true);
     if (!hasDirection) continue;
     final cleared = override.copyWith(
@@ -1210,11 +1200,7 @@ class _FaresTabState extends State<FaresTab> {
     if (name == null || name.isEmpty || !mounted) return;
     try {
       await repo.create(
-        BusCompany(
-          name: name,
-          authorUid: user.uid,
-          authorEmail: user.email,
-        ),
+        BusCompany(name: name, authorUid: user.uid, authorEmail: user.email),
         user,
       );
       await _loadRouteData();
@@ -1259,14 +1245,8 @@ class _FaresTabState extends State<FaresTab> {
           _busStops = stops;
           // A selected stop may have been deleted — clamp the
           // Trip-card indices back into the merged list.
-          _originHub = math.max(
-            0,
-            math.min(_originHub, _tripHubs.length - 1),
-          );
-          _destHub = math.max(
-            0,
-            math.min(_destHub, _tripHubs.length - 1),
-          );
+          _originHub = math.max(0, math.min(_originHub, _tripHubs.length - 1));
+          _destHub = math.max(0, math.min(_destHub, _tripHubs.length - 1));
         });
       }
     }
@@ -1316,7 +1296,14 @@ class _FaresTabState extends State<FaresTab> {
     }
     await _loadRouteData();
     if (!mounted) return;
-    TopPopup.show(context, message: result.deleted ? 'Route deleted.' : existing == null ? 'Route added.' : 'Route updated.',);
+    TopPopup.show(
+      context,
+      message: result.deleted
+          ? 'Route deleted.'
+          : existing == null
+          ? 'Route added.'
+          : 'Route updated.',
+    );
   }
 
   /// Opens the edit sheet for one Popular Route (admin only —
@@ -1331,9 +1318,7 @@ class _FaresTabState extends State<FaresTab> {
     if (user == null || !isAdminUser(user)) return;
     final customId = route.customRouteId;
     if (customId != null) {
-      final existing = _customRoutes
-          .where((r) => r.id == customId)
-          .firstOrNull;
+      final existing = _customRoutes.where((r) => r.id == customId).firstOrNull;
       if (existing == null) return;
       await _openAddRoute(existing: existing);
       return;
@@ -1372,7 +1357,12 @@ class _FaresTabState extends State<FaresTab> {
     }
     await _loadRouteData();
     if (!mounted) return;
-    TopPopup.show(context, message: result.deleted ? 'Route reset to its built-in fare.' : 'Route updated.',);
+    TopPopup.show(
+      context,
+      message: result.deleted
+          ? 'Route reset to its built-in fare.'
+          : 'Route updated.',
+    );
   }
 
   /// Remove a route (admin only — the entry points are hidden
@@ -1387,23 +1377,18 @@ class _FaresTabState extends State<FaresTab> {
     if (user == null || !isAdminUser(user)) return;
     final customId = route.customRouteId;
     if (customId != null) {
-      final custom = _customRoutes
-          .where((r) => r.id == customId)
-          .firstOrNull;
+      final custom = _customRoutes.where((r) => r.id == customId).firstOrNull;
       final repo = widget.customRouteRepository;
       if (custom == null || repo == null) return;
       final confirmed = await showIosAlert<bool>(
         context: context,
         title: 'Delete this route?',
-        message: '${custom.from} → ${custom.to} will be removed from '
+        message:
+            '${custom.from} → ${custom.to} will be removed from '
             'Popular Routes. This cannot be undone.',
         actions: const [
           IosAlertAction<bool>('Cancel', value: false),
-          IosAlertAction<bool>(
-            'Delete',
-            value: true,
-            isDestructive: true,
-          ),
+          IosAlertAction<bool>('Delete', value: true, isDestructive: true),
         ],
       );
       if (confirmed != true || !mounted) return;
@@ -1424,15 +1409,12 @@ class _FaresTabState extends State<FaresTab> {
     final confirmed = await showIosAlert<bool>(
       context: context,
       title: 'Remove this route?',
-      message: '${route.from} → ${route.to} will be hidden from '
+      message:
+          '${route.from} → ${route.to} will be hidden from '
           'Popular Routes. You can restore it from Hidden routes.',
       actions: const [
         IosAlertAction<bool>('Cancel', value: false),
-        IosAlertAction<bool>(
-          'Remove',
-          value: true,
-          isDestructive: true,
-        ),
+        IosAlertAction<bool>('Remove', value: true, isDestructive: true),
       ],
     );
     if (confirmed != true || !mounted) return;
@@ -1440,7 +1422,12 @@ class _FaresTabState extends State<FaresTab> {
       await repo.hide(key, user);
       await _loadRouteData();
       if (!mounted) return;
-      TopPopup.show(context, message: 'Route hidden.', actionLabel: 'View hidden', onAction: _showHiddenRoutes);
+      TopPopup.show(
+        context,
+        message: 'Route hidden.',
+        actionLabel: 'View hidden',
+        onAction: _showHiddenRoutes,
+      );
     } catch (_) {
       if (!mounted) return;
       TopPopup.show(context, message: 'Could not hide the route.');
@@ -1456,9 +1443,7 @@ class _FaresTabState extends State<FaresTab> {
   /// an edited fare appears here without a reload.
   List<PopularRoute> get _allPopularRoutes => [
     for (final route in popularRoutes)
-      if (!_hiddenRouteKeys.contains(
-        seededRouteKey(route.from, route.to),
-      ))
+      if (!_hiddenRouteKeys.contains(seededRouteKey(route.from, route.to)))
         route.applyOverride(
           _fareOverrides[seededRouteKey(route.from, route.to)],
         ),
@@ -1495,15 +1480,13 @@ class _FaresTabState extends State<FaresTab> {
   /// every province in the bundled data (see
   /// [provincesInRegion]). 'Metro Manila' is a region, not a
   /// province, so it never appears.
-  List<String> get _provinceOptions =>
-      provincesInRegion(_stagedRegionFilter);
+  List<String> get _provinceOptions => provincesInRegion(_stagedRegionFilter);
 
   /// Operators offered by the Operator dropdown: the distinct
   /// operators on the full Popular Routes list (Bus routes only),
   /// first-seen order — from the data, never hardcoded. An
   /// operator with no route is never offered.
-  List<String> get _operatorOptions =>
-      routeOperators(_allPopularRoutes);
+  List<String> get _operatorOptions => routeOperators(_allPopularRoutes);
 
   /// True when any Popular Routes filter is applied.
   bool get _hasActiveFilters =>
@@ -1612,20 +1595,23 @@ class _FaresTabState extends State<FaresTab> {
                     label: Text(option),
                     selected: selected == option,
                     showCheckmark: false,
-                    selectedColor: kFaresAccent,
+                    // Feature 4: grass block chips (Baloo 2 label,
+                    // grass fill when selected, 2.5px ink border).
+                    selectedColor: MinecraftColors.grassGreen,
                     backgroundColor: _faresCardColor(context),
                     side: BorderSide(
                       color: selected == option
-                          ? kFaresAccent
+                          ? MinecraftColors.grassGreen
                           : scheme.outline,
+                      width: selected == option ? 2.5 : 1,
                     ),
-                    labelStyle: TextStyle(
-                      color: selected == option ? Colors.white : null,
-                      fontWeight: FontWeight.w600,
+                    labelStyle: MinecraftText.button(
+                      color: selected == option
+                          ? Colors.white
+                          : scheme.onSurface,
+                      fontSize: 14,
                     ),
-                    onSelected: enabled
-                        ? (_) => onSelected(option)
-                        : null,
+                    onSelected: enabled ? (_) => onSelected(option) : null,
                   ),
                 ),
             ],
@@ -1850,12 +1836,8 @@ class _FaresTabState extends State<FaresTab> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        // iOS-style sheet top radius (Nov 7) — matches the
-        // bottomSheetTheme's 24, so this sheet looks the same
-        // as every other sheet in the app.
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      // Feature 4: no explicit shape — the Minecraft
+      // bottomSheetTheme (16px corners + 3px ink border) applies.
       builder: (_) => _FareBreakdownSheet(
         from: route.from,
         to: route.to,
@@ -1897,11 +1879,7 @@ class _FaresTabState extends State<FaresTab> {
         // Follow requested — the Map starts GPS tracking on
         // this route. Same endpoint gate as Show direction.
         onStartRide: canViewOnMap
-            ? () => _jumpToMap(
-                  from: route.from,
-                  to: route.to,
-                  startLive: true,
-                )
+            ? () => _jumpToMap(from: route.from, to: route.to, startLive: true)
             : null,
         // F1/F2: the sheet shows the live OSRM geometry when
         // available (cached or freshly fetched) and falls back to
@@ -1909,11 +1887,11 @@ class _FaresTabState extends State<FaresTab> {
         initialGeometry: initialGeometry,
         loadGeometry: fromHub != null && toHub != null
             ? () => fetchRouteGeometry(
-                  oLat: fromHub.lat,
-                  oLng: fromHub.lng,
-                  dest: toHub,
-                  via: viaPoints,
-                )
+                oLat: fromHub.lat,
+                oLng: fromHub.lng,
+                dest: toHub,
+                via: viaPoints,
+              )
             : null,
         geometryFrom: fromHub,
         geometryTo: toHub,
@@ -1953,8 +1931,7 @@ class _FaresTabState extends State<FaresTab> {
                 left: 16,
                 right: 16,
                 top: 16,
-                bottom:
-                    MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1995,8 +1972,9 @@ class _FaresTabState extends State<FaresTab> {
                                     tooltip: 'Edit region',
                                     icon: const Icon(Icons.edit_outlined),
                                     onPressed: () async {
-                                      final updated =
-                                          await _editBusStopRegion(stop);
+                                      final updated = await _editBusStopRegion(
+                                        stop,
+                                      );
                                       if (updated != null && mounted) {
                                         setSheetState(() {});
                                       }
@@ -2006,8 +1984,9 @@ class _FaresTabState extends State<FaresTab> {
                                     tooltip: 'Delete stop',
                                     icon: const Icon(Icons.delete_outline),
                                     onPressed: () async {
-                                      final deleted =
-                                          await _deleteBusStop(stop);
+                                      final deleted = await _deleteBusStop(
+                                        stop,
+                                      );
                                       if (deleted && mounted) {
                                         setSheetState(() {});
                                       }
@@ -2054,8 +2033,7 @@ class _FaresTabState extends State<FaresTab> {
                 left: 16,
                 right: 16,
                 top: 16,
-                bottom:
-                    MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2089,8 +2067,7 @@ class _FaresTabState extends State<FaresTab> {
                               title: Text('${route.from} → ${route.to}'),
                               subtitle: Text(
                                 [
-                                  if (route.operator != null)
-                                    route.operator!,
+                                  if (route.operator != null) route.operator!,
                                   route.vehicle,
                                 ].join(' · '),
                               ),
@@ -2098,20 +2075,23 @@ class _FaresTabState extends State<FaresTab> {
                                 onPressed: () async {
                                   try {
                                     await repo.unhide(
-                                      seededRouteKey(
-                                        route.from,
-                                        route.to,
-                                      ),
+                                      seededRouteKey(route.from, route.to),
                                       user,
                                     );
                                     await _loadRouteData();
                                     if (mounted) setSheetState(() {});
                                     if (mounted) {
-                                      TopPopup.show(context, message: 'Route restored.');
+                                      TopPopup.show(
+                                        context,
+                                        message: 'Route restored.',
+                                      );
                                     }
                                   } catch (_) {
                                     if (mounted) {
-                                      TopPopup.show(context, message: 'Could not restore the route.',);
+                                      TopPopup.show(
+                                        context,
+                                        message: 'Could not restore the route.',
+                                      );
                                     }
                                   }
                                 },
@@ -2157,8 +2137,7 @@ class _FaresTabState extends State<FaresTab> {
                     ChoiceChip(
                       label: Text(r),
                       selected: region == r,
-                      onSelected: (_) =>
-                          setDialogState(() => region = r),
+                      onSelected: (_) => setDialogState(() => region = r),
                     ),
                 ],
               ),
@@ -2179,10 +2158,7 @@ class _FaresTabState extends State<FaresTab> {
     );
     if (confirmed != true || !mounted) return null;
     try {
-      final updated = await repo.update(
-        stop.copyWith(region: region),
-        user,
-      );
+      final updated = await repo.update(stop.copyWith(region: region), user);
       await _loadRouteData();
       return updated;
     } catch (_) {
@@ -2210,21 +2186,23 @@ class _FaresTabState extends State<FaresTab> {
         );
     if (referenced) {
       if (!mounted) return false;
-      TopPopup.show(context, message: '"${stop.name}" is still used by a route — remove it ' 'from the route first.',);
+      TopPopup.show(
+        context,
+        message:
+            '"${stop.name}" is still used by a route — remove it '
+            'from the route first.',
+      );
       return false;
     }
     final confirmed = await showIosAlert<bool>(
       context: context,
       title: 'Delete this bus stop?',
-      message: '"${stop.name}" will be removed from the From/To and '
+      message:
+          '"${stop.name}" will be removed from the From/To and '
           'via-stops pickers. This cannot be undone.',
       actions: const [
         IosAlertAction<bool>('Cancel', value: false),
-        IosAlertAction<bool>(
-          'Delete',
-          value: true,
-          isDestructive: true,
-        ),
+        IosAlertAction<bool>('Delete', value: true, isDestructive: true),
       ],
     );
     if (confirmed != true || !mounted) return false;
@@ -2272,17 +2250,14 @@ class _FaresTabState extends State<FaresTab> {
     final confirmed = await showIosAlert<bool>(
       context: context,
       title: 'Reset all directions?',
-      message: 'This clears the saved direction on '
+      message:
+          'This clears the saved direction on '
           '${plan.affectedCount} route(s) — every drawn line and '
           'every named via stop. Fares stay as they are. You can '
           'draw new lines on the Map afterwards.',
       actions: const [
         IosAlertAction<bool>('Cancel', value: false),
-        IosAlertAction<bool>(
-          'Reset all',
-          value: true,
-          isDestructive: true,
-        ),
+        IosAlertAction<bool>('Reset all', value: true, isDestructive: true),
       ],
     );
     if (confirmed != true || !mounted) return;
@@ -2298,11 +2273,21 @@ class _FaresTabState extends State<FaresTab> {
       }
       await _loadRouteData();
       if (!mounted) return;
-      TopPopup.show(context, message: 'Reset ${plan.affectedCount} direction(s). ' 'Fares were not changed.',);
+      TopPopup.show(
+        context,
+        message:
+            'Reset ${plan.affectedCount} direction(s). '
+            'Fares were not changed.',
+      );
     } catch (_) {
       await _loadRouteData();
       if (!mounted) return;
-      TopPopup.show(context, message: 'Some directions could not be reset. Check the routes ' 'and try again.',);
+      TopPopup.show(
+        context,
+        message:
+            'Some directions could not be reset. Check the routes '
+            'and try again.',
+      );
     }
   }
 
@@ -2328,9 +2313,10 @@ class _FaresTabState extends State<FaresTab> {
     final custom = _tripCustomRoute();
     final via = custom == null
         ? const <LatLng>[]
-        : effectiveRouteWaypoints(customRoute: custom, busStops: _busStops)
-              .map((w) => w.point)
-              .toList();
+        : effectiveRouteWaypoints(
+            customRoute: custom,
+            busStops: _busStops,
+          ).map((w) => w.point).toList();
     if (_originMode == _OriginMode.location) {
       if (_deviceLat == null || _deviceLng == null) return null;
       return routeGeometryCache.get(
@@ -2388,7 +2374,10 @@ class _FaresTabState extends State<FaresTab> {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         if (mounted) {
-          TopPopup.show(context, message: 'Turn on Location (GPS) on your phone first.');
+          TopPopup.show(
+            context,
+            message: 'Turn on Location (GPS) on your phone first.',
+          );
         }
         return;
       }
@@ -2399,7 +2388,10 @@ class _FaresTabState extends State<FaresTab> {
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
-          TopPopup.show(context, message: 'Location permission is needed to see where you are.',);
+          TopPopup.show(
+            context,
+            message: 'Location permission is needed to see where you are.',
+          );
         }
         return;
       }
@@ -2445,11 +2437,8 @@ class _FaresTabState extends State<FaresTab> {
   }) {
     final hub = _tripHubs[value];
     return InkWell(
-      onTap: () => _pickTripPlace(
-        label: label,
-        current: value,
-        onPicked: onChanged,
-      ),
+      onTap: () =>
+          _pickTripPlace(label: label, current: value, onPicked: onChanged),
       borderRadius: BorderRadius.circular(kFaresInputRadius),
       child: InputDecorator(
         decoration: InputDecoration(
@@ -2460,9 +2449,7 @@ class _FaresTabState extends State<FaresTab> {
         ),
         child: Row(
           children: [
-            Expanded(
-              child: Text('${hub.name} · ${hub.region}'),
-            ),
+            Expanded(child: Text('${hub.name} · ${hub.region}')),
             const Icon(Icons.arrow_drop_down),
           ],
         ),
@@ -2481,7 +2468,7 @@ class _FaresTabState extends State<FaresTab> {
 
     Widget sectionTitle(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: kFaresCardHeading),
+      child: Text(text, style: MinecraftText.title(color: scheme.onSurface)),
     );
 
     return SingleChildScrollView(
@@ -2492,158 +2479,152 @@ class _FaresTabState extends State<FaresTab> {
           children: [
             _FaresHero(),
             const SizedBox(height: 24),
-            Card(
-              color: _faresCardColor(context),
-              shape: _faresCardShape(context),
-              child: Padding(
-                padding: AppLayout.cardPadding,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    sectionTitle('Trip'),
-                    IosSegmentedControl<_OriginMode>(
-                      segments: const [
-                        IosSegment(
-                          value: _OriginMode.location,
-                          label: 'My location',
+            // Feature 4: blocky Minecraft card shell (3px ink
+            // border, hard shadow) around the unchanged Trip
+            // picker — same fields, same behaviour, new look.
+            MinecraftCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  sectionTitle('Trip'),
+                  IosSegmentedControl<_OriginMode>(
+                    segments: const [
+                      IosSegment(
+                        value: _OriginMode.location,
+                        label: 'My location',
+                      ),
+                      IosSegment(value: _OriginMode.hub, label: 'Choose a hub'),
+                    ],
+                    groupValue: _originMode,
+                    onValueChanged: (value) {
+                      setState(() => _originMode = value);
+                    },
+                  ),
+                  const SizedBox(height: AppLayout.cardGap),
+                  if (_originMode == _OriginMode.location) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _deviceLat == null
+                                ? 'No location yet. Tap to get your current location.'
+                                : 'Your location has been found.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ),
-                        IosSegment(
-                          value: _OriginMode.hub,
-                          label: 'Choose a hub',
+                        const SizedBox(width: AppSpacing.s8),
+                        FilledButton(
+                          onPressed: _locating ? null : _useLocation,
+                          child: _locating
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  _deviceLat == null
+                                      ? 'Use my location'
+                                      : 'Refresh',
+                                ),
                         ),
                       ],
-                      groupValue: _originMode,
-                      onValueChanged: (value) {
-                        setState(() => _originMode = value);
-                      },
                     ),
-                    const SizedBox(height: AppLayout.cardGap),
-                    if (_originMode == _OriginMode.location) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _deviceLat == null
-                                  ? 'No location yet. Tap to get your current location.'
-                                  : 'Your location has been found.',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.s8),
-                          FilledButton(
-                            onPressed: _locating ? null : _useLocation,
-                            child: _locating
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(
-                                    _deviceLat == null
-                                        ? 'Use my location'
-                                        : 'Refresh',
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ] else ...[
-                      _tripPlaceField(
-                        label: 'From',
-                        value: _originHub,
-                        onChanged: (v) => setState(() => _originHub = v),
-                      ),
-                    ],
-                    if (_originMode == _OriginMode.hub) ...[
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: IconButton(
-                          tooltip: 'Swap From and To',
-                          onPressed: () {
-                            setState(() {
-                              final from = _originHub;
-                              _originHub = _destHub;
-                              _destHub = from;
-                            });
-                          },
-                          icon: const Icon(Icons.swap_vert),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppLayout.cardGap),
+                  ] else ...[
                     _tripPlaceField(
-                      label: 'To',
-                      value: _destHub,
-                      onChanged: (v) => setState(() => _destHub = v),
+                      label: 'From',
+                      value: _originHub,
+                      onChanged: (v) => setState(() => _originHub = v),
                     ),
-                    const SizedBox(height: AppLayout.cardGap),
-
-                    if (roadKm != null) ...[
-                      Text(
-                        '${roadKm.toStringAsFixed(1)} km',
-                        style: Theme.of(context).textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: AppSpacing.s4),
-                      Text(
-                        // F2: the ×1.22 figure is labelled an
-                        // estimate; the live OSRM distance says so.
-                        tripGeometry != null
-                            ? 'Live road distance — same as the Map tab.'
-                            : tripCustom != null
-                            ? 'Calculated from your stops: straight-line legs + 22% road allowance.'
-                            : 'Calculated: ${directKm!.toStringAsFixed(1)} km straight-line distance + 22% road allowance. May differ from the actual route.',
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                      ),
-                    ] else
-                      Text(
-                        '— km',
-                        style: Theme.of(context).textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    if (widget.onViewOnMap != null) ...[
-                      const SizedBox(height: AppLayout.cardGap),
-                      FilledButton.icon(
-                        onPressed: () => _jumpToMap(
-                          from: _originMode == _OriginMode.location
-                              ? 'My location'
-                              : _tripHubs[_originHub].name,
-                          to: _tripHubs[_destHub].name,
-                          // J2: the device position travels with the
-                          // jump, so the Map starts at the real
-                          // location instead of the home hub.
-                          fromLat: _originMode == _OriginMode.location
-                              ? _deviceLat
-                              : null,
-                          fromLng: _originMode == _OriginMode.location
-                              ? _deviceLng
-                              : null,
-                        ),
-                        icon: const Icon(Icons.map_outlined),
-                        label: const Text('Find routes'),
-                      ),
-                    ],
                   ],
-                ),
+                  if (_originMode == _OriginMode.hub) ...[
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        tooltip: 'Swap From and To',
+                        onPressed: () {
+                          setState(() {
+                            final from = _originHub;
+                            _originHub = _destHub;
+                            _destHub = from;
+                          });
+                        },
+                        icon: const Icon(Icons.swap_vert),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppLayout.cardGap),
+                  _tripPlaceField(
+                    label: 'To',
+                    value: _destHub,
+                    onChanged: (v) => setState(() => _destHub = v),
+                  ),
+                  const SizedBox(height: AppLayout.cardGap),
+
+                  if (roadKm != null) ...[
+                    Text(
+                      '${roadKm.toStringAsFixed(1)} km',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: AppSpacing.s4),
+                    Text(
+                      // F2: the ×1.22 figure is labelled an
+                      // estimate; the live OSRM distance says so.
+                      tripGeometry != null
+                          ? 'Live road distance — same as the Map tab.'
+                          : tripCustom != null
+                          ? 'Calculated from your stops: straight-line legs + 22% road allowance.'
+                          : 'Calculated: ${directKm!.toStringAsFixed(1)} km straight-line distance + 22% road allowance. May differ from the actual route.',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ] else
+                    Text(
+                      '— km',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  if (widget.onViewOnMap != null) ...[
+                    const SizedBox(height: AppLayout.cardGap),
+                    FilledButton.icon(
+                      onPressed: () => _jumpToMap(
+                        from: _originMode == _OriginMode.location
+                            ? 'My location'
+                            : _tripHubs[_originHub].name,
+                        to: _tripHubs[_destHub].name,
+                        // J2: the device position travels with the
+                        // jump, so the Map starts at the real
+                        // location instead of the home hub.
+                        fromLat: _originMode == _OriginMode.location
+                            ? _deviceLat
+                            : null,
+                        fromLng: _originMode == _OriginMode.location
+                            ? _deviceLng
+                            : null,
+                      ),
+                      icon: const Icon(Icons.map_outlined),
+                      label: const Text('Find routes'),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Text('Popular Routes', style: kFaresCardHeading),
-                const Spacer(),
-                Text(
-                  routesCountLabel(
-                    filtered: filteredRoutes.length,
-                    total: _allPopularRoutes.length,
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+            // Feature 4: blocky section header (grass icon badge +
+            // Baloo 2 title) with the live route count as trailing.
+            MinecraftSectionHeader(
+              icon: Icons.directions_bus,
+              title: 'Popular Routes',
+              trailing: Text(
+                routesCountLabel(
+                  filtered: filteredRoutes.length,
+                  total: _allPopularRoutes.length,
                 ),
-              ],
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
             ),
             const SizedBox(height: AppSpacing.s8),
             // Nov 8, 2026 redesign (Steven: pasted spec, approved
@@ -2695,8 +2676,7 @@ class _FaresTabState extends State<FaresTab> {
                 InkWell(
                   onTap: () {
                     setState(() {
-                      _additionalFiltersExpanded =
-                          !_additionalFiltersExpanded;
+                      _additionalFiltersExpanded = !_additionalFiltersExpanded;
                     });
                   },
                   borderRadius: BorderRadius.circular(8),
@@ -2714,9 +2694,7 @@ class _FaresTabState extends State<FaresTab> {
                         ),
                         const SizedBox(width: 4),
                         Icon(
-                          _additionalFiltersExpanded
-                              ? Icons.remove
-                              : Icons.add,
+                          _additionalFiltersExpanded ? Icons.remove : Icons.add,
                           size: 16,
                           color: scheme.onSurfaceVariant,
                         ),
@@ -2728,7 +2706,7 @@ class _FaresTabState extends State<FaresTab> {
                             'Active',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  color: kFaresAccent,
+                                  color: MinecraftColors.deepLeaves,
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),
@@ -2737,7 +2715,10 @@ class _FaresTabState extends State<FaresTab> {
                   ),
                 ),
                 AnimatedSize(
-                  duration: const Duration(milliseconds: 250),
+                  // Reduced motion: no expand/collapse animation.
+                  duration: MediaQuery.of(context).disableAnimations
+                      ? Duration.zero
+                      : const Duration(milliseconds: 250),
                   curve: Curves.easeInOut,
                   alignment: Alignment.topCenter,
                   child: _additionalFiltersExpanded
@@ -2780,9 +2761,7 @@ class _FaresTabState extends State<FaresTab> {
                             ),
                             const SizedBox(height: AppLayout.cardGap),
                             _filterDropdown(
-                              fieldKey: const ValueKey(
-                                'sort-filter-dropdown',
-                              ),
+                              fieldKey: const ValueKey('sort-filter-dropdown'),
                               label: 'Sort By',
                               options: sortByOptions,
                               value: _stagedSortBy,
@@ -2827,10 +2806,15 @@ class _FaresTabState extends State<FaresTab> {
               for (final route in filteredRoutes)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _PopularRouteCard(
-                    route: route,
-                    onTap: () => _openRouteSheet(route),
-                    onRemove: _isAdmin ? () => _removeRoute(route) : null,
+                  // Feature 5: tap squash + ring/bits. The wrapper
+                  // only observes the pointer; the card's InkWell
+                  // still owns the tap.
+                  child: MinecraftTapAnimation(
+                    child: _PopularRouteCard(
+                      route: route,
+                      onTap: () => _openRouteSheet(route),
+                      onRemove: _isAdmin ? () => _removeRoute(route) : null,
+                    ),
                   ),
                 ),
             // Nov 7 (Steven): the calculator (Sasakyan card, result
@@ -2925,8 +2909,9 @@ class _AddCompanyDialogState extends State<_AddCompanyDialog> {
 String formatKm(double km) =>
     km.toStringAsFixed(km.truncateToDouble() == km ? 0 : 1);
 
-/// Hero panel at the top of the Fares tab (preview design): a Deep
-/// Emerald gradient carrying the tab's existing title and subtitle.
+/// Hero panel at the top of the Fares tab (Feature 4 Minecraft
+/// restyle): a grass gradient carrying the tab's existing title
+/// and subtitle, with a 3px ink border and a dirt block badge.
 /// No dark-mode toggle here — that lives only in Settings →
 /// General → Appearance (Nov 5 rule); the preview's in-tab toggle
 /// is preview chrome and is deliberately not ported.
@@ -2935,14 +2920,19 @@ class _FaresHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [kFaresDeepEmerald, Color(0xFF166534)],
+          colors: [MinecraftColors.grassBright, MinecraftColors.grassMid],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(kFaresCardRadius),
+        borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
+        ),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -2950,34 +2940,28 @@ class _FaresHero extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.calculate_outlined,
-                  color: Colors.white,
-                ),
+              const MinecraftIconBadge(
+                icon: Icons.calculate_outlined,
+                backgroundColor: MinecraftColors.dirtBrown,
+                size: 40,
+                iconSize: 22,
               ),
               const SizedBox(width: AppSpacing.s12),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Know your fare before you go',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                  style: MinecraftText.heading(
                     color: Colors.white,
+                    fontSize: 22,
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.s8),
-          const Text(
+          Text(
             'LTFRB fare calculator — same rates and formula as the web app.',
-            style: TextStyle(color: Colors.white70),
+            style: MinecraftText.body(color: Colors.white70),
           ),
         ],
       ),
@@ -2987,24 +2971,29 @@ class _FaresHero extends StatelessWidget {
 
 /// "Provincial" scope tag carried by every bus route card and the
 /// fare breakdown sheet (preview design). Van / jeepney / tricycle
-/// routes carry no scope tag.
+/// routes carry no scope tag. Feature 4: blocky chip — grass
+/// tint, 2.5px ink border, Baloo 2 label.
 class _ProvincialTag extends StatelessWidget {
   const _ProvincialTag();
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: kFaresDeepEmerald.withValues(alpha: 0.12),
+        color: MinecraftColors.grassGreen.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: 2,
+        ),
       ),
-      child: const Text(
+      child: Text(
         'Provincial',
-        style: TextStyle(
+        style: MinecraftText.button(
+          color: isDark ? Colors.white : MinecraftColors.deepLeaves,
           fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: kFaresDeepEmerald,
         ),
       ),
     );
@@ -3027,9 +3016,14 @@ IconData _popularRouteIcon(String vehicle) {
   }
 }
 
-/// One Popular Routes card: vehicle icon, From → To, operator and
-/// vehicle with the "Provincial" scope tag on bus cards, and the
-/// route's own fare (regular + 20%-off) or "Fare not set".
+/// One Popular Routes card (Feature 4 Minecraft restyle): a
+/// blocky card with a grass icon badge, the From → To route in
+/// Baloo 2, operator and vehicle, the "Provincial" scope tag on
+/// bus cards, the route's own live fare (regular + 20%-off
+/// student fare) or "Fare not set", and the road detail — the
+/// route's real road distance when known, plus its admin-set via
+/// stops. No sample fares, no invented distances: a route with
+/// no known distance shows no distance line.
 class _PopularRouteCard extends StatelessWidget {
   const _PopularRouteCard({
     required this.route,
@@ -3048,96 +3042,95 @@ class _PopularRouteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final fare = route.fare;
-    return Card(
-      color: _faresCardColor(context),
-      shape: _faresCardShape(context),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: AppLayout.cardPadding,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: kFaresAccent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
+    final roadKm = route.roadKm;
+    return MinecraftCard(
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MinecraftIconBadge(icon: _popularRouteIcon(route.vehicle)),
+          const SizedBox(width: AppSpacing.s12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${route.from} → ${route.to}',
+                  style: MinecraftText.title(color: scheme.onSurface),
                 ),
-                child: Icon(
-                  _popularRouteIcon(route.vehicle),
-                  color: kFaresAccent,
+                const SizedBox(height: AppSpacing.s4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (route.operator != null)
+                      Text(
+                        route.operator!,
+                        style: MinecraftText.caption(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    Text(
+                      route.vehicle,
+                      style: MinecraftText.caption(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (route.isBus) const _ProvincialTag(),
+                  ],
                 ),
-              ),
-              const SizedBox(width: AppSpacing.s12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                if (roadKm != null || route.viaHubs.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.s4),
+                  Text(
+                    [
+                      if (roadKm != null)
+                        '≈ ${formatKm(roadKm)} km road distance',
+                      if (route.viaHubs.isNotEmpty)
+                        'Via ${route.viaHubs.join(' · ')}',
+                    ].join(' · '),
+                    style: MinecraftText.caption(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s8),
+          fare == null
+              ? Text(
+                  'Fare not set',
+                  style: MinecraftText.caption(color: scheme.onSurfaceVariant),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${route.from} → ${route.to}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      peso(fare),
+                      style: MinecraftText.heading(
+                        color: scheme.onSurface,
+                        fontSize: 16,
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.s4),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (route.operator != null)
-                          Text(
-                            route.operator!,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: scheme.onSurfaceVariant),
-                          ),
-                        Text(
-                          route.vehicle,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                        if (route.isBus) const _ProvincialTag(),
-                      ],
+                    Text(
+                      '${peso(route.effectiveStudentFare!)} student',
+                      style: MinecraftText.caption(
+                        color: MinecraftColors.deepLeaves,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: AppSpacing.s8),
-              fare == null
-                  ? Text(
-                      'Fare not set',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          peso(fare),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          '${peso(route.effectiveStudentFare!)} student',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: kFaresAccent),
-                        ),
-                      ],
-                    ),
-              if (onRemove != null) ...[
-                const SizedBox(width: AppSpacing.s4),
-                IconButton(
-                  tooltip: 'Remove route',
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  color: scheme.error,
-                ),
-              ],
-            ],
-          ),
-        ),
+          if (onRemove != null) ...[
+            const SizedBox(width: AppSpacing.s4),
+            IconButton(
+              tooltip: 'Remove route',
+              onPressed: onRemove,
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: scheme.error,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -3171,15 +3164,17 @@ class _SheetRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-                  ),
+                  style: MinecraftText.bodySemiBold(color: scheme.onSurface)
+                      .copyWith(
+                        fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+                      ),
                 ),
                 if (detail != null)
                   Text(
                     detail!,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: MinecraftText.caption(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),
@@ -3187,9 +3182,8 @@ class _SheetRow extends StatelessWidget {
           const SizedBox(width: AppSpacing.s12),
           Text(
             amount,
-            style: TextStyle(
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-            ),
+            style: MinecraftText.bodySemiBold(color: scheme.onSurface)
+                .copyWith(fontWeight: bold ? FontWeight.w700 : FontWeight.w600),
           ),
         ],
       ),
@@ -3401,18 +3395,18 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
         : widget.etaNote;
     final stops =
         geometry != null &&
-                widget.geometryFrom != null &&
-                widget.geometryTo != null
-            ? hubPairStops(
-                from: widget.geometryFrom!,
-                to: widget.geometryTo!,
-                totalKm: geometry.distanceKm,
-                viaHubNames: widget.geometryViaHubNames,
-                viaWaypoints: widget.geometryViaWaypoints,
-                extraStops: widget.geometryExtraStops,
-                roadPoints: geometry.points,
-              ).map((s) => (name: s.name, role: s.role)).toList()
-            : widget.stops;
+            widget.geometryFrom != null &&
+            widget.geometryTo != null
+        ? hubPairStops(
+            from: widget.geometryFrom!,
+            to: widget.geometryTo!,
+            totalKm: geometry.distanceKm,
+            viaHubNames: widget.geometryViaHubNames,
+            viaWaypoints: widget.geometryViaWaypoints,
+            extraStops: widget.geometryExtraStops,
+            roadPoints: geometry.points,
+          ).map((s) => (name: s.name, role: s.role)).toList()
+        : widget.stops;
     final breakdown = geometry != null && widget.breakdownForKm != null
         ? widget.breakdownForKm!(geometry.distanceKm)
         : widget.breakdown;
@@ -3437,8 +3431,11 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
               const SizedBox(height: AppSpacing.s16),
               Row(
                 children: [
-                  const Expanded(
-                    child: Text('Fare breakdown', style: kFaresCardHeading),
+                  Expanded(
+                    child: Text(
+                      'Fare breakdown',
+                      style: MinecraftText.title(color: scheme.onSurface),
+                    ),
                   ),
                   if (onEditRoute != null)
                     TextButton.icon(
@@ -3458,7 +3455,7 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
               ),
               Text(
                 '$from → $to',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: MinecraftText.title(color: scheme.onSurface),
               ),
               const SizedBox(height: AppSpacing.s4),
               Wrap(
@@ -3498,15 +3495,14 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
               ],
               if (fareStatus != null) ...[
                 const SizedBox(height: AppSpacing.s8),
-                _SheetRow(
-                  label: 'Fare status',
-                  amount: fareStatus,
-                  bold: true,
-                ),
+                _SheetRow(label: 'Fare status', amount: fareStatus, bold: true),
               ],
               if (showRouteFare) ...[
                 const SizedBox(height: AppSpacing.s16),
-                const Text('Route fare', style: kFaresCardHeading),
+                Text(
+                  'Route fare',
+                  style: MinecraftText.title(color: scheme.onSurface),
+                ),
                 const SizedBox(height: AppSpacing.s8),
                 if (routeFare != null) ...[
                   _SheetRow(
@@ -3528,9 +3524,7 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
                     detail: routeFarePwdSet
                         ? 'Set by an admin'
                         : '20% off with a valid PWD ID',
-                    amount: peso(
-                      routeFarePwd ?? discountedFareOf(routeFare),
-                    ),
+                    amount: peso(routeFarePwd ?? discountedFareOf(routeFare)),
                   ),
                   _SheetRow(
                     label: 'Senior Citizen discount',
@@ -3547,6 +3541,43 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
                     style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
+                  // Feature 4 (preview parity): a flat note card
+                  // for the student discount — 20% off the regular
+                  // fare unless the admin set a student fare, and
+                  // the school ID is shown at the gate. No fare
+                  // amount is repeated here (the rows above carry
+                  // it), so the sheet's fare counts stay unchanged.
+                  const SizedBox(height: AppSpacing.s8),
+                  Container(
+                    key: const Key('student-discount-card'),
+                    decoration: MinecraftDecorations.flatCardFor(
+                      Theme.of(context).brightness,
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const MinecraftIconBadge(
+                          icon: Icons.school_outlined,
+                          backgroundColor: MinecraftColors.gold,
+                          iconColor: MinecraftColors.ink,
+                          size: 36,
+                          iconSize: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            routeFareStudentSet
+                                ? 'Student fare set by an admin — show your school ID.'
+                                : 'Student discount: 20% off the regular fare — show your school ID.',
+                            style: MinecraftText.bodySemiBold(
+                              color: scheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   if (routeFareNote != null) ...[
                     const SizedBox(height: AppSpacing.s4),
                     Text(
@@ -3556,9 +3587,9 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
                     ),
                   ],
                 ] else ...[
-                  const Text(
+                  Text(
                     'Fare not set',
-                    style: TextStyle(fontWeight: FontWeight.w700),
+                    style: MinecraftText.title(color: scheme.onSurface),
                   ),
                   const SizedBox(height: AppSpacing.s4),
                   Text(
@@ -3570,8 +3601,10 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
               ],
               if (breakdown != null) ...[
                 const SizedBox(height: AppSpacing.s16),
-                const Text('Calculator estimate', style: kFaresCardHeading),
-                const SizedBox(height: AppSpacing.s8),
+                Text(
+                  'Calculator estimate',
+                  style: MinecraftText.title(color: scheme.onSurface),
+                ),
                 _SheetRow(
                   label: 'Base fare',
                   detail: 'Covers the first ${formatKm(breakdown.bracket)} km',
@@ -3606,17 +3639,18 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       'Amount to pay',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      style: MinecraftText.bodySemiBold(
+                        color: scheme.onSurface,
+                      ),
                     ),
                     const Spacer(),
                     Text(
                       '≈ ${peso(breakdown.collected)}',
-                      style: const TextStyle(
+                      style: MinecraftText.heading(
+                        color: MinecraftColors.grassGreen,
                         fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: kFaresAccent,
                       ),
                     ),
                   ],
@@ -3637,8 +3671,10 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
               ],
               if (stops != null && stops.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.s16),
-                const Text('Stops along the way', style: kFaresCardHeading),
-                const SizedBox(height: AppSpacing.s8),
+                Text(
+                  'Stops along the way',
+                  style: MinecraftText.title(color: scheme.onSurface),
+                ),
                 for (var i = 0; i < stops.length; i++)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
@@ -3648,13 +3684,17 @@ class _FareBreakdownSheetState extends State<_FareBreakdownSheet> {
                           width: 22,
                           child: Text(
                             '${i + 1}',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
+                            style: MinecraftText.button(
+                              color: scheme.onSurface,
+                            ),
                           ),
                         ),
                         Expanded(
                           child: Text(
                             stops[i].name,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: MinecraftText.bodySemiBold(
+                              color: scheme.onSurface,
+                            ),
                           ),
                         ),
                         Text(

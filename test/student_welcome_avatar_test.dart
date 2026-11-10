@@ -10,6 +10,7 @@
 // NOTE: the "photo" files below are real PNGs already in the repo
 // (no file is created by these tests — async file creation hangs
 // the tester in this sandbox, so tests must never create files).
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:estudyantego/features/onboarding/onboarding_state.dart';
 import 'package:estudyantego/features/student/student_theme.dart';
 import 'package:estudyantego/features/student_tab.dart';
@@ -107,15 +108,20 @@ void main() {
     expect(_welcomeAvatar(tester).backgroundImage, isNull);
   });
 
-  testWidgets('green welcome card design is unchanged', (tester) async {
+  // Minecraft theme (Feature 2): the welcome card is now a grass
+  // gradient banner with a 3px ink border and hard shadow, Baloo 2
+  // greeting — the old deep-emerald gradient is gone by design.
+  testWidgets('Minecraft welcome card design', (tester) async {
     await _pumpHeader(tester, _profileWithPhoto(_photoA));
 
     final container = tester.widget<Container>(find.byType(Container).first);
     final decoration = container.decoration as BoxDecoration;
     final gradient = decoration.gradient as LinearGradient;
-    expect(gradient.colors, [kStudentEmerald, kStudentEmeraldAccent]);
+    expect(gradient.colors,
+        [MinecraftColors.grassBright, MinecraftColors.grassMid]);
     expect(decoration.borderRadius,
-        const BorderRadius.all(Radius.circular(20)));
+        BorderRadius.all(Radius.circular(MinecraftShapes.cardRadius)));
+    expect(decoration.border, MinecraftShapes.blockBorder);
     expect(container.padding, const EdgeInsets.all(20));
     expect(find.text('Student Hub'), findsOneWidget);
     expect(find.text('Your school commute, in one place.'), findsOneWidget);

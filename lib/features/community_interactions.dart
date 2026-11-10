@@ -94,6 +94,7 @@
 // cannot double-count; the widget additionally ignores taps while a
 // reaction write is in flight.
 import 'dart:convert';
+
 import 'top_popup.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -103,6 +104,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_layout.dart';
 import 'app_rating.dart';
 import 'community_posts.dart';
+import 'minecraft_tap_animation.dart';
+import 'minecraft_theme.dart';
+import 'onboarding/splash_sound.dart';
 import 'onboarding/auth_service.dart';
 
 /// A user's reaction to a post. Null means "no reaction".
@@ -160,8 +164,9 @@ class PostComment {
       id: id,
       postId: data['postId'] is String ? data['postId'] as String : '',
       userId: data['userId'] is String ? data['userId'] as String : '',
-      displayName:
-          data['displayName'] is String ? data['displayName'] as String : '',
+      displayName: data['displayName'] is String
+          ? data['displayName'] as String
+          : '',
       photoUrl: data['photoUrl'] is String ? data['photoUrl'] as String : null,
       text: data['text'] is String ? data['text'] as String : '',
       parentCommentId: data['parentCommentId'] is String
@@ -170,21 +175,21 @@ class PostComment {
       createdAt: createdAt is Timestamp
           ? createdAt.toDate()
           : createdAt is DateTime
-              ? createdAt
-              : DateTime.fromMillisecondsSinceEpoch(0),
+          ? createdAt
+          : DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'postId': postId,
-        'userId': userId,
-        'displayName': displayName,
-        if (photoUrl != null) 'photoUrl': photoUrl,
-        'text': text,
-        if (parentCommentId != null) 'parentCommentId': parentCommentId,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'postId': postId,
+    'userId': userId,
+    'displayName': displayName,
+    if (photoUrl != null) 'photoUrl': photoUrl,
+    'text': text,
+    if (parentCommentId != null) 'parentCommentId': parentCommentId,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   factory PostComment.fromJson(Map<String, dynamic> json) {
     final createdAt = json['createdAt'];
@@ -192,16 +197,17 @@ class PostComment {
       id: json['id'] is String ? json['id'] as String : '',
       postId: json['postId'] is String ? json['postId'] as String : '',
       userId: json['userId'] is String ? json['userId'] as String : '',
-      displayName:
-          json['displayName'] is String ? json['displayName'] as String : '',
-      photoUrl:
-          json['photoUrl'] is String ? json['photoUrl'] as String : null,
+      displayName: json['displayName'] is String
+          ? json['displayName'] as String
+          : '',
+      photoUrl: json['photoUrl'] is String ? json['photoUrl'] as String : null,
       text: json['text'] is String ? json['text'] as String : '',
       parentCommentId: json['parentCommentId'] is String
           ? json['parentCommentId'] as String
           : null,
       createdAt: createdAt is String
-          ? DateTime.tryParse(createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0)
+          ? DateTime.tryParse(createdAt) ??
+                DateTime.fromMillisecondsSinceEpoch(0)
           : DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -241,8 +247,7 @@ const kMaxCommentDepth = 2;
 /// Reaction document id for one user on one comment: comment +
 /// author, so one user can hold at most one reaction per comment.
 /// Pure — unit-tested.
-String commentReactionId(String commentId, String uid) =>
-    '${commentId}_$uid';
+String commentReactionId(String commentId, String uid) => '${commentId}_$uid';
 
 /// Depth of [comment] in [all], by walking its parent chain.
 /// A comment with no parent (or a parent missing from the list,
@@ -363,8 +368,18 @@ String? commentValidationError(String rawText) {
 /// local time). No intl dependency — month names are inlined.
 String formatCommentTime(DateTime time) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   final local = time.toLocal();
   final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
@@ -510,10 +525,9 @@ String interactionErrorMessage(Object error) {
 /// The transaction reads the reaction document first (it may not
 /// exist yet — the rules' null arm permits that read); the stats
 /// document read needs no null arm (its rule dereferences nothing).
-class FirestorePostInteractionRepository
-    implements PostInteractionRepository {
+class FirestorePostInteractionRepository implements PostInteractionRepository {
   FirestorePostInteractionRepository({CommentRateGuard? rateGuard})
-      : _rateGuard = rateGuard ?? CommentRateGuard();
+    : _rateGuard = rateGuard ?? CommentRateGuard();
 
   final CommentRateGuard _rateGuard;
 
@@ -531,9 +545,7 @@ class FirestorePostInteractionRepository
   DocumentReference<Map<String, dynamic>> _statsRef(String postId) =>
       _db.collection('community_post_stats').doc(postId);
 
-  DocumentReference<Map<String, dynamic>> _commentStatsRef(
-    String commentId,
-  ) =>
+  DocumentReference<Map<String, dynamic>> _commentStatsRef(String commentId) =>
       _db.collection('comment_stats').doc(commentId);
 
   /// Reaction document id: post + author, so one user can hold at
@@ -552,8 +564,7 @@ class FirestorePostInteractionRepository
     final commentCount = (stats?['commentCount'] as num?)?.toInt() ?? 0;
     PostReaction? mine;
     if (uid != null) {
-      final reactionSnap =
-          await _reactions.doc(_reactionId(postId, uid)).get();
+      final reactionSnap = await _reactions.doc(_reactionId(postId, uid)).get();
       final value = reactionSnap.data()?['value'];
       if (value == 'like') {
         mine = PostReaction.like;
@@ -573,8 +584,7 @@ class FirestorePostInteractionRepository
   Future<List<PostComment>> loadComments(String postId) async {
     // Single-field equality query: no composite index needed.
     // Sorted client-side (newest first) for the same reason.
-    final snap =
-        await _comments.where('postId', isEqualTo: postId).get();
+    final snap = await _comments.where('postId', isEqualTo: postId).get();
     final comments = snap.docs
         .map((doc) => PostComment.fromDoc(doc.id, doc.data()))
         .toList();
@@ -613,8 +623,8 @@ class FirestorePostInteractionRepository
           mine = value == 'like'
               ? PostReaction.like
               : value == 'dislike'
-                  ? PostReaction.dislike
-                  : null;
+              ? PostReaction.dislike
+              : null;
         }
       }
       result[entry.key] = CommentReactionState(
@@ -634,8 +644,9 @@ class FirestorePostInteractionRepository
     required PostReaction tapped,
   }) async {
     await _db.runTransaction((tx) async {
-      final reactionRef =
-          _commentReactions.doc(commentReactionId(commentId, user.uid));
+      final reactionRef = _commentReactions.doc(
+        commentReactionId(commentId, user.uid),
+      );
       final statsRef = _commentStatsRef(commentId);
       final existing = await tx.get(reactionRef);
       final statsSnap = await tx.get(statsRef);
@@ -650,8 +661,8 @@ class FirestorePostInteractionRepository
       final oldReaction = oldValue == 'like'
           ? PostReaction.like
           : oldValue == 'dislike'
-              ? PostReaction.dislike
-              : null;
+          ? PostReaction.dislike
+          : null;
       final next = resolveReaction(oldReaction, tapped);
       if (oldReaction == PostReaction.like) likes -= 1;
       if (oldReaction == PostReaction.dislike) dislikes -= 1;
@@ -711,9 +722,7 @@ class FirestorePostInteractionRepository
       if (c.id == parentCommentId) parent = c;
     }
     if (parent == null) {
-      throw const PostInteractionException(
-        'That comment no longer exists.',
-      );
+      throw const PostInteractionException('That comment no longer exists.');
     }
     if (!canReplyTo(all, parent)) {
       throw const PostInteractionException(
@@ -722,11 +731,8 @@ class FirestorePostInteractionRepository
     }
     await _db.runTransaction((tx) async {
       final parentSnap = await tx.get(_comments.doc(parentCommentId));
-      if (!parentSnap.exists ||
-          (parentSnap.data() ?? {})['postId'] != postId) {
-        throw const PostInteractionException(
-          'That comment no longer exists.',
-        );
+      if (!parentSnap.exists || (parentSnap.data() ?? {})['postId'] != postId) {
+        throw const PostInteractionException('That comment no longer exists.');
       }
       final statsRef = _statsRef(postId);
       final statsSnap = await tx.get(statsRef);
@@ -777,8 +783,8 @@ class FirestorePostInteractionRepository
       final oldReaction = oldValue == 'like'
           ? PostReaction.like
           : oldValue == 'dislike'
-              ? PostReaction.dislike
-              : null;
+          ? PostReaction.dislike
+          : null;
       final next = resolveReaction(oldReaction, tapped);
       if (oldReaction == PostReaction.like) likes -= 1;
       if (oldReaction == PostReaction.dislike) dislikes -= 1;
@@ -894,7 +900,7 @@ class FirestorePostInteractionRepository
 /// documents themselves, so they are exact by construction.
 class LocalPostInteractionRepository implements PostInteractionRepository {
   LocalPostInteractionRepository({CommentRateGuard? rateGuard})
-      : _rateGuard = rateGuard ?? CommentRateGuard();
+    : _rateGuard = rateGuard ?? CommentRateGuard();
 
   final CommentRateGuard _rateGuard;
 
@@ -944,8 +950,8 @@ class LocalPostInteractionRepository implements PostInteractionRepository {
           mine = entry.value == 'like'
               ? PostReaction.like
               : entry.value == 'dislike'
-                  ? PostReaction.dislike
-                  : null;
+              ? PostReaction.dislike
+              : null;
         }
       }
     }
@@ -995,8 +1001,8 @@ class LocalPostInteractionRepository implements PostInteractionRepository {
           mine = reaction.value == 'like'
               ? PostReaction.like
               : reaction.value == 'dislike'
-                  ? PostReaction.dislike
-                  : null;
+              ? PostReaction.dislike
+              : null;
         }
       }
       result[entry.key.toString()] = CommentReactionState(
@@ -1028,8 +1034,8 @@ class LocalPostInteractionRepository implements PostInteractionRepository {
     final current = currentValue == 'like'
         ? PostReaction.like
         : currentValue == 'dislike'
-            ? PostReaction.dislike
-            : null;
+        ? PostReaction.dislike
+        : null;
     final next = resolveReaction(current, tapped);
     if (next == null) {
       commentMap.remove(user.uid);
@@ -1070,9 +1076,7 @@ class LocalPostInteractionRepository implements PostInteractionRepository {
       if (c.id == parentCommentId) parent = c;
     }
     if (parent == null) {
-      throw const PostInteractionException(
-        'That comment no longer exists.',
-      );
+      throw const PostInteractionException('That comment no longer exists.');
     }
     if (!canReplyTo(all, parent)) {
       throw const PostInteractionException(
@@ -1111,8 +1115,8 @@ class LocalPostInteractionRepository implements PostInteractionRepository {
     final current = currentValue == 'like'
         ? PostReaction.like
         : currentValue == 'dislike'
-            ? PostReaction.dislike
-            : null;
+        ? PostReaction.dislike
+        : null;
     final next = resolveReaction(current, tapped);
     if (next == null) {
       map.remove(user.uid);
@@ -1235,8 +1239,7 @@ class _CommunityPostInteractionWidgetState
     super.initState();
     // Pending / rejected shared posts render nothing, so they never
     // load (and never touch the backend).
-    if (!widget.post.isShared ||
-        widget.post.status == PostStatus.approved) {
+    if (!widget.post.isShared || widget.post.status == PostStatus.approved) {
       _reload();
     } else {
       _loading = false;
@@ -1280,8 +1283,9 @@ class _CommunityPostInteractionWidgetState
       await _reload();
       // Rating prompt (Nov 9): a successful Like/Dislike is a real
       // action — interacting with a Communities post.
-      AppRatingTracker.instance
-          .recordAction(AppRatingAction.interactedWithPost);
+      AppRatingTracker.instance.recordAction(
+        AppRatingAction.interactedWithPost,
+      );
     } catch (e) {
       if (!mounted) return;
       TopPopup.show(context, message: interactionErrorMessage(e));
@@ -1310,8 +1314,7 @@ class _CommunityPostInteractionWidgetState
   Widget build(BuildContext context) {
     // Pending and rejected shared posts are not public: no
     // interactions, ever. (Local posts always show the row.)
-    if (widget.post.isShared &&
-        widget.post.status != PostStatus.approved) {
+    if (widget.post.isShared && widget.post.status != PostStatus.approved) {
       return const SizedBox.shrink();
     }
     final scheme = Theme.of(context).colorScheme;
@@ -1356,9 +1359,13 @@ class _CommunityPostInteractionWidgetState
                 label: 'Like',
                 count: state.likeCount,
                 selected: state.myReaction == PostReaction.like,
-                selectedColor: scheme.primary,
+                // Feature 4 (preview parity): a liked post turns
+                // heart-red, like the preview's Like button.
+                selectedColor: MinecraftColors.heartRed,
                 enabled: signedIn,
                 busy: _reacting == PostReaction.like,
+                // Feature 6: Like plays the like slide.
+                sound: MinecraftSoundKind.like,
                 onTap: () => _onReactionTap(PostReaction.like),
               ),
             ),
@@ -1370,7 +1377,7 @@ class _CommunityPostInteractionWidgetState
                 label: 'Dislike',
                 count: state.dislikeCount,
                 selected: state.myReaction == PostReaction.dislike,
-                selectedColor: const Color(0xFFEF4444),
+                selectedColor: MinecraftColors.heartRed,
                 enabled: signedIn,
                 busy: _reacting == PostReaction.dislike,
                 onTap: () => _onReactionTap(PostReaction.dislike),
@@ -1408,6 +1415,7 @@ class _ReactionButton extends StatelessWidget {
     required this.enabled,
     required this.busy,
     required this.onTap,
+    this.sound = MinecraftSoundKind.click,
   });
 
   final IconData icon;
@@ -1419,64 +1427,77 @@ class _ReactionButton extends StatelessWidget {
   final bool busy;
   final VoidCallback onTap;
 
+  /// Tap sound (Feature 6): Like plays like, Dislike / Comment
+  /// play the default click.
+  final MinecraftSoundKind sound;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = !enabled
         ? scheme.onSurfaceVariant.withValues(alpha: 0.5)
         : selected
-            ? selectedColor
-            : scheme.onSurfaceVariant;
-    return TextButton(
-      onPressed: enabled && !busy ? onTap : null,
-      style: TextButton.styleFrom(
-        foregroundColor: color,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (busy)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
+        ? selectedColor
+        : scheme.onSurfaceVariant;
+    // Reduced motion: the icon/count scale animation is skipped.
+    final switchDuration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
+    // Feature 4: Baloo 2 count + label, keeping the selected
+    // weight (bold when active, medium otherwise).
+    TextStyle labelStyle() =>
+        MinecraftText.button(color: color)
+            .copyWith(fontWeight: selected ? FontWeight.w700 : FontWeight.w500);
+    // Feature 5: tap squash + ring/bits. The wrapper only observes
+    // the pointer; the TextButton still owns the reaction tap.
+    // Feature 6: the button plays [sound] (like for Like).
+    // Disabled / busy buttons get no animation.
+    return MinecraftTapAnimation(
+      enabled: enabled && !busy,
+      sound: sound,
+      child: TextButton(
+        onPressed: enabled && !busy ? onTap : null,
+        style: TextButton.styleFrom(
+          foregroundColor: color,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (busy)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              AnimatedSwitcher(
+                duration: switchDuration,
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: Tween<double>(begin: 0.8, end: 1).animate(animation),
+                  child: child,
+                ),
+                child: Icon(icon, key: ValueKey(icon), size: 20),
+              ),
+            const SizedBox(width: 6),
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
+              duration: switchDuration,
               transitionBuilder: (child, animation) => ScaleTransition(
                 scale: Tween<double>(begin: 0.8, end: 1).animate(animation),
                 child: child,
               ),
-              child: Icon(icon, key: ValueKey(icon), size: 20),
+              child: Text('$count', key: ValueKey(count), style: labelStyle()),
             ),
-          const SizedBox(width: 6),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, animation) => ScaleTransition(
-              scale: Tween<double>(begin: 0.8, end: 1).animate(animation),
-              child: child,
-            ),
-            child: Text(
-              '$count',
-              key: ValueKey(count),
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: labelStyle(),
               ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1536,8 +1557,7 @@ class _CommentSheetState extends State<_CommentSheet> {
       _error = null;
     });
     try {
-      final comments =
-          await widget.repository.loadComments(widget.postId);
+      final comments = await widget.repository.loadComments(widget.postId);
       if (!mounted) return;
       setState(() {
         _comments = comments;
@@ -1549,8 +1569,7 @@ class _CommentSheetState extends State<_CommentSheet> {
       // shows every comment (reactions stay at zero and surface
       // the error only when tapped).
       try {
-        final reactions =
-            await widget.repository.loadCommentReactions(
+        final reactions = await widget.repository.loadCommentReactions(
           postId: widget.postId,
           uid: widget.user.uid,
         );
@@ -1679,9 +1698,7 @@ class _CommentSheetState extends State<_CommentSheet> {
                       Expanded(
                         child: Text(
                           comment.displayName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                       Text(
@@ -1705,13 +1722,11 @@ class _CommentSheetState extends State<_CommentSheet> {
                           label: 'Like',
                           count: likeCount,
                           selected: myReaction == PostReaction.like,
-                          selectedColor: scheme.primary,
+                          selectedColor: MinecraftColors.heartRed,
                           enabled: true,
                           busy: _reactingCommentId == comment.id,
-                          onTap: () => _onCommentReaction(
-                            comment,
-                            PostReaction.like,
-                          ),
+                          onTap: () =>
+                              _onCommentReaction(comment, PostReaction.like),
                         ),
                       ),
                       Expanded(
@@ -1721,22 +1736,18 @@ class _CommentSheetState extends State<_CommentSheet> {
                               : Icons.thumb_down_outlined,
                           label: 'Dislike',
                           count: dislikeCount,
-                          selected:
-                              myReaction == PostReaction.dislike,
-                          selectedColor: const Color(0xFFEF4444),
+                          selected: myReaction == PostReaction.dislike,
+                          selectedColor: MinecraftColors.heartRed,
                           enabled: true,
                           busy: _reactingCommentId == comment.id,
-                          onTap: () => _onCommentReaction(
-                            comment,
-                            PostReaction.dislike,
-                          ),
+                          onTap: () =>
+                              _onCommentReaction(comment, PostReaction.dislike),
                         ),
                       ),
                       if (node.depth < kMaxCommentDepth)
                         TextButton.icon(
-                          onPressed: () => setState(
-                            () => _replyingTo = comment,
-                          ),
+                          onPressed: () =>
+                              setState(() => _replyingTo = comment),
                           icon: const Icon(Icons.reply, size: 18),
                           label: const Text('Reply'),
                         ),
@@ -1767,16 +1778,11 @@ class _CommentSheetState extends State<_CommentSheet> {
                       child: SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     )
                   : IconButton(
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        size: 20,
-                      ),
+                      icon: const Icon(Icons.delete_outline, size: 20),
                       tooltip: 'Delete comment',
                       onPressed: () => _delete(comment),
                     ),
@@ -1841,55 +1847,49 @@ class _CommentSheetState extends State<_CommentSheet> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : _error != null
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: Text(
-                                  _error!,
-                                  textAlign: TextAlign.center,
-                                  style: AppText.caption.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: AppText.caption.copyWith(
+                                color: scheme.onSurfaceVariant,
                               ),
-                              const SizedBox(height: 8),
-                              TextButton(
-                                onPressed: _reload,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        )
-                      : _comments.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Text(
-                                  'No comments yet. '
-                                  'Be the first to comment.',
-                                  textAlign: TextAlign.center,
-                                  style: AppText.caption.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              itemCount: roots.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 12),
-                              itemBuilder: (_, index) =>
-                                  _commentTile(roots[index]),
                             ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _reload,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _comments.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          'No comments yet. '
+                          'Be the first to comment.',
+                          textAlign: TextAlign.center,
+                          style: AppText.caption.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: roots.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (_, index) => _commentTile(roots[index]),
+                    ),
             ),
             const Divider(height: 1),
             if (replyingTo != null)
@@ -1909,8 +1909,7 @@ class _CommentSheetState extends State<_CommentSheet> {
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
                       tooltip: 'Cancel reply',
-                      onPressed: () =>
-                          setState(() => _replyingTo = null),
+                      onPressed: () => setState(() => _replyingTo = null),
                     ),
                   ],
                 ),
@@ -1951,9 +1950,7 @@ class _CommentSheetState extends State<_CommentSheet> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.send_rounded),
                     tooltip: 'Send comment',

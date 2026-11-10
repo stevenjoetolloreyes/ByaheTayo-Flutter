@@ -12,6 +12,7 @@
 // tests hold on any day.
 import 'dart:convert';
 
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:estudyantego/features/student/allowance_screen.dart';
 import 'package:estudyantego/features/student/invoice_scan.dart';
 import 'package:estudyantego/features/student/student_data.dart';
@@ -220,7 +221,7 @@ TOTAL ₱350.00
           of: find
               .ancestor(
                 of: find.text('Allowance & Budgeting'),
-                matching: find.byType(Card),
+                matching: find.byType(MinecraftCard),
               )
               .first,
           matching: find.text(text),

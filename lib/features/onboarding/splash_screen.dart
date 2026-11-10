@@ -2,10 +2,11 @@
 //
 // A faithful port of the Claude HTML splash (EstudyanteGO__1__3_cn09.html),
 // adapted to the real app's emerald palette and real brand assets:
-// same sequence — white flash + speed-lines burst + whoosh; logo zoom
-// 3.4 -> 0.9 -> 1.08 -> 0.97 -> 1.0 with blur; impact shake + 3-note
-// sting; tagline "Kasama mo sa araw-araw na eskwela"; loading bar 2 s
-// with a tick each 25%; "Handa na!" at 100%; fade out ~4.9 s — then
+// same sequence — white flash + speed-lines burst + opening
+// jingle; logo zoom 3.4 -> 0.9 -> 1.08 -> 0.97 -> 1.0 with blur;
+// impact shake (visual only since Feature 6); tagline
+// "Kasama mo sa araw-araw na eskwela"; loading bar 2 s with a tick
+// each 25%; "Handa na!" at 100%; fade out ~4.9 s — then
 // the splash hands off on its own. NO tap-to-start (the HTML's start
 // overlay existed only for web audio autoplay policy; native audio
 // plays without it, so it is not ported). The HTML's 4-tab mini app
@@ -23,7 +24,10 @@
 //   "Your Student Companion".
 // - No mascot (it was main-app-only in the HTML).
 // - Sounds are synthesized in Dart (splash_sound.dart) — no audio
-//   files. Best-effort: visuals never depend on audio.
+//   files. Best-effort: visuals never depend on audio. The
+//   Minecraft theme (Feature 6) plays a blocky opening jingle on
+//   app open, replacing the old whoosh + impact sting; the loading
+//   ticks are unchanged.
 // - The ROAD motif is included (bottom strip + animated dashed line,
 //   1.1 s loop), adapted to emerald.
 //
@@ -89,7 +93,6 @@ class _SplashScreenState extends State<SplashScreen>
   bool _handedOff = false;
   AppStartDestination? _destination;
 
-  bool _impactFired = false;
   int _lastTickBucket = -1;
 
   @override
@@ -110,7 +113,7 @@ class _SplashScreenState extends State<SplashScreen>
       startupStage: StartupStage.splash.name,
       severity: ErrorSeverity.info,
     );
-    SplashSound.whoosh();
+    SplashSound.openingJingle();
     _runSequence();
     _go();
   }
@@ -123,14 +126,13 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  /// Fires the timeline sounds: the impact sting at 1550 ms and a
-  /// tick at each 25% of the loading bar (700 / 760 / 820 / 880 Hz).
+  /// Fires the timeline sounds: a tick at each 25% of the loading
+  /// bar (700 / 760 / 820 / 880 Hz). The opening jingle already
+  /// played in initState (Feature 6, replacing the old whoosh +
+  /// impact sting at 1550 ms); the shake at 1550 ms is visual
+  /// only now.
   void _onSequenceTick() {
     final elapsed = _sequence.value * _totalMs;
-    if (!_impactFired && elapsed >= 1550) {
-      _impactFired = true;
-      SplashSound.impact();
-    }
     final progress = ((elapsed - 2650) / 2000).clamp(0.0, 1.0);
     final bucket = (progress * 4).floor();
     if (bucket != _lastTickBucket && progress < 1.0) {

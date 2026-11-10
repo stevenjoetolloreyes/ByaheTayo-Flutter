@@ -50,6 +50,9 @@ import 'features/fares_tab.dart';
 import 'features/friend_cloud_repository.dart';
 import 'features/hidden_routes.dart';
 import 'features/ios_components.dart';
+import 'features/minecraft_tap_animation.dart';
+import 'features/minecraft_theme.dart';
+import 'features/onboarding/splash_sound.dart';
 import 'features/local_notifications.dart';
 import 'features/route_fare_overrides.dart';
 import 'features/shared_study_files.dart';
@@ -107,9 +110,7 @@ Future<void> main() async {
     final external = await getExternalStorageDirectory();
     await diagnosticsService.init(
       store: ErrorLogStore(
-        storage: FileErrorLogStorage(
-          File('${docs.path}/error_logs.jsonl'),
-        ),
+        storage: FileErrorLogStorage(File('${docs.path}/error_logs.jsonl')),
         externalMirrorFile: external == null
             ? null
             : File('${external.path}/estudyantego-crash.log'),
@@ -145,16 +146,17 @@ Future<void> main() async {
       () => initializeFirebase(
         skipAppCheck: d.safeMode,
         onAppCheckResult: (succeeded) {
-          unawaited(diagnosticsService.record(
-            category: ErrorCategory.startup,
-            message: succeeded
-                ? 'App Check activation succeeded.'
-                : 'App Check activation did not complete '
-                    '(best-effort; launch continues).',
-            startupStage: StartupStage.appCheck.name,
-            severity:
-                succeeded ? ErrorSeverity.info : ErrorSeverity.warning,
-          ));
+          unawaited(
+            diagnosticsService.record(
+              category: ErrorCategory.startup,
+              message: succeeded
+                  ? 'App Check activation succeeded.'
+                  : 'App Check activation did not complete '
+                        '(best-effort; launch continues).',
+              startupStage: StartupStage.appCheck.name,
+              severity: succeeded ? ErrorSeverity.info : ErrorSeverity.warning,
+            ),
+          );
         },
       ),
       fallback: false,
@@ -189,16 +191,17 @@ Future<void> main() async {
       () => initializeFirebase(
         skipAppCheck: diagnostics.safeMode,
         onAppCheckResult: (succeeded) {
-          unawaited(diagnosticsService.record(
-            category: ErrorCategory.startup,
-            message: succeeded
-                ? 'App Check activation succeeded.'
-                : 'App Check activation did not complete '
-                    '(best-effort; launch continues).',
-            startupStage: StartupStage.appCheck.name,
-            severity:
-                succeeded ? ErrorSeverity.info : ErrorSeverity.warning,
-          ));
+          unawaited(
+            diagnosticsService.record(
+              category: ErrorCategory.startup,
+              message: succeeded
+                  ? 'App Check activation succeeded.'
+                  : 'App Check activation did not complete '
+                        '(best-effort; launch continues).',
+              startupStage: StartupStage.appCheck.name,
+              severity: succeeded ? ErrorSeverity.info : ErrorSeverity.warning,
+            ),
+          );
         },
       ),
       fallback: false,
@@ -210,318 +213,52 @@ Future<void> main() async {
     firebaseConfigured = await initializeFirebase();
   }
 
-  runZonedGuarded(
-    () {
-      // Theme preference is read once at startup; Time Based resolves
-      // against the clock right now and re-evaluates while running
-      // (resume + periodic check in _EstudyanteGOAppState).
-      final themePreference =
-          appThemePreferenceFromString(prefs?.getString(_themeModeKey));
-      runApp(
-        EstudyanteGOApp(
-          initialSidebarCollapsed:
-              prefs?.getBool(_sidebarCollapsedKey) ?? false,
-          initialThemePreference: themePreference,
-          initialThemeMode:
-              resolveThemeMode(themePreference, DateTime.now()),
-          authService: FirebaseAuthService(isConfigured: firebaseConfigured),
-        ),
-      );
-      unawaited(diagnosticsService.record(
+  runZonedGuarded(() {
+    // Theme preference is read once at startup; Time Based resolves
+    // against the clock right now and re-evaluates while running
+    // (resume + periodic check in _EstudyanteGOAppState).
+    final themePreference = appThemePreferenceFromString(
+      prefs?.getString(_themeModeKey),
+    );
+    runApp(
+      EstudyanteGOApp(
+        initialSidebarCollapsed: prefs?.getBool(_sidebarCollapsedKey) ?? false,
+        initialThemePreference: themePreference,
+        initialThemeMode: resolveThemeMode(themePreference, DateTime.now()),
+        authService: FirebaseAuthService(isConfigured: firebaseConfigured),
+      ),
+    );
+    unawaited(
+      diagnosticsService.record(
         category: ErrorCategory.startup,
         message: 'runApp called.',
         severity: ErrorSeverity.info,
-      ));
-    },
-    diagnosticsService.handleZoneError,
-  );
+      ),
+    );
+  }, diagnosticsService.handleZoneError);
 }
 
-// ---- Brand — Premium Dark Minimalist redesign (Oct 31 spec): emerald accent ----
-const _primary = Color(0xFF16A34A);
-const _deepEmerald = Color(0xFF14532D);
-const _primaryDark = Color(0xFF059669);
-const _indicatorLight = Color(0xFFD1FAE5);
-const _indicatorDark = Color(0xFF064E3B);
-const _bgLight = Color(0xFFF1F5F9);
-const _textDark = Color(0xFF0F172A);
-const _textSecondary = Color(0xFF64748B);
+// ---- Brand — Minecraft theme (Feature 1) ----
+// The dark emerald brand green is present as the Minecraft palette
+// itself: grass green #58CC02 over deep leaves #2F7A12 (see
+// lib/features/minecraft_theme.dart). The old Premium Dark
+// Minimalist tokens are gone; the dark-mode surfaces live in
+// MinecraftColors now.
+const _textSecondary = Color(0xFF5B6B52);
 
-// Preview tokens (Nov 7): the Fares Phone Preview's dark emerald UI
-// — page background #0c1410, brand #16a34a, accent #34d399. The dark
-// theme below is built from these; the light theme keeps its own
-// approved values and only gains the preview fonts.
-const _previewDarkBg = Color(0xFF0C1410);
-const _previewDarkCard = Color(0xFF202B25);
-const _previewDarkElevated = Color(0xFF252B2D);
-const _previewAccent = Color(0xFF34D399);
-const _previewDarkSubtext = Color(0xFFB0B8B5);
-const _previewDarkBorder = Color(0xFF343B3D);
+// Minecraft theme foundation (Feature 1): the global light + dark
+// themes are built from the Minecraft tokens in
+// lib/features/minecraft_theme.dart (grass green primary, Baloo 2
+// headings, Nunito body, blocky 3px borders + hard shadows). The
+// iOS-style Cupertino override stays here — it is shell behavior,
+// not a Minecraft token.
+ThemeData _lightTheme() => minecraftThemeData(Brightness.light).copyWith(
+  cupertinoOverrideTheme: iosCupertinoTheme(Brightness.light).noDefault(),
+);
 
-ThemeData _lightTheme() {
-  final scheme = const ColorScheme.light(
-    primary: _primary,
-    onPrimary: Colors.white,
-    secondary: _primaryDark,
-    surface: Colors.white,
-    onSurface: _textDark,
-    outline: Color(0xFFE2E8F0),
-  );
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: scheme,
-    fontFamily: 'Inter',
-    scaffoldBackgroundColor: _bgLight,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.white,
-      foregroundColor: _textDark,
-      elevation: 0,
-      centerTitle: false,
-      titleTextStyle: TextStyle(
-        fontFamily: 'PlusJakartaSans',
-        color: _textDark,
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      indicatorColor: _indicatorLight,
-      iconTheme: const WidgetStatePropertyAll(IconThemeData(size: AppLayout.navIconSize)),
-      labelTextStyle: const WidgetStatePropertyAll(
-        AppText.smallSemiBold,
-      ),
-    ),
-    // Premium Dark Minimalist card language (shared by every tab, and
-    // the same language the Map sheet already uses): 16dp corners,
-    // a subtle outline, no elevation shadow.
-    cardTheme: const CardThemeData(
-      color: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
-        side: BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-    ),
-    // iOS-style component shaping (Nov 7): dialogs, sheets, fields
-    // and buttons get the iOS look (large rounded corners, no
-    // shadows, rounded filled fields) while keeping the app's
-    // colors, fonts, and behaviour. Cupertino widgets themselves
-    // get their theme from cupertinoOverrideTheme below.
-    dialogTheme: const DialogThemeData(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.all(Radius.circular(AppLayout.dialogRadius)),
-      ),
-    ),
-    bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: Colors.white,
-      modalBackgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      showDragHandle: true,
-      dragHandleColor: Color(0xFFCBD5E1),
-    ),
-    inputDecorationTheme: const InputDecorationTheme(
-      filled: true,
-      fillColor: Color(0xFFF8FAFC),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: _primary, width: 1.5),
-      ),
-      hintStyle: TextStyle(color: _textSecondary),
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    switchTheme: SwitchThemeData(
-      trackOutlineWidth: const WidgetStatePropertyAll(0),
-      thumbColor: const WidgetStatePropertyAll(Colors.white),
-      trackColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected)
-            ? _primary
-            : const Color(0xFFE2E8F0),
-      ),
-    ),
-    // iOS-style components (Nov 7): Cupertino widgets read this
-    // override (emerald + Inter) instead of the default iOS blue /
-    // SF Pro. CupertinoTheme.of falls back to it when no CupertinoTheme
-    // ancestor exists. (MaterialApp has no cupertinoOverrideTheme
-    // parameter — it lives on ThemeData.)
-    cupertinoOverrideTheme:
-        iosCupertinoTheme(Brightness.light).noDefault(),
-  );
-}
-
-ThemeData _darkTheme() {
-  // Preview dark tokens (Nov 7): #0c1410 page, #202B25 cards,
-  // #252B2D elevated, white primary text, #B0B8B5 secondary text,
-  // #343B3D borders — the same surfaces the Student Hub, Fares and
-  // Account tabs already use for dark mode. Brand #16a34a is the
-  // primary (buttons, selected pills, brand surfaces) with white
-  // text, exactly like the preview; accent #34d399 is the secondary
-  // for bright text highlights on dark surfaces.
-  final scheme = const ColorScheme.dark(
-    primary: _primary,
-    onPrimary: Colors.white,
-    secondary: _previewAccent,
-    onSecondary: Color(0xFF052E16),
-    surface: _previewDarkCard,
-    onSurface: Color(0xFFFFFFFF),
-    surfaceContainerHighest: _previewDarkElevated,
-    onSurfaceVariant: _previewDarkSubtext,
-    outline: _previewDarkBorder,
-  );
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: scheme,
-    fontFamily: 'Inter',
-    scaffoldBackgroundColor: _previewDarkBg,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: _previewDarkBg,
-      foregroundColor: Color(0xFFFFFFFF),
-      elevation: 0,
-      titleTextStyle: TextStyle(
-        fontFamily: 'PlusJakartaSans',
-        color: Color(0xFFFFFFFF),
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-    navigationBarTheme: const NavigationBarThemeData(
-      backgroundColor: _previewDarkBg,
-      elevation: 0,
-      indicatorColor: _indicatorDark,
-      iconTheme: WidgetStatePropertyAll(IconThemeData(size: AppLayout.navIconSize)),
-      labelTextStyle: WidgetStatePropertyAll(
-        AppText.smallSemiBold,
-      ),
-    ),
-    // Dark card language: #202B25 surface, #343B3D outline, 16dp
-    // corners, no shadow — same as the Student Hub / Fares dark cards.
-    cardTheme: const CardThemeData(
-      color: _previewDarkCard,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(AppLayout.cardRadius)),
-        side: BorderSide(color: _previewDarkBorder),
-      ),
-    ),
-    // iOS-style component shaping (Nov 7) — same as the light theme,
-    // in the dark emerald tokens. See _lightTheme for the rationale.
-    dialogTheme: const DialogThemeData(
-      backgroundColor: _previewDarkCard,
-      shape: RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.all(Radius.circular(AppLayout.dialogRadius)),
-      ),
-    ),
-    bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: _previewDarkCard,
-      modalBackgroundColor: _previewDarkCard,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      showDragHandle: true,
-      dragHandleColor: _previewDarkBorder,
-    ),
-    inputDecorationTheme: const InputDecorationTheme(
-      filled: true,
-      fillColor: _previewDarkElevated,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: _previewDarkBorder),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: _previewDarkBorder),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: _primary, width: 1.5),
-      ),
-      hintStyle: TextStyle(color: _previewDarkSubtext),
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    ),
-    switchTheme: SwitchThemeData(
-      trackOutlineWidth: const WidgetStatePropertyAll(0),
-      thumbColor: const WidgetStatePropertyAll(Colors.white),
-      trackColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected)
-            ? _primary
-            : _previewDarkBorder,
-      ),
-    ),
-    // iOS-style components (Nov 7): see _lightTheme — same emerald
-    // Cupertino override, dark brightness.
-    cupertinoOverrideTheme: iosCupertinoTheme(Brightness.dark).noDefault(),
-  );
-}
+ThemeData _darkTheme() => minecraftThemeData(Brightness.dark).copyWith(
+  cupertinoOverrideTheme: iosCupertinoTheme(Brightness.dark).noDefault(),
+);
 
 // ---- Destinations (6 tabs) ----
 // Order (preview parity, Nov 6): Student, Study, Fares, Map,
@@ -608,7 +345,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
   /// straight onto their ThemeMode.
   late AppThemePreference _themePreference =
       widget.initialThemePreference ??
-          appThemePreferenceForThemeMode(widget.initialThemeMode);
+      appThemePreferenceForThemeMode(widget.initialThemeMode);
 
   /// Re-checks the Time Based theme once a minute while it is
   /// selected, so it flips at 6 AM / 6 PM without a restart. Null
@@ -847,8 +584,9 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
         await _restoreProfileForUser(user);
       }
     }
-    final profileDone =
-        user == null ? false : store.isProfileSetupDone(user.uid);
+    final profileDone = user == null
+        ? false
+        : store.isProfileSetupDone(user.uid);
     _profile = user == null ? null : store.loadProfile(user.uid);
     return resolveStartDestination(
       firebaseConfigured: _authService.isConfigured,
@@ -865,12 +603,14 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
   }
 
   void _goDashboard({bool promptForNotifications = false}) {
-    unawaited(ErrorLogService.instance.record(
-      category: ErrorCategory.startup,
-      message: 'Dashboard init: destination set to dashboard.',
-      startupStage: StartupStage.dashboardInit.name,
-      severity: ErrorSeverity.info,
-    ));
+    unawaited(
+      ErrorLogService.instance.record(
+        category: ErrorCategory.startup,
+        message: 'Dashboard init: destination set to dashboard.',
+        startupStage: StartupStage.dashboardInit.name,
+        severity: ErrorSeverity.info,
+      ),
+    );
     setState(() => _destination = AppStartDestination.dashboard);
     if (promptForNotifications) _maybePromptForNotifications();
   }
@@ -893,10 +633,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
       if (!mounted) return;
       final promptContext = _navigatorKey.currentContext;
       if (promptContext == null) return;
-      await showNotificationPermissionPrompt(
-        promptContext,
-        _permissionService,
-      );
+      await showNotificationPermissionPrompt(promptContext, _permissionService);
     });
   }
 
@@ -1117,9 +854,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
         return SignInScreen(
           service: _authService,
           onSignedIn: _afterSignIn,
-          onCreateAccountRequested: () => setState(
-            () => _destination = AppStartDestination.createAccount,
-          ),
+          onCreateAccountRequested: () =>
+              setState(() => _destination = AppStartDestination.createAccount),
           profileRepository: _profileRepository,
           themeMode: _themeMode,
           onThemeModeChanged: _setThemeMode,
@@ -1133,9 +869,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
             setState(() => _destination = AppStartDestination.verifyEmail);
           },
           onSignedIn: _afterAuth,
-          onSignInRequested: () => setState(
-            () => _destination = AppStartDestination.signIn,
-          ),
+          onSignInRequested: () =>
+              setState(() => _destination = AppStartDestination.signIn),
           themeMode: _themeMode,
           onThemeModeChanged: _setThemeMode,
           onBack: _cameFromOnboarding ? _backToOnboarding : null,
@@ -1192,9 +927,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
         // saved by this point.
         if (_postSetupPhase == _PostSetupPhase.celebration) {
           return SetupCelebrationOverlay(
-            onFinished: () => setState(
-              () => _postSetupPhase = _PostSetupPhase.prompt,
-            ),
+            onFinished: () =>
+                setState(() => _postSetupPhase = _PostSetupPhase.prompt),
           );
         }
         if (_postSetupPhase == _PostSetupPhase.prompt) {
@@ -1210,9 +944,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           initial: _profile,
           onSaved: (profile) {
             _profile = profile;
-            setState(
-              () => _postSetupPhase = _PostSetupPhase.celebration,
-            );
+            setState(() => _postSetupPhase = _PostSetupPhase.celebration);
           },
         );
       case AppStartDestination.dashboard:
@@ -1248,8 +980,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           // TOUR HOOK (Feature 3): "No, show me how" on the
           // post-setup prompt lands here with startWatchTour true.
           startWatchTour: _startWatchTour,
-          onWatchTourConsumed: () =>
-              setState(() => _startWatchTour = false),
+          onWatchTourConsumed: () => setState(() => _startWatchTour = false),
           // ENTRANCE HOOK (Feature 5): the Welcome Back overlay
           // just finished — the Student tab plays its game-style
           // entrance once on landing, then consumes the flag.
@@ -1359,8 +1090,7 @@ class _HomeShellState extends State<_HomeShell>
   /// (widget tests keep the legacy 0-balance display). Passed to
   /// the Student and Account tabs so a sign-in claim updates the
   /// Account UI immediately.
-  late final PointsWalletController _walletController =
-      PointsWalletController(
+  late final PointsWalletController _walletController = PointsWalletController(
     repository: widget.authService.isConfigured
         ? FirestorePointsWalletRepository()
         : null,
@@ -1407,12 +1137,14 @@ class _HomeShellState extends State<_HomeShell>
     // Safe Mode skips ads init (nonessential). Otherwise the
     // existing fire-and-forget init is unchanged.
     if (ErrorLogService.instance.safeMode) {
-      unawaited(ErrorLogService.instance.record(
-        category: ErrorCategory.startup,
-        message: 'Ads init skipped (Safe Mode).',
-        startupStage: 'adsInit',
-        severity: ErrorSeverity.warning,
-      ));
+      unawaited(
+        ErrorLogService.instance.record(
+          category: ErrorCategory.startup,
+          message: 'Ads init skipped (Safe Mode).',
+          startupStage: 'adsInit',
+          severity: ErrorSeverity.warning,
+        ),
+      );
     } else {
       unawaited(_adService.initialize());
     }
@@ -1484,10 +1216,9 @@ class _HomeShellState extends State<_HomeShell>
             // only when Firebase is configured; otherwise the
             // Notifications sheet keeps its empty state and the
             // bell shows no badge.
-            reviewNotificationRepository:
-                widget.authService.isConfigured
-                    ? FirestoreAppReviewNotificationRepository()
-                    : null,
+            reviewNotificationRepository: widget.authService.isConfigured
+                ? FirestoreAppReviewNotificationRepository()
+                : null,
           ),
         ),
         StudyTab(
@@ -1500,50 +1231,41 @@ class _HomeShellState extends State<_HomeShell>
           friendCloudRepository: widget.authService.isConfigured
               ? FirestoreFriendCloudRepository()
               : null,
-          sharedFileRepository:
-              widget.authService.isConfigured
-                  ? FirestoreSharedStudyFileRepository()
-                  : LocalSharedStudyFileRepository(),
+          sharedFileRepository: widget.authService.isConfigured
+              ? FirestoreSharedStudyFileRepository()
+              : LocalSharedStudyFileRepository(),
         ),
         FaresTab(
           onViewOnMap: () => widget.onSelect(3),
           currentUser: widget.user,
-          customRouteRepository:
-              widget.authService.isConfigured
-                  ? FirestoreCustomRouteRepository()
-                  : LocalCustomRouteRepository(),
-          fareOverrideRepository:
-              widget.authService.isConfigured
-                  ? FirestoreRouteFareOverrideRepository()
-                  : LocalRouteFareOverrideRepository(),
-          hiddenRouteRepository:
-              widget.authService.isConfigured
-                  ? FirestoreHiddenRouteRepository()
-                  : LocalHiddenRouteRepository(),
-          busStopRepository:
-              widget.authService.isConfigured
-                  ? FirestoreBusStopRepository()
-                  : LocalBusStopRepository(),
-          busCompanyRepository:
-              widget.authService.isConfigured
-                  ? FirestoreBusCompanyRepository()
-                  : LocalBusCompanyRepository(),
+          customRouteRepository: widget.authService.isConfigured
+              ? FirestoreCustomRouteRepository()
+              : LocalCustomRouteRepository(),
+          fareOverrideRepository: widget.authService.isConfigured
+              ? FirestoreRouteFareOverrideRepository()
+              : LocalRouteFareOverrideRepository(),
+          hiddenRouteRepository: widget.authService.isConfigured
+              ? FirestoreHiddenRouteRepository()
+              : LocalHiddenRouteRepository(),
+          busStopRepository: widget.authService.isConfigured
+              ? FirestoreBusStopRepository()
+              : LocalBusStopRepository(),
+          busCompanyRepository: widget.authService.isConfigured
+              ? FirestoreBusCompanyRepository()
+              : LocalBusCompanyRepository(),
         ),
         MapTab(
           currentUser: widget.user,
           visible: widget.selectedIndex == 3,
-          customRouteRepository:
-              widget.authService.isConfigured
-                  ? FirestoreCustomRouteRepository()
-                  : LocalCustomRouteRepository(),
-          fareOverrideRepository:
-              widget.authService.isConfigured
-                  ? FirestoreRouteFareOverrideRepository()
-                  : LocalRouteFareOverrideRepository(),
-          busStopRepository:
-              widget.authService.isConfigured
-                  ? FirestoreBusStopRepository()
-                  : LocalBusStopRepository(),
+          customRouteRepository: widget.authService.isConfigured
+              ? FirestoreCustomRouteRepository()
+              : LocalCustomRouteRepository(),
+          fareOverrideRepository: widget.authService.isConfigured
+              ? FirestoreRouteFareOverrideRepository()
+              : LocalRouteFareOverrideRepository(),
+          busStopRepository: widget.authService.isConfigured
+              ? FirestoreBusStopRepository()
+              : LocalBusStopRepository(),
         ),
         CommunitiesTab(
           onViewOnMap: () => widget.onSelect(3),
@@ -1565,10 +1287,9 @@ class _HomeShellState extends State<_HomeShell>
           adService: _adService,
           // About screen's live stats graph (Nov 8): same
           // Firestore-vs-Local choice as the Fares tab.
-          customRouteRepository:
-              widget.authService.isConfigured
-                  ? FirestoreCustomRouteRepository()
-                  : LocalCustomRouteRepository(),
+          customRouteRepository: widget.authService.isConfigured
+              ? FirestoreCustomRouteRepository()
+              : LocalCustomRouteRepository(),
           onViewStudent: widget.onViewStudent,
           onViewCommunities: widget.onViewCommunities,
           onViewFares: widget.onViewFares,
@@ -1631,7 +1352,8 @@ class _HomeShellState extends State<_HomeShell>
     final Widget shellScaffold = wide
         ? Scaffold(
             appBar: AppBar(
-                title: Text(_destinations[widget.selectedIndex].label)),
+              title: Text(_destinations[widget.selectedIndex].label),
+            ),
             // Top inset is handled by the AppBar; left/right/bottom insets
             // (gesture bar, cutouts) are respected here.
             body: SafeArea(
@@ -1715,9 +1437,10 @@ class _HomeShellState extends State<_HomeShell>
   }
 }
 
-/// Phone header (preview port, Nov 6): plain styled "EstudyanteGO"
-/// wordmark — bold, emerald gradient lettering, short gradient
-/// underline bar, NO logo mark — plus the notifications bell.
+/// Phone header (Minecraft theme, Feature 1): grass gradient
+/// (grass-bright → grass-mid) with a 4px grass-deep bottom border,
+/// white Baloo 2 "EstudyanteGO" wordmark, dirt underline bar, and
+/// the notifications bell. NO logo mark.
 ///
 /// NOTE: there is deliberately NO theme toggle here. The preview's
 /// header theme toggle is preview chrome; the Nov 5 rule keeps the
@@ -1730,16 +1453,8 @@ class _PhoneHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    // Preview wordmark: deep emerald → brand on light; bright
-    // accent → brand on dark, so the wordmark stays readable on the
-    // #0c1410 page instead of sinking into it.
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final wordmarkColors = isDark
-        ? const [_previewAccent, _primary]
-        : const [_deepEmerald, _primary];
     return Container(
-      color: scheme.surface,
+      decoration: MinecraftDecorations.grassHeader,
       padding: const EdgeInsets.fromLTRB(20, 12, 8, 10),
       child: Row(
         children: [
@@ -1748,42 +1463,44 @@ class _PhoneHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                ShaderMask(
-                  shaderCallback: (bounds) => LinearGradient(
-                    colors: wordmarkColors,
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ).createShader(bounds),
-                  child: const Text(
-                    'EstudyanteGO',
-                    style: TextStyle(
-                      fontFamily: 'PlusJakartaSans',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
+                Text(
+                  'EstudyanteGO',
+                  style: MinecraftText.heading(
+                    color: Colors.white,
+                    fontSize: 22,
+                  ).copyWith(letterSpacing: -0.5),
                 ),
                 const SizedBox(height: 4),
                 Container(
                   width: 48,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: wordmarkColors,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: MinecraftColors.dirtBrown,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: MinecraftColors.dirtDark,
+                        width: 2,
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ],
             ),
           ),
-          IconButton(
-            key: const Key('header-notifications'),
-            icon: const Icon(Icons.notifications_outlined),
-            tooltip: 'Notifications',
-            onPressed: onBell,
+          // Feature 6: the notification bell plays bell. The
+          // wrapper only observes the pointer; the IconButton
+          // still owns the tap.
+          MinecraftTapAnimation(
+            sound: MinecraftSoundKind.bell,
+            child: IconButton(
+              key: const Key('header-notifications'),
+              icon: const Icon(
+                Icons.notifications_outlined,
+                color: Colors.white,
+              ),
+              tooltip: 'Notifications',
+              onPressed: onBell,
+            ),
           ),
         ],
       ),
@@ -1880,7 +1597,14 @@ class _SidebarState extends State<_Sidebar>
             child: Container(
               decoration: BoxDecoration(
                 color: scheme.surface,
-                border: Border(right: BorderSide(color: scheme.outline)),
+                border: Border(
+                  right: BorderSide(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? scheme.outline
+                        : MinecraftColors.border,
+                    width: 3,
+                  ),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1908,13 +1632,13 @@ class _SidebarState extends State<_Sidebar>
                         children: [
                           const _LogoMark(),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Text(
                               'EstudyanteGO',
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                              style: MinecraftText.heading(
+                                color: Theme.of(context).colorScheme.onSurface,
                                 fontSize: 18,
-                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1971,35 +1695,49 @@ class _SidebarState extends State<_Sidebar>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Material(
         key: Key('sidebar-item-${destination.label}'),
-        color: selected ? _primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(MinecraftShapes.buttonRadius),
           onTap: onTap,
-          child: SizedBox(
-            height: 56,
-            child: Row(
-              children: [
-                const SizedBox(width: 12),
-                Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  size: 24,
-                  color: selected ? Colors.white : muted,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    destination.label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected ? Colors.white : muted,
+          // Feature 5: tap squash + ring/bits. The wrapper only
+          // observes the pointer; the InkWell still owns the tap.
+          // Feature 6: sidebar tabs play pop.
+          child: MinecraftTapAnimation(
+            sound: MinecraftSoundKind.pop,
+            child: Container(
+              height: 56,
+              decoration: selected
+                  ? BoxDecoration(
+                      color: MinecraftColors.grassGreen,
+                      borderRadius: BorderRadius.circular(
+                        MinecraftShapes.buttonRadius,
+                      ),
+                      border: MinecraftShapes.buttonBorder,
+                      boxShadow: const [MinecraftShapes.hardShadow],
+                    )
+                  : null,
+              child: Row(
+                children: [
+                  const SizedBox(width: 12),
+                  Icon(
+                    selected ? destination.selectedIcon : destination.icon,
+                    size: 24,
+                    color: selected ? Colors.white : muted,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      destination.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: MinecraftText.button(
+                        color: selected ? Colors.white : muted,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-              ],
+                  const SizedBox(width: 12),
+                ],
+              ),
             ),
           ),
         ),
@@ -2020,18 +1758,32 @@ class _SidebarState extends State<_Sidebar>
           message: destination.label,
           child: Material(
             key: Key('sidebar-item-${destination.label}'),
-            color: selected ? _primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
+            color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(MinecraftShapes.buttonRadius),
               onTap: onTap,
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  size: 24,
-                  color: selected ? Colors.white : muted,
+              // Feature 5: tap squash + ring/bits. The wrapper
+              // only observes the pointer; the InkWell still owns
+              // the tap. Feature 6: sidebar tabs play pop.
+              child: MinecraftTapAnimation(
+                sound: MinecraftSoundKind.pop,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: selected
+                      ? BoxDecoration(
+                          color: MinecraftColors.grassGreen,
+                          borderRadius: BorderRadius.circular(
+                            MinecraftShapes.buttonRadius,
+                          ),
+                          border: MinecraftShapes.buttonBorder,
+                        )
+                      : null,
+                  child: Icon(
+                    selected ? destination.selectedIcon : destination.icon,
+                    size: 24,
+                    color: selected ? Colors.white : muted,
+                  ),
                 ),
               ),
             ),
@@ -2042,7 +1794,8 @@ class _SidebarState extends State<_Sidebar>
   }
 }
 
-/// Small branded mark: emerald rounded square with a bus icon.
+/// Small branded mark: grass block (grass green, 3px ink border)
+/// with a bus icon — the Minecraft logo block.
 class _LogoMark extends StatelessWidget {
   const _LogoMark();
 
@@ -2052,8 +1805,9 @@ class _LogoMark extends StatelessWidget {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: _primary,
+        color: MinecraftColors.grassGreen,
         borderRadius: BorderRadius.circular(10),
+        border: MinecraftShapes.buttonBorder,
       ),
       child: const Icon(Icons.directions_bus, color: Colors.white, size: 22),
     );

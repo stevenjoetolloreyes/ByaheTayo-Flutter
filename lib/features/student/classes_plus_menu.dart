@@ -17,16 +17,20 @@
 // here shows/hides instantly.
 import 'package:flutter/material.dart';
 
+import '../minecraft_tap_animation.dart';
+import '../minecraft_theme.dart';
+import '../onboarding/splash_sound.dart';
+
 /// The three destinations of the Classes "+" menu, in menu order.
 enum ClassesPlusOption { manual, files, google }
 
 /// Floating "+" menu for the Classes & Timetable screen.
 ///
-/// Dark emerald style (bg #0c1410, brand #16A34A), Material icons,
-/// English labels. The parent positions this widget above the round
-/// + button and drives [animation]; tapping an option invokes its
-/// hook (if provided) and then [onDismiss] so the parent can close
-/// the menu.
+/// Minecraft blocky style (white / dark card, 3px ink border, hard
+/// shadow, grass icon badges, Baloo 2 labels). The parent positions
+/// this widget above the round + button and drives [animation];
+/// tapping an option invokes its hook (if provided) and then
+/// [onDismiss] so the parent can close the menu.
 class ClassesPlusMenu extends StatelessWidget {
   const ClassesPlusMenu({
     super.key,
@@ -114,18 +118,14 @@ class ClassesPlusMenu extends StatelessWidget {
                 child: Container(
                   key: const Key('classes-plus-menu'),
                   width: 248,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0C1410),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black54,
-                        blurRadius: 16,
-                        offset: Offset(0, 8),
+                  decoration:
+                      MinecraftDecorations.blockCardFor(
+                        Theme.of(context).brightness,
+                      ).copyWith(
+                        borderRadius: BorderRadius.circular(
+                          MinecraftShapes.panelRadius,
+                        ),
                       ),
-                    ],
-                  ),
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -176,23 +176,34 @@ class _PlusMenuRow extends StatelessWidget {
           key: option.key,
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(option.icon, color: const Color(0xFF16A34A), size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    option.label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+          // Feature 5: tap squash + ring/bits. The wrapper only
+          // observes the pointer; the InkWell still owns the tap.
+          // Feature 6: picker rows play pop.
+          // The row keeps its own staggered entrance transform —
+          // the squash nests inside it, no double-squash.
+          child: MinecraftTapAnimation(
+            sound: MinecraftSoundKind.pop,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  MinecraftIconBadge(
+                    icon: option.icon,
+                    backgroundColor: MinecraftColors.grassGreen,
+                    size: 36,
+                    iconSize: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      option.label,
+                      style: MinecraftText.button(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

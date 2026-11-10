@@ -12,6 +12,7 @@
 // readable dark accent is #34D399 and the light accent is #059669.
 
 import 'package:flutter/material.dart';
+import '../minecraft_theme.dart';
 import '../onboarding/onboarding_state.dart';
 import '../profile_avatar.dart';
 
@@ -185,12 +186,13 @@ String greetingFor(DateTime now) {
   return 'Good Evening';
 }
 
-/// Dashboard header: emerald gradient banner with the greeting,
-/// title, subtitle, profile photo, and a notification bell.
-/// The bell shows a real unread badge ([unreadNotifications], the
-/// count of unread admin-reply notifications — 0 hides the badge,
-/// so there is never a fake unread dot) and opens the Notifications
-/// sheet.
+/// Dashboard header (Minecraft restyle, Feature 2): grass gradient
+/// banner with a 3px ink border and hard shadow, Baloo 2 greeting,
+/// blocky white-bordered avatar, and the notification bell. The
+/// bell's live unread badge ([unreadNotifications], the count of
+/// unread admin-reply notifications — 0 hides the badge, so there
+/// is never a fake unread dot) and the profile-photo rule below
+/// are unchanged.
 ///
 /// The profile circle shows the EXACT SAME photo the Account Profile
 /// shows: one shared rule (see profile_avatar.dart) — local file →
@@ -217,24 +219,33 @@ Widget studentHeader({
       : displayName.split(RegExp(r'\s+')).first;
   return Container(
     padding: const EdgeInsets.all(20),
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [kStudentEmerald, kStudentEmeraldAccent],
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [MinecraftColors.grassBright, MinecraftColors.grassMid],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
-      borderRadius: BorderRadius.all(Radius.circular(20)),
+      borderRadius:
+          BorderRadius.circular(MinecraftShapes.cardRadius),
+      border: MinecraftShapes.blockBorder,
+      boxShadow: const [MinecraftShapes.cardShadow],
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 26,
-          backgroundColor: Colors.white24,
-          backgroundImage: photoImage,
-          child: hasPhoto
-              ? null
-              : const Icon(Icons.person, color: Colors.white, size: 30),
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+          ),
+          child: CircleAvatar(
+            radius: 26,
+            backgroundColor: Colors.white24,
+            backgroundImage: photoImage,
+            child: hasPhoto
+                ? null
+                : const Icon(Icons.person, color: Colors.white, size: 30),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -243,16 +254,21 @@ Widget studentHeader({
             children: [
               Text(
                 '$greetingName, $firstName!',
-                style: kStudentPageTitle.copyWith(color: Colors.white),
+                style: MinecraftText.heading(
+                  color: Colors.white,
+                  fontSize: 26,
+                ),
               ),
               Text(
                 'Student Hub',
-                style:
-                    kStudentSectionHeading.copyWith(color: Colors.white),
+                style: MinecraftText.title(
+                  color: Colors.white,
+                  fontSize: 20,
+                ),
               ),
-              const Text(
+              Text(
                 'Your school commute, in one place.',
-                style: TextStyle(color: Colors.white70),
+                style: MinecraftText.body(color: Colors.white70),
               ),
             ],
           ),

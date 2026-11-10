@@ -32,6 +32,7 @@ import 'app_layout.dart';
 import 'app_review_notifications.dart';
 import 'credits_repository.dart';
 import 'ios_components.dart';
+import 'minecraft_theme.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'onboarding/splash_sound.dart';
@@ -909,24 +910,21 @@ class _StudentTabState extends State<StudentTab>
                 _headerWithNotifications(now),
               ),
               const SizedBox(height: 16),
-              // Watch demo (Feature 3): manual tour start, dark
-              // emerald, directly below the header. The tour itself
-              // is an overlay — it never changes anything below.
-              // Starting it completes a playing entrance first
-              // (Feature 5) so the tour takes over cleanly.
+              // Watch demo (Feature 3): manual tour start,
+              // Minecraft block button directly below the header.
+              // The tour itself is an overlay — it never changes
+              // anything below. Starting it completes a playing
+              // entrance first (Feature 5) so the tour takes over
+              // cleanly.
               _entranceItem(
                 studentEntranceWatchDemoIndex,
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
+                  child: MinecraftBlockButton(
                     key: const ValueKey('watch-demo-button'),
                     onPressed: _startTour,
-                    icon: const Icon(Icons.play_arrow, size: 20),
-                    label: const Text('Watch demo'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: kStudentEmerald,
-                      foregroundColor: Colors.white,
-                    ),
+                    icon: Icons.play_arrow,
+                    label: 'Watch demo',
                   ),
                 ),
               ),
@@ -1126,24 +1124,35 @@ class _StudentTabState extends State<StudentTab>
     );
   }
 
-  /// Group heading for the preview-port sections (Material 3).
+  /// Group heading (Minecraft restyle, Feature 2): a grass block
+  /// accent + Baloo 2 heading. The titles and order are unchanged.
   Widget _groupHeader(String title) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
         Container(
-          width: 4,
+          width: 12,
           height: 20,
           decoration: BoxDecoration(
-            color: scheme.primary,
-            borderRadius: BorderRadius.circular(2),
+            color: MinecraftColors.grassGreen,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isDark
+                  ? MinecraftColors.darkBorder
+                  : MinecraftColors.border,
+              width: 2.5,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             title,
-            style: kStudentSectionHeading,
+            style: MinecraftText.heading(
+              color: scheme.onSurface,
+              fontSize: 20,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -1151,80 +1160,117 @@ class _StudentTabState extends State<StudentTab>
     );
   }
 
-  /// At-a-glance summary under the greeting hero: today's date
-  /// plus the three live counts — points, free scans, classes
-  /// today. All real data; zero states stay honest.
-  /// [animatedPoints] (Feature 5) overrides the points value
-  /// while the entrance count-up runs — it is always the eased
-  /// 0 -> live balance, never a hardcoded number.
+  /// At-a-glance summary under the greeting hero (Minecraft
+  /// restyle, Feature 2): today's date plus the three live counts
+  /// — points, free scans, classes today — as HUD blocks with
+  /// icons, Baloo 2 values, and grass/dirt accents. All real
+  /// data; zero states stay honest.
+  ///
+  /// No Hearts HUD item: the preview's hearts have no live data
+  /// source in the app, and no level/XP bar either — the real
+  /// progress bars (sign-in cycle, Walking Goal) get the XP-bar
+  /// treatment instead. [animatedPoints] (Feature 5) overrides
+  /// the points value while the entrance count-up runs — it is
+  /// always the eased 0 -> live balance, never a hardcoded number.
   Widget _atAGlanceWidget(
     BuildContext context,
     DateTime now, {
     int? animatedPoints,
   }) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final points = animatedPoints ?? widget.walletController?.balance ?? 0;
     final freeScans =
         widget.creditsController?.scanCounter.freeRemaining ??
             freeScansPerDay;
     final classesToday = classesOnDay(_subjects, now.weekday).length;
 
-    Widget stat(String label, String value, {Key? valueKey}) {
+    Widget hudStat({
+      required IconData icon,
+      required Color iconColor,
+      required String value,
+      required String label,
+      Key? valueKey,
+    }) {
       return Expanded(
-        child: Column(
-          children: [
-            Text(
-              value,
-              key: valueKey,
-              style: AppText.bodyStrong.copyWith(color: scheme.primary),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: AppText.small.copyWith(color: scheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          decoration: MinecraftDecorations.blockCardFor(
+            Theme.of(context).brightness,
+            color: isDark
+                ? MinecraftColors.darkElevated
+                : MinecraftColors.cream,
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: iconColor, size: 22),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                key: valueKey,
+                style: MinecraftText.heading(
+                  color: scheme.onSurface,
+                  fontSize: 20,
+                ),
+              ),
+              Text(
+                label,
+                style: MinecraftText.caption(
+                  color: scheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: AppLayout.cardPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${weekdayName(now.weekday)}, ${monthName(now.month)} ${now.day}, ${now.year}',
+          style: MinecraftText.bodySemiBold(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s8),
+        Row(
           children: [
-            Text(
-              '${weekdayName(now.weekday)}, ${monthName(now.month)} ${now.day}, ${now.year}',
-              style: AppText.caption.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
+            hudStat(
+              icon: Icons.diamond_rounded,
+              iconColor: MinecraftColors.emerald,
+              value: '$points',
+              label: 'Points',
+              valueKey: const ValueKey('at-a-glance-points'),
             ),
-            const SizedBox(height: AppSpacing.s8),
-            Row(
-              children: [
-                stat(
-                  'Points',
-                  '$points',
-                  valueKey: const ValueKey('at-a-glance-points'),
-                ),
-                stat('Free scans', '$freeScans/$freeScansPerDay'),
-                stat(
-                  'Classes today',
-                  '$classesToday',
-                ),
-              ],
+            const SizedBox(width: 8),
+            hudStat(
+              icon: Icons.qr_code_scanner_rounded,
+              iconColor: MinecraftColors.skyBlue,
+              value: '$freeScans/$freeScansPerDay',
+              label: 'Free scans',
+            ),
+            const SizedBox(width: 8),
+            hudStat(
+              icon: Icons.school_rounded,
+              iconColor: MinecraftColors.goldDark,
+              value: '$classesToday',
+              label: 'Classes today',
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 
   // ------------------------------------------------------------ shell
 
+  /// Shared hub-card shell (Minecraft restyle, Feature 2): blocky
+  /// card, grass icon badge, Baloo 2 title. Tap behaviour is
+  /// unchanged — only the header is tappable when [onOpen] is set.
   Widget _widgetCard(
     BuildContext context, {
     required IconData icon,
@@ -1237,20 +1283,23 @@ class _StudentTabState extends State<StudentTab>
     final scheme = Theme.of(context).colorScheme;
     final header = Row(
       children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: scheme.primary.withValues(alpha: 0.12),
-          child: Icon(icon, color: scheme.primary, size: 20),
-        ),
+        MinecraftIconBadge(icon: icon),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: kStudentCardHeading),
+              Text(
+                title,
+                style: MinecraftText.title(color: scheme.onSurface),
+              ),
               if (subtitle != null)
-                Text(subtitle,
-                    style: AppText.caption.copyWith(color: scheme.onSurfaceVariant)),
+                Text(
+                  subtitle,
+                  style: MinecraftText.caption(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
             ],
           ),
         ),
@@ -1258,24 +1307,22 @@ class _StudentTabState extends State<StudentTab>
         if (onOpen != null) const Icon(Icons.chevron_right),
       ],
     );
-    return Card(
-      child: Padding(
-        padding: AppLayout.cardPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (onOpen == null)
-              header
-            else
-              InkWell(
-                onTap: onOpen,
-                borderRadius: BorderRadius.circular(14),
-                child: header,
-              ),
-            const SizedBox(height: AppLayout.cardGap),
-            ...children,
-          ],
-        ),
+    return MinecraftCard(
+      padding: AppLayout.cardPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (onOpen == null)
+            header
+          else
+            InkWell(
+              onTap: onOpen,
+              borderRadius: BorderRadius.circular(14),
+              child: header,
+            ),
+          const SizedBox(height: AppLayout.cardGap),
+          ...children,
+        ],
       ),
     );
   }
@@ -1357,6 +1404,11 @@ class _StudentTabState extends State<StudentTab>
     // theme, but these inner accents are hardcoded light pastels —
     // they get dark tints here so the card reads as one dark card.
     // Light mode keeps the exact approved values below.
+    // (Minecraft restyle, Feature 2: the card shell, header badge,
+    // progress bar, and stat tiles go blocky; the day tiles keep
+    // their EXACT approved colors — only geometry + label font
+    // change — so the state still reads the same in both modes.
+    // Stat values keep the approved `emphasis` color.)
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tileGreen = isDark
         ? kStudentEmeraldAccent.withValues(alpha: 0.18)
@@ -1370,90 +1422,98 @@ class _StudentTabState extends State<StudentTab>
     final emphasis = isDark ? kStudentDarkAccent : kStudentEmerald;
     final divider = isDark ? kStudentDarkBorder : kStudentBorder;
     final muted = isDark ? kStudentDarkSubtext : kStudentSubtext;
-    return Card(
+    final scheme = Theme.of(context).colorScheme;
+    return MinecraftCard(
       key: const ValueKey('signin-hub-card'),
-      child: InkWell(
-        onTap: () => _open(SigninScreen(
-          userId: widget.user?.uid,
-          walletController: widget.walletController,
-          onViewWallet: widget.onViewAccount,
-          adService: widget.adService,
-        )),
-        borderRadius: BorderRadius.circular(kStudentCardRadius),
-        child: Padding(
-          padding: AppLayout.cardPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: () => _open(SigninScreen(
+        userId: widget.user?.uid,
+        walletController: widget.walletController,
+        onViewWallet: widget.onViewAccount,
+        adService: widget.adService,
+      )),
+      padding: AppLayout.cardPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: tileGreen,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.calendar_month_rounded,
-                        color: kStudentEmeraldAccent, size: 26),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('7-Day Sign-in',
-                            style: kStudentCardHeading),
-                        Text('Build your study habit and earn rewards!',
-                            style: AppText.caption),
-                      ],
-                    ),
-                  ),
-                  // Feature 5: the streak badge pops in with the
-                  // entrance (spring scale 0.6 -> 1); static
-                  // arrivals render it at full size (streakPop 1).
-                  Transform.scale(
-                    scale: 0.6 + 0.4 * streakPop.clamp(0.0, 1.0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: tileGreen,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.local_fire_department_rounded,
-                              color: kStudentEmeraldAccent, size: 16),
-                          const SizedBox(width: 4),
-                          Text('Day $todayDay of 7',
-                              style: AppText.smallBold
-                                  .copyWith(color: emphasis)),
-                        ],
+              const MinecraftIconBadge(
+                icon: Icons.calendar_month_rounded,
+                iconSize: 26,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '7-Day Sign-in',
+                      style: MinecraftText.title(
+                        color: scheme.onSurface,
                       ),
                     ),
+                    Text(
+                      'Build your study habit and earn rewards!',
+                      style: MinecraftText.caption(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Feature 5: the streak badge pops in with the
+              // entrance (spring scale 0.6 -> 1); static
+              // arrivals render it at full size (streakPop 1).
+              Transform.scale(
+                scale: 0.6 + 0.4 * streakPop.clamp(0.0, 1.0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: tileGreen,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? MinecraftColors.darkBorder
+                          : MinecraftColors.border,
+                      width: MinecraftShapes.chipBorderWidth,
+                    ),
                   ),
-                ],
-              ),
-              const SizedBox(height: AppLayout.cardGap),
-              SigninDayTiles(
-                checkedCells: checkedCells,
-                currentDay: todayDay,
-                checkedToday: checkedToday,
-              ),
-              const SizedBox(height: AppSpacing.s8),
-              Row(
-                children: [
-                  Expanded(
-                    child: AnimatedSigninProgressBar(
-                        value: checkedCells / 7),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.local_fire_department_rounded,
+                          color: kStudentEmeraldAccent, size: 16),
+                      const SizedBox(width: 4),
+                      Text('Day $todayDay of 7',
+                          style: MinecraftText.button(
+                            color: emphasis,
+                            fontSize: 13,
+                          )),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text('$checkedCells / 7 Days',
-                      style: AppText.smallBold
-                          .copyWith(color: emphasis)),
-                ],
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: AppLayout.cardGap),
+          SigninDayTiles(
+            checkedCells: checkedCells,
+            currentDay: todayDay,
+            checkedToday: checkedToday,
+            minecraft: true,
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          Row(
+            children: [
+              Expanded(
+                child: MinecraftXpBar(value: checkedCells / 7),
+              ),
+              const SizedBox(width: 8),
+              Text('$checkedCells / 7 Days',
+                  style: MinecraftText.button(color: emphasis)),
+            ],
+          ),
               const SizedBox(height: AppLayout.cardGap),
               Row(
                 children: [
@@ -1501,13 +1561,13 @@ class _StudentTabState extends State<StudentTab>
               ),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 
   /// One Hub-card stat: icon tile + label above value, as in the
-  /// approved preview.
+  /// approved preview. (Minecraft restyle, Feature 2: the icon
+  /// tile gets a 2.5px border and the label/value go Baloo 2 /
+  /// Nunito; the approved colors are unchanged.)
   Widget _signinStat({
     required IconData icon,
     required Color iconBg,
@@ -1517,6 +1577,8 @@ class _StudentTabState extends State<StudentTab>
     required Color valueColor,
     Widget? trailing,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
@@ -1524,6 +1586,12 @@ class _StudentTabState extends State<StudentTab>
           decoration: BoxDecoration(
             color: iconBg,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark
+                  ? MinecraftColors.darkBorder
+                  : MinecraftColors.border,
+              width: MinecraftShapes.chipBorderWidth,
+            ),
           ),
           child: Icon(icon, color: iconColor, size: 20),
         ),
@@ -1532,10 +1600,16 @@ class _StudentTabState extends State<StudentTab>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: AppText.caption),
-              Text(value,
-                  style: AppText.smallBold
-                      .copyWith(color: valueColor)),
+              Text(
+                label,
+                style: MinecraftText.caption(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                value,
+                style: MinecraftText.button(color: valueColor),
+              ),
             ],
           ),
         ),
@@ -1546,53 +1620,76 @@ class _StudentTabState extends State<StudentTab>
 
   // -------------------------------------------------------------- bible
 
+  /// Bible Verse card (Minecraft restyle, Feature 2): grass
+  /// gradient with a 3px ink border and hard shadow, Baloo 2
+  /// title, white ref chip with an ink border. Text and tap are
+  /// unchanged.
   Widget _bibleWidget(BuildContext context) {
     final daily = verseOfDay(DateTime.now());
-    return Card(
+    return Container(
       key: const ValueKey('bible-hub-card'),
-      child: InkWell(
-        onTap: () => _open(const BibleScreen()),
-        borderRadius: BorderRadius.circular(kStudentCardRadius),
-        child: Container(
-          padding: AppLayout.cardPadding,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [kStudentEmerald, kStudentEmeraldAccent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.all(
-                Radius.circular(kStudentCardRadius)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.menu_book_outlined, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Bible Verse',
-                      style: kStudentCardHeading.copyWith(
-                          color: Colors.white)),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.s8),
-              Text(
-                '"${daily.text}"',
-                style: AppText.body.copyWith(fontStyle: FontStyle.italic, color: Colors.white),
-              ),
-              const SizedBox(height: AppSpacing.s8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [MinecraftColors.grassBright, MinecraftColors.grassMid],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius:
+            BorderRadius.circular(MinecraftShapes.cardRadius),
+        border: MinecraftShapes.blockBorder,
+        boxShadow: const [MinecraftShapes.cardShadow],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.circular(MinecraftShapes.cardRadius),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _open(const BibleScreen()),
+          child: Padding(
+            padding: AppLayout.cardPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.menu_book_outlined,
+                        color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text('Bible Verse',
+                        style: MinecraftText.title(color: Colors.white)),
+                  ],
                 ),
-                child: Text('${daily.ref} (KJV)',
-                    style: AppText.smallBold.copyWith(color: kStudentEmerald)),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.s8),
+                Text(
+                  '"${daily.text}"',
+                  style: MinecraftText.body(color: Colors.white)
+                      .copyWith(fontStyle: FontStyle.italic),
+                ),
+                const SizedBox(height: AppSpacing.s8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: MinecraftColors.border,
+                      width: MinecraftShapes.chipBorderWidth,
+                    ),
+                  ),
+                  child: Text(
+                    '${daily.ref} (KJV)',
+                    style: MinecraftText.button(
+                      color: MinecraftColors.deepLeaves,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1641,6 +1738,10 @@ class _StudentTabState extends State<StudentTab>
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: color,
+              width: MinecraftShapes.chipBorderWidth,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1649,13 +1750,21 @@ class _StudentTabState extends State<StudentTab>
                 children: [
                   Icon(icon, size: 16, color: color),
                   const SizedBox(width: 4),
-                  Expanded(child: Text(label, style: AppText.small)),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: MinecraftText.caption(
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 2),
-              Text(value,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, color: color)),
+              Text(
+                value,
+                style: MinecraftText.button(color: color),
+              ),
             ],
           ),
         ),
@@ -1679,11 +1788,14 @@ class _StudentTabState extends State<StudentTab>
             height: 10,
             decoration: BoxDecoration(
               color: color,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(width: 6),
-          Text('$label ${peso(value)}', style: AppText.small),
+          Text(
+            '$label ${peso(value)}',
+            style: MinecraftText.caption(color: scheme.onSurface),
+          ),
         ],
       );
     }
@@ -1705,13 +1817,20 @@ class _StudentTabState extends State<StudentTab>
       children: [
         Container(
           padding: AppLayout.cardPadding,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [kStudentEmerald, kStudentEmeraldAccent],
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                MinecraftColors.grassBright,
+                MinecraftColors.grassMid,
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.circular(
+              MinecraftShapes.buttonRadius,
+            ),
+            border: MinecraftShapes.blockBorder,
+            boxShadow: const [MinecraftShapes.cardShadow],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1722,12 +1841,18 @@ class _StudentTabState extends State<StudentTab>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Available Balance',
-                            style: TextStyle(color: Colors.white70)),
+                        Text(
+                          'Available Balance',
+                          style: MinecraftText.body(
+                            color: Colors.white70,
+                          ),
+                        ),
                         Text(
                           _hideBalance ? '₱••••' : peso(balance),
-                          style: AppText.displaySmall
-                              .copyWith(color: Colors.white),
+                          style: MinecraftText.heading(
+                            color: Colors.white,
+                            fontSize: 26,
+                          ),
                         ),
                       ],
                     ),
@@ -1735,15 +1860,21 @@ class _StudentTabState extends State<StudentTab>
                   if (_budgets.isEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 2,
+                        ),
                       ),
                       child: Text(
                         'No budgets set',
-                        style: AppText.smallBold
-                            .copyWith(color: Colors.white),
+                        style: MinecraftText.button(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   IconButton(
@@ -1760,40 +1891,46 @@ class _StudentTabState extends State<StudentTab>
               const SizedBox(height: AppSpacing.s4),
               Text(
                 'Income ${peso(totalIncome)} · Expenses ${peso(totalExpense)}',
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: MinecraftText.caption(color: Colors.white70),
               ),
             ],
           ),
         ),
         const SizedBox(height: AppLayout.cardGap),
-        const Text('Income vs Expenses',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          'Income vs Expenses',
+          style: MinecraftText.title(color: scheme.onSurface),
+        ),
         const SizedBox(height: AppSpacing.s4),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                height: 10,
-                color: scheme.outline.withValues(alpha: 0.5),
-                child: Row(
-                  children: [
-                    if (incomeShare > 0)
-                      Container(
-                        width: width * incomeShare,
-                        color: scheme.secondary,
+        // Flex segments (not absolute widths): the shares always
+        // fill the track exactly, whatever the card width is.
+        Container(
+          height: 14,
+          decoration: MinecraftDecorations.xpBarTrack,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: Row(
+                children: [
+                  if (incomeShare > 0)
+                    Expanded(
+                      flex: (incomeShare * 1000).round().clamp(1, 1000),
+                      child: Container(
+                        color: MinecraftColors.grassGreen,
                       ),
-                    if (expenseShare > 0)
-                      Container(
-                        width: width * expenseShare,
-                        color: kStudentError,
+                    ),
+                  if (expenseShare > 0)
+                    Expanded(
+                      flex: (expenseShare * 1000).round().clamp(1, 1000),
+                      child: Container(
+                        color: MinecraftColors.heartRed,
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
-            );
-          },
+            ),
+          ),
         ),
         const SizedBox(height: AppSpacing.s4),
         Wrap(
@@ -1831,8 +1968,10 @@ class _StudentTabState extends State<StudentTab>
           ],
         ),
         const SizedBox(height: AppLayout.cardGap),
-        const Text('Monthly Spending (Last 6 Months)',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          'Monthly Spending (Last 6 Months)',
+          style: MinecraftText.title(color: scheme.onSurface),
+        ),
         const SizedBox(height: AppSpacing.s4),
         Container(
           padding: const EdgeInsets.all(12),
@@ -1849,8 +1988,10 @@ class _StudentTabState extends State<StudentTab>
           ),
         ),
         const SizedBox(height: AppSpacing.s8),
-        const Text('Budget Utilization',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          'Budget Utilization',
+          style: MinecraftText.title(color: scheme.onSurface),
+        ),
         const SizedBox(height: AppSpacing.s4),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1897,6 +2038,7 @@ class _StudentTabState extends State<StudentTab>
                         )),
                     const SizedBox(height: AppSpacing.s8),
                     FilledButton(
+                      style: minecraftBlockButtonStyle(),
                       onPressed: () => _open(const AllowanceScreen()),
                       child: const Text('Set limit'),
                     ),
@@ -1922,7 +2064,7 @@ class _StudentTabState extends State<StudentTab>
                               Text(
                                   '${b.category}: ${peso(spent)} of ${peso(b.limit)}'),
                               const SizedBox(height: AppSpacing.s2),
-                              LinearProgressIndicator(
+                              MinecraftXpBar(
                                 value: b.limit > 0
                                     ? (spent / b.limit).clamp(0, 1).toDouble()
                                     : 0,
@@ -1938,8 +2080,10 @@ class _StudentTabState extends State<StudentTab>
           ],
         ),
         const SizedBox(height: AppSpacing.s8),
-        const Text('Savings Progress',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          'Savings Progress',
+          style: MinecraftText.title(color: scheme.onSurface),
+        ),
         if (_goals.isEmpty) ...[
           const Text('No savings goals yet.'),
           Text(
@@ -1948,12 +2092,10 @@ class _StudentTabState extends State<StudentTab>
                 .copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: AppSpacing.s2),
-          LinearProgressIndicator(
-            value: 0,
-            backgroundColor: scheme.outline.withValues(alpha: 0.5),
-          ),
+          const MinecraftXpBar(value: 0),
           const SizedBox(height: AppSpacing.s8),
           FilledButton(
+            style: minecraftBlockButtonStyle(),
             onPressed: () => _open(const AllowanceScreen()),
             child: const Text('New goal'),
           ),
@@ -1971,7 +2113,7 @@ class _StudentTabState extends State<StudentTab>
                 children: [
                   Text('${g.name}: ${peso(g.saved)} of ${peso(g.target)}'),
                   const SizedBox(height: AppSpacing.s2),
-                  LinearProgressIndicator(
+                  MinecraftXpBar(
                     value: g.target > 0
                         ? (g.saved / g.target).clamp(0, 1).toDouble()
                         : 0,
@@ -1981,21 +2123,21 @@ class _StudentTabState extends State<StudentTab>
             ),
         ],
         const SizedBox(height: AppSpacing.s8),
-        const Text('Recent Transactions',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          'Recent Transactions',
+          style: MinecraftText.title(color: scheme.onSurface),
+        ),
         if (recent.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 16,
+                MinecraftIconBadge(
+                  icon: Icons.receipt_long_outlined,
                   backgroundColor: scheme.primary.withValues(alpha: 0.12),
-                  child: Icon(
-                    Icons.receipt_long_outlined,
-                    color: scheme.primary,
-                    size: 18,
-                  ),
+                  iconColor: scheme.primary,
+                  size: 32,
+                  iconSize: 18,
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -2021,15 +2163,13 @@ class _StudentTabState extends State<StudentTab>
                 padding: const EdgeInsets.only(top: 6),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 16,
+                    MinecraftIconBadge(
+                      icon: allowanceTxnIcon(t),
                       backgroundColor:
                           scheme.primary.withValues(alpha: 0.12),
-                      child: Icon(
-                        allowanceTxnIcon(t),
-                        color: scheme.primary,
-                        size: 18,
-                      ),
+                      iconColor: scheme.primary,
+                      size: 32,
+                      iconSize: 18,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -2180,93 +2320,99 @@ class _StudentTabState extends State<StudentTab>
     // segmented control and the ClassWeekGrid below are NOT
     // redesigned — they are the circled calendar region Steven
     // asked to keep ("eto wag galawin").
-    return Card(
-      child: Padding(
-        padding: AppLayout.cardPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: () => _open(const ClassesScreen()),
-              borderRadius: BorderRadius.circular(14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: scheme.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.calendar_month_outlined,
-                      color: scheme.primary,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Classes & Timetable',
-                          style: kStudentCardHeading,
+    // (Minecraft restyle, Feature 2: blocky card shell, grass
+    // icon badge, Baloo 2 title, blocky Total Subjects chip and
+    // next-class banner. The grid, segmented control, and
+    // timetable rows are untouched.)
+    return MinecraftCard(
+      padding: AppLayout.cardPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => _open(const ClassesScreen()),
+            borderRadius: BorderRadius.circular(14),
+            child: Row(
+              children: [
+                const MinecraftIconBadge(
+                  icon: Icons.calendar_month_outlined,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Classes & Timetable',
+                        style: MinecraftText.title(
+                          color: scheme.onSurface,
                         ),
-                        Text(
-                          'Your schedule at a glance.',
-                          style: AppText.caption.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                      ),
+                      Text(
+                        'Your schedule at a glance.',
+                        style: MinecraftText.caption(
+                          color: scheme.onSurfaceVariant,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const Icon(Icons.chevron_right),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppLayout.cardGap),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.s12),
-              decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.school_outlined,
-                    color: scheme.primary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: AppSpacing.s8),
-                  const Expanded(child: Text('Total Subjects')),
-                  Text(
-                    '${_subjects.length}',
-                    key: const ValueKey('total-subjects-count'),
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: scheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s4),
-            IosSegmentedControl<String>(
-              segments: const [
-                IosSegment(value: 'today', label: 'Today'),
-                IosSegment(value: 'week', label: 'This Week'),
+                ),
+                const Icon(Icons.chevron_right),
               ],
-              groupValue: _classesTab,
-              onValueChanged: (value) => setState(() => _classesTab = value),
             ),
-            const SizedBox(height: AppSpacing.s8),
-            tabBody,
-          ],
-        ),
+          ),
+          const SizedBox(height: AppLayout.cardGap),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.s12),
+            decoration: BoxDecoration(
+              color: MinecraftColors.grassGreen.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? MinecraftColors.darkBorder
+                    : MinecraftColors.border,
+                width: MinecraftShapes.chipBorderWidth,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.school_outlined,
+                  color: scheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: AppSpacing.s8),
+                Expanded(
+                  child: Text(
+                    'Total Subjects',
+                    style: MinecraftText.bodySemiBold(
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${_subjects.length}',
+                  key: const ValueKey('total-subjects-count'),
+                  style: MinecraftText.heading(
+                    color: scheme.primary,
+                    fontSize: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s4),
+          IosSegmentedControl<String>(
+            segments: const [
+              IosSegment(value: 'today', label: 'Today'),
+              IosSegment(value: 'week', label: 'This Week'),
+            ],
+            groupValue: _classesTab,
+            onValueChanged: (value) => setState(() => _classesTab = value),
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          tabBody,
+        ],
       ),
     );
   }
@@ -2352,15 +2498,18 @@ class _StudentTabState extends State<StudentTab>
     );
   }
 
-  /// Next-class banner (Today view): emerald-tinted, schedule icon,
-  /// "NEXT CLASS" micro label + subject · day time in bold. Same
-  /// data as the old plain row — name, weekday, start time — plus
-  /// the room · teacher line when either exists.
+  /// Next-class banner (Today view): flat blocky card (Minecraft
+  /// restyle, Feature 2) — cream block with a 3px border, a gold
+  /// schedule badge, a pixel "NEXT CLASS" label, and the subject ·
+  /// day time in Baloo 2. Same data as the old plain row — name,
+  /// weekday, start time — plus the room · teacher line when
+  /// either exists.
   Widget _nextClassBanner(
     BuildContext context,
     ({Subject subject, DateTime date}) next,
   ) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final details = [
       if (next.subject.room.isNotEmpty) next.subject.room,
       if (next.subject.teacher.isNotEmpty) next.subject.teacher,
@@ -2368,17 +2517,21 @@ class _StudentTabState extends State<StudentTab>
     return Container(
       key: const ValueKey('next-class-banner'),
       padding: const EdgeInsets.all(AppSpacing.s12),
-      decoration: BoxDecoration(
-        color: scheme.primary.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
+      decoration: MinecraftDecorations.blockCardFor(
+        Theme.of(context).brightness,
+        color: isDark
+            ? MinecraftColors.darkElevated
+            : MinecraftColors.cream,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.schedule_outlined,
-            color: scheme.primary,
-            size: 20,
+          const MinecraftIconBadge(
+            icon: Icons.schedule_outlined,
+            backgroundColor: MinecraftColors.gold,
+            iconColor: MinecraftColors.ink,
+            size: 36,
+            iconSize: 20,
           ),
           const SizedBox(width: AppSpacing.s8),
           Expanded(
@@ -2387,19 +2540,20 @@ class _StudentTabState extends State<StudentTab>
               children: [
                 Text(
                   'NEXT CLASS',
-                  style: AppText.micro.copyWith(
+                  style: MinecraftText.pixel(
                     color: scheme.primary,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   '${next.subject.name} · ${weekdayName(next.date.weekday)} ${formatMinutes(next.subject.startMin)}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: MinecraftText.button(color: scheme.onSurface),
                 ),
                 if (details.isNotEmpty)
                   Text(
                     details,
-                    style: AppText.caption.copyWith(
+                    style: MinecraftText.caption(
                       color: scheme.onSurfaceVariant,
                     ),
                   ),
@@ -2480,6 +2634,7 @@ class _StudentTabState extends State<StudentTab>
           children: [
             Expanded(
               child: OutlinedButton.icon(
+                style: minecraftOutlinedButtonStyle(),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(
                       text: '"${daily.text}" — ${daily.author}'));
@@ -2492,6 +2647,7 @@ class _StudentTabState extends State<StudentTab>
             const SizedBox(width: AppSpacing.s8),
             Expanded(
               child: OutlinedButton.icon(
+                style: minecraftOutlinedButtonStyle(),
                 onPressed: () => shareBoundaryAsImage(
                   boundaryKey: _quoteKey,
                   filename: 'byahetayo-quote.png',
@@ -2566,6 +2722,7 @@ class _StudentTabState extends State<StudentTab>
       custom: _customDays,
       overrides: _overrides,
     );
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final card = _widgetCard(
       context,
@@ -2598,8 +2755,10 @@ class _StudentTabState extends State<StudentTab>
         Row(
           children: [
             Expanded(
-              child: Text('${monthName(month.month)} ${month.year}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(
+                '${monthName(month.month)} ${month.year}',
+                style: MinecraftText.title(color: scheme.onSurface),
+              ),
             ),
             IconButton(
               key: const ValueKey('calendar-prev-month'),
@@ -2623,9 +2782,13 @@ class _StudentTabState extends State<StudentTab>
             for (final d in ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
               Expanded(
                 child: Center(
-                  child: Text(d,
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w700)),
+                  child: Text(
+                    d,
+                    style: MinecraftText.button(
+                      color: scheme.onSurface,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -2668,39 +2831,53 @@ class _StudentTabState extends State<StudentTab>
               child: InkWell(
                 key: ValueKey('calendar-day-$day'),
                 onTap: () => setState(() => _selectedDay = dayDate),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(8),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Google Calendar style: today is a filled
-                    // emerald circle with white text; the tapped
-                    // day gets an emerald ring.
+                    // Minecraft restyle (Feature 2): today is a
+                    // grass-green block with a 3px border and white
+                    // Baloo 2 number; the tapped day gets a grass
+                    // block border instead of the old ring.
                     Container(
                       width: 26,
                       height: 26,
                       alignment: Alignment.center,
                       decoration: isToday
-                          ? const BoxDecoration(
-                              color: kStudentEmerald,
-                              shape: BoxShape.circle,
+                          ? BoxDecoration(
+                              color: MinecraftColors.grassGreen,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isDark
+                                    ? MinecraftColors.darkBorder
+                                    : MinecraftColors.border,
+                                width: 2.5,
+                              ),
                             )
                           : isSelected
                               ? BoxDecoration(
-                                  shape: BoxShape.circle,
+                                  borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                      color: scheme.primary, width: 2),
+                                      color: MinecraftColors.grassGreen,
+                                      width: 2.5),
                                 )
                               : null,
                       child: Text(
                         '$day',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isToday ? Colors.white : dayColor,
-                          fontWeight: isToday ||
-                                  entry?.type == MarkedDayType.holiday
-                              ? FontWeight.w800
-                              : null,
-                        ),
+                        style: isToday
+                            ? MinecraftText.button(
+                                color: Colors.white,
+                                fontSize: 12,
+                              )
+                            : TextStyle(
+                                fontSize: 12,
+                                color: dayColor,
+                                fontWeight: isToday ||
+                                        entry?.type ==
+                                            MarkedDayType.holiday
+                                    ? FontWeight.w800
+                                    : null,
+                              ),
                       ),
                     ),
                     // A fixed 6px slot keeps dotted and undotted
@@ -2782,8 +2959,10 @@ class _StudentTabState extends State<StudentTab>
         // today), below the card, exactly like the preview.
         if (upcoming.isNotEmpty) ...[
           const SizedBox(height: 16),
-          const Text('Coming up — no-school days & events',
-              style: kStudentCardHeading),
+          Text(
+            'Coming up — no-school days & events',
+            style: MinecraftText.title(color: scheme.onSurface),
+          ),
           const SizedBox(height: 8),
           for (final entry in upcoming) _comingUpRow(context, entry),
         ],
@@ -2792,12 +2971,23 @@ class _StudentTabState extends State<StudentTab>
   }
 
   Widget _legendItem(Color color, String label) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.circle, size: 8, color: color),
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
         const SizedBox(width: AppSpacing.s4),
-        Text(label),
+        Text(
+          label,
+          style: MinecraftText.caption(color: scheme.onSurface),
+        ),
       ],
     );
   }
@@ -2832,6 +3022,10 @@ class _StudentTabState extends State<StudentTab>
               color: markedDayTypeColor(entry.type)
                   .withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: markedDayTypeColor(entry.type),
+                width: 2,
+              ),
             ),
             child: Text(
               entry.type.label,

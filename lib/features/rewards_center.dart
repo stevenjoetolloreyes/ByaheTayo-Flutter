@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 
 import 'credits_repository.dart';
 import 'ios_components.dart';
+import 'minecraft_theme.dart';
 
 /// Shared one-button redeem-all flow: confirmation dialog, then the
 /// repository call, then a result dialog. [pointsBalance] is the
@@ -112,76 +113,91 @@ class RewardsCenterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.stars_rounded),
-                SizedBox(width: 8),
-                Text(
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Minecraft restyle (Feature 2 — Student tab): blocky card,
+    // gold star badge, Baloo 2 headings, emerald points / gold
+    // credits. Every value is still the live controller value.
+    return MinecraftCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const MinecraftIconBadge(
+                icon: Icons.stars_rounded,
+                backgroundColor: MinecraftColors.gold,
+                iconColor: MinecraftColors.ink,
+                size: 36,
+                iconSize: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
                   'Rewards Center',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: MinecraftText.title(color: scheme.onSurface),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (!signedIn) ...[
-              const Text(
-                'Sign in to see your points, credits, and '
-                'redemption history.',
-              ),
-            ] else ...[
-              Text(
-                '$pointsBalance points',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${formatMinorUnits(creditsBalanceUnits)} credits',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'AI Scanner free scans left today: '
-                '$scanFreeRemaining/$freeScansPerDay',
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => handleRedeem(
-                  context,
-                  pointsBalance: pointsBalance,
-                  onRedeem: onRedeem,
-                ),
-                child: const Text('Redeem all points'),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Watch Ads & Earn Credits is not available yet: '
-                'ads need an AdMob setup and server verification '
-                'first. No ad is shown here and no credits are '
-                'granted for ads today.',
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          if (!signedIn) ...[
+            Text(
+              'Sign in to see your points, credits, and '
+              'redemption history.',
+              style: MinecraftText.body(color: scheme.onSurface),
+            ),
+          ] else ...[
+            Text(
+              '$pointsBalance points',
+              style: MinecraftText.heading(
+                color: MinecraftColors.emerald,
+                fontSize: 24,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${formatMinorUnits(creditsBalanceUnits)} credits',
+              style: MinecraftText.title(
+                color: isDark
+                    ? MinecraftColors.gold
+                    : MinecraftColors.goldDark,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'AI Scanner free scans left today: '
+              '$scanFreeRemaining/$freeScansPerDay',
+              style: MinecraftText.body(color: scheme.onSurface),
+            ),
             const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: onOpenFullCenter,
-              child: const Text('View full Rewards Center'),
+            FilledButton(
+              style: minecraftBlockButtonStyle(),
+              onPressed: () => handleRedeem(
+                context,
+                pointsBalance: pointsBalance,
+                onRedeem: onRedeem,
+              ),
+              child: const Text('Redeem all points'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Watch Ads & Earn Credits is not available yet: '
+              'ads need an AdMob setup and server verification '
+              'first. No ad is shown here and no credits are '
+              'granted for ads today.',
+              style: MinecraftText.body(color: scheme.onSurface),
             ),
           ],
-        ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            style: minecraftOutlinedButtonStyle(),
+            onPressed: onOpenFullCenter,
+            child: const Text('View full Rewards Center'),
+          ),
+        ],
       ),
     );
   }

@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_layout.dart';
+import '../minecraft_theme.dart';
 import 'student_data.dart';
 import 'student_theme.dart';
 
@@ -37,6 +38,12 @@ const kSigninTrack = Color(0xFFE2E8F0);
 /// [showPoints] adds the per-day reward label under each tile
 /// ("+10 pts", Day 7 "+50 pts") on the Details Page; the Hub card
 /// shows compact "D1".."D7" labels instead.
+///
+/// [minecraft] (Feature 2, Hub card only) restyles the tiles
+/// blocky — 8px corners, a 2.5px border, Baloo 2 labels — while
+/// keeping the EXACT approved tile colors in both modes, so the
+/// state (completed / current / upcoming / Day 7) still reads the
+/// same. The Details Page keeps the default (false).
 class SigninDayTiles extends StatelessWidget {
   const SigninDayTiles({
     super.key,
@@ -44,12 +51,14 @@ class SigninDayTiles extends StatelessWidget {
     required this.currentDay,
     required this.checkedToday,
     this.showPoints = false,
+    this.minecraft = false,
   });
 
   final int checkedCells;
   final int currentDay;
   final bool checkedToday;
   final bool showPoints;
+  final bool minecraft;
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +124,16 @@ class SigninDayTiles extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
       decoration: BoxDecoration(
         color: tileColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius:
+            BorderRadius.circular(minecraft ? 8 : 12),
+        border: minecraft
+            ? Border.all(
+                color: isDark
+                    ? MinecraftColors.darkBorder
+                    : MinecraftColors.border,
+                width: MinecraftShapes.chipBorderWidth,
+              )
+            : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -124,7 +142,9 @@ class SigninDayTiles extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             showPoints ? 'Day $day' : 'D$day',
-            style: AppText.tiny.copyWith(color: labelColor),
+            style: minecraft
+                ? MinecraftText.button(color: labelColor, fontSize: 11)
+                : AppText.tiny.copyWith(color: labelColor),
           ),
           if (showPoints)
             Text(

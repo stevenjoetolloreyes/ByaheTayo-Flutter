@@ -16,9 +16,10 @@
 // System Default option stays selectable in Account settings (the
 // existing settings entry point).
 //
-// Tokens are the spec's exact values. Typography: Inter body +
-// Plus Jakarta Sans headings (preview typography, Nov 7), bundled
-// in assets/fonts — the same fonts the dashboard themes use.
+// Tokens are the spec's exact values. Typography: Nunito body
+// (Minecraft theme, Feature 1 — google_fonts runtime download, no
+// binary font files in the repo); headings keep the shared AppText
+// styles, so this file does not restyle any other screen.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../app_layout.dart';
@@ -51,25 +52,29 @@ class EntryColors {
   /// Text/icon color on top of [primary].
   final Color onPrimary;
 
+  // Minecraft palette (Feature 1): grass-green primary over deep
+  // leaves, paper background, cream secondary surface, heart-red
+  // error. Radii, border widths, and the whole entry flow are
+  // untouched — this is a color + font swap only.
   static const light = EntryColors(
-    primary: Color(0xFF079B61),
-    primaryDark: Color(0xFF067A4D),
-    background: Color(0xFFF8FAFC),
+    primary: Color(0xFF58CC02),
+    primaryDark: Color(0xFF2F7A12),
+    background: Color(0xFFFFFEF7),
     surface: Color(0xFFFFFFFF),
-    secondarySurface: Color(0xFFF1F5F3),
-    primaryText: Color(0xFF17211D),
+    secondarySurface: Color(0xFFFFF8E1),
+    primaryText: Color(0xFF1A2E12),
     secondaryText: Color(0xFF64748B),
     border: Color(0xFFE2E8F0),
-    error: Color(0xFFDC2626),
+    error: Color(0xFFFF4B4B),
     onPrimary: Colors.white,
   );
 
   // Dark tokens follow the preview's dark emerald UI (Nov 7):
-  // #0c1410 page background, brand #16a34a primary with white text
+  // #0c1410 page background, grass-green primary with white text
   // (the preview's button/badge pattern), dark-green surfaces.
   static const dark = EntryColors(
-    primary: Color(0xFF16A34A),
-    primaryDark: Color(0xFF079B61),
+    primary: Color(0xFF58CC02),
+    primaryDark: Color(0xFF2F7A12),
     background: Color(0xFF0C1410),
     surface: Color(0xFF19231F),
     secondarySurface: Color(0xFF202D27),
@@ -121,7 +126,7 @@ ThemeData entryThemeData(Brightness brightness) {
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
-    fontFamily: 'Inter',
+    fontFamily: 'Nunito',
     colorScheme: scheme,
     scaffoldBackgroundColor: colors.background,
     // Rounded inputs, 14dp (spec range 12-16dp).
