@@ -22,16 +22,20 @@
 // hour with no AM/PM reads 7-11 as morning, 12 as noon, 1-6 as
 // afternoon (the usual school-schedule reading).
 //
-// Table-style OCR (added Nov 10, 2026): a Certificate of
-// Registration is a table, so ML Kit reads it fragmented — the
-// subject code/name, the day code, the time range, the room, and
-// the instructor may each land on their own line, or a subject
-// may carry two schedule lines. [parseScheduleText] therefore
-// runs a second pass that groups nearby fragments into class
-// entries: a schedule fragment (a time range, with its day code
-// on the same line or on the line just above it) attaches to the
-// nearest preceding subject (code + name), and room / instructor
-// are read from the fragment's own line or the next line(s).
+// Table-style OCR (added Nov 10, 2026; day-after-time fixed
+// Nov 11, 2026): a Certificate of Registration is a table, so
+// ML Kit reads it fragmented — the subject code/name, the day
+// code, the time range, the room, and the instructor may each
+// land on their own line, or a subject may carry two schedule
+// lines. [parseScheduleText] therefore runs a second pass that
+// groups nearby fragments into class entries: a schedule
+// fragment (a time range, with its day code on the same line
+// before the time, right after the time — "7:30-9:30 am M
+// CC105", the real certificate's format — on the line just
+// above it, or on the line just below it) attaches to the
+// nearest preceding subject (code + name), and room /
+// instructor are read from the fragment's own line or the next
+// line(s).
 // Day codes in schedule fragments: M = Monday, T = Tuesday,
 // W = Wednesday, Th = Thursday, Sat = Saturday, TTh = Tue + Thu
 // (plus MWF / MW / TR and the named days above). A bare
@@ -180,6 +184,58 @@ Set<int> _parseScheduleDays(String segment) {
   return days;
 }
 
+/// Leading day tokens at the start of [text], and the text after
+/// them. Only ever called on text in schedule position — right
+/// after a time range, or a line following a time line — never on
+/// free prose, headers, or subject names. Tokens are read left to
+/// right and stop at the first token that is not a day token, so
+/// "M CC105 A. Supnet" reads Monday and stops at the room code,
+/// and "W.E. Que" can never donate a Wednesday: "W.E." is one
+/// token with periods, not a bare "W", and it sits after the room
+/// code anyway. Per token, in order: (a) a named day (Mon / Tue /
+/// Monday ..., case-insensitive, optional trailing period);
+/// (b) "TTh" (Tue + Thu); (c) "Th" (Thursday); (d) a compact
+/// token of 2-5 letters all in [_compactDayMap] (MWF, MW, TR);
+/// (e) a bare single letter in [_compactDayMap] (M, T, W, R, F,
+/// S, U) — exactly the letter, no trailing period, so an initial
+/// like "M." is never a day. "T Th" as two tokens reads Tue +
+/// Thu, and extra spaces are harmless (whitespace tokenizing).
+({Set<int> days, String rest}) _leadingScheduleDays(String text) {
+  final days = <int>{};
+  var consumedEnd = 0;
+  for (final m in RegExp(r'\S+').allMatches(text)) {
+    final token = m.group(0)!;
+    final lower = token.toLowerCase();
+    final unperioded =
+        lower.endsWith('.') ? lower.substring(0, lower.length - 1) : lower;
+    final named = _dayNames[unperioded];
+    if (named != null) {
+      days.add(named);
+    } else if (lower == 'tth') {
+      days.add(2);
+      days.add(4);
+    } else if (lower == 'th') {
+      days.add(4);
+    } else {
+      final upper = token.toUpperCase();
+      if (upper.length >= 2 &&
+          upper.length <= 5 &&
+          upper.split('').every(_compactDayMap.containsKey)) {
+        for (var i = 0; i < upper.length; i++) {
+          days.add(_compactDayMap[upper[i]]!);
+        }
+      } else if (token.length == 1 &&
+          _compactDayMap.containsKey(upper)) {
+        days.add(_compactDayMap[upper]!);
+      } else {
+        break;
+      }
+    }
+    consumedEnd = m.end;
+  }
+  return (days: days, rest: text.substring(consumedEnd).trim());
+}
+
 /// Earliest index in [text] where a schedule day token (named,
 /// compact, TTh, bare "Th", or a bare single-letter code) or the
 /// time range starts, or null when neither appears. Like
@@ -305,6 +361,54 @@ bool _isRoomTeacherLine(String line) {
   final rest = m.group(2)!.trim();
   final pm = _personNameRe.firstMatch(rest);
   return pm != null && pm.start == 0 && pm.end == rest.length;
+}
+
+/// Room / teacher from up to two lines after [fromIndex] that
+/// look like room / teacher. Stops at a time line, a day-only
+/// line, or a subject line (a bare code after a time range is a
+/// room code — "CC105" — but once the room is set, a bare code
+/// is the next subject, so stop). Consumed lines are added to
+/// [consumed] so the main walk skips them. [rt] is the room /
+/// teacher already read from the time line itself; the lookahead
+/// only fills fields still empty.
+({String room, String teacher}) _roomTeacherLookahead(
+  List<String> lines,
+  int fromIndex,
+  Set<int> consumed,
+  ({String room, String teacher}) rt,
+) {
+  var looked = 0;
+  for (var j = fromIndex; j < lines.length && looked < 2; j++) {
+    final next = lines[j].trim();
+    if (next.isEmpty) continue;
+    if (_timeRangeRe.hasMatch(next)) break;
+    if (_isDayOnlyLine(next)) break;
+    if (_isSubjectWithNameLine(next) && !_isRoomTeacherLine(next)) {
+      break;
+    }
+    if (RegExp('^$_codeRe\$').hasMatch(next)) {
+      // A bare code after a time range is a room code
+      // ("CC105"); once the room is set, a bare code is the
+      // next subject, so stop.
+      if (rt.room.isEmpty) {
+        rt = (room: next, teacher: rt.teacher);
+        consumed.add(j);
+        looked++;
+        continue;
+      }
+      break;
+    }
+    final nextRt = _roomTeacherFromText(next);
+    if (nextRt.room.isEmpty && nextRt.teacher.isEmpty) break;
+    rt = (
+      room: rt.room.isEmpty ? nextRt.room : rt.room,
+      teacher: rt.teacher.isEmpty ? nextRt.teacher : rt.teacher,
+    );
+    consumed.add(j);
+    looked++;
+    if (rt.room.isNotEmpty && rt.teacher.isNotEmpty) break;
+  }
+  return rt;
 }
 
 /// "8:00 AM - 9:30 AM", "8-9:30am", "13:00-14:30", "8:00 to 9:30".
@@ -540,14 +644,19 @@ ScannedClass? _parseLine(String line) {
 /// The walk keeps the nearest preceding subject (code + name,
 /// with name continuations joined) and a pending day code from a
 /// day-only line. A line with a time range becomes a class when
-/// it has days — on its own line before the time, or pending from
-/// the line above — and a subject; room / teacher come from the
-/// same line after the time and from up to two following lines
-/// that look like room / teacher (never a day, time, or subject
-/// line). A subject with two schedule lines yields two entries.
-/// Anything missing a subject, days, or a time range is skipped;
-/// nothing is ever invented from fragments that do not belong
-/// together.
+/// it has days — on its own line before the time, pending from
+/// the line above, or leading right after the time ("7:30-9:30
+/// am M CC105", the real certificate's format) — and a subject;
+/// room / teacher come from the same line after the time and from
+/// up to two following lines that look like room / teacher (never
+/// a day, time, or subject line). A subject with two schedule
+/// lines yields two entries. A time line with no days at all is
+/// kept as a pending time entry and completed only by the
+/// immediately following non-empty line when that line starts
+/// with day tokens ("7:30-9:30 AM" then "M"); any other next
+/// line discards it. Anything missing a subject, days, or a time
+/// range is skipped; nothing is ever invented from fragments
+/// that do not belong together.
 List<ScannedClass> _tableFragmentClasses(String text) {
   final lines = text.split('\n');
   final found = <ScannedClass>[];
@@ -555,6 +664,8 @@ List<ScannedClass> _tableFragmentClasses(String text) {
   ({String name, String code})? currentSubject;
   var awaitingName = false;
   Set<int>? pendingDays;
+  ({String name, String code, int startMin, int endMin, String room,
+      String teacher})? pendingTime;
 
   for (var i = 0; i < lines.length; i++) {
     if (consumed.contains(i)) continue;
@@ -565,12 +676,21 @@ List<ScannedClass> _tableFragmentClasses(String text) {
     final time =
         timeMatch == null ? null : _parseTimeRange(line);
     if (time != null && timeMatch != null) {
-      // Schedule line: days come from the part before the time
-      // (never from after it — that is room / teacher text), or
-      // from a pending day-only line just above.
+      // A new time line supersedes any pending time entry: only
+      // the immediately following line may complete one.
+      pendingTime = null;
+      // Schedule line: days come from the part before the time,
+      // from a pending day-only line just above, or from the
+      // leading day tokens right after the time ("7:30-9:30 am
+      // M CC105"). The after-time read uses only leading tokens
+      // and stops at the room code, so a teacher like "W.E. Que"
+      // can never donate a Wednesday.
       final prefix = line.substring(0, timeMatch.start);
       var days = _parseScheduleDays(prefix);
       if (days.isEmpty) days = pendingDays ?? <int>{};
+      if (days.isEmpty) {
+        days = _leadingScheduleDays(line.substring(timeMatch.end)).days;
+      }
       pendingDays = null;
       awaitingName = false;
 
@@ -596,7 +716,29 @@ List<ScannedClass> _tableFragmentClasses(String text) {
           }
         }
       }
-      if (days.isEmpty) continue;
+      // Room / teacher from the rest of this line (after the
+      // time), whatever the days turn out to be.
+      final rtSameLine =
+          _roomTeacherFromText(line.substring(timeMatch.end));
+      if (days.isEmpty) {
+        // No days from any source: keep the time as a pending
+        // entry when a subject exists, to be completed only by
+        // the immediately following non-empty line starting
+        // with day tokens. Otherwise skip it, never guess.
+        if (subject != null &&
+            (subject.name.isNotEmpty || subject.code.isNotEmpty)) {
+          pendingTime = (
+            name:
+                subject.name.isEmpty ? subject.code : subject.name,
+            code: subject.code,
+            startMin: time.startMin,
+            endMin: time.endMin,
+            room: rtSameLine.room,
+            teacher: rtSameLine.teacher,
+          );
+        }
+        continue;
+      }
       if (subject == null) continue;
       final name =
           subject.name.isEmpty ? subject.code : subject.name;
@@ -604,39 +746,7 @@ List<ScannedClass> _tableFragmentClasses(String text) {
 
       // Room / teacher: the rest of this line, then up to two
       // following lines that look like room / teacher.
-      var rt = _roomTeacherFromText(line.substring(timeMatch.end));
-      var looked = 0;
-      for (var j = i + 1; j < lines.length && looked < 2; j++) {
-        final next = lines[j].trim();
-        if (next.isEmpty) continue;
-        if (_timeRangeRe.hasMatch(next)) break;
-        if (_isDayOnlyLine(next)) break;
-        if (_isSubjectWithNameLine(next) && !_isRoomTeacherLine(next)) {
-          break;
-        }
-        if (RegExp('^$_codeRe\$').hasMatch(next)) {
-          // A bare code after a time range is a room code
-          // ("CC105"); once the room is set, a bare code is the
-          // next subject, so stop.
-          if (rt.room.isEmpty) {
-            rt = (room: next, teacher: rt.teacher);
-            consumed.add(j);
-            looked++;
-            continue;
-          }
-          break;
-        }
-        final nextRt = _roomTeacherFromText(next);
-        if (nextRt.room.isEmpty && nextRt.teacher.isEmpty) break;
-        rt = (
-          room: rt.room.isEmpty ? nextRt.room : rt.room,
-          teacher:
-              rt.teacher.isEmpty ? nextRt.teacher : rt.teacher,
-        );
-        consumed.add(j);
-        looked++;
-        if (rt.room.isNotEmpty && rt.teacher.isNotEmpty) break;
-      }
+      final rt = _roomTeacherLookahead(lines, i + 1, consumed, rtSameLine);
 
       currentSubject = subject;
       found.add(ScannedClass(
@@ -649,6 +759,41 @@ List<ScannedClass> _tableFragmentClasses(String text) {
         endMin: time.endMin,
       ));
       continue;
+    }
+
+    // A pending time entry is completed only by the immediately
+    // following non-empty line, when that line starts with day
+    // tokens ("M", or "M CC105"). Any other line discards the
+    // pending entry and is processed normally below.
+    if (pendingTime != null) {
+      final pending = pendingTime;
+      pendingTime = null;
+      pendingDays = null;
+      awaitingName = false;
+      final leading = _leadingScheduleDays(line);
+      if (leading.days.isNotEmpty) {
+        final restRt = _roomTeacherFromText(leading.rest);
+        var rt = (
+          room: pending.room.isEmpty ? restRt.room : pending.room,
+          teacher: pending.teacher.isEmpty
+              ? restRt.teacher
+              : pending.teacher,
+        );
+        rt = _roomTeacherLookahead(lines, i + 1, consumed, rt);
+        currentSubject = (name: pending.name, code: pending.code);
+        found.add(ScannedClass(
+          name: pending.name,
+          code: pending.code,
+          teacher: rt.teacher,
+          room: rt.room,
+          days: leading.days.toList()..sort(),
+          startMin: pending.startMin,
+          endMin: pending.endMin,
+        ));
+        continue;
+      }
+      // No leading day tokens: fall through and process this
+      // line normally (the pending entry is already discarded).
     }
 
     // A day-only line: remember its days for the time line that
