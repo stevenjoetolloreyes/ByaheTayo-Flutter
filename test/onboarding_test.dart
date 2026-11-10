@@ -425,7 +425,7 @@ void main() {
     });
   });
 
-  group('AuthScreen', () {
+  group('SignInScreen and CreateAccountScreen', () {
     testWidgets('sign-in success calls onSignedIn',
         (WidgetTester tester) async {
       final auth = FakeAuthService();
@@ -437,11 +437,10 @@ void main() {
       await auth.signOut();
       AuthUser? signedIn;
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: auth,
-          initialMode: AuthMode.signIn,
           onSignedIn: (user) => signedIn = user,
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
         ),
       ));
       await tester.enterText(
@@ -467,11 +466,10 @@ void main() {
       );
       await auth.signOut();
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: auth,
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
         ),
       ));
       await tester.enterText(
@@ -493,11 +491,11 @@ void main() {
       final auth = FakeAuthService();
       AuthUser? created;
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        CreateAccountScreen(
           service: auth,
-          initialMode: AuthMode.createAccount,
-          onSignedIn: (_) {},
           onAccountCreated: (user) => created = user,
+          onSignedIn: (_) {},
+          onSignInRequested: () {},
         ),
       ));
       await tester.enterText(
@@ -522,11 +520,10 @@ void main() {
         (WidgetTester tester) async {
       final auth = FakeAuthService();
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: auth,
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
         ),
       ));
       await tester.tap(find.text('Forgot password?'));
@@ -555,11 +552,10 @@ void main() {
         (WidgetTester tester) async {
       final auth = FakeAuthService(configured: false);
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: auth,
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
         ),
       ));
       expect(find.textContaining('Firebase is not configured yet'),
@@ -660,7 +656,7 @@ void main() {
         'Student',
       );
       // The form is taller than the default viewport; scroll first.
-      await _tapVisible(tester, 'Continue');
+      await _tapVisible(tester, 'Finish setup');
 
       expect(saved?.displayName, 'Steven Reyes');
       expect(saved?.school, 'University of Northern Philippines');
@@ -697,9 +693,34 @@ void main() {
         _fieldByLabel('Full name *'),
         '',
       );
-      await _tapVisible(tester, 'Continue');
+      await _tapVisible(tester, 'Finish setup');
       expect(saved, isFalse);
       expect(store.isProfileSetupDone('uid-9'), isFalse);
+    });
+
+    testWidgets('step indicator shows Step 8 of 9 in setup, none in edit',
+        (WidgetTester tester) async {
+      final prefs = await SharedPreferences.getInstance();
+      final store = ProfileStore(prefs);
+      await tester.pumpWidget(_wrap(
+        ProfileSetupScreen(
+          user: _verifiedUser,
+          store: store,
+          onSaved: (_) {},
+        ),
+      ));
+      expect(find.text('Step 8 of 9'), findsOneWidget);
+
+      await tester.pumpWidget(_wrap(
+        ProfileSetupScreen(
+          user: _verifiedUser,
+          store: store,
+          isEdit: true,
+          onSaved: (_) {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Step 8 of 9'), findsNothing);
     });
   });
 
@@ -1046,11 +1067,10 @@ void main() {
         (WidgetTester tester) async {
       final auth = FakeAuthService();
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: auth,
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
           themeMode: ThemeMode.light,
         ),
       ));
@@ -1060,11 +1080,10 @@ void main() {
       );
 
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: auth,
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
           themeMode: ThemeMode.dark,
         ),
       ));
@@ -1079,11 +1098,10 @@ void main() {
         (WidgetTester tester) async {
       ThemeMode? changed;
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: FakeAuthService(),
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
           themeMode: ThemeMode.light,
           onThemeModeChanged: (mode) => changed = mode,
         ),
@@ -1094,11 +1112,10 @@ void main() {
       expect(changed, ThemeMode.dark);
 
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: FakeAuthService(),
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
           themeMode: ThemeMode.dark,
           onThemeModeChanged: (mode) => changed = mode,
         ),
@@ -1114,11 +1131,10 @@ void main() {
         (WidgetTester tester) async {
       var backed = false;
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: FakeAuthService(),
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
           onBack: () => backed = true,
         ),
       ));
@@ -1127,11 +1143,10 @@ void main() {
       expect(backed, isTrue);
 
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        SignInScreen(
           service: FakeAuthService(),
-          initialMode: AuthMode.signIn,
           onSignedIn: (_) {},
-          onAccountCreated: (_) {},
+          onCreateAccountRequested: () {},
         ),
       ));
       await tester.pumpAndSettle();
@@ -1174,29 +1189,75 @@ void main() {
       expect(find.text('Sign In'), findsOneWidget);
     });
 
-    testWidgets('auth titles and bottom links match the spec exactly',
+    testWidgets('auth titles, dividers, notes and cross-links match the spec',
         (WidgetTester tester) async {
+      var signInRequested = false;
+      var createRequested = false;
       await tester.pumpWidget(_wrap(
-        AuthScreen(
+        CreateAccountScreen(
           service: FakeAuthService(),
-          initialMode: AuthMode.createAccount,
-          onSignedIn: (_) {},
           onAccountCreated: (_) {},
+          onSignedIn: (_) {},
+          onSignInRequested: () => signInRequested = true,
         ),
       ));
       expect(find.text('Create Your Account'), findsOneWidget);
       expect(find.text('Join EstudyanteGO and get started.'), findsOneWidget);
       expect(find.text('Already have an account? Sign In'), findsOneWidget);
       expect(find.text('Continue with Google'), findsOneWidget);
-      expect(find.text('OR'), findsOneWidget);
+      expect(find.text('OR SIGN UP WITH'), findsOneWidget);
+      expect(find.text('Google here creates your account and profile.'),
+          findsOneWidget);
+      expect(find.text('Step 6 of 9'), findsOneWidget);
 
       // The link sits below the fold in the default viewport on the
       // taller create-account layout; scroll it into view first.
+      // It navigates to the Sign In page (separate page since the
+      // Nov 10 split), so here it fires the gate callback.
       await _tapVisible(tester, 'Already have an account? Sign In');
+      expect(signInRequested, isTrue);
+
+      await tester.pumpWidget(_wrap(
+        SignInScreen(
+          service: FakeAuthService(),
+          onSignedIn: (_) {},
+          onCreateAccountRequested: () => createRequested = true,
+        ),
+      ));
+      await tester.pumpAndSettle();
       expect(find.text('Welcome Back'), findsOneWidget);
       expect(find.text('Sign in to continue to EstudyanteGO.'), findsOneWidget);
       expect(find.text("Don't have an account? Create Account"), findsOneWidget);
       expect(find.text('Forgot password?'), findsOneWidget);
+      expect(find.text('OR SIGN IN WITH'), findsOneWidget);
+      expect(
+        find.text('On Sign In, Google is login-only — no account, no entry.'),
+        findsOneWidget,
+      );
+      expect(find.text('Step 7 of 9'), findsOneWidget);
+
+      await _tapVisible(tester, "Don't have an account? Create Account");
+      expect(createRequested, isTrue);
+    });
+
+    testWidgets('startup step indicator tracks onboarding pages 2 to 5',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        OnboardingScreen(
+          onGetStarted: () {},
+          onSignIn: () {},
+        ),
+      ));
+      expect(find.text('Step 2 of 9'), findsOneWidget);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Step 3 of 9'), findsOneWidget);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Step 4 of 9'), findsOneWidget);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Step 5 of 9'), findsOneWidget);
     });
   });
 

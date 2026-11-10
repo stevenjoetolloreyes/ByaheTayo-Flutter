@@ -44,6 +44,35 @@ class SplashSound {
     unawaited(_play(_toneWav(660, 0.09, 0.09)));
   }
 
+  /// Setup-success chime: three ascending sine beeps — C5 (523 Hz)
+  /// / E5 (659 Hz) / G5 (784 Hz), staggered 0.09 s apart, gain
+  /// 0.08–0.09, in one 0.6 s clip. Plays when a new user finishes
+  /// Profile Setup (see SetupCelebrationOverlay). Best-effort like
+  /// the rest of this class: silence on failure.
+  static void celebration() {
+    unawaited(_play(_chimeWav()));
+  }
+
+  /// Welcome-back chime: a gentle two-note success chime (E5
+  /// 659 Hz / G5 784 Hz) plus a soft pop (990 Hz, 0.06 s) at the
+  /// end, in one 0.5 s clip. Plays when a returning user signs in
+  /// (see WelcomeBackOverlay). Best-effort like the rest of this
+  /// class: silence on failure.
+  static void welcomeBack() {
+    unawaited(_play(_welcomeBackWav()));
+  }
+
+  /// Student-tab entrance chime (Feature 5): a quick cheerful
+  /// arpeggio — C5 (523 Hz) / E5 (659 Hz) / G5 (784 Hz) / C6
+  /// (1047 Hz), staggered 0.09 s apart, gain 0.07–0.09, in one
+  /// 0.9 s clip. Plays once when the game-style entrance starts
+  /// on the Student tab after the Welcome Back overlay. Same
+  /// pattern as [celebration]: synthesized, no audio asset,
+  /// best-effort, silence on failure.
+  static void entrance() {
+    unawaited(_play(_entranceWav()));
+  }
+
   static Future<void> _play(Uint8List wav) async {
     try {
       final player = AudioPlayer();
@@ -85,6 +114,37 @@ class SplashSound {
     final count = (_sampleRate * duration).round();
     final samples = Float64List(count);
     _addTone(samples, freq, 0.0, duration, gain);
+    return _encodeWav(samples);
+  }
+
+  static Uint8List _chimeWav() {
+    const duration = 0.6;
+    final count = (_sampleRate * duration).round();
+    final samples = Float64List(count);
+    _addTone(samples, 523.25, 0.0, 0.2, 0.08);
+    _addTone(samples, 659.25, 0.09, 0.2, 0.08);
+    _addTone(samples, 783.99, 0.18, 0.28, 0.09);
+    return _encodeWav(samples);
+  }
+
+  static Uint8List _welcomeBackWav() {
+    const duration = 0.5;
+    final count = (_sampleRate * duration).round();
+    final samples = Float64List(count);
+    _addTone(samples, 659.25, 0.0, 0.2, 0.08);
+    _addTone(samples, 783.99, 0.09, 0.22, 0.08);
+    _addTone(samples, 990, 0.32, 0.06, 0.05);
+    return _encodeWav(samples);
+  }
+
+  static Uint8List _entranceWav() {
+    const duration = 0.9;
+    final count = (_sampleRate * duration).round();
+    final samples = Float64List(count);
+    _addTone(samples, 523.25, 0.0, 0.22, 0.07);
+    _addTone(samples, 659.25, 0.09, 0.22, 0.08);
+    _addTone(samples, 783.99, 0.18, 0.24, 0.08);
+    _addTone(samples, 1046.50, 0.27, 0.4, 0.09);
     return _encodeWav(samples);
   }
 

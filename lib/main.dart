@@ -67,10 +67,14 @@ import 'features/profile_repository.dart';
 import 'features/onboarding/onboarding_state.dart';
 import 'features/onboarding/permission_service.dart';
 import 'features/onboarding/profile_setup_screen.dart';
+import 'features/onboarding/setup_celebration.dart';
 import 'features/onboarding/splash_screen.dart';
 import 'features/onboarding/verify_email_screen.dart';
+import 'features/onboarding/welcome_back_overlay.dart';
+import 'features/profile_avatar.dart';
 import 'features/student_tab.dart';
 import 'features/student/student_theme.dart';
+import 'features/student/watch_tour.dart';
 import 'theme_preference.dart';
 
 /// SharedPreferences key for the sidebar collapsed state.
@@ -541,6 +545,20 @@ const _destinations = <_Destination>[
   _Destination('Account', Icons.person_outlined, Icons.person),
 ];
 
+/// Which post-setup overlay the gate shows after a new user taps
+/// "Finish setup" (Feature 2). The overlays are part of the
+/// onboarding flow, not new steps — the 9-step stepper stays as-is.
+enum _PostSetupPhase {
+  /// No overlay: the normal Profile Setup screen.
+  none,
+
+  /// Celebration overlay (auto-advances, or tap to skip).
+  celebration,
+
+  /// "You know how to use the app?" prompt.
+  prompt,
+}
+
 class EstudyanteGOApp extends StatefulWidget {
   const EstudyanteGOApp({
     super.key,
@@ -642,12 +660,11 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
 
   // ---- First-time gate state ----
   AppStartDestination? _destination;
-  AuthMode _authMode = AuthMode.signIn;
 
-  /// True when the sign-in screen was reached from onboarding (the
+  /// True when an auth screen was reached from onboarding (the
   /// first-launch path). Only then does auth get a back button, and
   /// it returns to the welcome state (onboarding page 4). Every other
-  /// path into sign-in (sign-out, verify escape hatch, fallbacks)
+  /// path into auth (sign-out, verify escape hatch, fallbacks)
   /// has no back target, so no back button is shown there.
   bool _cameFromOnboarding = false;
   int _onboardingInitialPage = 0;
@@ -655,6 +672,49 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
   UserProfile? _profile;
   ProfileStore? _store;
   int _tabIndex = 0;
+
+  /// Post-setup celebration phase (Feature 2). After a NEW user
+  /// taps "Finish setup" on Profile Setup (step 8), the gate shows
+  /// the celebration overlay, then the "You know how to use the
+  /// app?" prompt, and only then the dashboard (step 9, Student
+  /// tab). [none] is the normal state: no overlay up. Edit-profile
+  /// saves (Account -> Edit profile) never touch this — they pop
+  /// back via [_openProfileSetup] instead of the gate.
+  _PostSetupPhase _postSetupPhase = _PostSetupPhase.none;
+
+  /// TOUR HOOK (Feature 3 reads this — see [StudentTab.startWatchTour]).
+  /// True only when the new user answered "No, show me how" on the
+  /// post-setup prompt: the dashboard then lands on the Student tab
+  /// with the Watch demo guided tour auto-started. Cleared when the
+  /// tour starts (via [StudentTab.onWatchTourConsumed]) or on
+  /// sign-out, so it never re-fires on a later visit.
+  bool _startWatchTour = false;
+
+  /// WELCOME BACK (Feature 4). True while a sign-in that originated
+  /// on the Sign In page is still resolving (verified / profile
+  /// restored) and has not landed yet. Only [_afterSignIn] sets it
+  /// — the Create Account Google sign-up path (which also routes
+  /// through [_afterAuth]) never does, so a new user never sees the
+  /// Welcome Back overlay. Consumed by [_landOnDashboard]; cleared
+  /// whenever the flow diverts to Profile Setup, on sign-out, and
+  /// on "Use a different account".
+  bool _welcomeBackPending = false;
+
+  /// WELCOME BACK (Feature 4). True while the Welcome Back overlay
+  /// is up over the dashboard destination (after a returning user
+  /// signed in). Cleared by [_finishWelcomeBack] when the overlay
+  /// ends (auto-advance or tap); the dashboard underneath is the
+  /// Student tab. Never set by the new-user path.
+  bool _showWelcomeBack = false;
+
+  /// STUDENT ENTRANCE (Feature 5). True only when the Welcome
+  /// Back overlay has just finished, so the Student tab plays its
+  /// game-style entrance once on landing. Set by
+  /// [_finishWelcomeBack] (the same moment the overlay ends) and
+  /// consumed by the Student tab via [StudentTab.onEntranceConsumed]
+  /// when the entrance starts (or is skipped) — never set by any
+  /// other path, never re-armed by tab switches.
+  bool _playStudentEntrance = false;
 
   /// Remote student-profile store, behind the same `isConfigured`
   /// gate as the shared-posts repository: null when Firebase is not
@@ -812,25 +872,62 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
       severity: ErrorSeverity.info,
     ));
     setState(() => _destination = AppStartDestination.dashboard);
-    if (promptForNotifications && _user != null && _store != null) {
-      final store = _store!;
-      if (!store.notificationPromptShown) {
-        // Show once, right after first authenticated arrival. The flag
-        // is set before the dialog so it never repeats, whatever the
-        // user chooses.
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          if (!mounted) return;
-          await store.markNotificationPromptShown();
-          if (!mounted) return;
-          final promptContext = _navigatorKey.currentContext;
-          if (promptContext == null) return;
-          await showNotificationPermissionPrompt(
-            promptContext,
-            _permissionService,
-          );
-        });
-      }
-    }
+    if (promptForNotifications) _maybePromptForNotifications();
+  }
+
+  /// Shows the one-time notification-permission prompt on first
+  /// authenticated arrival. The flag is set before the dialog so it
+  /// never repeats, whatever the user chooses. Split out of
+  /// [_goDashboard] so the Welcome Back overlay can defer it until
+  /// the overlay ends instead of letting it pop over the overlay.
+  void _maybePromptForNotifications() {
+    if (_user == null || _store == null) return;
+    final store = _store!;
+    if (store.notificationPromptShown) return;
+    // Show once, right after first authenticated arrival. The flag
+    // is set before the dialog so it never repeats, whatever the
+    // user chooses.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await store.markNotificationPromptShown();
+      if (!mounted) return;
+      final promptContext = _navigatorKey.currentContext;
+      if (promptContext == null) return;
+      await showNotificationPermissionPrompt(
+        promptContext,
+        _permissionService,
+      );
+    });
+  }
+
+  /// End of the post-setup flow (Feature 2): the user answered the
+  /// "You know how to use the app?" prompt. Both answers land on
+  /// the Student tab (step 9); [startTour] (the "No, show me how"
+  /// answer) additionally arms the Watch demo tour hook — see
+  /// [_startWatchTour] and [StudentTab.startWatchTour]. The
+  /// notification prompt still runs on first arrival, as before.
+  void _finishSetupFlow({required bool startTour}) {
+    setState(() {
+      _postSetupPhase = _PostSetupPhase.none;
+      _startWatchTour = startTour;
+      _tabIndex = 0;
+    });
+    _goDashboard(promptForNotifications: true);
+  }
+
+  /// Sign In page success (Feature 4): the sign-in originated on
+  /// the Sign In page (step 7 — email/password or login-only
+  /// Google), from the onboarding gate, the Account-tab sign-in
+  /// request, or a verify-email fallback. Arms the Welcome Back
+  /// overlay for the dashboard landing; the shared [_afterAuth]
+  /// below decides whether the landing actually happens (verified
+  /// + profile complete) or diverts to Verify Email / Profile
+  /// Setup instead. The Create Account Google sign-up path calls
+  /// [_afterAuth] directly and never arms this, so a new user
+  /// never sees the overlay.
+  Future<void> _afterSignIn(AuthUser user) async {
+    _welcomeBackPending = true;
+    await _afterAuth(user);
   }
 
   Future<void> _afterAuth(AuthUser user) async {
@@ -838,6 +935,9 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
     final store = _store ?? ProfileStore(await SharedPreferences.getInstance());
     _store = store;
     if (!user.emailVerified) {
+      // Keep [_welcomeBackPending]: the user signed in on the Sign
+      // In page and will come back through [_afterVerified] once
+      // the email is verified.
       setState(() => _destination = AppStartDestination.verifyEmail);
       return;
     }
@@ -846,11 +946,18 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
     // straight to the dashboard instead of setup.
     await _restoreProfileForUser(user);
     if (!store.isProfileSetupDone(user.uid)) {
-      setState(() => _destination = AppStartDestination.profileSetup);
+      // Incomplete profile: no Welcome Back overlay — this user
+      // goes to Profile Setup, whose Finish has its own
+      // celebration (Feature 2).
+      _welcomeBackPending = false;
+      setState(() {
+        _postSetupPhase = _PostSetupPhase.none;
+        _destination = AppStartDestination.profileSetup;
+      });
       return;
     }
     _profile = store.loadProfile(user.uid);
-    _goDashboard(promptForNotifications: true);
+    _landOnDashboard();
   }
 
   Future<void> _afterVerified(AuthUser user) async {
@@ -859,11 +966,49 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
     _store = store;
     await _restoreProfileForUser(user);
     if (!store.isProfileSetupDone(user.uid)) {
-      setState(() => _destination = AppStartDestination.profileSetup);
+      // Same as [_afterAuth]: an incomplete profile goes to setup
+      // with its own celebration, never the Welcome Back overlay.
+      _welcomeBackPending = false;
+      setState(() {
+        _postSetupPhase = _PostSetupPhase.none;
+        _destination = AppStartDestination.profileSetup;
+      });
       return;
     }
     _profile = store.loadProfile(user.uid);
-    _goDashboard(promptForNotifications: true);
+    _landOnDashboard();
+  }
+
+  /// Dashboard landing shared by [_afterAuth] and [_afterVerified].
+  /// When the landing follows a Sign In page success
+  /// ([_welcomeBackPending]), the Welcome Back overlay shows first
+  /// (Feature 4) and the notification prompt waits until it ends,
+  /// so it never pops over the overlay. Otherwise the dashboard
+  /// opens directly, as before. Either way the landing tab is the
+  /// Student tab — the overlay never shows the "You know how to
+  /// use the app?" prompt and never touches [_startWatchTour].
+  void _landOnDashboard() {
+    final showWelcomeBack = _welcomeBackPending;
+    _welcomeBackPending = false;
+    setState(() {
+      _tabIndex = 0;
+      _showWelcomeBack = showWelcomeBack;
+    });
+    _goDashboard(promptForNotifications: !showWelcomeBack);
+  }
+
+  /// End of the Welcome Back overlay (Feature 4): auto-advance or
+  /// tap. The dashboard underneath is already the Student tab; the
+  /// deferred first-arrival notification prompt runs now. Feature
+  /// 5: the overlay finishing arms the Student tab entrance
+  /// ([_playStudentEntrance]) — the tab plays it once on landing
+  /// and consumes the flag, so no other arrival replays it.
+  void _finishWelcomeBack() {
+    setState(() {
+      _showWelcomeBack = false;
+      _playStudentEntrance = true;
+    });
+    _maybePromptForNotifications();
   }
 
   void _openProfileSetup({bool isEdit = false}) {
@@ -893,6 +1038,11 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
       _user = null;
       _profile = null;
       _cameFromOnboarding = false;
+      _postSetupPhase = _PostSetupPhase.none;
+      _startWatchTour = false;
+      _welcomeBackPending = false;
+      _showWelcomeBack = false;
+      _playStudentEntrance = false;
       _destination = _authService.isConfigured
           ? AppStartDestination.signIn
           : AppStartDestination.dashboard;
@@ -947,16 +1097,14 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
             await _markOnboardingDone();
             if (!mounted) return;
             setState(() {
-              _authMode = AuthMode.createAccount;
               _cameFromOnboarding = true;
-              _destination = AppStartDestination.signIn;
+              _destination = AppStartDestination.createAccount;
             });
           },
           onSignIn: () async {
             await _markOnboardingDone();
             if (!mounted) return;
             setState(() {
-              _authMode = AuthMode.signIn;
               _cameFromOnboarding = true;
               _destination = AppStartDestination.signIn;
             });
@@ -966,14 +1114,27 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           initialPage: _onboardingInitialPage,
         );
       case AppStartDestination.signIn:
-        return AuthScreen(
+        return SignInScreen(
           service: _authService,
-          initialMode: _authMode,
-          onSignedIn: _afterAuth,
+          onSignedIn: _afterSignIn,
+          onCreateAccountRequested: () => setState(
+            () => _destination = AppStartDestination.createAccount,
+          ),
+          themeMode: _themeMode,
+          onThemeModeChanged: _setThemeMode,
+          onBack: _cameFromOnboarding ? _backToOnboarding : null,
+        );
+      case AppStartDestination.createAccount:
+        return CreateAccountScreen(
+          service: _authService,
           onAccountCreated: (user) {
             _user = user;
             setState(() => _destination = AppStartDestination.verifyEmail);
           },
+          onSignedIn: _afterAuth,
+          onSignInRequested: () => setState(
+            () => _destination = AppStartDestination.signIn,
+          ),
           themeMode: _themeMode,
           onThemeModeChanged: _setThemeMode,
           onBack: _cameFromOnboarding ? _backToOnboarding : null,
@@ -983,14 +1144,12 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
         if (user == null) {
           // Should not happen (verify implies a user), but never trap
           // the user on a screen that needs one.
-          return AuthScreen(
+          return SignInScreen(
             service: _authService,
-            initialMode: AuthMode.signIn,
-            onSignedIn: _afterAuth,
-            onAccountCreated: (created) {
-              _user = created;
-              setState(() => _destination = AppStartDestination.verifyEmail);
-            },
+            onSignedIn: _afterSignIn,
+            onCreateAccountRequested: () => setState(
+              () => _destination = AppStartDestination.createAccount,
+            ),
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
           );
@@ -1004,6 +1163,8 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
               _user = null;
               _profile = null;
               _cameFromOnboarding = false;
+              _welcomeBackPending = false;
+              _showWelcomeBack = false;
               _destination = AppStartDestination.signIn;
             });
           },
@@ -1012,16 +1173,31 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
         final user = _user;
         final store = _store;
         if (user == null || store == null) {
-          return AuthScreen(
+          return SignInScreen(
             service: _authService,
-            initialMode: AuthMode.signIn,
-            onSignedIn: _afterAuth,
-            onAccountCreated: (created) {
-              _user = created;
-              setState(() => _destination = AppStartDestination.verifyEmail);
-            },
+            onSignedIn: _afterSignIn,
+            onCreateAccountRequested: () => setState(
+              () => _destination = AppStartDestination.createAccount,
+            ),
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
+          );
+        }
+        // Post-setup overlays (Feature 2): after "Finish setup"
+        // the gate shows the celebration, then the guide prompt,
+        // and only then the dashboard. The profile is already
+        // saved by this point.
+        if (_postSetupPhase == _PostSetupPhase.celebration) {
+          return SetupCelebrationOverlay(
+            onFinished: () => setState(
+              () => _postSetupPhase = _PostSetupPhase.prompt,
+            ),
+          );
+        }
+        if (_postSetupPhase == _PostSetupPhase.prompt) {
+          return SetupGuidePromptOverlay(
+            onTakeMeIn: () => _finishSetupFlow(startTour: false),
+            onShowMeHow: () => _finishSetupFlow(startTour: true),
           );
         }
         return ProfileSetupScreen(
@@ -1031,10 +1207,32 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           initial: _profile,
           onSaved: (profile) {
             _profile = profile;
-            _goDashboard(promptForNotifications: true);
+            setState(
+              () => _postSetupPhase = _PostSetupPhase.celebration,
+            );
           },
         );
       case AppStartDestination.dashboard:
+        // WELCOME BACK (Feature 4): a returning user who just
+        // signed in on the Sign In page sees this overlay first,
+        // then the Student tab underneath. The photo uses the same
+        // shared rule as the Student Hub / Account tab (local file
+        // -> uploaded URL -> Google avatar); the first name comes
+        // from the stored profile, then the Firebase display name.
+        if (_showWelcomeBack) {
+          final profile = _profile;
+          final user = _user;
+          return WelcomeBackOverlay(
+            firstName: welcomeBackFirstName(profile: profile, user: user),
+            displayName: profile?.displayName ?? user?.displayName,
+            photoImage: resolveProfilePhoto(
+              photoPath: profile?.photoPath,
+              profilePhotoUrl: profile?.profilePhotoUrl,
+              photoUrl: profile?.photoUrl ?? user?.photoUrl,
+            ),
+            onFinished: _finishWelcomeBack,
+          );
+        }
         return _HomeShell(
           initialSidebarCollapsed: widget.initialSidebarCollapsed,
           themePreference: _themePreference,
@@ -1044,6 +1242,17 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           authService: _authService,
           user: _user,
           profile: _profile,
+          // TOUR HOOK (Feature 3): "No, show me how" on the
+          // post-setup prompt lands here with startWatchTour true.
+          startWatchTour: _startWatchTour,
+          onWatchTourConsumed: () =>
+              setState(() => _startWatchTour = false),
+          // ENTRANCE HOOK (Feature 5): the Welcome Back overlay
+          // just finished — the Student tab plays its game-style
+          // entrance once on landing, then consumes the flag.
+          playStudentEntrance: _playStudentEntrance,
+          onStudentEntranceConsumed: () =>
+              setState(() => _playStudentEntrance = false),
           permissionService: _permissionService,
           notificationService: _notificationService,
           onViewStudent: () => _selectTab(0),
@@ -1053,7 +1262,6 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           onEditProfile: () => _openProfileSetup(isEdit: true),
           onSignInRequested: () {
             setState(() {
-              _authMode = AuthMode.signIn;
               _destination = AppStartDestination.signIn;
             });
           },
@@ -1073,6 +1281,10 @@ class _HomeShell extends StatefulWidget {
     required this.authService,
     required this.user,
     required this.profile,
+    this.startWatchTour = false,
+    this.onWatchTourConsumed,
+    this.playStudentEntrance = false,
+    this.onStudentEntranceConsumed,
     required this.permissionService,
     required this.notificationService,
     required this.onViewStudent,
@@ -1092,6 +1304,27 @@ class _HomeShell extends StatefulWidget {
   final AuthService authService;
   final AuthUser? user;
   final UserProfile? profile;
+
+  /// TOUR HOOK (Feature 3): true when the new user answered "No,
+  /// show me how" on the post-setup prompt. Passed through to
+  /// [StudentTab.startWatchTour]; see the contract there.
+  final bool startWatchTour;
+
+  /// TOUR HOOK (Feature 3): called once the tour starts, so the
+  /// flag clears and never re-fires. Passed through to
+  /// [StudentTab.onWatchTourConsumed].
+  final VoidCallback? onWatchTourConsumed;
+
+  /// ENTRANCE HOOK (Feature 5): true when the Welcome Back
+  /// overlay just finished. Passed through to
+  /// [StudentTab.playEntrance]; see the contract there.
+  final bool playStudentEntrance;
+
+  /// ENTRANCE HOOK (Feature 5): called once the entrance starts
+  /// (or is skipped), so the flag clears and never re-fires.
+  /// Passed through to [StudentTab.onEntranceConsumed].
+  final VoidCallback? onStudentEntranceConsumed;
+
   final PermissionService permissionService;
   final LocalNotificationService notificationService;
   final VoidCallback onViewStudent;
@@ -1144,9 +1377,21 @@ class _HomeShellState extends State<_HomeShell>
   /// block the shell, and the service never throws.
   late final AdService _adService = GoogleMobileAdsService();
 
+  /// Watch demo tour (Feature 3): one controller per shell, passed
+  /// to the Student tab (which registers its cards) and rendered
+  /// as an overlay above the whole shell below, so stop 1 can
+  /// highlight the top nav (phone) / left sidebar (tablet) — both
+  /// registered here under the same 'nav' stop id; only the one
+  /// actually laid out is used.
+  late final WatchTourController _tourController = WatchTourController();
+  final _topNavKey = GlobalKey();
+  final _sidebarKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
+    _tourController.registerTarget('nav', _topNavKey);
+    _tourController.registerTarget('nav', _sidebarKey);
     _tabFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 180),
@@ -1185,6 +1430,7 @@ class _HomeShellState extends State<_HomeShell>
   @override
   void dispose() {
     _tabFadeController.dispose();
+    _tourController.dispose();
     super.dispose();
   }
 
@@ -1215,6 +1461,19 @@ class _HomeShellState extends State<_HomeShell>
             onViewAccount: () => widget.onSelect(5),
             user: widget.user,
             profile: widget.profile,
+            // TOUR HOOK (Feature 3): forwarded verbatim from the
+            // gate; see [StudentTab.startWatchTour].
+            startWatchTour: widget.startWatchTour,
+            onWatchTourConsumed: widget.onWatchTourConsumed,
+            // ENTRANCE HOOK (Feature 5): forwarded verbatim from
+            // the gate; see [StudentTab.playEntrance]. Only the
+            // Welcome Back finish arms it.
+            playEntrance: widget.playStudentEntrance,
+            onEntranceConsumed: widget.onStudentEntranceConsumed,
+            // Watch demo tour (Feature 3): the shell's controller
+            // — the tab registers its cards on it, and the shell
+            // renders the overlay above the whole shell.
+            tourController: _tourController,
             walletController: _walletController,
             creditsController: _creditsController,
             adService: _adService,
@@ -1361,54 +1620,67 @@ class _HomeShellState extends State<_HomeShell>
       child: ratedBody,
     );
 
-    if (wide) {
-      return Scaffold(
-        appBar: AppBar(title: Text(_destinations[widget.selectedIndex].label)),
-        // Top inset is handled by the AppBar; left/right/bottom insets
-        // (gesture bar, cutouts) are respected here.
-        body: SafeArea(
-          top: false,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Sidebar(
-                collapsed: _collapsed,
-                selectedIndex: widget.selectedIndex,
-                onSelect: widget.onSelect,
-                onToggle: _toggleSidebar,
+    // Watch demo tour (Feature 3): the overlay sits above the
+    // whole shell — whichever branch below is built — so stop 1
+    // can highlight the top nav (phone) / left sidebar (tablet).
+    // When the tour is inactive the overlay is zero-size and the
+    // shell below is untouched.
+    final Widget shellScaffold = wide
+        ? Scaffold(
+            appBar: AppBar(
+                title: Text(_destinations[widget.selectedIndex].label)),
+            // Top inset is handled by the AppBar; left/right/bottom insets
+            // (gesture bar, cutouts) are respected here.
+            body: SafeArea(
+              top: false,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Sidebar(
+                    key: _sidebarKey,
+                    collapsed: _collapsed,
+                    selectedIndex: widget.selectedIndex,
+                    onSelect: widget.onSelect,
+                    onToggle: _toggleSidebar,
+                  ),
+                  // Expanded content stays responsive while the sidebar
+                  // animates; no overflow, no layout shift of the content.
+                  Expanded(child: replyBody),
+                ],
               ),
-              // Expanded content stays responsive while the sidebar
-              // animates; no overflow, no layout shift of the content.
-              Expanded(child: replyBody),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Phones (preview port, Nov 6): the plain "EstudyanteGO"
-    // wordmark header + the icon-only top nav directly under it.
-    // There is NO bottom nav on phones anymore (the floating
-    // glass capsule / iOS glass bar are retired); the top nav is
-    // the only tab switcher. The wide branch above is untouched.
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _PhoneHeader(onBell: () => _showNotifications(context)),
-            TopNavBar(
-              selectedIndex: widget.selectedIndex,
-              onSelect: widget.onSelect,
-              destinations: [
-                for (final d in _destinations)
-                  TopNavDestination(d.label, d.icon, d.selectedIcon),
-              ],
             ),
-            Expanded(child: replyBody),
-          ],
-        ),
-      ),
+          )
+        // Phones (preview port, Nov 6): the plain "EstudyanteGO"
+        // wordmark header + the icon-only top nav directly under it.
+        // There is NO bottom nav on phones anymore (the floating
+        // glass capsule / iOS glass bar are retired); the top nav is
+        // the only tab switcher. The wide branch above is untouched.
+        : Scaffold(
+            body: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _PhoneHeader(onBell: () => _showNotifications(context)),
+                  TopNavBar(
+                    key: _topNavKey,
+                    selectedIndex: widget.selectedIndex,
+                    onSelect: widget.onSelect,
+                    destinations: [
+                      for (final d in _destinations)
+                        TopNavDestination(d.label, d.icon, d.selectedIcon),
+                    ],
+                  ),
+                  Expanded(child: replyBody),
+                ],
+              ),
+            ),
+          );
+
+    return Stack(
+      children: [
+        shellScaffold,
+        WatchTourOverlay(controller: _tourController),
+      ],
     );
   }
 
@@ -1530,6 +1802,7 @@ class _PhoneHeader extends StatelessWidget {
 /// mid-animation (a plain ClipRect only clips paint, not layout).
 class _Sidebar extends StatefulWidget {
   const _Sidebar({
+    super.key,
     required this.collapsed,
     required this.selectedIndex,
     required this.onSelect,

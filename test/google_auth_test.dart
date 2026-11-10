@@ -28,20 +28,32 @@ void main() {
   late FakeAuthService fake;
   AuthUser? signedInUser;
   AuthUser? createdUser;
+  var createAccountRequested = false;
+  var signInRequested = false;
 
-  Future<void> pumpAuth(WidgetTester tester, AuthMode mode) async {
+  /// Pumps the auth page for [signIn]: SignInScreen for sign-in,
+  /// CreateAccountScreen for create-account. The two pages are
+  /// separate routes now (Nov 10 split); cross-page links fire the
+  /// gate callbacks instead of toggling a mode in place.
+  Future<void> pumpAuth(WidgetTester tester, {required bool signIn}) async {
     tester.view.physicalSize = const Size(390, 3000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
-        home: AuthScreen(
-          service: fake,
-          initialMode: mode,
-          onSignedIn: (user) => signedInUser = user,
-          onAccountCreated: (user) => createdUser = user,
-        ),
+        home: signIn
+            ? SignInScreen(
+                service: fake,
+                onSignedIn: (user) => signedInUser = user,
+                onCreateAccountRequested: () => createAccountRequested = true,
+              )
+            : CreateAccountScreen(
+                service: fake,
+                onAccountCreated: (user) => createdUser = user,
+                onSignedIn: (user) => signedInUser = user,
+                onSignInRequested: () => signInRequested = true,
+              ),
       ),
     );
     await tester.pumpAndSettle();
@@ -62,6 +74,8 @@ void main() {
     fake = FakeAuthService();
     signedInUser = null;
     createdUser = null;
+    createAccountRequested = false;
+    signInRequested = false;
     SharedPreferences.setMockInitialValues({});
   });
 
@@ -86,7 +100,7 @@ void main() {
       const UserProfile(displayName: 'Ana Santos', email: 'ana@example.com'),
     );
     fake.googleUser = googleUser(uid: 'google-uid-1');
-    await pumpAuth(tester, AuthMode.signIn);
+    await pumpAuth(tester, signIn: true);
     await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
     expect(signedInUser, isNotNull);
@@ -98,22 +112,28 @@ void main() {
   testWidgets('Google Sign In without profile signs out and shows message',
       (tester) async {
     fake.googleUser = googleUser(uid: 'google-unknown-uid');
-    await pumpAuth(tester, AuthMode.signIn);
+    await pumpAuth(tester, signIn: true);
     await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
     expect(signedInUser, isNull);
     expect(fake.signOutCount, 1);
     expect(find.text(noAccountFoundMessage), findsOneWidget);
     expect(find.text('Create Account'), findsOneWidget);
+    // The no-account button navigates to the Create Account page
+    // (separate page since the Nov 10 split); the gate swaps the
+    // destination, so here we assert the request fires and the
+    // Create Account page renders its title.
     await tester.tap(find.text('Create Account'));
     await tester.pumpAndSettle();
+    expect(createAccountRequested, isTrue);
+    await pumpAuth(tester, signIn: false);
     expect(find.text('Create Your Account'), findsOneWidget);
   });
 
   testWidgets('Google Sign In canceled shows honest message, no sign-out',
       (tester) async {
     fake.googleCanceled = true;
-    await pumpAuth(tester, AuthMode.signIn);
+    await pumpAuth(tester, signIn: true);
     await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
     expect(signedInUser, isNull);
@@ -127,7 +147,7 @@ void main() {
       uid: 'google-new-1',
       photoUrl: 'https://example.com/photo.jpg',
     );
-    await pumpAuth(tester, AuthMode.createAccount);
+    await pumpAuth(tester, signIn: false);
     await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
     expect(signedInUser, isNotNull);
@@ -150,7 +170,7 @@ void main() {
       ),
     );
     fake.googleUser = googleUser(uid: 'google-uid-9', name: 'New Name');
-    await pumpAuth(tester, AuthMode.createAccount);
+    await pumpAuth(tester, signIn: false);
     await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
     expect(signedInUser, isNotNull);
@@ -161,11 +181,21 @@ void main() {
 
   testWidgets('Google button exists on both Sign In and Create Account',
       (tester) async {
-    await pumpAuth(tester, AuthMode.signIn);
+    await pumpAuth(tester, signIn: true);
     expect(find.text('Continue with Google'), findsOneWidget);
+    // The cross-link navigates to the Create Account page (separate
+    // page since the Nov 10 split); the gate swaps the destination,
+    // so here we assert the request fires and the Create Account
+    // page renders its Google button.
     await tester.tap(find.text("Don't have an account? Create Account"));
     await tester.pumpAndSettle();
+    expect(createAccountRequested, isTrue);
+    await pumpAuth(tester, signIn: false);
     expect(find.text('Create Your Account'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
+    // And back the other way.
+    await tester.tap(find.text('Already have an account? Sign In'));
+    await tester.pumpAndSettle();
+    expect(signInRequested, isTrue);
   });
 }

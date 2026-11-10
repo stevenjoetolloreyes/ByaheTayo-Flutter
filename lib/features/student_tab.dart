@@ -34,6 +34,7 @@ import 'credits_repository.dart';
 import 'ios_components.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
+import 'onboarding/splash_sound.dart';
 import 'ph_holidays.dart';
 import 'points_wallet_repository.dart';
 import 'rewards_center.dart';
@@ -49,10 +50,12 @@ import 'student/share_card.dart';
 import 'student/signin_screen.dart';
 import 'student/signin_components.dart';
 import 'student/student_data.dart';
+import 'student/student_entrance.dart';
 import 'student/student_theme.dart';
 import 'student/walking_goal_card.dart';
 import 'student/walking_goal_screen.dart';
 import 'student/walking_repository.dart';
+import 'student/watch_tour.dart';
 import 'student/week_grid.dart';
 
 class StudentTab extends StatefulWidget {
@@ -67,6 +70,11 @@ class StudentTab extends StatefulWidget {
     this.walkingController,
     this.adService,
     this.reviewNotificationRepository,
+    this.startWatchTour = false,
+    this.onWatchTourConsumed,
+    this.playEntrance = false,
+    this.onEntranceConsumed,
+    this.tourController,
   });
 
   /// Switches the shell to the Map tab (used by My Commute jumps).
@@ -104,6 +112,59 @@ class StudentTab extends StatefulWidget {
   /// popup is attempted).
   final AdService? adService;
 
+  /// TOUR HOOK — Feature 3 (Watch demo guided tour) MUST wire this
+  /// up; Feature 2 only plumbs the flag, it does NOT build the tour.
+  ///
+  /// True when the new user answered "No, show me how" on the
+  /// post-setup "You know how to use the app?" prompt: the gate
+  /// lands on this tab with [startWatchTour] true. Feature 3 must:
+  ///   1. When [startWatchTour] is true on first build after
+  ///      landing (check in initState and/or didUpdateWidget —
+  ///      the shell builds this tab eagerly inside an IndexedStack,
+  ///      so initState runs with the flag already true), auto-start
+  ///      the Watch demo guided tour.
+  ///   2. Call [onWatchTourConsumed] once the tour starts, so the
+  ///      gate clears the flag and it never re-fires on a later
+  ///      visit to this tab.
+  /// False in every other case (including bare widget tests and the
+  /// "Yes, take me in" answer) — the tab then behaves exactly as
+  /// before, with no tour.
+  final bool startWatchTour;
+
+  /// TOUR HOOK — Feature 3: call once the guided tour starts, so
+  /// the gate clears [startWatchTour]. Null in bare widget tests.
+  final VoidCallback? onWatchTourConsumed;
+
+  /// ENTRANCE HOOK — Feature 5 (game-style Student tab entrance).
+  ///
+  /// True only when the gate is landing on this tab right after
+  /// the Welcome Back overlay finished (Sign In path — see
+  /// lib/main.dart `_finishWelcomeBack`). The tab then plays the
+  /// entrance once: every element staggers in top-to-bottom, the
+  /// points count up to the live wallet balance, the Walking Goal
+  /// bar fills to the live progress, and the real streak badge
+  /// pops with a confetti burst. See student_entrance.dart.
+  ///
+  /// False in every other case — other arrivals at the tab
+  /// (tab switches, first launch, Create Account path) show the
+  /// tab static, with no replay. The flag is consumed once via
+  /// [onEntranceConsumed] when the entrance starts (or is
+  /// skipped for reduced motion / an active tour), so it never
+  /// re-fires on a later visit.
+  final bool playEntrance;
+
+  /// ENTRANCE HOOK — Feature 5: call once the entrance starts
+  /// (or is skipped), so the gate clears [playEntrance]. Null in
+  /// bare widget tests.
+  final VoidCallback? onEntranceConsumed;
+
+  /// The Watch demo tour controller. The shell passes its own
+  /// instance (and renders the overlay above the whole shell, so
+  /// the tour can highlight the shell's top nav / sidebar). Null
+  /// in bare widget tests, in which case the tab owns a controller
+  /// and renders the overlay itself over its own list.
+  final WatchTourController? tourController;
+
   /// Reads the student's admin-reply notifications (null in bare
   /// widget tests and when Firebase is not configured, in which
   /// case the Notifications sheet keeps its empty state and the
@@ -114,7 +175,83 @@ class StudentTab extends StatefulWidget {
   State<StudentTab> createState() => _StudentTabState();
 }
 
-class _StudentTabState extends State<StudentTab> {
+/// The header bell's live unread badge.
+///
+/// Owns its own notification stream: created in initState (once
+/// per mount) and recreated only when the repository or user
+/// changes, so parent rebuilds never resubscribe and re-emit.
+///
+/// WHY a separate widget (Nov 10, 2026): the tab used to cache ONE
+/// stream instance in its state and hand it to a StreamBuilder.
+/// That stream is single-subscription on the no-Firebase degrade
+/// path (`watchForUser` returns `Stream.value(...)` when Firebase
+/// isn't initialized — the Firestore path is broadcast and safe).
+/// When the ListView scrolled the header out of view and back in,
+/// the StreamBuilder remounted and re-listened to the SAME stream
+/// instance, throwing "Bad state: Stream has already been listened
+/// to" and leaving the header broken. The Watch demo tour's
+/// programmatic scrolling tripped it on every auto-start; plain
+/// manual scrolling reproduces it too. A fresh stream per mount
+/// fixes it (each remount opens a new query listener, which the
+/// StreamBuilder cancels on dispose — no leak).
+class _NotificationHeader extends StatefulWidget {
+  const _NotificationHeader({
+    required this.repository,
+    required this.userId,
+    required this.greetingName,
+    required this.onBell,
+    required this.profile,
+  });
+
+  final AppReviewNotificationRepository repository;
+  final String userId;
+  final String greetingName;
+  final VoidCallback onBell;
+  final UserProfile? profile;
+
+  @override
+  State<_NotificationHeader> createState() => _NotificationHeaderState();
+}
+
+class _NotificationHeaderState extends State<_NotificationHeader> {
+  late Stream<List<AppReviewNotification>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.repository.watchForUser(widget.userId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _NotificationHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository ||
+        oldWidget.userId != widget.userId) {
+      _stream = widget.repository.watchForUser(widget.userId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<AppReviewNotification>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final unread = (snapshot.data ?? const <AppReviewNotification>[])
+            .where((n) => !n.read)
+            .length;
+        return studentHeader(
+          greetingName: widget.greetingName,
+          onBell: widget.onBell,
+          profile: widget.profile,
+          unreadNotifications: unread,
+        );
+      },
+    );
+  }
+}
+
+class _StudentTabState extends State<StudentTab>
+    with TickerProviderStateMixin {
   bool _loading = true;
   bool _hideBalance = false;
   String _classesTab = 'today';
@@ -157,6 +294,276 @@ class _StudentTabState extends State<StudentTab> {
   late final WalkingController _walking;
   bool _walkingOwned = false;
 
+  // ------------------------------------------------------- watch tour
+  // Feature 3: the guided tour. The controller is the shell's when
+  // one is passed in (real app — the shell renders the overlay
+  // above everything so stop 1 can highlight the top nav /
+  // sidebar); otherwise the tab owns one and renders the overlay
+  // itself over its list (bare widget tests).
+  late final WatchTourController _tourController;
+  bool _tourOwned = false;
+
+  /// One GlobalKey per tour stop the tab owns ('nav' is the
+  /// shell's — it registers its own keys under that id).
+  final Map<String, GlobalKey> _tourKeys = {
+    for (final stop in kWatchTourStops)
+      if (stop.id != 'nav') stop.id: GlobalKey(),
+  };
+
+  /// Guards [onWatchTourConsumed]: it fires exactly once, when the
+  /// auto-started tour starts — never again on a manual restart.
+  bool _tourConsumedFired = false;
+
+  // ------------------------------------------------- entrance (Feature 5)
+  // Game-style entrance after the Welcome Back overlay (Sign In
+  // path only). One 2 s controller drives every stagger item plus
+  // the derived count-up / fill / tick-in values below; the
+  // AnimatedBuilder in build() rebuilds the list each frame while
+  // it runs. The end states are captured LIVE at start (never
+  // hardcoded): the real wallet balance, the real walking
+  // progress, the real checked cells and the real streak.
+  late final AnimationController _entranceController;
+
+  /// True once the entrance has started (or been skipped for
+  /// reduced motion / an active tour). Guards the one-shot: a
+  /// rebuild or a second visit never replays it.
+  bool _entranceStarted = false;
+
+  /// True once the entrance has finished (or was completed early
+  /// because the tour started). The tab then shows its live end
+  /// states with no entrance overlays.
+  bool _entranceDone = false;
+
+  /// Guards [onEntranceConsumed]: it fires exactly once, when the
+  /// entrance starts (or is skipped).
+  bool _entranceConsumedFired = false;
+
+  /// Live end states captured when the entrance starts.
+  int _entrancePoints = 0;
+  double _entranceWalking = 0;
+  int _entranceChecked = 0;
+  int _entranceStreak = 0;
+
+  /// 0..1 count-up progress for the points balance (at-a-glance
+  /// item lands, then ~1.2 s of counting).
+  double get _pointsProgress => Interval(0.07, 0.65).transform(
+        _entranceController.value.clamp(0.0, 1.0),
+      );
+
+  /// The points value to show in the at-a-glance card right now:
+  /// null when no entrance is playing (the card shows the live
+  /// balance directly), otherwise the eased 0 -> live balance
+  /// count-up.
+  int? get _animatedPoints {
+    if (!_entranceStarted) return null;
+    return entranceCountUp(_entrancePoints, _pointsProgress);
+  }
+
+  /// True while the floating "+N pts" chip is shown (entrance
+  /// playing, a real balance to celebrate, count still running).
+  bool get _showPointsFloat =>
+      _entranceStarted &&
+      !_entranceDone &&
+      _entrancePoints > 0 &&
+      _pointsProgress > 0.02 &&
+      _pointsProgress < 1.0;
+
+  /// The Walking Goal fill right now: null when no entrance is
+  /// playing (the card shows the live progress directly),
+  /// otherwise the eased 0 -> live progress fill.
+  double? get _animatedWalkingProgress {
+    if (!_entranceStarted) return null;
+    final t = Interval(0.21, 0.8).transform(
+      _entranceController.value.clamp(0.0, 1.0),
+    );
+    return _entranceWalking * Curves.easeOut.transform(t);
+  }
+
+  /// How many day cells are ticked in right now: null when no
+  /// entrance is playing (the card shows the real checked count),
+  /// otherwise the real checked cells ticking in one by one.
+  int? get _animatedCheckedCells {
+    if (!_entranceStarted) return null;
+    final t = Interval(0.14, 0.6).transform(
+      _entranceController.value.clamp(0.0, 1.0),
+    );
+    return entranceCheckedCells(_entranceChecked, t);
+  }
+
+  /// 0..1 pop of the streak badge (the signin item's spring).
+  double get _streakPop => _entranceStarted
+      ? entranceItemProgress(
+          _entranceController.value,
+          studentEntranceSigninIndex,
+        )
+      : 1.0;
+
+  /// 0..1 progress of the confetti burst over the streak badge.
+  double get _confettiProgress => Interval(0.3, 0.75).transform(
+        _entranceController.value.clamp(0.0, 1.0),
+      );
+
+  /// True while the amber streak glow is shown (entrance playing
+  /// with a real streak to celebrate).
+  bool get _showStreakGlow =>
+      _entranceStarted && !_entranceDone && _entranceStreak > 0;
+
+  /// Starts the entrance once the tab has loaded, if the gate
+  /// armed it ([StudentTab.playEntrance]). Reduced motion shows
+  /// the finished tab instantly with no sound; an already-active
+  /// tour wins outright (the entrance is skipped, never played
+  /// under the tour). Either way the flag is consumed exactly
+  /// once, so the entrance never re-fires.
+  void _maybeStartEntrance() {
+    if (!widget.playEntrance || _entranceStarted || _loading || !mounted) {
+      return;
+    }
+    _entranceStarted = true;
+    _consumeEntrance();
+    // Capture the LIVE end states FIRST — the real wallet balance,
+    // the real walking progress, the real checked cells and the
+    // real streak. Nothing is hardcoded here. The capture runs
+    // before the skip paths below, so a skipped entrance still
+    // shows the live values (the animated overrides equal the
+    // live end states) instead of zeros.
+    _entrancePoints = widget.walletController?.balance ?? 0;
+    _entranceWalking = _walking.todayProgress;
+    final records = _signinRecords;
+    final today = _signinToday;
+    _entranceChecked = currentCycleChecked(records, today);
+    _entranceStreak = checkinStreak(records, today);
+    if (_tourController.isActive) {
+      // The tour (auto-started or manual) owns the screen now.
+      _entranceDone = true;
+      _entranceController.value = 1;
+      return;
+    }
+    if (MediaQuery.of(context).disableAnimations) {
+      // Reduced motion: the finished tab, instantly, no sound.
+      _entranceDone = true;
+      _entranceController.value = 1;
+      return;
+    }
+    SplashSound.entrance();
+    _entranceController.forward(from: 0);
+  }
+
+  void _consumeEntrance() {
+    if (_entranceConsumedFired) return;
+    _entranceConsumedFired = true;
+    widget.onEntranceConsumed?.call();
+  }
+
+  /// Completes the entrance instantly at its live end states.
+  /// Called when the Watch demo tour starts while the entrance
+  /// is playing, so the tour takes over cleanly: every value is
+  /// already at its final (live) value and the overlays are gone.
+  void _completeEntrance() {
+    if (!_entranceStarted || _entranceDone) return;
+    _entranceDone = true;
+    _entranceController.value = 1;
+  }
+
+  /// Tour listener (Feature 5): if the tour becomes active while
+  /// the entrance is playing, the entrance completes cleanly
+  /// instead of fighting the overlay.
+  void _onTourChanged() {
+    if (_tourController.isActive) _completeEntrance();
+  }
+
+  /// Manual "Watch demo" start: the entrance (if playing) is
+  /// completed first, then the tour starts.
+  void _startTour() {
+    _completeEntrance();
+    _tourController.start();
+  }
+
+  /// The tab list's own scroll controller, so the tour can sweep a
+  /// below-the-fold target into range (the list builds lazily —
+  /// an unbuilt target has no context for ensureVisible to use).
+  final _tourScrollController = ScrollController();
+
+  /// Auto-start entry: when [StudentTab.startWatchTour] is true on
+  /// first build after landing, start the tour and fire the
+  /// consumed callback once. Called from initState (post-frame, so
+  /// the targets are laid out) and didUpdateWidget (flag flipped
+  /// while the tab already exists).
+  void _maybeAutoStartTour() {
+    if (!widget.startWatchTour || _tourController.isActive) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.startWatchTour) return;
+      if (_tourController.isActive) return;
+      // The tour takes over: finish any playing entrance first
+      // (Feature 5) so the two never fight over the tab.
+      _completeEntrance();
+      _tourController.start();
+      if (!_tourConsumedFired) {
+        _tourConsumedFired = true;
+        widget.onWatchTourConsumed?.call();
+      }
+    });
+  }
+
+  /// Scrolls [key]'s widget into view for the tour overlay. The
+  /// tab's ListView builds lazily, so a below-the-fold target has
+  /// no context until it is scrolled into range — this sweeps the
+  /// list down in viewport steps, then back up, until the target
+  /// builds, then ensures it visible. Gives up silently (the
+  /// overlay shows a centred caption instead) if the target never
+  /// builds or the list has no scrollable yet.
+  Future<void> _revealTourTarget(GlobalKey key) async {
+    // Fast path: already built.
+    if (await _tryEnsureVisible(key)) return;
+    for (var attempt = 0; attempt < 24; attempt++) {
+      if (!_tourScrollController.hasClients) return;
+      final position = _tourScrollController.position;
+      // Sweep down first (12 steps), then back up (12 steps):
+      // every item in the list is built at some point on the way.
+      final goingDown = attempt < 12;
+      final next = goingDown
+          ? (position.pixels + position.viewportDimension * 0.8)
+              .clamp(position.minScrollExtent, position.maxScrollExtent)
+          : (position.pixels - position.viewportDimension * 0.8)
+              .clamp(position.minScrollExtent, position.maxScrollExtent);
+      if (next == position.pixels) {
+        if (goingDown) continue;
+        return;
+      }
+      await _tourScrollController.animateTo(
+        next,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+      // Re-check after each step: the target builds (or unbuilds)
+      // as the sweep moves the list.
+      if (await _tryEnsureVisible(key)) return;
+    }
+  }
+
+  /// Ensures [key]'s widget is visible when it is already built
+  /// (false when it has no context yet — the sweep keeps going).
+  /// The context is read fresh from the key inside this helper so
+  /// no BuildContext is used across an async gap.
+  Future<bool> _tryEnsureVisible(GlobalKey key) async {
+    final targetContext = key.currentContext;
+    if (targetContext == null) return false;
+    await _ensureTargetVisible(targetContext);
+    return true;
+  }
+
+  /// Ensures an already-built tour target is visible in the tab
+  /// list (no-op when the target sits outside any Scrollable,
+  /// e.g. the shell's nav). Split out so no BuildContext is used
+  /// across an async gap.
+  static Future<void> _ensureTargetVisible(BuildContext context) async {
+    if (Scrollable.maybeOf(context) == null) return;
+    await Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 300),
+      alignment: 0.3,
+    );
+  }
+
   /// Remote mode: the wallet controller has a real backend.
   bool get _signinRemote => widget.walletController?.remote ?? false;
 
@@ -174,6 +581,17 @@ class _StudentTabState extends State<StudentTab> {
   @override
   void initState() {
     super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: studentEntranceDuration,
+    );
+    _entranceController.addStatusListener((status) {
+      if (status == AnimationStatus.completed &&
+          mounted &&
+          !_entranceDone) {
+        setState(() => _entranceDone = true);
+      }
+    });
     widget.walletController?.addListener(_onWalletChanged);
     widget.creditsController?.addListener(_onWalletChanged);
     _loadCredits();
@@ -184,16 +602,35 @@ class _StudentTabState extends State<StudentTab> {
     _nowTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
+    // Watch demo tour (Feature 3): register this tab's targets and
+    // the reveal hook, then auto-start if the gate armed it.
+    _tourController = widget.tourController ?? WatchTourController();
+    _tourOwned = widget.tourController == null;
+    _tourController.addListener(_onTourChanged);
+    for (final entry in _tourKeys.entries) {
+      _tourController.registerTarget(entry.key, entry.value);
+    }
+    _tourController.revealTarget = _revealTourTarget;
     _load();
+    _maybeAutoStartTour();
+    _maybeStartEntrance();
   }
 
   @override
   void dispose() {
     _nowTimer?.cancel();
+    _entranceController.dispose();
+    _tourController.removeListener(_onTourChanged);
     widget.walletController?.removeListener(_onWalletChanged);
     widget.creditsController?.removeListener(_onWalletChanged);
     _walking.removeListener(_onWalkingChanged);
     if (_walkingOwned) _walking.dispose();
+    _tourScrollController.dispose();
+    if (_tourOwned) {
+      _tourController.dispose();
+    } else {
+      _tourController.revealTarget = null;
+    }
     super.dispose();
   }
 
@@ -209,6 +646,19 @@ class _StudentTabState extends State<StudentTab> {
       oldWidget.creditsController?.removeListener(_onWalletChanged);
       widget.creditsController?.addListener(_onWalletChanged);
       _loadCredits();
+    }
+    // Tour hook (Feature 3): the gate may arm the tour while this
+    // tab already exists (the shell builds it eagerly inside an
+    // IndexedStack, so initState usually sees the flag already —
+    // this covers the flip-while-mounted case).
+    if (widget.startWatchTour && !oldWidget.startWatchTour) {
+      _maybeAutoStartTour();
+    }
+    // Entrance hook (Feature 5): the gate may arm the entrance
+    // while this tab already exists (same flip-while-mounted case
+    // as the tour hook above).
+    if (widget.playEntrance && !oldWidget.playEntrance) {
+      _maybeStartEntrance();
     }
   }
 
@@ -307,6 +757,10 @@ class _StudentTabState extends State<StudentTab> {
       _quoteHistory = quoteHistory;
       _loading = false;
     });
+    // The entrance (Feature 5) can only start once the tab has
+    // loaded — starting it during the spinner would animate
+    // nothing. _maybeStartEntrance no-ops unless the gate armed it.
+    _maybeStartEntrance();
   }
 
   Future<void> _open(Widget screen, {bool darkAware = false}) async {
@@ -360,59 +814,22 @@ class _StudentTabState extends State<StudentTab> {
   /// When there is no notification repository or no signed-in user,
   /// the plain header (no badge) is used.
   Widget _headerWithNotifications(DateTime now) {
-    final stream = _headerNotificationStream();
-    if (stream == null) {
+    final repository = widget.reviewNotificationRepository;
+    final userId = widget.user?.uid;
+    if (repository == null || userId == null) {
       return studentHeader(
         greetingName: greetingFor(now),
         onBell: _showNotifications,
         profile: widget.profile,
       );
     }
-    return StreamBuilder<List<AppReviewNotification>>(
-      stream: stream,
-      builder: (context, snapshot) {
-        final unread = (snapshot.data ?? const <AppReviewNotification>[])
-            .where((n) => !n.read)
-            .length;
-        return studentHeader(
-          greetingName: greetingFor(now),
-          onBell: _showNotifications,
-          profile: widget.profile,
-          unreadNotifications: unread,
-        );
-      },
+    return _NotificationHeader(
+      repository: repository,
+      userId: userId,
+      greetingName: greetingFor(now),
+      onBell: _showNotifications,
+      profile: widget.profile,
     );
-  }
-
-  /// The student's reply-notification stream for the header bell
-  /// badge. Created once per signed-in user and reused across
-  /// rebuilds — never created in build, or every rebuild would
-  /// resubscribe and re-emit. (The Notifications section card
-  /// that used a second stream was removed Nov 9 at Steven's
-  /// request; admin replies still reach the student through the
-  /// bell badge, the top popup, and the Notifications sheet.)
-  Stream<List<AppReviewNotification>>? _headerNotificationsStream;
-  String? _notificationsStreamUserId;
-
-  void _ensureNotificationStreams() {
-    final repository = widget.reviewNotificationRepository;
-    final userId = widget.user?.uid;
-    if (repository == null || userId == null) {
-      _headerNotificationsStream = null;
-      _notificationsStreamUserId = null;
-      return;
-    }
-    if (_notificationsStreamUserId == userId &&
-        _headerNotificationsStream != null) {
-      return;
-    }
-    _notificationsStreamUserId = userId;
-    _headerNotificationsStream = repository.watchForUser(userId);
-  }
-
-  Stream<List<AppReviewNotification>>? _headerNotificationStream() {
-    _ensureNotificationStreams();
-    return _headerNotificationsStream;
   }
 
   @override
@@ -432,58 +849,280 @@ class _StudentTabState extends State<StudentTab> {
     // has no Hub entry point anymore. The Commute, Subject
     // breakdown, and Notifications sections were removed Nov 9 at
     // his request.)
-    final now = DateTime.now();
-    final groups = <({String title, List<Widget> sections})>[
-      (
-        title: 'Rewards & Goals',
-        sections: [
-          _signinWidget(context),
-          _rewardsCenterWidget(context),
-          _walkingWidget(context),
-        ],
-      ),
-      (
-        title: 'Study',
-        sections: [
-          _classesWidget(context),
-        ],
-      ),
-      (
-        title: 'Money',
-        sections: [_allowanceWidget(context)],
-      ),
-      (
-        title: 'Inspiration & Calendar',
-        sections: [
-          _bibleWidget(context),
-          _quotesWidget(context),
-          _attendanceWidget(context),
-        ],
-      ),
-    ];
+    // The entrance (Feature 5) rebuilds this list every frame
+    // while it runs, so the stagger, count-up, fill and tick-in
+    // values stay live. The AnimatedBuilder's builder re-runs on
+    // every controller tick — the list is NOT passed as `child`
+    // (a cached child would never update). When no entrance is
+    // playing the controller is idle and this builds exactly once,
+    // as before; the layout, order and data are unchanged.
+    final content = AnimatedBuilder(
+      animation: _entranceController,
+      builder: (context, _) {
+        final now = DateTime.now();
+        final groups = <({String title, List<(String, Widget)> sections})>[
+          (
+            title: 'Rewards & Goals',
+            sections: [
+              (
+                'signin',
+                _signinWidget(
+                  context,
+                  animatedCheckedCells: _animatedCheckedCells,
+                  streakPop: _streakPop,
+                ),
+              ),
+              ('rewards', _rewardsCenterWidget(context)),
+              ('walking', _walkingWidget(context)),
+            ],
+          ),
+          (
+            title: 'Study',
+            sections: [
+              ('classes', _classesWidget(context)),
+            ],
+          ),
+          (
+            title: 'Money',
+            sections: [('allowance', _allowanceWidget(context))],
+          ),
+          (
+            title: 'Inspiration & Calendar',
+            sections: [
+              ('verse', _bibleWidget(context)),
+              ('quotes', _quotesWidget(context)),
+              ('calendar', _attendanceWidget(context)),
+            ],
+          ),
+        ];
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        // ChatGPT spacing: 20px horizontal screen padding,
-        // 24px between sections.
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-        children: [
-          _headerWithNotifications(now),
-          const SizedBox(height: 16),
-          _atAGlanceWidget(context, now),
-          for (final g in groups) ...[
-            const SizedBox(height: 24),
-            _groupHeader(g.title),
-            const SizedBox(height: 12),
-            for (final s in g.sections) ...[
-              s,
+        return RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            controller: _tourScrollController,
+            // ChatGPT spacing: 20px horizontal screen padding,
+            // 24px between sections.
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            children: [
+              _entranceItem(
+                studentEntranceHeaderIndex,
+                _headerWithNotifications(now),
+              ),
+              const SizedBox(height: 16),
+              // Watch demo (Feature 3): manual tour start, dark
+              // emerald, directly below the header. The tour itself
+              // is an overlay — it never changes anything below.
+              // Starting it completes a playing entrance first
+              // (Feature 5) so the tour takes over cleanly.
+              _entranceItem(
+                studentEntranceWatchDemoIndex,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    key: const ValueKey('watch-demo-button'),
+                    onPressed: _startTour,
+                    icon: const Icon(Icons.play_arrow, size: 20),
+                    label: const Text('Watch demo'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kStudentEmerald,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _entranceItem(
+                studentEntranceAtAGlanceIndex,
+                _atAGlanceWithFloat(context, now),
+              ),
+              for (final g in groups) ...[
+                const SizedBox(height: 24),
+                _entranceItem(
+                  _entranceIndexForGroup(g.title),
+                  _groupHeader(g.title),
+                ),
+                const SizedBox(height: 12),
+                for (final s in g.sections) ...[
+                  _entranceItem(
+                    _entranceIndexForSection(s.$1),
+                    _wrapEntranceSection(
+                      s.$1,
+                      KeyedSubtree(key: _tourKeys[s.$1]!, child: s.$2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ],
               const SizedBox(height: 12),
             ],
-          ],
-          const SizedBox(height: 12),
+          ),
+        );
+      },
+    );
+
+    // Bare tab (no shell controller): the tab renders the tour
+    // overlay itself over its own list. In the real app the shell
+    // owns the controller and renders the overlay above the whole
+    // shell instead, so the tour can also highlight the top nav /
+    // sidebar — the tab then renders no overlay of its own.
+    if (!_tourOwned) return content;
+    return Stack(
+      children: [
+        content,
+        WatchTourOverlay(controller: _tourController),
+      ],
+    );
+  }
+
+  /// Entrance stagger wrapper (Feature 5): when no entrance is
+  /// playing this returns [child] untouched (the static tab). While
+  /// the entrance runs, item [index] fades + slides up + springs
+  /// in with an overshoot bounce at its ~70 ms stagger slot.
+  Widget _entranceItem(int index, Widget child) {
+    if (!_entranceStarted) return child;
+    final value = _entranceController.value;
+    final progress = entranceItemProgress(value, index);
+    final scale = entranceItemScale(value, index);
+    return Opacity(
+      opacity: progress,
+      child: Transform.translate(
+        offset: Offset(0, 14 * (1 - progress)),
+        child: Transform.scale(scale: scale, child: child),
+      ),
+    );
+  }
+
+  /// Stagger index of a group header, by the group's title (the
+  /// four groups, in the tab's top-to-bottom order).
+  int _entranceIndexForGroup(String title) {
+    switch (title) {
+      case 'Study':
+        return studentEntranceStudyHeaderIndex;
+      case 'Money':
+        return studentEntranceMoneyHeaderIndex;
+      case 'Inspiration & Calendar':
+        return studentEntranceInspirationHeaderIndex;
+      case 'Rewards & Goals':
+      default:
+        return studentEntranceRewardsHeaderIndex;
+    }
+  }
+
+  /// Stagger index of a section card, by its tour stop id.
+  int _entranceIndexForSection(String id) {
+    switch (id) {
+      case 'rewards':
+        return studentEntranceRewardsIndex;
+      case 'walking':
+        return studentEntranceWalkingIndex;
+      case 'classes':
+        return studentEntranceClassesIndex;
+      case 'allowance':
+        return studentEntranceAllowanceIndex;
+      case 'verse':
+        return studentEntranceVerseIndex;
+      case 'quotes':
+        return studentEntranceQuotesIndex;
+      case 'calendar':
+        return studentEntranceCalendarIndex;
+      case 'signin':
+      default:
+        return studentEntranceSigninIndex;
+    }
+  }
+
+  /// Entrance-only dressing for a section card. Only the sign-in
+  /// card gets any: while the entrance is playing with a real
+  /// streak, an amber glow hugs the card and a confetti burst
+  /// fires over the streak badge. Every other section passes
+  /// through untouched, and the dressing is gone the moment the
+  /// entrance finishes.
+  Widget _wrapEntranceSection(String id, Widget child) {
+    if (id != 'signin' || !_showStreakGlow) return child;
+    final glowAlpha =
+        _streakPop * (1 - _confettiProgress) * 0.55;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: glowAlpha > 0.01
+            ? [
+                BoxShadow(
+                  color: kSigninFlame.withValues(alpha: glowAlpha),
+                  blurRadius: 24,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          child,
+          if (_confettiProgress > 0.05 && _confettiProgress < 1.0)
+            Positioned.fill(
+              child: EntranceConfetti(
+                key: entranceConfettiKey,
+                progress: _confettiProgress,
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  /// The at-a-glance card, plus the floating "+N pts" chip while
+  /// the entrance's points count-up is running. The chip floats
+  /// up and fades out as the count reaches the live balance, and
+  /// is gone entirely once the entrance finishes.
+  Widget _atAGlanceWithFloat(BuildContext context, DateTime now) {
+    final card = _atAGlanceWidget(
+      context,
+      now,
+      animatedPoints: _animatedPoints,
+    );
+    if (!_showPointsFloat) return card;
+    final p = _pointsProgress;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        card,
+        Positioned(
+          top: -10,
+          right: 12,
+          child: Opacity(
+            opacity: (1 - p).clamp(0.0, 1.0),
+            child: Transform.translate(
+              offset: Offset(0, -10 * p),
+              child: Container(
+                key: entrancePointsFloatKey,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: kStudentEmerald,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: kStudentEmerald.withValues(alpha: 0.4),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Text(
+                  '+$_entrancePoints pts',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -515,20 +1154,28 @@ class _StudentTabState extends State<StudentTab> {
   /// At-a-glance summary under the greeting hero: today's date
   /// plus the three live counts — points, free scans, classes
   /// today. All real data; zero states stay honest.
-  Widget _atAGlanceWidget(BuildContext context, DateTime now) {
+  /// [animatedPoints] (Feature 5) overrides the points value
+  /// while the entrance count-up runs — it is always the eased
+  /// 0 -> live balance, never a hardcoded number.
+  Widget _atAGlanceWidget(
+    BuildContext context,
+    DateTime now, {
+    int? animatedPoints,
+  }) {
     final scheme = Theme.of(context).colorScheme;
-    final points = widget.walletController?.balance ?? 0;
+    final points = animatedPoints ?? widget.walletController?.balance ?? 0;
     final freeScans =
         widget.creditsController?.scanCounter.freeRemaining ??
             freeScansPerDay;
     final classesToday = classesOnDay(_subjects, now.weekday).length;
 
-    Widget stat(String label, String value) {
+    Widget stat(String label, String value, {Key? valueKey}) {
       return Expanded(
         child: Column(
           children: [
             Text(
               value,
+              key: valueKey,
               style: AppText.bodyStrong.copyWith(color: scheme.primary),
             ),
             const SizedBox(height: 2),
@@ -558,7 +1205,11 @@ class _StudentTabState extends State<StudentTab> {
             const SizedBox(height: AppSpacing.s8),
             Row(
               children: [
-                stat('Points', '$points'),
+                stat(
+                  'Points',
+                  '$points',
+                  valueKey: const ValueKey('at-a-glance-points'),
+                ),
                 stat('Free scans', '$freeScans/$freeScansPerDay'),
                 stat(
                   'Classes today',
@@ -654,6 +1305,10 @@ class _StudentTabState extends State<StudentTab> {
   Widget _walkingWidget(BuildContext context) {
     return WalkingGoalCard(
       controller: _walking,
+      // Feature 5: while the entrance runs, the bar fills 0 ->
+      // the live progress instead of showing it at once. Null
+      // (no entrance) shows the live progress directly.
+      progressOverride: _animatedWalkingProgress,
       onOpen: () => _open(
         WalkingGoalScreen(controller: _walking),
         darkAware: true,
@@ -672,12 +1327,22 @@ class _StudentTabState extends State<StudentTab> {
   /// The WHOLE card is one tap target into the dedicated sign-in
   /// page; only the Next Reward stat has its own tap (the reward
   /// schedule sheet).
-  Widget _signinWidget(BuildContext context) {
+  ///
+  /// Feature 5: [animatedCheckedCells] ticks the day cells in
+  /// one by one (always the real checked count as the end state),
+  /// and [streakPop] (0..1) springs the streak badge in with the
+  /// entrance — both default to the live/static rendering.
+  Widget _signinWidget(
+    BuildContext context, {
+    int? animatedCheckedCells,
+    double streakPop = 1.0,
+  }) {
     final records = _signinRecords;
     final today = _signinToday;
     final streak = checkinStreak(records, today);
     final checkedToday = hasCheckedInToday(records, today);
-    final checkedCells = currentCycleChecked(records, today);
+    final checkedCells =
+        animatedCheckedCells ?? currentCycleChecked(records, today);
     final todayDay = checkedToday
         ? records
             .firstWhere((r) => dateKey(r.date) == dateKey(today))
@@ -743,23 +1408,29 @@ class _StudentTabState extends State<StudentTab> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: tileGreen,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.local_fire_department_rounded,
-                            color: kStudentEmeraldAccent, size: 16),
-                        const SizedBox(width: 4),
-                        Text('Day $todayDay of 7',
-                            style: AppText.smallBold
-                                .copyWith(color: emphasis)),
-                      ],
+                  // Feature 5: the streak badge pops in with the
+                  // entrance (spring scale 0.6 -> 1); static
+                  // arrivals render it at full size (streakPop 1).
+                  Transform.scale(
+                    scale: 0.6 + 0.4 * streakPop.clamp(0.0, 1.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: tileGreen,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.local_fire_department_rounded,
+                              color: kStudentEmeraldAccent, size: 16),
+                          const SizedBox(width: 4),
+                          Text('Day $todayDay of 7',
+                              style: AppText.smallBold
+                                  .copyWith(color: emphasis)),
+                        ],
+                      ),
                     ),
                   ),
                 ],

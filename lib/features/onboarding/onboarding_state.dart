@@ -254,7 +254,14 @@ class ProfileStore {
 /// profile setup. When Firebase is NOT configured, the app falls back
 /// to the dashboard (legacy behavior) so it stays usable before
 /// google-services.json is supplied.
-enum AppStartDestination { onboarding, signIn, verifyEmail, profileSetup, dashboard }
+enum AppStartDestination {
+  onboarding,
+  signIn,
+  createAccount,
+  verifyEmail,
+  profileSetup,
+  dashboard
+}
 
 AppStartDestination resolveStartDestination({
   required bool firebaseConfigured,

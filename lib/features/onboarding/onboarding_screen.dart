@@ -33,6 +33,7 @@ import 'package:flutter/services.dart';
 
 import '../app_layout.dart';
 import 'entry_theme.dart';
+import 'startup_step_indicator.dart';
 
 class _OnboardingPage {
   const _OnboardingPage({
@@ -198,6 +199,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ],
                   ),
                 ),
+                // Startup progress: onboarding pages are steps 2–5
+                // of the 9-step flow (1 Splash, 6 Create Account,
+                // 7 Sign In, 8 Profile Setup, 9 Student tab).
+                const SizedBox(height: 4),
+                StartupStepIndicator(
+                  step: _index + 2,
+                  activeColor: colors.primary,
+                  inactiveColor: colors.secondaryText,
+                  labelColor: colors.secondaryText,
+                ),
+                const SizedBox(height: 4),
                 Expanded(
                   child: PageView.builder(
                     controller: _controller,

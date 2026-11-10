@@ -21,10 +21,19 @@ class WalkingGoalCard extends StatelessWidget {
     super.key,
     required this.controller,
     required this.onOpen,
+    this.progressOverride,
   });
 
   final WalkingController controller;
   final VoidCallback onOpen;
+
+  /// Feature 5 (Student tab entrance): when non-null, the ready
+  /// card's progress bar shows this value instead of the live
+  /// [WalkingController.todayProgress]. The entrance drives it
+  /// 0 -> the live progress so the bar fills like an XP bar; null
+  /// (the normal case) always shows the live progress. Never a
+  /// hardcoded target — the caller passes the live progress.
+  final double? progressOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +220,8 @@ class WalkingGoalCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final steps = controller.todaySteps;
     final goal = controller.goal;
-    final progress = controller.todayProgress;
+    final progress =
+        (progressOverride ?? controller.todayProgress).clamp(0.0, 1.0);
     final week = controller.weeklyHistory;
     final maxWeek = week.fold<int>(
         0, (max, e) => (e.steps ?? 0) > max ? (e.steps ?? 0) : max);
