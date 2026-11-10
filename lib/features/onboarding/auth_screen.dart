@@ -23,8 +23,22 @@
 // - Sign In Google is LOGIN ONLY: after Google authentication, the
 //   screen looks up the EstudyanteGO profile for the Firebase UID in
 //   ProfileStore. A profile means login proceeds (normal gate flow).
-//   No profile means immediate sign-out + [noAccountFoundMessage] +
-//   a Create Account button. Google sign-in NEVER auto-registers.
+//   When the local profile is missing, the gate checks Firestore
+//   (`student_profiles`, doc ID = UID) via [profileRepository]
+//   BEFORE rejecting: a remote profile means login proceeds too
+//   (the normal post-auth restore merges it into the local store),
+//   so a returning user on a fresh install / cleared data / new
+//   device is not locked out. No profile in EITHER store means
+//   immediate sign-out + [noAccountFoundMessage] + a Create Account
+//   button. Google sign-in NEVER auto-registers. The lookup is by
+//   UID only — never by email — so a profile under a different UID
+//   (a different Google account) still correctly says "No account
+//   found" for this UID.
+// - When no repository is supplied (Firebase unconfigured), the
+//   gate falls back to the local-only check. When the Firestore
+//   fetch itself fails (e.g. offline), the gate shows a retry-able
+//   error instead of treating the failure as "no account" — and it
+//   does NOT sign the user out, so one more tap retries.
 // - Create Account Google is SIGN-UP: it creates the Firebase account
 //   (when new) and the UID-keyed EstudyanteGO profile, reusing an
 //   existing profile instead of duplicating it.
@@ -37,6 +51,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_layout.dart';
+import '../profile_repository.dart';
 import 'auth_service.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
@@ -279,6 +294,7 @@ class SignInScreen extends StatefulWidget {
     required this.service,
     required this.onSignedIn,
     required this.onCreateAccountRequested,
+    this.profileRepository,
     this.themeMode = ThemeMode.dark,
     this.onThemeModeChanged,
     this.onBack,
@@ -291,6 +307,15 @@ class SignInScreen extends StatefulWidget {
   /// no-account Create Account button) navigate to the Create
   /// Account page — the gate swaps the destination.
   final VoidCallback onCreateAccountRequested;
+
+  /// Remote student-profile store, used ONLY as a fallback when the
+  /// local profile is missing (see [_SignInScreenState
+  /// ._handleGoogleSignIn]). The app passes the
+  /// `isConfigured`-gated repository from main.dart
+  /// (`FirestoreStudentProfileRepository` when Firebase is
+  /// configured, null otherwise); null means the gate checks the
+  /// local store only. Tests inject an in-memory fake here.
+  final StudentProfileRepository? profileRepository;
 
   /// Selected theme, from the app shell.
   final ThemeMode themeMode;
@@ -372,6 +397,17 @@ class _SignInScreenState extends State<SignInScreen> {
   /// onAccountCreated callbacks), so signing out here cannot strand
   /// the user on another screen: the gate stays on Sign In and this
   /// screen's message state survives.
+  ///
+  /// Firestore fallback (Nov 10, Feature 5): the local store is
+  /// only a cache, so a missing local profile is NOT proof of no
+  /// account — the profile may live in Firestore from another
+  /// install or device. When the local lookup misses, the gate
+  /// checks Firestore for this UID (doc ID = UID, never email)
+  /// before rejecting. A remote profile proceeds to login (the
+  /// normal post-auth restore merges it locally). No profile in
+  /// either store signs out + shows [noAccountFoundMessage].
+  /// A failed fetch is neither: it shows a retry-able error and
+  /// leaves the user signed in, so one more tap retries.
   Future<void> _handleGoogleSignIn() async {
     if (!_configured || _busy) return;
     setState(() {
@@ -390,8 +426,33 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       final profile = store.loadProfile(user.uid);
       if (profile == null) {
-        // Never auto-register from Sign In: sign out immediately and
-        // point at Create Account instead.
+        final repository = widget.profileRepository;
+        if (repository != null) {
+          try {
+            final remote = await repository.fetchProfile(user.uid);
+            if (!mounted) return;
+            if (remote != null) {
+              // Profile exists in Firestore (returning user, fresh
+              // install / cleared data / new device): login
+              // proceeds. The post-auth restore merges it locally.
+              widget.onSignedIn(user);
+              return;
+            }
+          } catch (_) {
+            // A fetch failure is not "no account": show a
+            // retry-able error and stay signed in, so the user can
+            // tap again instead of being pushed to Create Account.
+            if (mounted) {
+              setState(
+                () => _error = 'Something went wrong. Please try again.',
+              );
+            }
+            return;
+          }
+        }
+        // No profile locally AND none in Firestore (or no remote
+        // store at all): never auto-register from Sign In — sign
+        // out immediately and point at Create Account instead.
         await widget.service.signOut();
         if (!mounted) return;
         setState(() {

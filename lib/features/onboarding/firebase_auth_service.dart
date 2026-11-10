@@ -155,11 +155,20 @@ class FirebaseAuthService implements AuthService {
   /// the next tap retries.
   static bool _googleInitialized = false;
 
-  Future<void> _ensureGoogleInitialized() async {
+  /// Makes sure Google Sign-In is initialized, exactly once per
+  /// process (see [_googleInitialized]). Public so the Google
+  /// Calendar sync (Feature 4) can authorize the calendar scope
+  /// through the same already-initialized instance — calling
+  /// initialize() a second time from the sync would be undefined
+  /// behavior. This only initializes the plugin; it never signs
+  /// anyone in and never touches Firebase Auth.
+  static Future<void> ensureGoogleInitialized() async {
     if (_googleInitialized) return;
     await GoogleSignIn.instance.initialize();
     _googleInitialized = true;
   }
+
+  Future<void> _ensureGoogleInitialized() => ensureGoogleInitialized();
 
   /// Shared Google flow for login and signup: native account chooser,
   /// Firebase credential sign-in. Returns null ONLY when the user

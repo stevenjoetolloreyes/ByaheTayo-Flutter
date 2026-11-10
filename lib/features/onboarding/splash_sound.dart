@@ -44,6 +44,17 @@ class SplashSound {
     unawaited(_play(_toneWav(660, 0.09, 0.09)));
   }
 
+  /// Class-placement chime (Classes + menu, Feature 2): the same
+  /// soft pop as [pop] — a single 660 Hz sine pop, 0.09 s, gain
+  /// 0.09. Plays only when a class is placed into the timetable
+  /// (manual add, Files scan, or Google Schedule import), never on
+  /// menu open, form open, or any other success. Named separately
+  /// from [pop] so the placement call sites read as what they are.
+  /// Best-effort like the rest of this class: silence on failure.
+  static void placeClass() {
+    pop();
+  }
+
   /// Setup-success chime: three ascending sine beeps — C5 (523 Hz)
   /// / E5 (659 Hz) / G5 (784 Hz), staggered 0.09 s apart, gain
   /// 0.08–0.09, in one 0.6 s clip. Plays when a new user finishes

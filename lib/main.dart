@@ -1120,6 +1120,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           onCreateAccountRequested: () => setState(
             () => _destination = AppStartDestination.createAccount,
           ),
+          profileRepository: _profileRepository,
           themeMode: _themeMode,
           onThemeModeChanged: _setThemeMode,
           onBack: _cameFromOnboarding ? _backToOnboarding : null,
@@ -1150,6 +1151,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
             onCreateAccountRequested: () => setState(
               () => _destination = AppStartDestination.createAccount,
             ),
+            profileRepository: _profileRepository,
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
           );
@@ -1179,6 +1181,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
             onCreateAccountRequested: () => setState(
               () => _destination = AppStartDestination.createAccount,
             ),
+            profileRepository: _profileRepository,
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
           );

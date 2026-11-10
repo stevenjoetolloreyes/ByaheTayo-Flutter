@@ -147,6 +147,24 @@ List<GoogleCalendarEvent> sampleGoogleEvents() => [
 /// Storage key for the locally stored synced set.
 const googleEventsKey = 'byahetayo_student_google_events';
 
+/// Set to 1 once the first REAL Google Calendar sync has replaced
+/// the placeholder sample set (Feature 4). Until then the stored
+/// set may still be the seeded samples; after the first real sync
+/// the stored set is real events only, and later syncs merge into
+/// it instead of replacing it.
+const googleCalendarRealSyncKey = 'byahetayo_google_calendar_real_sync_done';
+
+/// True once a real Calendar API sync has run (see
+/// [googleCalendarRealSyncKey]).
+Future<bool> isGoogleCalendarRealSyncDone() async {
+  return await StudentStorage.loadInt(googleCalendarRealSyncKey) == 1;
+}
+
+/// Marks the first real sync as done, so later syncs merge.
+Future<void> markGoogleCalendarRealSyncDone() async {
+  await StudentStorage.saveInt(googleCalendarRealSyncKey, 1);
+}
+
 /// Loads the stored synced set; seeds (and stores) the sample set
 /// on first run. An explicitly stored empty list stays empty — a
 /// student who removed every event does not get them back.
