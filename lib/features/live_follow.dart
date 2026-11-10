@@ -213,6 +213,36 @@ double bearingBetween(LatLng from, LatLng to) {
   return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
 }
 
+/// Screen rotation of the Live Follow vehicle marker, in
+/// degrees, normalised to -180..180: the live bearing minus the
+/// map's current bearing, so the marker points along the
+/// direction of travel ON SCREEN. In heading-up Live mode the
+/// map bearing equals the live bearing, so the marker points
+/// straight up; in north-up it points along the heading.
+/// Wraps across the 0/360 seam (live 10, map 350 -> 20, not
+/// -340; live 350, map 10 -> -20).
+double liveMarkerScreenRotationDeg({
+  required double liveBearing,
+  required double mapBearing,
+}) {
+  var diff = (liveBearing - mapBearing) % 360;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  return diff;
+}
+
+/// Target zoom for a plain map tap (tap-to-zoom, Nov 11,
+/// 2026): two levels closer than the current zoom, clamped to
+/// the map's 3..19 range. Exactly at the Live follow zoom (16)
+/// the tap recentres without zooming further in — the follow
+/// camera already sits at 16, so zooming on every tap would
+/// walk the zoom up while the user is only trying to look
+/// around. (Above 16 the +2 clamp still applies: 18 -> 19.)
+double liveTapZoomTarget(double currentZoom) {
+  if (currentZoom == 16) return 16;
+  return (currentZoom + 2).clamp(3.0, 19.0);
+}
+
 /// Interpolates an angle (degrees) toward a target along the
 /// shortest arc, so a bearing never spins the long way around
 /// the 0/360 seam (350° → 10° passes through 0, not 180).
@@ -240,4 +270,19 @@ String formatArrivalTime(DateTime t) {
   final minutes = t.minute.toString().padLeft(2, '0');
   final suffix = t.hour < 12 ? 'AM' : 'PM';
   return '$hour12:$minutes $suffix';
+}
+
+/// Live speed for the Live panel's Speed chip: whole km/h
+/// ("42 km/h"), or "—" when no speed sample exists yet — never
+/// a guessed speed.
+String formatLiveSpeedKmh(double? kmh) {
+  if (kmh == null || kmh.isNaN || kmh.isInfinite) return '—';
+  return '${kmh.round()} km/h';
+}
+
+/// Live distance for the Live panel's Distance chip:
+/// travelled / total route, one decimal ("12.3 / 27.0 km").
+String formatLiveDistanceKm(double traveledKm, double totalKm) {
+  return '${traveledKm.toStringAsFixed(1)} / '
+      '${totalKm.toStringAsFixed(1)} km';
 }

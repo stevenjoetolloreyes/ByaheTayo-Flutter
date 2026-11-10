@@ -60,6 +60,7 @@ import 'custom_routes.dart';
 import 'fares_tab.dart';
 import 'ios_components.dart';
 import 'live_follow.dart';
+import 'live_minimap.dart';
 import 'onboarding/auth_service.dart';
 import 'osm_routing.dart';
 import 'route_fare_overrides.dart';
@@ -1660,9 +1661,18 @@ List<MapLineLayerSpec> mapLineLayers({
   required LatLng draftDest,
   required List<LatLng>? draftRoadPoints,
   bool roadLoading = false,
+  bool liveMode = false,
 }) {
   const green = Color(0xFF16A34A);
+  const cyan = Color(0xFF22D3EE);
   const amber = Color(0xFFF59E0B);
+  // Live Follow (Nov 11, 2026): while follow is active the
+  // route line renders bright cyan instead of green, so the
+  // live ride reads as "in progress" at a glance. The amber
+  // draft line is unchanged (it is the admin's in-progress
+  // work, not the live route).
+  final main = liveMode ? cyan : green;
+  final core = liveMode ? cyan : const Color(0xFF4ADE80);
   final layers = <MapLineLayerSpec>[];
   // Slot 0: the saved route line, always present when a route
   // is active — including in draw mode, as the reference under
@@ -1674,7 +1684,7 @@ List<MapLineLayerSpec> mapLineLayers({
       layers.add(
         MapLineLayerSpec(
           points: routePoints,
-          color: green,
+          color: main,
           solid: routeSolid,
         ),
       );
@@ -1689,14 +1699,14 @@ List<MapLineLayerSpec> mapLineLayers({
         // Earlier part: dimmed to 0.15.
         MapLineLayerSpec(
           points: split.before,
-          color: green.withValues(alpha: 0.15),
+          color: main.withValues(alpha: 0.15),
           solid: true,
         ),
         // Remaining part: soft glow + white casing + wide
-        // light-green core.
+        // light-green core (bright cyan core in Live mode).
         MapLineLayerSpec(
           points: split.after,
-          color: green.withValues(alpha: 0.25),
+          color: main.withValues(alpha: 0.25),
           solid: true,
           width: 16,
         ),
@@ -1708,7 +1718,7 @@ List<MapLineLayerSpec> mapLineLayers({
         ),
         MapLineLayerSpec(
           points: split.after,
-          color: const Color(0xFF4ADE80),
+          color: core,
           solid: true,
           width: 7,
         ),
@@ -1717,7 +1727,7 @@ List<MapLineLayerSpec> mapLineLayers({
       layers.add(
         MapLineLayerSpec(
           points: routePoints,
-          color: green,
+          color: main,
           solid: routeSolid,
         ),
       );
@@ -2753,10 +2763,21 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     return Geolocator.getCurrentPosition();
   }
 
+  /// My Location turns Live Follow ON (Nov 11, 2026): while
+  /// follow is active but paused it resumes follow; when follow
+  /// is not active it starts it. Only when starting fails
+  /// (permission denied — [_startLiveFollow] already showed the
+  /// honest message) does it fall back to the old behaviour:
+  /// one position + a move to it.
   Future<void> _goToMyLocation() async {
     if (_locating) return;
     setState(() => _locating = true);
     try {
+      if (_liveFollowActive) {
+        if (_liveFollowPaused) _resumeLiveFollow();
+        return;
+      }
+      if (await _startLiveFollow()) return;
       final position = await _ensurePosition();
       if (position == null || !mounted) return;
       setState(() {
@@ -3077,6 +3098,34 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     if (!_liveFollowActive) return;
     setState(() => _liveFollowPaused = false);
     unawaited(_liveMoveCameraToMarker());
+  }
+
+  /// A plain map tap (no special mode, no stop card open):
+  /// zoom in on the tapped point — two levels closer
+  /// ([liveTapZoomTarget]), eased over ~0.85 s. While Live
+  /// Follow is active the tap first pauses follow (same as a
+  /// stop-chip tap), so the next GPS update does not yank the
+  /// camera back to the marker mid-zoom.
+  Future<void> _onPlainMapTapZoom(Geographic point) async {
+    final controller = _mapController;
+    if (controller == null) return;
+    if (_liveFollowActive && !_liveFollowPaused) {
+      setState(() => _liveFollowPaused = true);
+    }
+    final target = LatLng(point.lat, point.lon);
+    final zoom = liveTapZoomTarget(_mapZoom);
+    try {
+      await controller.animateCamera(
+        center: Geographic(lon: target.longitude, lat: target.latitude),
+        zoom: zoom,
+        nativeDuration: const Duration(milliseconds: 850),
+      );
+      _mapCenter = target;
+      _mapZoom = zoom;
+    } catch (_) {
+      // Interrupted by a newer camera move — the newer one
+      // owns the view.
+    }
   }
 
   /// Fits the map to a southwest/northeast box. Native fitBounds
@@ -3526,6 +3575,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       draftDest: dest,
       draftRoadPoints: _draftRoadPoints,
       roadLoading: _roadLoading,
+      liveMode: _liveFollowActive,
     );
     if (_lineLayerSpecs != null &&
         listEquals(_lineLayerSpecs, specs)) {
@@ -3642,13 +3692,22 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       }
     }
     // User position: a plain blue-dot circle (MapLibre has no
-    // built-in blue dot). During Live Follow it is the green bus
+    // built-in blue dot). During Live Follow it is the green car
     // icon from Steven's Live screen, riding the interpolated
     // position so it glides instead of jumping between fixes.
+    // The car rotates to point along the direction of travel
+    // ON SCREEN (live bearing minus the map's bearing — in
+    // heading-up Live mode that is 0, so it points straight
+    // up). Tapping it focuses the live marker and resumes
+    // Follow (see _resumeLiveFollow).
     if (_userPos != null && _locationGranted) {
       if (_liveFollowActive) {
         final markerPos = _liveMarkerPos ??
             LatLng(_userPos!.latitude, _userPos!.longitude);
+        final rotationDeg = liveMarkerScreenRotationDeg(
+          liveBearing: _liveBearing,
+          mapBearing: _bearing.value,
+        );
         markers.add(
           Marker(
             point: Geographic(
@@ -3656,23 +3715,29 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               lat: markerPos.latitude,
             ),
             size: const Size(48, 48),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF16A34A),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 6,
-                    offset: Offset(0, 2),
+            child: GestureDetector(
+              onTap: _resumeLiveFollow,
+              child: Transform.rotate(
+                angle: rotationDeg * math.pi / 180,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16A34A),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.directions_bus,
-                color: Colors.white,
-                size: 26,
+                  child: const Icon(
+                    Icons.directions_car,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
               ),
             ),
           ),
@@ -5334,6 +5399,31 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       widgets.add(_liveProgressBar(scheme, snap));
       widgets.add(const SizedBox(height: 14));
       widgets.add(_liveStatChips(scheme, snap));
+      // Speed + distance row (Nov 11, 2026): the live speed
+      // from the GPS snapshot and the travelled / total route
+      // distance, in the same chip style as the row above.
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(
+        Row(
+          children: [
+            Expanded(
+              child: _liveStatChip(
+                scheme,
+                formatLiveSpeedKmh(snap.speedKmh),
+                'Speed',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _liveStatChip(
+                scheme,
+                formatLiveDistanceKm(snap.traveledKm, snap.totalKm),
+                'Distance travelled',
+              ),
+            ),
+          ],
+        ),
+      );
       // Honest status line (only when something is not live).
       final status = _liveStatusText();
       if (status != null) {
@@ -5405,6 +5495,27 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           onPressed: _resumeLiveFollow,
           icon: const Icon(Icons.my_location),
           label: const Text('Resume follow'),
+        ),
+      );
+    }
+    // Overview (Nov 11, 2026): pauses follow and fits the whole
+    // active route, so the user can see the full trip at a
+    // glance. Only shown while a route is active — with no route
+    // there is nothing to fit.
+    if (route != null) {
+      widgets.add(const SizedBox(height: 14));
+      widgets.add(
+        OutlinedButton.icon(
+          onPressed: () {
+            setState(() => _liveFollowPaused = true);
+            _fitActiveRoute();
+          },
+          icon: const Icon(Icons.zoom_out_map),
+          label: const Text('Overview'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF16A34A),
+            side: const BorderSide(color: Color(0xFF16A34A)),
+          ),
         ),
       );
     }
@@ -5872,6 +5983,19 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               _mapCenter = LatLng(camera.center.lat, camera.center.lon);
               _mapZoom = camera.zoom;
               _bearing.value = camera.bearing;
+            } else if (event is MapEventStartMoveCamera) {
+              // A user drag breaks Live Follow: pause the follow
+              // camera so the next GPS update does not yank the
+              // view back while the user is looking around. The
+              // Resume control re-centres. Programmatic moves
+              // (developerAnimation / apiAnimation — the follow
+              // camera itself, flights, view-mode tilts) never
+              // pause follow.
+              if (event.reason == CameraChangeReason.apiGesture &&
+                  _liveFollowActive &&
+                  !_liveFollowPaused) {
+                setState(() => _liveFollowPaused = true);
+              }
             } else if (event is MapEventClick) {
               if (_setEndpointsActive) {
                 // Set Start/End mode: the tap places the Start
@@ -5886,6 +6010,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                 // A plain map tap dismisses the open stop card
                 // (and restores the normal line).
                 setState(() => _selectedStopIndex = null);
+              } else {
+                // Plain tap on the open map: zoom in on the
+                // tapped point (see _onPlainMapTapZoom). While
+                // Live Follow is active the tap first pauses
+                // follow, so the zoom is not yanked back.
+                _onPlainMapTapZoom(event.point);
               }
             }
           },
@@ -6141,6 +6271,36 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
             ],
           ),
         ),
+        // Live minimap (Nov 11, 2026): a pure-Dart overview of
+        // the active route, top-right directly below the control
+        // cluster. Only while Live Follow is active AND no stop
+        // card is open — the stop card pins just below the
+        // cluster (kMapStopCardTop) and would collide. Tapping
+        // it fits the whole route. Hides when Live stops or a
+        // stop card opens.
+        if (_liveFollowActive &&
+            _selectedStopIndex == null &&
+            _activeRoute != null &&
+            _activeRouteOrigin != null)
+          Positioned(
+            right: 16,
+            top: 364,
+            child: LiveMinimap(
+              routePoints:
+                  _roadPoints ??
+                  [
+                    _activeRouteOrigin!,
+                    ..._customRouteViaPoints(_activeRoute!),
+                    LatLng(
+                      _activeRoute!.dest.lat,
+                      _activeRoute!.dest.lng,
+                    ),
+                  ],
+              livePos: _liveMarkerPos,
+              live: true,
+              onTap: _fitActiveRoute,
+            ),
+          ),
         // Basemap attribution (ⓘ button, bottom-left above the sheet):
         // the preview's map carries its attribution as a small
         // corner button, and the preview has no Standard/Satellite
