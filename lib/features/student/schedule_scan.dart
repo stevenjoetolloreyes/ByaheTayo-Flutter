@@ -22,11 +22,30 @@
 // hour with no AM/PM reads 7-11 as morning, 12 as noon, 1-6 as
 // afternoon (the usual school-schedule reading).
 //
+// Table-style OCR (added Nov 10, 2026): a Certificate of
+// Registration is a table, so ML Kit reads it fragmented — the
+// subject code/name, the day code, the time range, the room, and
+// the instructor may each land on their own line, or a subject
+// may carry two schedule lines. [parseScheduleText] therefore
+// runs a second pass that groups nearby fragments into class
+// entries: a schedule fragment (a time range, with its day code
+// on the same line or on the line just above it) attaches to the
+// nearest preceding subject (code + name), and room / instructor
+// are read from the fragment's own line or the next line(s).
+// Day codes in schedule fragments: M = Monday, T = Tuesday,
+// W = Wednesday, Th = Thursday, Sat = Saturday, TTh = Tue + Thu
+// (plus MWF / MW / TR and the named days above). A bare
+// single-letter day (M, T, W, ...) counts ONLY in schedule
+// context — next to a time range, or on a day-only line between
+// a subject and its time line — never in free prose or a header.
+// A fragment with no subject, or with days but no time (or vice
+// versa), is skipped, never guessed.
+//
 // What it cannot do (yet): a scanned / image-only PDF has no text
 // layer, so it reads as empty — a photo of the page works instead
-// (on-device OCR). A class split across several lines, or a table
-// whose days live in a header row and whose times live in a
-// column, does not parse — one class per line is required.
+// (on-device OCR). A table whose days live only in a header row
+// and whose times live only in a column, with nothing tying a
+// day/time to a subject row, does not parse.
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -120,6 +139,173 @@ final _dayRangeRe = RegExp(
     caseSensitive: false);
 final _compactDaysRe = RegExp(r'\b([MTWRFSU]{2,5})\b');
 final _tthRe = RegExp(r'\bTTh\b');
+
+/// Bare day codes, schedule context ONLY (see [_parseScheduleDays]):
+/// a lone "Th" is Thursday, and a lone letter is its compact day
+/// (M = Monday, T = Tuesday, W = Wednesday, R = Thursday,
+/// F = Friday, S = Saturday, U = Sunday). These are never read
+/// through [_parseDays] — that would misread initials in a
+/// teacher name ("W.E. Que") as Wednesday.
+final _bareThRe = RegExp(r'\bTh\b');
+final _bareSingleDayRe = RegExp(r'\b[MTWRFSU]\b');
+
+/// A person's name as printed on a certificate: initials plus a
+/// surname ("A. Supnet", "W.E. Que", "L. Baja") or a titled name
+/// ("Prof. Santos", "Dr. Cruz").
+final _personNameRe = RegExp(
+  r'\b(?:[A-Z](?:\.[A-Z])+\.?|[A-Z]\.)\s+[A-Z][a-z]+\b'
+  r'|\b(?:Prof\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+[A-Z][A-Za-z]+'
+  r'(?:\s+[A-Z][A-Za-z]+)?',
+);
+
+/// A bare room code as printed on a certificate ("CC105",
+/// "CC 104"). Only ever read from text after a time range (or a
+/// room/teacher lookahead line), never from a subject line.
+final _roomCodeRe = RegExp(r'\b[A-Z]{1,4}\s?\d{2,4}[A-Z]?\b');
+
+/// Weekdays in a schedule fragment: everything [_parseDays]
+/// finds, plus bare "Th" and bare single-letter codes. Callers
+/// must only pass text that is in schedule context — the part of
+/// a line before its time range, or a day-only line sitting
+/// between a subject and its time line. Never call this on free
+/// prose, a header, or text after a time range (an instructor
+/// like "W.E. Que" would otherwise donate a Wednesday).
+Set<int> _parseScheduleDays(String segment) {
+  final days = _parseDays(segment);
+  if (_bareThRe.hasMatch(segment)) days.add(4);
+  for (final m in _bareSingleDayRe.allMatches(segment)) {
+    final day = _compactDayMap[m.group(0)!];
+    if (day != null) days.add(day);
+  }
+  return days;
+}
+
+/// Earliest index in [text] where a schedule day token (named,
+/// compact, TTh, bare "Th", or a bare single-letter code) or the
+/// time range starts, or null when neither appears. Like
+/// [_firstDayOrTimeIndex] but schedule-aware, so a subject name
+/// can be cut off before a bare "M" day code.
+int? _firstScheduleDayOrTimeIndex(String text) {
+  var earliest = _timeRangeRe.firstMatch(text)?.start;
+  for (final re in [
+    _dayRangeRe,
+    _dayWordRe,
+    _compactDaysRe,
+    _tthRe,
+    _bareThRe,
+    _bareSingleDayRe,
+  ]) {
+    final at = re.firstMatch(text)?.start;
+    if (at != null && (earliest == null || at < earliest)) {
+      earliest = at;
+    }
+  }
+  return earliest;
+}
+
+/// True when [line] holds nothing but day tokens and separators
+/// ("M", "TTh", "MWF", "Mon Wed", "Sat"). Such a line is a
+/// schedule fragment's day half, never a subject or prose.
+bool _isDayOnlyLine(String line) {
+  if (_parseScheduleDays(line).isEmpty) return false;
+  var rest = line;
+  for (final re in [
+    _dayRangeRe,
+    _dayWordRe,
+    _tthRe,
+    _compactDaysRe,
+    _bareThRe,
+    _bareSingleDayRe,
+  ]) {
+    rest = rest.replaceAll(re, '');
+  }
+  rest = rest.replaceAll(RegExp(r'[\s,;/|.\-]+'), '');
+  return rest.isEmpty;
+}
+
+/// True when [line] is a subject code followed by a name
+/// ("CT102 Computer Programming 1"). A bare code alone is not
+/// one — that may be a room code on the line after a time range.
+bool _isSubjectWithNameLine(String line) {
+  final m =
+      RegExp('^($_codeRe)\\s*[-–—:.]?\\s+(.+)\$').firstMatch(line);
+  if (m == null) return false;
+  final rest = m.group(2)!.trim();
+  if (rest.isEmpty || _isDayOnlyLine(rest)) return false;
+  if (_timeRangeRe.hasMatch(rest)) return false;
+  return true;
+}
+
+/// True when [line] could continue a subject name split across
+/// lines ("Computer Systems" after "CSS101 Installing and
+/// Configuring", "Computer Programming 1" after "CT102"): mostly
+/// words, not a bare code ("CC105"), a room label, or a date /
+/// year line. A digit inside a name ("Programming 1") is fine.
+bool _looksLikeNameContinuation(String line) {
+  if (line.length > 80) return false;
+  if (!RegExp(r'[A-Za-z]').hasMatch(line)) return false;
+  if (RegExp(r'^$_codeRe\$').hasMatch(line)) return false;
+  if (RegExp(r'^(room|rm\.?|lab|bldg\.?|building|hall|blk\.?|wing)\b',
+          caseSensitive: false)
+      .hasMatch(line)) {
+    return false;
+  }
+  if (RegExp(r'\b(19|20)\d\d\b').hasMatch(line)) return false;
+  if (line.contains('|') || line.contains(';')) return false;
+  if (_personNameRe.hasMatch(line)) return false;
+  if (_isDayOnlyLine(line)) return false;
+  return true;
+}
+
+/// Pull room / teacher out of [raw] — text after a time range, or
+/// a room/teacher lookahead line. Labelled chunks first (via
+/// [_splitRoomTeacher]), then a bare room code ("CC105") and an
+/// initials-style teacher name ("A. Supnet", "W.E. Que"). A bare
+/// room code wins over [_splitRoomTeacher]'s unlabelled-digit
+/// chunk, so "CC105 A. Supnet" reads as room CC105 + teacher
+/// A. Supnet, not room "CC105 A. Supnet".
+({String room, String teacher}) _roomTeacherFromText(String raw) {
+  final labelled = _splitRoomTeacher(raw);
+  var teacher = labelled.teacher;
+  if (teacher.isEmpty) {
+    final m = _personNameRe.firstMatch(raw);
+    if (m != null) teacher = m.group(0)!;
+  }
+  var room = '';
+  final hasLabel = RegExp(
+    r'\b(room|rm\.?|bldg\.?|building|hall|lab|blk\.?|wing)\b',
+    caseSensitive: false,
+  ).hasMatch(raw);
+  if (hasLabel && labelled.room.isNotEmpty) {
+    room = labelled.room;
+  } else {
+    final code = _roomCodeRe.firstMatch(raw);
+    if (code != null) {
+      room = code.group(0)!;
+    } else {
+      room = labelled.room;
+    }
+  }
+  if (teacher.isNotEmpty && room.contains(teacher)) {
+    room = room
+        .replaceAll(teacher, '')
+        .replaceAll(RegExp(r'[,;|]+\s*$'), '')
+        .trim();
+  }
+  return (room: room, teacher: teacher);
+}
+
+/// True when [line] is a room code followed by a teacher name
+/// ("CC203 L. Baja"). It looks like a subject line (code + name)
+/// but, right after a time range, it is room + teacher — the
+/// lookahead must consume it, not stop at it.
+bool _isRoomTeacherLine(String line) {
+  final m = RegExp('^($_codeRe)\\s+(.+)\$').firstMatch(line);
+  if (m == null) return false;
+  final rest = m.group(2)!.trim();
+  final pm = _personNameRe.firstMatch(rest);
+  return pm != null && pm.start == 0 && pm.end == rest.length;
+}
 
 /// "8:00 AM - 9:30 AM", "8-9:30am", "13:00-14:30", "8:00 to 9:30".
 /// Groups: 1 = start hour, 2 = start minutes, 3 = start AM/PM,
@@ -303,7 +489,7 @@ ScannedClass? _parseLine(String line) {
         if (_parseTimeRange(part) != null) timeSeen = true;
         continue;
       }
-      final rt = _splitRoomTeacher(part);
+      final rt = _roomTeacherFromText(part);
       if (room.isEmpty) room = rt.room;
       if (teacher.isEmpty) teacher = rt.teacher;
     }
@@ -335,7 +521,7 @@ ScannedClass? _parseLine(String line) {
   if (nameCode.name.isEmpty) return null;
   final timeEnd = _timeRangeRe.firstMatch(trimmed)!.end;
   final trailing = trimmed.substring(timeEnd).trim();
-  final rt = _splitRoomTeacher(trailing);
+  final rt = _roomTeacherFromText(trailing);
   return ScannedClass(
     name: nameCode.name,
     code: nameCode.code,
@@ -347,19 +533,205 @@ ScannedClass? _parseLine(String line) {
   );
 }
 
-/// Pull every class entry out of [text], one per line. Lines
-/// without both a weekday and a time range are skipped; identical
-/// entries in the file are kept once.
+/// Second pass for table-style OCR text (see the file header):
+/// reconstruct class entries whose subject, day code, time range,
+/// room, and instructor arrived on separate or interleaved lines.
+///
+/// The walk keeps the nearest preceding subject (code + name,
+/// with name continuations joined) and a pending day code from a
+/// day-only line. A line with a time range becomes a class when
+/// it has days — on its own line before the time, or pending from
+/// the line above — and a subject; room / teacher come from the
+/// same line after the time and from up to two following lines
+/// that look like room / teacher (never a day, time, or subject
+/// line). A subject with two schedule lines yields two entries.
+/// Anything missing a subject, days, or a time range is skipped;
+/// nothing is ever invented from fragments that do not belong
+/// together.
+List<ScannedClass> _tableFragmentClasses(String text) {
+  final lines = text.split('\n');
+  final found = <ScannedClass>[];
+  final consumed = <int>{};
+  ({String name, String code})? currentSubject;
+  var awaitingName = false;
+  Set<int>? pendingDays;
+
+  for (var i = 0; i < lines.length; i++) {
+    if (consumed.contains(i)) continue;
+    final line = lines[i].trim();
+    if (line.isEmpty) continue;
+
+    final timeMatch = _timeRangeRe.firstMatch(line);
+    final time =
+        timeMatch == null ? null : _parseTimeRange(line);
+    if (time != null && timeMatch != null) {
+      // Schedule line: days come from the part before the time
+      // (never from after it — that is room / teacher text), or
+      // from a pending day-only line just above.
+      final prefix = line.substring(0, timeMatch.start);
+      var days = _parseScheduleDays(prefix);
+      if (days.isEmpty) days = pendingDays ?? <int>{};
+      pendingDays = null;
+      awaitingName = false;
+
+      // A subject printed on this same line, before the day/time.
+      ({String name, String code})? subject = currentSubject;
+      final nameEnd = _firstScheduleDayOrTimeIndex(line);
+      if (nameEnd != null && nameEnd > 0) {
+        final rawName = line
+            .substring(0, nameEnd)
+            .replaceAll(RegExp(r'[-–—•|:,;]+\s*$'), '')
+            .trim();
+        if (rawName.isNotEmpty) {
+          final nameCode = _splitNameCode(rawName);
+          if (nameCode.name.isNotEmpty) {
+            subject = (name: nameCode.name, code: nameCode.code);
+          } else if (RegExp('^$_codeRe\$').hasMatch(rawName)) {
+            // Code only before the day/time ("CT101 | M | ..."):
+            // keep the code, keep any name seen before it.
+            subject = (
+              name: currentSubject?.name ?? rawName,
+              code: rawName,
+            );
+          }
+        }
+      }
+      if (days.isEmpty) continue;
+      if (subject == null) continue;
+      final name =
+          subject.name.isEmpty ? subject.code : subject.name;
+      if (name.isEmpty) continue;
+
+      // Room / teacher: the rest of this line, then up to two
+      // following lines that look like room / teacher.
+      var rt = _roomTeacherFromText(line.substring(timeMatch.end));
+      var looked = 0;
+      for (var j = i + 1; j < lines.length && looked < 2; j++) {
+        final next = lines[j].trim();
+        if (next.isEmpty) continue;
+        if (_timeRangeRe.hasMatch(next)) break;
+        if (_isDayOnlyLine(next)) break;
+        if (_isSubjectWithNameLine(next) && !_isRoomTeacherLine(next)) {
+          break;
+        }
+        if (RegExp('^$_codeRe\$').hasMatch(next)) {
+          // A bare code after a time range is a room code
+          // ("CC105"); once the room is set, a bare code is the
+          // next subject, so stop.
+          if (rt.room.isEmpty) {
+            rt = (room: next, teacher: rt.teacher);
+            consumed.add(j);
+            looked++;
+            continue;
+          }
+          break;
+        }
+        final nextRt = _roomTeacherFromText(next);
+        if (nextRt.room.isEmpty && nextRt.teacher.isEmpty) break;
+        rt = (
+          room: rt.room.isEmpty ? nextRt.room : rt.room,
+          teacher:
+              rt.teacher.isEmpty ? nextRt.teacher : rt.teacher,
+        );
+        consumed.add(j);
+        looked++;
+        if (rt.room.isNotEmpty && rt.teacher.isNotEmpty) break;
+      }
+
+      currentSubject = subject;
+      found.add(ScannedClass(
+        name: name,
+        code: subject.code,
+        teacher: rt.teacher,
+        room: rt.room,
+        days: days.toList()..sort(),
+        startMin: time.startMin,
+        endMin: time.endMin,
+      ));
+      continue;
+    }
+
+    // A day-only line: remember its days for the time line that
+    // follows — but only after a subject, so a stray "Monday" in
+    // prose never becomes a pending schedule.
+    if (_isDayOnlyLine(line)) {
+      awaitingName = false;
+      if (currentSubject != null &&
+          (currentSubject.name.isNotEmpty ||
+              currentSubject.code.isNotEmpty)) {
+        pendingDays = _parseScheduleDays(line);
+      }
+      continue;
+    }
+
+    // A subject line: a leading code with a name, or a bare code
+    // whose name follows on the next line(s).
+    final leading =
+        RegExp('^($_codeRe)\\s*[-–—:.]?\\s*(.*)\$').firstMatch(line);
+    if (leading != null) {
+      final rest = leading.group(2)!.trim();
+      if (rest.isEmpty) {
+        currentSubject = (name: '', code: leading.group(1)!);
+        awaitingName = true;
+        pendingDays = null;
+      } else if (_isDayOnlyLine(rest)) {
+        // "CT101 M" — code plus a day code, no name yet.
+        currentSubject = (name: '', code: leading.group(1)!);
+        awaitingName = true;
+        pendingDays = _parseScheduleDays(rest);
+      } else {
+        final nameCode = _splitNameCode(line);
+        currentSubject = (name: nameCode.name, code: nameCode.code);
+        // The name may continue on the next line ("Installing
+        // and Configuring" / "Computer Systems").
+        awaitingName = true;
+        // A new subject starts fresh: any pending day code
+        // belonged to the previous subject.
+        pendingDays = null;
+      }
+      continue;
+    }
+
+    // A name continuation for a subject whose name was split
+    // across lines.
+    if (awaitingName && currentSubject != null) {
+      if (_looksLikeNameContinuation(line)) {
+        final base = currentSubject.name.isEmpty
+            ? line
+            : '${currentSubject.name} $line';
+        currentSubject = (name: base, code: currentSubject.code);
+      } else {
+        awaitingName = false;
+      }
+      continue;
+    }
+
+    // Anything else (headers, term lines, prose, dates) is
+    // ignored — it belongs to no class.
+  }
+  return found;
+}
+
+/// Pull every class entry out of [text]. First the existing
+/// one-class-per-line pass, then the table-fragment pass for
+/// OCR text split across lines; identical entries are kept once.
 ScheduleParseResult parseScheduleText(String text) {
   final classes = <ScannedClass>[];
   final seen = <String>{};
+  void add(ScannedClass parsed) {
+    final key =
+        '${parsed.name.toLowerCase()}|${parsed.days.join(',')}|${parsed.startMin}|${parsed.endMin}';
+    if (!seen.add(key)) return;
+    classes.add(parsed);
+  }
+
   for (final rawLine in text.split('\n')) {
     final parsed = _parseLine(rawLine);
     if (parsed == null) continue;
-    final key =
-        '${parsed.name.toLowerCase()}|${parsed.days.join(',')}|${parsed.startMin}|${parsed.endMin}';
-    if (!seen.add(key)) continue;
-    classes.add(parsed);
+    add(parsed);
+  }
+  for (final parsed in _tableFragmentClasses(text)) {
+    add(parsed);
   }
   return ScheduleParseResult(classes: classes);
 }
