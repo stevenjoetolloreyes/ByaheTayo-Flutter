@@ -4,6 +4,7 @@
 // provided (it is optional), the card shows an honest empty state that
 // leads to Profile Setup.
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -31,15 +32,18 @@ class StudentIdCardScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Card(
-                clipBehavior: Clip.antiAlias,
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Color(0xFF14532D), Color(0xFF16A34A)],
+                          colors: [
+                            MinecraftColors.deepLeaves,
+                            MinecraftColors.grassGreen,
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
@@ -56,30 +60,30 @@ class StudentIdCardScreen extends StatelessWidget {
                             child: photo == null
                                 ? Text(
                                     profile.initials,
-                                    style: const TextStyle(
-                                      color: Color(0xFF14532D),
+                                    style: MinecraftText.heading(
+                                      color: MinecraftColors.deepLeaves,
                                       fontSize: 24,
-                                      fontWeight: FontWeight.w800,
                                     ),
                                   )
                                 : null,
                           ),
                           const SizedBox(width: 16),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'EstudyanteGO',
-                                  style: TextStyle(
+                                  style: MinecraftText.heading(
                                     color: Colors.white,
                                     fontSize: 18,
-                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                                 Text(
                                   'Student ID',
-                                  style: TextStyle(color: Colors.white70),
+                                  style: MinecraftText.body(
+                                    color: Colors.white70,
+                                  ),
                                 ),
                               ],
                             ),
@@ -123,18 +127,14 @@ class StudentIdCardScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.s16),
               if (!profile.hasStudentInfo)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
+                MinecraftCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'No student info yet',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: MinecraftText.title(),
                         ),
                         const SizedBox(height: 8),
                         const Text(
@@ -144,11 +144,11 @@ class StudentIdCardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         FilledButton(
+                          style: minecraftBlockButtonStyle(),
                           onPressed: onEditProfile,
                           child: const Text('Open Profile Setup'),
                         ),
                       ],
-                    ),
                   ),
                 ),
               const SizedBox(height: 16),
@@ -171,10 +171,10 @@ class StudentIdCardScreen extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          style: MinecraftText.button(fontSize: 11),
         ),
         const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 16)),
+        Text(value, style: MinecraftText.bodySemiBold(fontSize: 16)),
       ],
     );
   }

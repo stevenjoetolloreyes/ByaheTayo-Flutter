@@ -12,6 +12,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_layout.dart';
+import '../minecraft_theme.dart';
 import 'walking_repository.dart';
 
 class WalkingGoalScreen extends StatelessWidget {
@@ -108,12 +109,17 @@ class _Message extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(title,
-              style: AppText.titleStrong, textAlign: TextAlign.center),
+              style: MinecraftText.heading(), textAlign: TextAlign.center),
           const SizedBox(height: 8),
-          Text(body, style: AppText.body, textAlign: TextAlign.center),
+          Text(body,
+              style: MinecraftText.body(), textAlign: TextAlign.center),
           if (actionLabel != null) ...[
             const SizedBox(height: 16),
-            FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+            FilledButton(
+              style: minecraftBlockButtonStyle(),
+              onPressed: onAction,
+              child: Text(actionLabel!),
+            ),
           ],
           if (secondLabel != null) ...[
             const SizedBox(height: 8),
@@ -142,10 +148,9 @@ class _ReadyBody extends StatelessWidget {
     return ListView(
       padding: AppLayout.pagePaddingTab,
       children: [
-        Card(
-          child: Padding(
-            padding: AppLayout.cardPadding,
-            child: Column(
+        MinecraftCard(
+          padding: AppLayout.cardPadding,
+          child: Column(
               children: [
                 SizedBox(
                   width: 220,
@@ -169,7 +174,10 @@ class _ReadyBody extends StatelessWidget {
                         children: [
                           Text(
                             _formatNumber(steps),
-                            style: AppText.displayLarge,
+                            style: MinecraftText.heading(
+                              color: MinecraftColors.emerald,
+                              fontSize: 32,
+                            ),
                           ),
                           const Text('steps', style: AppText.caption),
                           const SizedBox(height: 4),
@@ -200,16 +208,17 @@ class _ReadyBody extends StatelessWidget {
                 ),
               ],
             ),
-          ),
         ),
         const SizedBox(height: AppLayout.cardGap),
-        Card(
-          child: Padding(
-            padding: AppLayout.cardPadding,
-            child: Column(
+        MinecraftCard(
+          padding: AppLayout.cardPadding,
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Today', style: AppText.sectionTitle),
+                const MinecraftSectionHeader(
+                  icon: Icons.today_rounded,
+                  title: 'Today',
+                ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -257,13 +266,11 @@ class _ReadyBody extends StatelessWidget {
                 ],
               ],
             ),
-          ),
         ),
         const SizedBox(height: AppLayout.cardGap),
-        Card(
-          child: Padding(
-            padding: AppLayout.cardPadding,
-            child: Column(
+        MinecraftCard(
+          padding: AppLayout.cardPadding,
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -331,7 +338,6 @@ class _ReadyBody extends StatelessWidget {
                 ),
               ],
             ),
-          ),
         ),
         const SizedBox(height: AppLayout.cardGap),
         // Health Connect is a snapshot source, not a live stream:
@@ -409,6 +415,7 @@ class _ReadyBody extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: minecraftBlockButtonStyle(),
             onPressed: () {
               final parsed = int.tryParse(input.text.trim());
               Navigator.pop(context, parsed);

@@ -18,7 +18,6 @@ import '../profile_photo_storage.dart';
 import '../profile_repository.dart';
 import 'auth_service.dart';
 import 'onboarding_state.dart';
-import 'startup_step_indicator.dart';
 import 'student_info_fields.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
@@ -348,18 +347,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Step 8 of the 9-step startup flow. Edit mode (from
-              // Account) is not part of the startup flow, so it shows
-              // no indicator.
-              if (!widget.isEdit) ...[
-                StartupStepIndicator(
-                  step: 8,
-                  activeColor: scheme.primary,
-                  inactiveColor: scheme.onSurfaceVariant,
-                  labelColor: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: 16),
-              ],
               Center(
                 child: GestureDetector(
                   onTap: _pickPhoto,

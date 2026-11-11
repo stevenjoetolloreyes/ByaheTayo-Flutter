@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../minecraft_theme.dart';
 import '../top_popup.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
@@ -95,10 +97,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
             children: [
               Text(
                 _note.title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: MinecraftText.heading(fontSize: 20),
               ),
               const SizedBox(height: 6),
               Text(
@@ -117,7 +116,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
               else if (_note.body.isNotEmpty)
                 Text(
                   _note.body,
-                  style: const TextStyle(fontSize: 14.5, height: 1.65),
+                  style: MinecraftText.body(fontSize: 14),
                 )
               else
                 Text(
@@ -217,7 +216,11 @@ class _NoteEditPageState extends State<NoteEditPage> {
       appBar: AppBar(
         title: const Text('Edit note'),
         actions: [
-          TextButton(onPressed: _save, child: const Text('Save')),
+          FilledButton(
+            style: minecraftBlockButtonStyle(),
+            onPressed: _save,
+            child: const Text('Save'),
+          ),
           const SizedBox(width: 4),
         ],
       ),

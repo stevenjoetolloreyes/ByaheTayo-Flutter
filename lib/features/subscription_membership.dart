@@ -19,6 +19,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 
 /// Billing period for a subscription plan.
 enum SubscriptionBilling { monthly, yearly }
@@ -102,7 +103,7 @@ const List<SubscriptionPlan> subscriptionPlans = [
     benefits: ['Basic features', 'With advertisements'],
     storageGB: 2,
     icon: Icons.eco_rounded,
-    iconColor: Color(0xFF16A34A),
+    iconColor: MinecraftColors.grassGreen,
   ),
   SubscriptionPlan(
     id: SubscriptionPlanId.standard,
@@ -112,7 +113,7 @@ const List<SubscriptionPlan> subscriptionPlans = [
     benefits: ['All Free features', 'No advertisements'],
     storageGB: 12,
     icon: Icons.bolt_rounded,
-    iconColor: Color(0xFFF59E0B),
+    iconColor: MinecraftColors.goldDark,
   ),
   SubscriptionPlan(
     id: SubscriptionPlanId.pro,
@@ -127,7 +128,7 @@ const List<SubscriptionPlan> subscriptionPlans = [
     ],
     storageGB: 30,
     icon: Icons.diamond_rounded,
-    iconColor: Color(0xFFFFC107),
+    iconColor: MinecraftColors.gold,
   ),
 ];
 
@@ -169,16 +170,19 @@ String _formatAmount(int value) {
   return '${value ~/ 1000},${(value % 1000).toString().padLeft(3, '0')}';
 }
 
+// Deep emerald is LOCKED by student_dark_mode_test.dart (the plan
+// price must stay #14532D in Light Mode) — do not re-point it.
+// The other accents below are Minecraft palette tokens.
 const Color _deepEmerald = Color(0xFF14532D);
-const Color _brightGreen = Color(0xFF16A34A);
-const Color _lightGreen = Color(0xFFDCFCE7);
-const Color _gold = Color(0xFFFFC107);
+const Color _brightGreen = MinecraftColors.grassGreen;
+const Color _lightGreen = Color(0xFFD9F7C4);
+const Color _gold = MinecraftColors.gold;
 
 // Dark-mode-readable emerald (same value as the app dark theme's
 // primary). Deep emerald #14532D as text on a dark card is
 // unreadable, so dark-mode price text uses this instead — light
 // mode keeps _deepEmerald exactly.
-const Color _lightEmerald = Color(0xFF34D399);
+const Color _lightEmerald = MinecraftColors.darkAccent;
 
 /// Gold crown drawn with widgets (no image asset, no emoji).
 class CrownIcon extends StatelessWidget {
@@ -308,15 +312,7 @@ class _SubscriptionMembershipScreenState
             ],
             ElevatedButton(
               key: const Key('membership-action-button'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _deepEmerald,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(AppLayout.buttonRadius),
-                ),
-              ),
+              style: minecraftBlockButtonStyle(),
               onPressed:
                   isCurrentPlan || _selected.isFree ? null : _openDetails,
               child: Row(
@@ -370,18 +366,17 @@ class _SubscriptionMembershipScreenState
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PremiumBadge(),
-                  SizedBox(height: 8),
+                  const _PremiumBadge(),
+                  const SizedBox(height: 8),
                   Text(
                     'Upgrade Your Experience',
-                    style: TextStyle(
+                    style: MinecraftText.heading(
                       color: Colors.white,
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   SizedBox(height: 4),
@@ -490,14 +485,11 @@ class _SubscriptionMembershipScreenState
   Widget _planCard(SubscriptionPlan plan) {
     final selected = _selected.id == plan.id;
     final equivalent = plan.monthlyEquivalentNote(_billing);
-    return Card(
-      child: InkWell(
-        key: Key('plan-card-${plan.id.name}'),
-        borderRadius: BorderRadius.circular(AppLayout.cardRadius),
-        onTap: () => setState(() => _selected = plan),
-        child: Padding(
-          padding: AppLayout.cardPadding,
-          child: Column(
+    return MinecraftCard(
+      key: Key('plan-card-${plan.id.name}'),
+      onTap: () => setState(() => _selected = plan),
+      padding: AppLayout.cardPadding,
+      child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -518,10 +510,10 @@ class _SubscriptionMembershipScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(plan.name, style: AppText.cardTitle),
+                        Text(plan.name, style: MinecraftText.title()),
                         Text(
                           plan.priceLabel(_billing),
-                          style: TextStyle(
+                          style: MinecraftText.heading(
                             // Dark Mode (Nov 2 polish): deep emerald
                             // on a dark card was the reported
                             // low-contrast bug — light emerald reads
@@ -531,7 +523,6 @@ class _SubscriptionMembershipScreenState
                                 ? _lightEmerald
                                 : _deepEmerald,
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
                           ),
                         ),
                         if (equivalent != null)
@@ -596,8 +587,6 @@ class _SubscriptionMembershipScreenState
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 }
@@ -738,7 +727,8 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
               const SizedBox(height: AppLayout.cardGap),
               Text('Plan Summary', style: AppText.cardTitle),
               const SizedBox(height: 8),
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 // Custom rows, not ListTiles: the Renewal value
                 // ("Auto-renew (cancel anytime)") is too wide for a
                 // ListTile trailing slot on narrow phones and trips
@@ -770,10 +760,9 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
               const SizedBox(height: AppLayout.cardGap),
               Text('Plan Benefits', style: AppText.cardTitle),
               const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: AppLayout.cardPadding,
-                  child: Column(
+              MinecraftCard(
+                padding: AppLayout.cardPadding,
+                child: Column(
                     children: [
                       for (final benefit in plan.benefits)
                         Padding(
@@ -800,20 +789,11 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
                         ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: AppLayout.cardGap),
               ElevatedButton(
                 key: const Key('subscribe-now-button'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _deepEmerald,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppLayout.buttonRadius),
-                  ),
-                ),
+                style: minecraftBlockButtonStyle(),
                 onPressed: plan.isFree
                     ? null
                     : () => _showCheckoutSheet(context),
@@ -892,10 +872,9 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
                 children: [
                   Text(
                     '${plan.name} Plan',
-                    style: const TextStyle(
+                    style: MinecraftText.heading(
                       color: Colors.white,
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -961,9 +940,9 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'Plan upgrade',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                style: MinecraftText.heading(fontSize: 20),
               ),
               const SizedBox(height: 16),
               _sheetRow('Plan', plan.name),

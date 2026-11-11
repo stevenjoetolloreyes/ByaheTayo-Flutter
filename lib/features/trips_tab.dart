@@ -21,6 +21,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 import 'community_posts.dart';
 import 'fares_tab.dart';
 import 'map_tab.dart';
@@ -187,12 +188,13 @@ class _TripsTabState extends State<TripsTab> {
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.s2),
-        const Text(
+        Text(
           'Find a Route',
-          style: AppText.pageTitle,
+          style: MinecraftText.heading(fontSize: 26),
         ),
         const SizedBox(height: AppLayout.cardGap),
-        Card(
+        MinecraftCard(
+          padding: EdgeInsets.zero,
           child: ListTile(
             leading: Icon(Icons.my_location, color: scheme.primary),
             title: Text(
@@ -253,29 +255,30 @@ class _TripsTabState extends State<TripsTab> {
           ],
         ),
         const SizedBox(height: AppLayout.headerGap),
-        Text(
-          'Nearby Routes (${routes.length})',
-          style: AppText.sectionTitle,
+        MinecraftSectionHeader(
+          icon: Icons.alt_route_rounded,
+          title: 'Nearby Routes (${routes.length})',
         ),
         const SizedBox(height: AppSpacing.s8),
         if (routes.isEmpty)
-          Card(
+          MinecraftCard(
+            padding: EdgeInsets.zero,
             child: ListTile(
               title: Text('No routes found for “$_searchQuery”.'),
               subtitle: const Text('Try a different destination.'),
             ),
           )
         else
-          for (final route in routes) _routeCard(route, origin),
+          for (final route in routes) _routeMinecraftCard(route, origin),
         // Routes Directory: same routes, grouped by direction like the
         // reference app's routes list. Rows show the destination only
         // (the origin is the section header) so the Nearby card titles
         // stay unique. Tap opens the detail sheet with the stops list.
         if (routes.isNotEmpty) ...[
           const SizedBox(height: 20),
-          Text(
-            'Routes Directory · From ${origin.name}',
-            style: AppText.sectionTitle,
+          MinecraftSectionHeader(
+            icon: Icons.list_alt_rounded,
+            title: 'Routes Directory · From ${origin.name}',
           ),
           const SizedBox(height: AppSpacing.s8),
           for (final dir in const [
@@ -297,13 +300,14 @@ class _TripsTabState extends State<TripsTab> {
         ],
         if (_recents.isNotEmpty) ...[
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
-                'Recent trips',
-                style: AppText.sectionTitle,
+              const Expanded(
+                child: MinecraftSectionHeader(
+                  icon: Icons.history_rounded,
+                  title: 'Recent trips',
+                ),
               ),
               Chip(
                 label: const Text('Current session only'),
@@ -313,13 +317,13 @@ class _TripsTabState extends State<TripsTab> {
             ],
           ),
           const SizedBox(height: AppSpacing.s8),
-          for (final route in _recents) _summaryCard(route),
+          for (final route in _recents) _summaryMinecraftCard(route),
         ],
         if (_savedRoutes.isNotEmpty) ...[
           const SizedBox(height: 20),
-          const Text(
-            'Saved routes',
-            style: AppText.sectionTitle,
+          MinecraftSectionHeader(
+            icon: Icons.bookmark_rounded,
+            title: 'Saved routes',
           ),
           const SizedBox(height: AppSpacing.s8),
           for (final key in _savedRoutes)
@@ -330,7 +334,7 @@ class _TripsTabState extends State<TripsTab> {
                     : '';
                 final match = routes.where((r) => r.dest.name == destName);
                 if (match.isEmpty) return const SizedBox.shrink();
-                return _summaryCard(match.first);
+                return _summaryMinecraftCard(match.first);
               },
             ),
         ],
@@ -338,7 +342,7 @@ class _TripsTabState extends State<TripsTab> {
     );
   }
 
-  Widget _routeCard(
+  Widget _routeMinecraftCard(
     RouteInfo route,
     ({double lat, double lng, String name, Hub? hub}) origin, {
     bool detailed = true,
@@ -373,7 +377,8 @@ class _TripsTabState extends State<TripsTab> {
       }
     }
 
-    return Card(
+    return MinecraftCard(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           ListTile(
@@ -396,7 +401,7 @@ class _TripsTabState extends State<TripsTab> {
                 IconButton(
                   icon: Icon(
                     saved ? Icons.favorite : Icons.favorite_border,
-                    color: saved ? Colors.red : null,
+                    color: saved ? MinecraftColors.heartRed : null,
                   ),
                   tooltip: saved ? 'Remove from saved' : 'Save route',
                   onPressed: () => _toggleSaved(route),
@@ -454,7 +459,8 @@ class _TripsTabState extends State<TripsTab> {
     final saved = _savedRoutes.contains(key);
     final rate = fareRates.firstWhere((r) => r.id == _fareModeId);
     final fare = computeFare(rate, route.roadKm, false);
-    return Card(
+    return MinecraftCard(
+      padding: EdgeInsets.zero,
       child: ListTile(
         leading: const Icon(Icons.directions_bus_outlined),
         title: Text(route.dest.name),
@@ -475,7 +481,7 @@ class _TripsTabState extends State<TripsTab> {
             IconButton(
               icon: Icon(
                 saved ? Icons.favorite : Icons.favorite_border,
-                color: saved ? Colors.red : null,
+                color: saved ? MinecraftColors.heartRed : null,
               ),
               tooltip: saved ? 'Remove from saved' : 'Save route',
               onPressed: () => _toggleSaved(route),
@@ -601,7 +607,7 @@ class _TripsTabState extends State<TripsTab> {
 
   /// Compact card for Recent / Saved lists. Tapping it filters the nearby
   /// list to this destination and expands it there.
-  Widget _summaryCard(RouteInfo route) {
+  Widget _summaryMinecraftCard(RouteInfo route) {
     final scheme = Theme.of(context).colorScheme;
     final key = '${route.originName}>${route.dest.name}';
     final saved = _savedRoutes.contains(key);
@@ -611,7 +617,8 @@ class _TripsTabState extends State<TripsTab> {
       route.roadKm,
       false,
     );
-    return Card(
+    return MinecraftCard(
+      padding: EdgeInsets.zero,
       child: ListTile(
         leading: const Icon(Icons.directions_bus_outlined),
         title: Text('${route.originName} → ${route.dest.name}'),
@@ -631,7 +638,7 @@ class _TripsTabState extends State<TripsTab> {
             IconButton(
               icon: Icon(
                 saved ? Icons.favorite : Icons.favorite_border,
-                color: saved ? Colors.red : null,
+                color: saved ? MinecraftColors.heartRed : null,
               ),
               tooltip: saved ? 'Remove from saved' : 'Save route',
               onPressed: () => _toggleSaved(route),

@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'top_popup.dart';
 
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 import 'community_post_repository.dart';
 import 'community_posts.dart';
 import 'ios_components.dart';
@@ -95,11 +96,13 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
               'No shared submissions waiting for review.',
               actions: (post) => [
                 FilledButton(
+                  style: minecraftBlockButtonStyle(),
                   onPressed: () =>
                       _setSharedStatus(post, PostStatus.approved),
                   child: const Text('Approve'),
                 ),
                 OutlinedButton(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: () => _rejectShared(context, post),
                   child: const Text('Reject'),
                 ),
@@ -113,6 +116,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
               'No published shared posts yet.',
               actions: (post) => [
                 OutlinedButton(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: () => _rejectShared(context, post),
                   child: const Text('Reject'),
                 ),
@@ -126,11 +130,13 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
               'No rejected shared posts.',
               actions: (post) => [
                 FilledButton(
+                  style: minecraftBlockButtonStyle(),
                   onPressed: () =>
                       _setSharedStatus(post, PostStatus.approved),
                   child: const Text('Approve'),
                 ),
                 OutlinedButton(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: () => _deleteShared(context, post),
                   child: const Text('Delete'),
                 ),
@@ -145,10 +151,12 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
             'No local submissions waiting for review.',
             actions: (post) => [
               FilledButton(
+                style: minecraftBlockButtonStyle(),
                 onPressed: () => _setLocalStatus(post, PostStatus.approved),
                 child: const Text('Approve'),
               ),
               OutlinedButton(
+                style: minecraftOutlinedButtonStyle(),
                 onPressed: () => _setLocalStatus(post, PostStatus.rejected),
                 child: const Text('Reject'),
               ),
@@ -162,6 +170,7 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
             'No published local posts yet.',
             actions: (post) => [
               OutlinedButton(
+                style: minecraftOutlinedButtonStyle(),
                 onPressed: () => _setLocalStatus(post, PostStatus.rejected),
                 child: const Text('Reject'),
               ),
@@ -175,10 +184,12 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
             'No rejected local posts.',
             actions: (post) => [
               FilledButton(
+                style: minecraftBlockButtonStyle(),
                 onPressed: () => _setLocalStatus(post, PostStatus.approved),
                 child: const Text('Approve'),
               ),
               OutlinedButton(
+                style: minecraftOutlinedButtonStyle(),
                 onPressed: () => _deleteLocal(context, post),
                 child: const Text('Delete'),
               ),
@@ -348,20 +359,16 @@ class _CommunityAdminScreenState extends State<CommunityAdminScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: AppText.sectionTitle,
+        MinecraftSectionHeader(
+          icon: Icons.fact_check_rounded,
+          title: title,
         ),
         const SizedBox(height: AppSpacing.s8),
         if (sectionPosts.isEmpty)
           Text(emptyText, style: TextStyle(color: scheme.onSurfaceVariant))
         else
           for (final post in sectionPosts) ...[
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: scheme.outline),
-                borderRadius: BorderRadius.circular(AppLayout.cardRadius),
-              ),
+            MinecraftCard(
               padding: AppLayout.cardPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

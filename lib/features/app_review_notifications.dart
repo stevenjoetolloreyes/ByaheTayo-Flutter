@@ -19,6 +19,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 import 'student/student_data.dart';
 
 /// One admin-reply notification for a student.
@@ -328,7 +329,7 @@ class _NotificationEntry extends StatelessWidget {
                                 i <= notification.stars!
                                     ? Icons.star
                                     : Icons.star_border,
-                                color: const Color(0xFFFFB300),
+                                color: MinecraftColors.gold,
                                 size: 16,
                               ),
                           ],

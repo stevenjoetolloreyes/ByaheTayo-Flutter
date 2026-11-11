@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_layout.dart';
+import '../minecraft_theme.dart';
 import 'share_card.dart';
 import 'student_data.dart';
 
@@ -121,6 +122,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel')),
           FilledButton(
+              style: minecraftBlockButtonStyle(),
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Add')),
         ],
@@ -154,10 +156,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('"${q.text}"',
-                style: const TextStyle(fontSize: 17)),
+                style: MinecraftText.title(fontSize: 17)),
             const SizedBox(height: AppLayout.cardGap),
             Text('— ${q.author}',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+                style: MinecraftText.bodySemiBold()),
           ],
         ),
         actions: [
@@ -186,6 +188,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
             child: const Text('Collect'),
           ),
           FilledButton(
+            style: minecraftBlockButtonStyle(),
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
@@ -217,8 +220,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
       body: ListView(
         padding: AppLayout.pagePaddingTab,
         children: [
-          const Text('Quote of the Day',
-              style: AppText.sectionTitle),
+          const MinecraftSectionHeader(
+            icon: Icons.format_quote_rounded,
+            title: 'Quote of the Day',
+          ),
           const SizedBox(height: AppSpacing.s8),
           RepaintBoundary(
             key: _dailyKey,
@@ -233,6 +238,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(
                         text: '"${daily.text}" — ${daily.author}'));
@@ -245,6 +251,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
               const SizedBox(width: AppSpacing.s8),
               Expanded(
                 child: OutlinedButton.icon(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: () => shareBoundaryAsImage(
                     boundaryKey: _dailyKey,
                     filename: 'byahetayo-quote.png',
@@ -260,7 +267,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   _favs.contains(daily.id)
                       ? Icons.favorite
                       : Icons.favorite_border,
-                  color: _favs.contains(daily.id) ? Colors.red : null,
+                  color: _favs.contains(daily.id) ? MinecraftColors.heartRed : null,
                 ),
                 onPressed: () => _toggleFav(daily.id),
               ),
@@ -301,10 +308,11 @@ class _QuotesScreenState extends State<QuotesScreen> {
           ),
           const SizedBox(height: AppLayout.cardGap),
           if (filtered.isEmpty)
-            const Card(child: ListTile(title: Text('No quotes found.')))
+            const MinecraftCard(padding: EdgeInsets.zero, child: ListTile(title: Text('No quotes found.')))
           else
             for (final q in filtered)
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   title: Text('"${q.text}"'),
                   subtitle: Text('— ${q.author} · ${q.category}'),
@@ -313,8 +321,9 @@ class _QuotesScreenState extends State<QuotesScreen> {
                       _favs.contains(q.id)
                           ? Icons.favorite
                           : Icons.favorite_border,
-                      color:
-                          _favs.contains(q.id) ? Colors.red : null,
+                      color: _favs.contains(q.id)
+                          ? MinecraftColors.heartRed
+                          : null,
                       size: 20,
                     ),
                     onPressed: () => _toggleFav(q.id),
@@ -324,11 +333,14 @@ class _QuotesScreenState extends State<QuotesScreen> {
               ),
           if (_collections.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Text('My collections',
-                style: AppText.sectionTitle),
+            const MinecraftSectionHeader(
+              icon: Icons.collections_bookmark_rounded,
+              title: 'My collections',
+            ),
             const SizedBox(height: AppSpacing.s8),
             for (final c in _collections)
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ExpansionTile(
                   title: Text('${c.name} (${c.ids.length})'),
                   children: [
@@ -356,11 +368,14 @@ class _QuotesScreenState extends State<QuotesScreen> {
           ],
           if (historyQuotes.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Text('Recently viewed',
-                style: AppText.sectionTitle),
+            const MinecraftSectionHeader(
+              icon: Icons.history_rounded,
+              title: 'Recently viewed',
+            ),
             const SizedBox(height: AppSpacing.s8),
             for (final q in historyQuotes)
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   title: Text('"${q.text}"'),
                   subtitle: Text('— ${q.author}'),

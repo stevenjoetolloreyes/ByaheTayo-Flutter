@@ -19,6 +19,7 @@ import 'app_layout.dart';
 import 'community_posts.dart';
 import 'ios_components.dart';
 import 'lgu_complaints.dart';
+import 'minecraft_theme.dart';
 import 'vehicle_categories.dart';
 
 /// Report form sheet. Returns the saved complaint (status Prepared),
@@ -234,13 +235,10 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Report Overpriced Fare',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: MinecraftText.heading(fontSize: 18),
                     ),
                   ),
                   IconButton(
@@ -263,7 +261,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(
                       Icons.verified,
-                      color: Color(0xFF16A34A),
+                      color: MinecraftColors.grassGreen,
                     ),
                     title: Text(lgu.lguName),
                     subtitle: Text(
@@ -525,10 +523,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                   Expanded(
                     child: Text(
                       _complaint.reference,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: MinecraftText.heading(fontSize: 18),
                     ),
                   ),
                   Chip(
@@ -536,8 +531,8 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                       submitted ? 'Submitted' : 'Prepared',
                     ),
                     backgroundColor: submitted
-                        ? const Color(0xFFDCFCE7)
-                        : const Color(0xFFFEF9C3),
+                        ? const Color(0xFFD9F7C4)
+                        : const Color(0xFFFFF3C4),
                   ),
                   IconButton(
                     onPressed: () =>
@@ -572,6 +567,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
               const SizedBox(height: AppLayout.cardGap),
               if (lgu != null && lgu.hasVerifiedPage)
                 FilledButton.icon(
+                  style: minecraftBlockButtonStyle(),
                   onPressed: () => _openPage(lgu.facebookUrl),
                   icon: const Icon(Icons.open_in_new),
                   label: Text('Open ${lgu.lguName} page'),
@@ -584,6 +580,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                 ),
               const SizedBox(height: AppSpacing.s8),
               OutlinedButton.icon(
+                style: minecraftOutlinedButtonStyle(),
                 onPressed: _copyMessage,
                 icon: const Icon(Icons.copy),
                 label: const Text('Copy Complaint'),
@@ -591,6 +588,7 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
               if (!submitted) ...[
                 const SizedBox(height: AppSpacing.s8),
                 OutlinedButton.icon(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: _confirmSent,
                   icon: const Icon(Icons.check_circle_outline),
                   label: const Text('Mark as sent'),
@@ -809,7 +807,7 @@ class _LguAdminScreenState extends State<LguAdminScreen> {
                             ? Icons.verified
                             : Icons.account_balance_outlined,
                         color: entry.verified
-                            ? const Color(0xFF16A34A)
+                            ? MinecraftColors.grassGreen
                             : null,
                       ),
                       title: Text(

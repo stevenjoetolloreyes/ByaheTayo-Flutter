@@ -39,11 +39,12 @@ const kSigninTrack = Color(0xFFE2E8F0);
 /// ("+10 pts", Day 7 "+50 pts") on the Details Page; the Hub card
 /// shows compact "D1".."D7" labels instead.
 ///
-/// [minecraft] (Feature 2, Hub card only) restyles the tiles
-/// blocky — 8px corners, a 2.5px border, Baloo 2 labels — while
-/// keeping the EXACT approved tile colors in both modes, so the
-/// state (completed / current / upcoming / Day 7) still reads the
-/// same. The Details Page keeps the default (false).
+/// [minecraft] (Feature 2, Hub card + Details Page) restyles the
+/// tiles blocky — 8px corners, a 2.5px border, Baloo 2 labels —
+/// while keeping the EXACT approved tile colors in both modes, so
+/// the state (completed / current / upcoming / Day 7) still reads
+/// the same. The Details Page passes true too, so both surfaces
+/// always agree.
 class SigninDayTiles extends StatelessWidget {
   const SigninDayTiles({
     super.key,

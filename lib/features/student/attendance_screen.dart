@@ -13,6 +13,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
 import '../app_layout.dart';
+import '../minecraft_theme.dart';
 import 'student_data.dart';
 
 const _statuses = ['present', 'absent', 'late', 'excused', 'half'];
@@ -312,7 +313,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             style: AppText.caption,
           ),
           const SizedBox(height: AppLayout.cardGap),
-          Card(
+          MinecraftCard(
             child: Padding(
               padding: AppLayout.cardPadding,
               child: Column(
@@ -323,9 +324,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       Expanded(
                         child: Text(
                           '${stats.percent.toStringAsFixed(1)}%',
-                          style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800),
+                          style: MinecraftText.heading(
+                            color: MinecraftColors.emerald,
+                            fontSize: 28,
+                          ),
                         ),
                       ),
                       TextButton(
@@ -414,10 +416,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             },
           ),
           if (filtered.isEmpty)
-            const Card(child: ListTile(title: Text('No records found.')))
+            const MinecraftCard(padding: EdgeInsets.zero, child: ListTile(title: Text('No records found.')))
           else
             for (final r in filtered)
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   leading: Icon(Icons.circle,
                       color: _statusColor(context, r.status), size: 16),
@@ -445,7 +448,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 style: AppText.sectionTitle),
             const SizedBox(height: AppSpacing.s8),
             for (final k in weeklyKeys.take(8))
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   title: Text('Week of $k'),
                   subtitle: Text(
@@ -459,7 +463,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 style: AppText.sectionTitle),
             const SizedBox(height: AppSpacing.s8),
             for (final k in monthlyKeys)
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   title: Text(k),
                   subtitle: Text(

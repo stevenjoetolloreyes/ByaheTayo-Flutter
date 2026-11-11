@@ -698,7 +698,7 @@ void main() {
       expect(store.isProfileSetupDone('uid-9'), isFalse);
     });
 
-    testWidgets('step indicator shows Step 8 of 9 in setup, none in edit',
+    testWidgets('no step indicator on profile setup or edit',
         (WidgetTester tester) async {
       final prefs = await SharedPreferences.getInstance();
       final store = ProfileStore(prefs);
@@ -709,7 +709,13 @@ void main() {
           onSaved: (_) {},
         ),
       ));
-      expect(find.text('Step 8 of 9'), findsOneWidget);
+      // The Step indicator was removed from all onboarding steps:
+      // no dots bar and no "Step N of 9" label, while the setup
+      // form itself still renders.
+      expect(find.text('Step 8 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
+      expect(find.text('Set up your profile'), findsOneWidget);
+      expect(find.text('Finish setup'), findsOneWidget);
 
       await tester.pumpWidget(_wrap(
         ProfileSetupScreen(
@@ -721,6 +727,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(find.text('Step 8 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
+      expect(find.text('Edit profile'), findsOneWidget);
     });
   });
 
@@ -1209,7 +1217,10 @@ void main() {
       expect(find.text('OR SIGN UP WITH'), findsOneWidget);
       expect(find.text('Google here creates your account and profile.'),
           findsOneWidget);
-      expect(find.text('Step 6 of 9'), findsOneWidget);
+      // No Step indicator on the auth screens: no dots bar and no
+      // "Step N of 9" label, while the form still renders.
+      expect(find.text('Step 6 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
 
       // The link sits below the fold in the default viewport on the
       // taller create-account layout; scroll it into view first.
@@ -1235,13 +1246,14 @@ void main() {
         find.text('On Sign In, Google is login-only — no account, no entry.'),
         findsOneWidget,
       );
-      expect(find.text('Step 7 of 9'), findsOneWidget);
+      expect(find.text('Step 7 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
 
       await _tapVisible(tester, "Don't have an account? Create Account");
       expect(createRequested, isTrue);
     });
 
-    testWidgets('startup step indicator tracks onboarding pages 2 to 5',
+    testWidgets('no startup step indicator on onboarding pages',
         (WidgetTester tester) async {
       await tester.pumpWidget(_wrap(
         OnboardingScreen(
@@ -1249,16 +1261,27 @@ void main() {
           onSignIn: () {},
         ),
       ));
-      expect(find.text('Step 2 of 9'), findsOneWidget);
+      // The Step indicator was removed from all onboarding steps:
+      // no dots bar and no "Step N of 9" label on any page, while
+      // the page content still renders.
+      expect(find.text('Step 2 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
+      expect(find.text('Explore the Map'), findsOneWidget);
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      expect(find.text('Step 3 of 9'), findsOneWidget);
+      expect(find.text('Step 3 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
+      expect(find.text('Plan Your Trip'), findsOneWidget);
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      expect(find.text('Step 4 of 9'), findsOneWidget);
+      expect(find.text('Step 4 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
+      expect(find.text('Know Your Fare'), findsOneWidget);
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      expect(find.text('Step 5 of 9'), findsOneWidget);
+      expect(find.text('Step 5 of 9'), findsNothing);
+      expect(find.byKey(const Key('startup-step-indicator')), findsNothing);
+      expect(find.text('Community Updates'), findsOneWidget);
     });
   });
 

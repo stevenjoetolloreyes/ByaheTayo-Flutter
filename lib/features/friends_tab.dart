@@ -48,6 +48,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_layout.dart';
 import 'friend_cloud_repository.dart';
+import 'minecraft_theme.dart';
 import 'friend_sharing.dart';
 import 'friend_store.dart';
 
@@ -56,7 +57,7 @@ import 'friend_store.dart';
 // AppLayout/AppText scale is used by other tabs and stays untouched.
 // Only the tokens this tab actually uses are defined here.
 const kFriendsDarkCard = Color(0xFF202B25);
-const kFriendsError = Color(0xFFEF4444);
+const kFriendsError = MinecraftColors.heartRed;
 const kFriendsCardRadius = 20.0;
 const kFriendsInputRadius = 14.0;
 const kFriendsPageTitle =
@@ -467,9 +468,9 @@ class _FriendsTabState extends State<FriendsTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Friends',
-                      style: kFriendsPageTitle,
+                      style: MinecraftText.heading(fontSize: 26),
                     ),
                     const SizedBox(height: AppSpacing.s2),
                     Text(
@@ -568,9 +569,9 @@ class _FriendsTabState extends State<FriendsTab> {
                   ),
                   const SizedBox(height: AppLayout.cardGap),
                 ],
-                const Text(
+                Text(
                   'Incoming',
-                  style: kFriendsCardHeading,
+                  style: MinecraftText.title(),
                 ),
                 const SizedBox(height: AppSpacing.s8),
                 if (!_cloudEnabled)
@@ -594,9 +595,9 @@ class _FriendsTabState extends State<FriendsTab> {
                     ],
                   ),
                 const SizedBox(height: AppLayout.headerGap),
-                const Text(
+                Text(
                   'Outgoing',
-                  style: kFriendsCardHeading,
+                  style: MinecraftText.title(),
                 ),
                 const SizedBox(height: AppSpacing.s8),
                 if (!_cloudEnabled)
@@ -943,7 +944,7 @@ class _FriendsTabState extends State<FriendsTab> {
                 Expanded(
                   child: Text(
                     title,
-                    style: kFriendsCardHeading,
+                    style: MinecraftText.title(),
                   ),
                 ),
               ],

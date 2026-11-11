@@ -29,6 +29,7 @@ import 'bus_stops.dart';
 import 'custom_routes.dart';
 import 'fares_tab.dart';
 import 'ios_components.dart';
+import 'minecraft_theme.dart';
 import 'onboarding/auth_service.dart';
 import 'place_picker.dart';
 import 'route_fare_overrides.dart';
@@ -697,7 +698,7 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
                   : widget.existing == null
                   ? 'Add Route'
                   : 'Edit Route',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: MinecraftText.heading(fontSize: 18),
             ),
             const SizedBox(height: 8),
             Text(
@@ -769,6 +770,7 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
+                    style: minecraftBlockButtonStyle(),
                     onPressed: _companySaving ? null : _addCompany,
                     child: Text(_companySaving ? 'Saving…' : 'Save'),
                   ),
@@ -914,6 +916,7 @@ class _AddRouteSheetState extends State<AddRouteSheet> {
             ],
             const SizedBox(height: 16),
             FilledButton(
+              style: minecraftBlockButtonStyle(),
               onPressed: busy ? null : _save,
               child: Text(
                 _saving

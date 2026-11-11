@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_layout.dart';
+import '../minecraft_theme.dart';
 import '../community_posts.dart';
 import '../fares_tab.dart' as fares;
 import '../map_tab.dart' as maps;
@@ -154,7 +155,8 @@ class _CommuteScreenState extends State<CommuteScreen> {
               style: AppText.sectionTitle),
           const SizedBox(height: AppSpacing.s8),
           if (_savedKeys.isEmpty)
-            const Card(
+            const MinecraftCard(
+              padding: EdgeInsets.zero,
               child: ListTile(
                 title: Text('No saved routes yet.'),
                 subtitle: Text(
@@ -164,8 +166,10 @@ class _CommuteScreenState extends State<CommuteScreen> {
           else
             for (final key in _savedKeys) _savedRouteCard(key, rate),
           const SizedBox(height: 20),
-          const Text('Favorite destinations',
-              style: AppText.sectionTitle),
+          const MinecraftSectionHeader(
+            icon: Icons.place_rounded,
+            title: 'Favorite destinations',
+          ),
           const SizedBox(height: AppSpacing.s8),
           Row(
             children: [
@@ -199,11 +203,13 @@ class _CommuteScreenState extends State<CommuteScreen> {
           ),
           const SizedBox(height: AppSpacing.s8),
           if (_favs.isEmpty)
-            const Card(
+            const MinecraftCard(
+              padding: EdgeInsets.zero,
                 child: ListTile(title: Text('No favorite destinations.')))
           else
             for (final f in _favs)
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   leading: const Icon(Icons.place_outlined),
                   title: Text(f),
@@ -229,7 +235,7 @@ class _CommuteScreenState extends State<CommuteScreen> {
           const Text('Commute expenses',
               style: AppText.sectionTitle),
           const SizedBox(height: AppSpacing.s8),
-          Card(
+          MinecraftCard(
             child: Padding(
               padding: AppLayout.cardPadding,
               child: Row(
@@ -243,7 +249,8 @@ class _CommuteScreenState extends State<CommuteScreen> {
           ),
           const SizedBox(height: AppSpacing.s8),
           if (_expenses.isEmpty)
-            const Card(
+            const MinecraftCard(
+              padding: EdgeInsets.zero,
               child: ListTile(
                 title: Text('No commute expenses logged.'),
                 subtitle: Text(
@@ -252,7 +259,8 @@ class _CommuteScreenState extends State<CommuteScreen> {
             )
           else
             for (final e in _expenses)
-              Card(
+              MinecraftCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   title: Text(e.routeKey),
                   subtitle: Text(
@@ -310,7 +318,8 @@ class _CommuteScreenState extends State<CommuteScreen> {
     } else {
       subtitle = 'Saved route';
     }
-    return Card(
+    return MinecraftCard(
+      padding: EdgeInsets.zero,
       child: ListTile(
         title: Text('$originName → $destName'),
         subtitle: Text(subtitle),

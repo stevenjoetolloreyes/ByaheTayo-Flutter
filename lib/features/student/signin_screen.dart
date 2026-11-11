@@ -1,6 +1,19 @@
 // 7-Day Attendance Sign-in — daily check-in with streaks and
 // reward points.
 //
+// Minecraft theme (Feature 2 extension): the page shell is
+// blocky Minecraft — grass hero, MinecraftCard sections,
+// MinecraftIconBadge headers, blocky day tiles
+// ([SigninDayTiles] with `minecraft: true`, the same treatment
+// the Student Hub card already uses), a MinecraftXpBar, and a
+// blocky check-in button with reward tap feedback. Visual-only:
+// every value, state, and tap still comes from the record log /
+// wallet controller exactly as before. The day-tile STATE colors
+// stay the approved ones (light-green completed, deep-emerald
+// current, pale-gold Day 7, grey upcoming) — the Minecraft mode
+// changes geometry + label font only, per the approved Feature 2
+// decision locked by `student_minecraft_theme_test.dart`.
+//
 // This is NOT the Attendance Sheet (class attendance records). A
 // sign-in is a once-a-day app check-in: one record per calendar date
 // (Asia/Manila), a streak of consecutive days, a 7-day cycle with a
@@ -22,7 +35,10 @@ import 'package:flutter/material.dart';
 
 import '../ad_service.dart';
 import '../app_layout.dart';
+import '../minecraft_tap_animation.dart';
+import '../minecraft_theme.dart';
 import '../points_wallet_repository.dart';
+import '../onboarding/splash_sound.dart';
 import 'signin_components.dart';
 import 'student_data.dart';
 import 'student_theme.dart';
@@ -219,15 +235,19 @@ class _SigninScreenState extends State<SigninScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: MinecraftColors.border,
+                  width: MinecraftShapes.chipBorderWidth,
+                ),
               ),
               child: Column(
                 children: [
                   Container(
                     height: 20,
                     decoration: const BoxDecoration(
-                      color: kStudentEmeraldAccent,
+                      color: MinecraftColors.grassGreen,
                       borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(12)),
+                          top: Radius.circular(9)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -274,7 +294,7 @@ class _SigninScreenState extends State<SigninScreen> {
                                           decoration: BoxDecoration(
                                             color: checkedCells
                                                     .contains((row, col))
-                                                ? kSigninLightGreen
+                                                ? MinecraftColors.grassGreen
                                                 : const Color(0xFFF1F5F9),
                                             borderRadius:
                                                 BorderRadius.circular(4),
@@ -283,8 +303,7 @@ class _SigninScreenState extends State<SigninScreen> {
                                                   .contains((row, col))
                                               ? const Icon(Icons.check,
                                                   size: 10,
-                                                  color:
-                                                      kStudentEmeraldAccent)
+                                                  color: Colors.white)
                                               : null,
                                         ),
                                       ),
@@ -308,12 +327,16 @@ class _SigninScreenState extends State<SigninScreen> {
                 Container(
                   width: 40,
                   height: 40,
-                  decoration: const BoxDecoration(
-                    color: kSigninGold,
+                  decoration: BoxDecoration(
+                    color: MinecraftColors.gold,
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: MinecraftColors.border,
+                      width: 2,
+                    ),
                   ),
                   child: const Icon(Icons.star,
-                      size: 20, color: Colors.white),
+                      size: 20, color: MinecraftColors.ink),
                 ),
                 Positioned(
                   right: 0,
@@ -322,7 +345,7 @@ class _SigninScreenState extends State<SigninScreen> {
                     width: 26,
                     height: 26,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFBBF24),
+                      color: MinecraftColors.goldDark,
                       shape: BoxShape.circle,
                       border: Border.all(
                           color: Colors.white, width: 2),
@@ -340,15 +363,19 @@ class _SigninScreenState extends State<SigninScreen> {
   }
 
   /// Full-width check-in button. Claimed or claiming states render
-  /// as a locked light-green pill (never a second claim tap);
-  /// available state is the green gradient pill from the preview.
+  /// as a locked light-green block (never a second claim tap);
+  /// available state is the grass block button from the Minecraft
+  /// theme, with reward tap feedback (gold ring + music note +
+  /// level-up sound) on the claim tap.
   Widget _checkinButton(bool checkedToday, int todayDay) {
     if (checkedToday || _claiming) {
       return Container(
         height: 56,
         decoration: BoxDecoration(
           color: kSigninLightGreen,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius:
+              BorderRadius.circular(MinecraftShapes.buttonRadius),
+          border: MinecraftShapes.buttonBorder,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -369,9 +396,8 @@ class _SigninScreenState extends State<SigninScreen> {
                 _claiming ? 'Checking in…' : 'Already checked in today',
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: MinecraftText.button(
                   color: kStudentEmerald,
-                  fontWeight: FontWeight.w800,
                   fontSize: 16,
                 ),
               ),
@@ -380,44 +406,40 @@ class _SigninScreenState extends State<SigninScreen> {
         ),
       );
     }
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [kStudentEmerald, kStudentEmeraldAccent],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
+    return MinecraftTapAnimation(
+      reward: true,
+      sound: MinecraftSoundKind.levelup,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: MinecraftColors.grassGreen,
+          borderRadius:
+              BorderRadius.circular(MinecraftShapes.buttonRadius),
+          border: MinecraftShapes.buttonBorder,
+          boxShadow: const [MinecraftShapes.hardShadow],
         ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: _checkIn,
-        borderRadius: BorderRadius.circular(28),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.white),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                'Check in today · Day $todayDay',
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
+        child: InkWell(
+          onTap: _checkIn,
+          borderRadius:
+              BorderRadius.circular(MinecraftShapes.buttonRadius),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Check in today · Day $todayDay',
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: MinecraftText.button(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -447,26 +469,35 @@ class _SigninScreenState extends State<SigninScreen> {
         _showAll ? _records : _records.take(5).toList();
 
     return Scaffold(
-      backgroundColor: kSigninPageBg,
+      backgroundColor: MinecraftColors.paper,
       appBar: AppBar(
-        title: const Text('7-Day Sign-in'),
-        backgroundColor: Colors.white,
-        foregroundColor: kStudentEmerald,
+        title: Text(
+          '7-Day Sign-in',
+          style: MinecraftText.heading(color: Colors.white, fontSize: 20),
+        ),
+        backgroundColor: MinecraftColors.grassGreen,
+        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: ListView(
         padding: AppLayout.pagePaddingTab,
         children: [
-          // Premium hero banner.
+          // Grass hero banner.
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [kStudentEmerald, kStudentEmeraldAccent],
+                colors: [
+                  MinecraftColors.grassBright,
+                  MinecraftColors.grassMid,
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius:
+                  BorderRadius.circular(MinecraftShapes.cardRadius),
+              border: MinecraftShapes.blockBorder,
+              boxShadow: const [MinecraftShapes.cardShadow],
             ),
             child: Row(
               children: [
@@ -480,30 +511,35 @@ class _SigninScreenState extends State<SigninScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white24,
                           borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
+                          ),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.calendar_month_rounded,
+                            const Icon(Icons.calendar_month_rounded,
                                 size: 14, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text('Study Rewards',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12)),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Study Rewards',
+                              style: MinecraftText.pixel(
+                                color: Colors.white,
+                                fontSize: 8,
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text('7-Day Sign-in',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800)),
-                      const Text(
-                          'Build your study habit and earn rewards!',
-                          style: TextStyle(color: Colors.white70)),
+                      Text('7-Day Sign-in',
+                          style: MinecraftText.heading(
+                              color: Colors.white, fontSize: 26)),
+                      Text(
+                        'Build your study habit and earn rewards!',
+                        style: MinecraftText.body(color: Colors.white70),
+                      ),
                     ],
                   ),
                 ),
@@ -517,37 +553,35 @@ class _SigninScreenState extends State<SigninScreen> {
           Row(
             children: [
               Expanded(
-                child: Container(
+                child: MinecraftCard(
                   padding: AppLayout.cardPadding,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    border: Border.all(color: kStudentBorder),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: kSigninFlameTile,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                            Icons.local_fire_department_rounded,
-                            color: kSigninFlame,
-                            size: 24),
+                      const MinecraftIconBadge(
+                        icon: Icons.local_fire_department_rounded,
+                        backgroundColor: kSigninFlameTile,
+                        iconColor: kSigninFlame,
+                        size: 40,
+                        iconSize: 24,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Current Streak',
-                                style: AppText.caption),
+                            Text(
+                              'Current Streak',
+                              style: MinecraftText.caption(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface,
+                              ),
+                            ),
                             Text(
                               streak == 1 ? '1 day' : '$streak days',
-                              style: AppText.titleStrong
-                                  .copyWith(color: kStudentEmerald),
+                              style: MinecraftText.title(
+                                color: kStudentEmerald,
+                              ),
                             ),
                           ],
                         ),
@@ -558,42 +592,47 @@ class _SigninScreenState extends State<SigninScreen> {
               ),
               const SizedBox(width: AppLayout.cardGap),
               Expanded(
-                child: InkWell(
-                  onTap: widget.onViewWallet,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
+                child: MinecraftTapAnimation(
+                  enabled: widget.onViewWallet != null,
+                  sound: MinecraftSoundKind.pop,
+                  child: MinecraftCard(
+                    onTap: widget.onViewWallet,
                     padding: AppLayout.cardPadding,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: kStudentBorder),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
                     child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: kSigninLightGreen,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.monetization_on_rounded,
-                              color: kStudentEmeraldAccent, size: 24),
+                        const MinecraftIconBadge(
+                          icon: Icons.monetization_on_rounded,
+                          backgroundColor: kSigninLightGreen,
+                          iconColor: kStudentEmeraldAccent,
+                          size: 40,
+                          iconSize: 24,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Total Points',
-                                  style: AppText.caption),
-                              Text('$totalPoints pts',
-                                  style: AppText.titleStrong.copyWith(
-                                      color: kStudentEmerald)),
+                              Text(
+                                'Total Points',
+                                style: MinecraftText.caption(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                ),
+                              ),
+                              Text(
+                                '$totalPoints pts',
+                                style: MinecraftText.title(
+                                  color: kStudentEmerald,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        const Icon(Icons.chevron_right,
-                            color: kStudentSubtext),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: kStudentSubtext,
+                        ),
                       ],
                     ),
                   ),
@@ -603,37 +642,40 @@ class _SigninScreenState extends State<SigninScreen> {
           ),
           const SizedBox(height: AppLayout.cardGap),
           // This Cycle tracker + progress + check-in button.
-          Container(
+          MinecraftCard(
             padding: AppLayout.cardPadding,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: kStudentBorder),
-              borderRadius: BorderRadius.circular(16),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: kSigninLightGreen,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.calendar_month_rounded,
-                          color: kStudentEmeraldAccent, size: 22),
+                    const MinecraftIconBadge(
+                      icon: Icons.calendar_month_rounded,
+                      size: 40,
+                      iconSize: 22,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('This Cycle',
-                              style: AppText.headingStrong),
                           Text(
-                              'Complete 7 consecutive days to get the bonus reward!',
-                              style: AppText.caption),
+                            'This Cycle',
+                            style: MinecraftText.heading(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface,
+                              fontSize: 18,
+                            ),
+                          ),
+                          Text(
+                            'Complete 7 consecutive days to get the bonus reward!',
+                            style: MinecraftText.caption(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -643,6 +685,10 @@ class _SigninScreenState extends State<SigninScreen> {
                       decoration: BoxDecoration(
                         color: kSigninLightGreen,
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: MinecraftColors.border,
+                          width: MinecraftShapes.chipBorderWidth,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -650,9 +696,13 @@ class _SigninScreenState extends State<SigninScreen> {
                           const Icon(Icons.schedule_rounded,
                               size: 14, color: kStudentEmerald),
                           const SizedBox(width: 4),
-                          Text(resetsLabel,
-                              style: AppText.smallBold
-                                  .copyWith(color: kStudentEmerald)),
+                          Text(
+                            resetsLabel,
+                            style: MinecraftText.button(
+                              color: kStudentEmerald,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -664,18 +714,21 @@ class _SigninScreenState extends State<SigninScreen> {
                   currentDay: todayDay,
                   checkedToday: checkedToday,
                   showPoints: true,
+                  minecraft: true,
                 ),
                 const SizedBox(height: AppSpacing.s12),
                 Row(
                   children: [
                     Expanded(
-                      child: AnimatedSigninProgressBar(
-                          value: checkedCells / 7),
+                      child: MinecraftXpBar(value: checkedCells / 7),
                     ),
                     const SizedBox(width: 8),
-                    Text('$checkedCells / 7 Days',
-                        style: AppText.smallBold
-                            .copyWith(color: kStudentEmerald)),
+                    Text(
+                      '$checkedCells / 7 Days',
+                      style: MinecraftText.button(
+                        color: kStudentEmerald,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.s16),
@@ -685,56 +738,73 @@ class _SigninScreenState extends State<SigninScreen> {
           ),
           const SizedBox(height: AppLayout.cardGap),
           // Daily Rewards card.
-          Container(
+          MinecraftCard(
             padding: AppLayout.cardPadding,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: kStudentBorder),
-              borderRadius: BorderRadius.circular(16),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: kSigninPaleGold,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.emoji_events_rounded,
-                          color: kSigninGold, size: 22),
+                    const MinecraftIconBadge(
+                      icon: Icons.emoji_events_rounded,
+                      backgroundColor: MinecraftColors.gold,
+                      iconColor: MinecraftColors.ink,
+                      size: 40,
+                      iconSize: 22,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Daily Rewards',
-                              style: AppText.headingStrong),
-                          Text('Earn points for checking in daily!',
-                              style: AppText.caption),
+                          Text(
+                            'Daily Rewards',
+                            style: MinecraftText.heading(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface,
+                              fontSize: 18,
+                            ),
+                          ),
+                          Text(
+                            'Earn points for checking in daily!',
+                            style: MinecraftText.caption(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
                 const Divider(height: 24),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.check_circle_rounded,
+                    const Icon(Icons.check_circle_rounded,
                         color: kStudentEmeraldAccent, size: 20),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text.rich(
                         TextSpan(
                           children: [
                             TextSpan(
-                                text: 'Day 1 – 6: ',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w700)),
-                            TextSpan(text: '10 points each'),
+                              text: 'Day 1 – 6: ',
+                              style: MinecraftText.bodySemiBold(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '10 points each',
+                              style: MinecraftText.body(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -742,22 +812,31 @@ class _SigninScreenState extends State<SigninScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.s8),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.star_rounded,
+                    const Icon(Icons.star_rounded,
                         color: kSigninGold, size: 20),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text.rich(
                         TextSpan(
                           children: [
                             TextSpan(
-                                text: 'Day 7: ',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w700)),
+                              text: 'Day 7: ',
+                              style: MinecraftText.bodySemiBold(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface,
+                              ),
+                            ),
                             TextSpan(
-                                text:
-                                    '50 points (completion reward)'),
+                              text: '50 points (completion reward)',
+                              style: MinecraftText.body(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -771,54 +850,62 @@ class _SigninScreenState extends State<SigninScreen> {
           // Check-in History — real ledger/local records only.
           // Records carry Manila dates only (no time-of-day is
           // stored), so rows show the date, never an invented time.
-          Container(
+          MinecraftCard(
             key: const ValueKey('signin-history'),
             padding: AppLayout.cardPadding,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: kStudentBorder),
-              borderRadius: BorderRadius.circular(16),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: kSigninLightGreen,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.history_rounded,
-                          color: kStudentEmeraldAccent, size: 22),
+                    const MinecraftIconBadge(
+                      icon: Icons.history_rounded,
+                      size: 40,
+                      iconSize: 22,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text('Check-in History',
-                          style: AppText.headingStrong),
+                    Expanded(
+                      child: Text(
+                        'Check-in History',
+                        style: MinecraftText.heading(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 18,
+                        ),
+                      ),
                     ),
                     if (_records.isNotEmpty)
-                      InkWell(
-                        onTap: () =>
-                            setState(() => _showAll = !_showAll),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_showAll ? 'Show less' : 'View All',
-                                style: AppText.smallBold.copyWith(
-                                    color: kStudentEmerald)),
-                            const Icon(Icons.chevron_right,
-                                size: 18, color: kStudentEmerald),
-                          ],
+                      MinecraftTapAnimation(
+                        sound: MinecraftSoundKind.pop,
+                        child: InkWell(
+                          onTap: () =>
+                              setState(() => _showAll = !_showAll),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _showAll ? 'Show less' : 'View All',
+                                style: MinecraftText.button(
+                                  color: kStudentEmerald,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right,
+                                  size: 18, color: kStudentEmerald),
+                            ],
+                          ),
                         ),
                       ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.s12),
                 if (_records.isEmpty)
-                  const Text('No check-in history yet.')
+                  Text(
+                    'No check-in history yet.',
+                    style: MinecraftText.body(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  )
                 else
                   for (var i = 0; i < visibleHistory.length; i++) ...[
                     if (i > 0) const Divider(height: 24),
@@ -833,12 +920,22 @@ class _SigninScreenState extends State<SigninScreen> {
                                 CrossAxisAlignment.start,
                             children: [
                               Text(
-                                  'Day ${visibleHistory[i].dayIndex}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700)),
+                                'Day ${visibleHistory[i].dayIndex}',
+                                style: MinecraftText.title(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                  fontSize: 16,
+                                ),
+                              ),
                               Text(
-                                  formatDate(visibleHistory[i].date),
-                                  style: AppText.caption),
+                                formatDate(visibleHistory[i].date),
+                                style: MinecraftText.caption(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -848,11 +945,18 @@ class _SigninScreenState extends State<SigninScreen> {
                           decoration: BoxDecoration(
                             color: kSigninLightGreen,
                             borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: MinecraftColors.border,
+                              width: MinecraftShapes.chipBorderWidth,
+                            ),
                           ),
                           child: Text(
-                              '+${visibleHistory[i].points} pts',
-                              style: AppText.smallBold
-                                  .copyWith(color: kStudentEmerald)),
+                            '+${visibleHistory[i].points} pts',
+                            style: MinecraftText.button(
+                              color: kStudentEmerald,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -865,7 +969,9 @@ class _SigninScreenState extends State<SigninScreen> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: kSigninLightGreen,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius:
+                  BorderRadius.circular(MinecraftShapes.buttonRadius),
+              border: MinecraftShapes.buttonBorder,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -878,7 +984,10 @@ class _SigninScreenState extends State<SigninScreen> {
                     _remote
                         ? 'Dates follow Asia/Manila time. Points are saved to your account and show in your Account Points Wallet.'
                         : 'Dates follow this phone\'s calendar (Asia/Manila). Points are saved on this device only and are separate from the Account Points Wallet.',
-                    style: const TextStyle(fontSize: 12),
+                    style: MinecraftText.caption(
+                      color: MinecraftColors.ink,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],

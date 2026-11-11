@@ -55,7 +55,6 @@ import '../profile_repository.dart';
 import 'auth_service.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
-import 'startup_step_indicator.dart';
 
 /// Shown when Google Sign In succeeds but no EstudyanteGO profile
 /// exists for the Firebase UID. Exact string (the strict rule requires
@@ -69,14 +68,13 @@ Future<ProfileStore> _profileStore() async {
 }
 
 /// Shared entry shell for the two auth pages: header (back + theme
-/// toggle), branding, the 9-step startup indicator, title, subtitle,
-/// then the page's own [child] form content.
+/// toggle), branding, title, subtitle, then the page's own [child]
+/// form content.
 class _AuthShell extends StatelessWidget {
   const _AuthShell({
     required this.themeMode,
     this.onThemeModeChanged,
     this.onBack,
-    required this.step,
     required this.title,
     required this.subtitle,
     required this.child,
@@ -86,9 +84,6 @@ class _AuthShell extends StatelessWidget {
   final ValueChanged<ThemeMode>? onThemeModeChanged;
   final VoidCallback? onBack;
 
-  /// 1-based step in the 9-step startup flow (6 = Create Account,
-  /// 7 = Sign In).
-  final int step;
   final String title;
   final String subtitle;
   final Widget child;
@@ -133,13 +128,6 @@ class _AuthShell extends StatelessWidget {
                       else
                         const SizedBox(width: 48),
                     ],
-                  ),
-                  const SizedBox(height: AppSpacing.s8),
-                  StartupStepIndicator(
-                    step: step,
-                    activeColor: colors.primary,
-                    inactiveColor: colors.secondaryText,
-                    labelColor: colors.secondaryText,
                   ),
                   const SizedBox(height: AppSpacing.s16),
                   // Branding.
@@ -536,7 +524,6 @@ class _SignInScreenState extends State<SignInScreen> {
       themeMode: widget.themeMode,
       onThemeModeChanged: widget.onThemeModeChanged,
       onBack: widget.onBack,
-      step: 7,
       title: 'Welcome Back',
       subtitle: 'Sign in to continue to EstudyanteGO.',
       child: Column(
@@ -855,7 +842,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       themeMode: widget.themeMode,
       onThemeModeChanged: widget.onThemeModeChanged,
       onBack: widget.onBack,
-      step: 6,
       title: 'Create Your Account',
       subtitle: 'Join EstudyanteGO and get started.',
       child: Column(

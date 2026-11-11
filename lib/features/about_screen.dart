@@ -25,6 +25,7 @@
 import 'package:flutter/material.dart';
 
 import 'custom_routes.dart';
+import 'minecraft_theme.dart';
 import 'fares_tab.dart';
 import 'philippine_places.dart';
 
@@ -207,11 +208,7 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
               child: Text(
                 'ESTUDYANTEGO · VERSION 1.0.0',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 0.5,
-                  color: muted,
-                ),
+                style: MinecraftText.pixel(color: muted, fontSize: 8),
               ),
             ),
           ],
@@ -230,27 +227,21 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
           width: 72,
           height: 72,
           decoration: BoxDecoration(
-            color: const Color(0xFF16A34A),
-            borderRadius: BorderRadius.circular(20),
+            color: MinecraftColors.grassGreen,
+            borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
+            border: MinecraftShapes.blockBorder,
+            boxShadow: const [MinecraftShapes.cardShadow],
           ),
           alignment: Alignment.center,
-          child: const Text(
+          child: Text(
             'E',
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
+            style: MinecraftText.pixel(color: Colors.white, fontSize: 28),
           ),
         ),
         const SizedBox(height: 12),
         Text(
           'EstudyanteGO',
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: onSurface,
-          ),
+          style: MinecraftText.heading(color: onSurface, fontSize: 26),
         ),
         const SizedBox(height: 4),
         Text(
@@ -273,23 +264,14 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
   /// loading, a progress indicator stands in for the graph so no
   /// partial number is ever shown.
   Widget _statsCard(AppStats? stats, bool dark, Color onSurface, Color muted) {
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        child: Column(
+    return MinecraftCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               'App stats',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: onSurface,
-              ),
+              style: MinecraftText.title(color: onSurface),
             ),
             const SizedBox(height: 4),
             Text(
@@ -311,7 +293,7 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
                 label: 'Routes',
                 count: stats.routes,
                 maxCount: _maxCount(stats),
-                color: const Color(0xFF16A34A),
+                color: MinecraftColors.grassGreen,
               ),
               const SizedBox(height: 12),
               _statBar(
@@ -319,7 +301,7 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
                 label: 'Hubs',
                 count: stats.hubs,
                 maxCount: _maxCount(stats),
-                color: const Color(0xFF2563EB),
+                color: MinecraftColors.skyBlue,
               ),
               const SizedBox(height: 12),
               _statBar(
@@ -327,7 +309,7 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
                 label: 'Cities & towns',
                 count: stats.cities,
                 maxCount: _maxCount(stats),
-                color: const Color(0xFFD97706),
+                color: MinecraftColors.goldDark,
               ),
               const SizedBox(height: 16),
               Text(
@@ -339,7 +321,6 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
             ],
           ],
         ),
-      ),
     );
   }
 
@@ -417,16 +398,12 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
       children: [
         Text(
           heading,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: onSurface,
-          ),
+          style: MinecraftText.title(color: onSurface),
         ),
         const SizedBox(height: 6),
         Text(
           body,
-          style: TextStyle(fontSize: 13, height: 1.5, color: muted),
+          style: MinecraftText.body(color: muted, fontSize: 13),
         ),
       ],
     );

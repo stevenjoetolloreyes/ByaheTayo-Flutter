@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'ad_service.dart';
 import 'credits_repository.dart';
 import 'ios_components.dart';
+import 'minecraft_theme.dart';
 import 'rewards_center.dart';
 
 class RewardsScreen extends StatelessWidget {
@@ -119,51 +120,47 @@ class RewardsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Your points',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.stars_rounded,
+                        title: 'Your points',
+                        iconColor: MinecraftColors.emerald,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         '$pointsBalance points',
-                        style: const TextStyle(
+                        style: MinecraftText.heading(
+                          color: MinecraftColors.emerald,
                           fontSize: 32,
-                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Your credits',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.monetization_on_rounded,
+                        title: 'Your credits',
+                        iconColor: MinecraftColors.gold,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         '${formatMinorUnits(creditsBalanceUnits)} credits',
-                        style: const TextStyle(
+                        style: MinecraftText.heading(
+                          color: Theme.of(context).brightness ==
+                                  Brightness.dark
+                              ? MinecraftColors.gold
+                              : MinecraftColors.goldDark,
                           fontSize: 32,
-                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -173,6 +170,7 @@ class RewardsScreen extends StatelessWidget {
                         'credits · Total spent: '
                         '${formatMinorUnits(creditsTotalSpentUnits)} '
                         'credits',
+                        style: MinecraftText.body(),
                       ),
                       const SizedBox(height: 4),
                       const Text(
@@ -181,6 +179,7 @@ class RewardsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       FilledButton(
+                        style: minecraftBlockButtonStyle(),
                         onPressed: () => handleRedeem(
                           context,
                           pointsBalance: pointsBalance,
@@ -190,21 +189,17 @@ class RewardsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Daily Rewards',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.calendar_month_rounded,
+                        title: 'Daily Rewards',
+                        iconColor: MinecraftColors.grassGreen,
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -214,26 +209,23 @@ class RewardsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       FilledButton(
+                        style: minecraftBlockButtonStyle(),
                         onPressed: onOpenStudentHub,
                         child: const Text('Open Student Hub'),
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'AI Scanner',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.document_scanner_rounded,
+                        title: 'AI Scanner',
+                        iconColor: MinecraftColors.skyBlue,
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -253,21 +245,17 @@ class RewardsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Learning Activities',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.school_rounded,
+                        title: 'Learning Activities',
+                        iconColor: MinecraftColors.grassGreen,
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -277,21 +265,17 @@ class RewardsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Achievements',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.emoji_events_rounded,
+                        title: 'Achievements',
+                        iconColor: MinecraftColors.gold,
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -300,21 +284,17 @@ class RewardsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Referral Rewards',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.group_add_rounded,
+                        title: 'Referral Rewards',
+                        iconColor: MinecraftColors.skyBlue,
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -323,21 +303,17 @@ class RewardsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Watch Ads & Earn Credits',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.play_circle_rounded,
+                        title: 'Watch Ads & Earn Credits',
+                        iconColor: MinecraftColors.gold,
                       ),
                       const SizedBox(height: 8),
                       if (adService == null)
@@ -359,6 +335,7 @@ class RewardsScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         FilledButton(
+                          style: minecraftBlockButtonStyle(),
                           onPressed: () => _watchAd(context),
                           child: const Text('Watch ad'),
                         ),
@@ -372,21 +349,17 @@ class RewardsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Redemption History',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.receipt_long_rounded,
+                        title: 'Redemption History',
+                        iconColor: MinecraftColors.grassGreen,
                       ),
                       const SizedBox(height: 8),
                       if (redemptions.isEmpty && scanCharges.isEmpty)
@@ -401,8 +374,8 @@ class RewardsScreen extends StatelessWidget {
                             ),
                             trailing: Text(
                               '+${formatMinorUnits(entry.units)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                              style: MinecraftText.bodySemiBold(
+                                color: MinecraftColors.emerald,
                               ),
                             ),
                           ),
@@ -415,29 +388,25 @@ class RewardsScreen extends StatelessWidget {
                             ),
                             trailing: Text(
                               formatMinorUnits(entry.units),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                              style: MinecraftText.bodySemiBold(
+                                color: MinecraftColors.heartRed,
                               ),
                             ),
                           ),
                       ],
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+              MinecraftCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Rewarded Ads History',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      MinecraftSectionHeader(
+                        icon: Icons.movie_rounded,
+                        title: 'Rewarded Ads History',
+                        iconColor: MinecraftColors.gold,
                       ),
                       const SizedBox(height: 8),
                       if (adRewardEntries.isEmpty)
@@ -460,14 +429,13 @@ class RewardsScreen extends StatelessWidget {
                             ),
                             trailing: Text(
                               '+${formatMinorUnits(entry.units)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                              style: MinecraftText.bodySemiBold(
+                                color: MinecraftColors.emerald,
                               ),
                             ),
                           ),
                     ],
                   ),
-                ),
               ),
             ],
           ),

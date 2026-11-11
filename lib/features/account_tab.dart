@@ -21,6 +21,7 @@ import 'about_screen.dart';
 import 'ad_service.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 import 'app_reviews.dart';
 import 'app_reviews_admin_screen.dart';
 import 'bus_stops.dart';
@@ -988,9 +989,8 @@ class _AccountTabState extends State<AccountTab> {
       ),
       title: Text(
         title,
-        style: TextStyle(
+        style: MinecraftText.bodySemiBold(
           fontSize: 13,
-          fontWeight: FontWeight.w700,
           color: titleColor,
         ),
       ),
@@ -1034,10 +1034,8 @@ class _AccountTabState extends State<AccountTab> {
       children: [
         Text(
           'My Account',
-          style: kAccountPageTitle.copyWith(
-            letterSpacing: -1.1,
-            color: onHeader,
-          ),
+          style: MinecraftText.heading(color: onHeader, fontSize: 26)
+              .copyWith(letterSpacing: -1.1),
         ),
         const SizedBox(height: 5),
         Text(
@@ -1118,7 +1116,7 @@ class _AccountTabState extends State<AccountTab> {
               children: [
                 Text(
                   'No account signed in',
-                  style: kAccountCardHeading.copyWith(color: onCard),
+                  style: MinecraftText.title(color: onCard),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -1174,7 +1172,7 @@ class _AccountTabState extends State<AccountTab> {
                 children: [
                   Text(
                     profile?.displayName ?? user.displayName ?? user.email,
-                    style: kAccountCardHeading.copyWith(color: onCard),
+                    style: MinecraftText.title(color: onCard),
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -1566,7 +1564,7 @@ class _AccountTabState extends State<AccountTab> {
               Expanded(
                 child: Text(
                   'Quick Actions',
-                  style: kAccountCardHeading.copyWith(
+                  style: MinecraftText.title().copyWith(
                     color: glass ? Colors.white : null,
                   ),
                 ),
@@ -1902,7 +1900,7 @@ class _AccountTabState extends State<AccountTab> {
           Expanded(
             child: Text(
               title,
-              style: kAccountCardHeading,
+              style: MinecraftText.title(),
             ),
           ),
           titleTrailing,

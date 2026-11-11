@@ -757,7 +757,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF34D399),
+                    color: MinecraftColors.darkAccent,
                     shape: BoxShape.circle,
                   ),
                 ),

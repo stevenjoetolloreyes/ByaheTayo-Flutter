@@ -30,6 +30,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../minecraft_theme.dart';
 import '../onboarding/onboarding_state.dart';
 import '../onboarding/splash_sound.dart';
 import '../ph_holidays.dart';
@@ -321,8 +322,8 @@ class _EditSchoolCalendarScreenState
             controller: _listController,
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
             children: [
-              const Text('School',
-                  style: TextStyle(fontWeight: FontWeight.w800)),
+              Text('School',
+                  style: MinecraftText.title()),
               const SizedBox(height: 8),
               TextField(
                 key: const ValueKey('edit-calendar-school'),
@@ -343,11 +344,11 @@ class _EditSchoolCalendarScreenState
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 20),
-              const Text('Marked days',
-                  style: TextStyle(fontWeight: FontWeight.w800)),
+              Text('Marked days',
+                  style: MinecraftText.title()),
               const SizedBox(height: 8),
               if (_days.isEmpty)
-                const Card(
+                const MinecraftCard(
                   child: ListTile(
                     title: Text('No marked days yet.'),
                     subtitle: Text(
@@ -707,7 +708,7 @@ class _DaySheetState extends State<_DaySheet> {
         children: [
           Text(
             widget.existing == null ? 'Add a day' : 'Edit day',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            style: MinecraftText.heading(fontSize: 18),
           ),
           const SizedBox(height: 16),
           const Text('Name', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -790,6 +791,7 @@ class _DaySheetState extends State<_DaySheet> {
               ),
               const SizedBox(width: 8),
               FilledButton(
+                style: minecraftBlockButtonStyle(),
                 key: const ValueKey('day-sheet-save'),
                 onPressed: _saveDay,
                 child: const Text('Save day'),

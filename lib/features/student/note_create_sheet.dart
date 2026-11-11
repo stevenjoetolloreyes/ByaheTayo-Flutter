@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../minecraft_theme.dart';
 import 'note_extract_service.dart';
 import 'student_data.dart';
 
@@ -239,9 +240,9 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Add note',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            style: MinecraftText.heading(fontSize: 18),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -288,6 +289,7 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
             children: [
               Expanded(
                 child: OutlinedButton(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
@@ -296,6 +298,7 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
               Expanded(
                 flex: 2,
                 child: FilledButton(
+                  style: minecraftBlockButtonStyle(),
                   onPressed: _save,
                   child: const Text('Save note'),
                 ),
@@ -594,6 +597,7 @@ class _ExtractDraftSheetState extends State<_ExtractDraftSheet> {
             children: [
               Expanded(
                 child: OutlinedButton(
+                  style: minecraftOutlinedButtonStyle(),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
@@ -603,6 +607,7 @@ class _ExtractDraftSheetState extends State<_ExtractDraftSheet> {
                 Expanded(
                   flex: 2,
                   child: FilledButton(
+                  style: minecraftBlockButtonStyle(),
                     onPressed: _save,
                     child: const Text('Save as note'),
                   ),

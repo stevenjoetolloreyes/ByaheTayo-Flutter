@@ -25,6 +25,7 @@
 // need the Full push system (FCM + Cloud Functions), which is not
 // approved and not built — the footer says so plainly.
 import 'package:flutter/material.dart';
+import 'minecraft_theme.dart';
 import 'top_popup.dart';
 
 import 'ios_components.dart';
@@ -204,10 +205,7 @@ class _NotificationSettingsScreenState
             ),
             Text(
               'Notification Settings',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: onSurface,
-                  ),
+              style: MinecraftText.heading(color: onSurface),
             ),
             const SizedBox(height: 8),
             Text(
@@ -232,6 +230,7 @@ class _NotificationSettingsScreenState
                   subtitle: Text(_statusLabel()),
                   trailing: FilledButton(
                     key: const Key('notification-permission-button'),
+                    style: minecraftBlockButtonStyle(),
                     onPressed: _onPermissionButton,
                     child: Text(
                       permissionGranted
@@ -261,11 +260,7 @@ class _NotificationSettingsScreenState
             const SizedBox(height: 20),
             Text(
               'REMINDERS',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: muted,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
+              style: MinecraftText.pixel(color: muted, fontSize: 9),
             ),
             const SizedBox(height: 8),
             _sectionCard(
@@ -373,6 +368,7 @@ class _NotificationSettingsScreenState
                         'Reminders may arrive a few minutes late.'),
                     trailing: OutlinedButton(
                       key: const Key('allow-exact-alarms-button'),
+                      style: minecraftOutlinedButtonStyle(),
                       onPressed: _onExactAlarms,
                       child: const Text('Allow'),
                     ),
@@ -383,6 +379,7 @@ class _NotificationSettingsScreenState
             const SizedBox(height: 20),
             OutlinedButton.icon(
               key: const Key('send-test-notification-button'),
+              style: minecraftOutlinedButtonStyle(),
               onPressed: _onSendTest,
               icon: const Icon(Icons.notifications_active_outlined),
               label: const Text('Send test notification'),
@@ -404,13 +401,8 @@ class _NotificationSettingsScreenState
 
   Widget _sectionCard(BuildContext context,
       {required List<Widget> children}) {
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return MinecraftCard(
+      padding: EdgeInsets.zero,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: children,

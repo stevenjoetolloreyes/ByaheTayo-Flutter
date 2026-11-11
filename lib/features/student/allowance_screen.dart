@@ -22,6 +22,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_layout.dart';
+import '../minecraft_theme.dart';
 import '../ios_components.dart';
 import '../onboarding/splash_sound.dart';
 import '../top_popup.dart';
@@ -625,17 +626,18 @@ class _AllowanceScreenState extends State<AllowanceScreen>
             controller: _scrollController,
             padding: AppLayout.pagePaddingTab,
             children: [
-              Card(
-                child: Padding(
-                  padding: AppLayout.cardPadding,
-                  child: Column(
+              MinecraftCard(
+                padding: AppLayout.cardPadding,
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('Available balance',
                           style: AppText.caption),
                       Text(peso(balance),
-                          style: const TextStyle(
-                              fontSize: 28, fontWeight: FontWeight.w800)),
+                          style: MinecraftText.heading(
+                            color: MinecraftColors.emerald,
+                            fontSize: 28,
+                          )),
                       const SizedBox(height: AppSpacing.s8),
                       Row(
                         children: [
@@ -649,15 +651,13 @@ class _AllowanceScreenState extends State<AllowanceScreen>
                       ),
                     ],
                   ),
-                ),
               ),
               if (overBudgets.isNotEmpty) ...[
                 const SizedBox(height: AppLayout.cardGap),
-                Card(
+                MinecraftCard(
                   color: scheme.errorContainer,
-                  child: Padding(
-                    padding: AppLayout.cardPadding,
-                    child: Column(
+                  padding: AppLayout.cardPadding,
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Budget alert',
@@ -667,33 +667,35 @@ class _AllowanceScreenState extends State<AllowanceScreen>
                               '${e.key.category} over budget: spent ${peso(e.value)} of ${peso(e.key.limit)}.'),
                       ],
                     ),
-                  ),
                 ),
               ],
               const SizedBox(height: 20),
-              const Text('Spending · last 6 months',
-                  style: AppText.sectionTitle),
+              const MinecraftSectionHeader(
+                icon: Icons.bar_chart_rounded,
+                title: 'Spending · last 6 months',
+              ),
               const SizedBox(height: AppSpacing.s8),
-              Card(
-                child: Padding(
-                  padding: AppLayout.cardPadding,
-                  child: MoneySpendingChart(
+              MinecraftCard(
+                padding: AppLayout.cardPadding,
+                child: MoneySpendingChart(
                     bars: bars,
                     totalSpent: totalSpent,
                     now: now,
                     barHeight: 80,
                     barWidth: 22,
                   ),
-                ),
               ),
               const SizedBox(height: 20),
               Row(
                 children: [
                   const Expanded(
-                    child: Text('Savings goals',
-                        style: AppText.sectionTitle),
+                    child: MinecraftSectionHeader(
+                      icon: Icons.savings_rounded,
+                      title: 'Savings goals',
+                    ),
                   ),
                   FilledButton(
+                    style: minecraftBlockButtonStyle(),
                     onPressed: _openGoalForm,
                     child: const Text('New goal'),
                   ),
@@ -701,11 +703,13 @@ class _AllowanceScreenState extends State<AllowanceScreen>
               ),
               const SizedBox(height: AppSpacing.s8),
               if (_goals.isEmpty)
-                const Card(
+                const MinecraftCard(
+                  padding: EdgeInsets.zero,
                     child: ListTile(title: Text('No savings goals yet.')))
               else
                 for (final g in _goals)
-                  Card(
+                  MinecraftCard(
+                    padding: EdgeInsets.zero,
                     child: ListTile(
                       title: Text(g.name),
                       subtitle: Column(
@@ -729,10 +733,13 @@ class _AllowanceScreenState extends State<AllowanceScreen>
               Row(
                 children: [
                   const Expanded(
-                    child: Text('Monthly budgets',
-                        style: AppText.sectionTitle),
+                    child: MinecraftSectionHeader(
+                      icon: Icons.account_balance_wallet_rounded,
+                      title: 'Monthly budgets',
+                    ),
                   ),
                   FilledButton(
+                    style: minecraftBlockButtonStyle(),
                     onPressed: _openBudgetForm,
                     child: const Text('Set limit'),
                   ),
@@ -740,7 +747,8 @@ class _AllowanceScreenState extends State<AllowanceScreen>
               ),
               const SizedBox(height: AppSpacing.s8),
               if (_budgets.isEmpty)
-                const Card(
+                const MinecraftCard(
+                  padding: EdgeInsets.zero,
                     child: ListTile(title: Text('No budget limits set.')))
               else
                 for (final b in _budgets)
@@ -752,7 +760,8 @@ class _AllowanceScreenState extends State<AllowanceScreen>
                             t.date.year == now.year &&
                             t.date.month == now.month)
                         .fold<double>(0, (s, t) => s + t.amount);
-                    return Card(
+                    return MinecraftCard(
+                      padding: EdgeInsets.zero,
                       child: ListTile(
                         title: Text(b.category),
                         subtitle: Text(
@@ -769,7 +778,10 @@ class _AllowanceScreenState extends State<AllowanceScreen>
                     );
                   }),
               const SizedBox(height: 20),
-              const Text('Transactions', style: AppText.sectionTitle),
+              const MinecraftSectionHeader(
+                icon: Icons.receipt_long_rounded,
+                title: 'Transactions',
+              ),
               const SizedBox(height: AppSpacing.s8),
               TextField(
                 onChanged: (v) => setState(() => _query = v),
@@ -820,7 +832,8 @@ class _AllowanceScreenState extends State<AllowanceScreen>
               ),
               const SizedBox(height: AppSpacing.s8),
               if (filtered.isEmpty)
-                const Card(
+                const MinecraftCard(
+                  padding: EdgeInsets.zero,
                     child: ListTile(title: Text('No transactions found.')))
               else
                 for (final group in groups) ...[
@@ -1005,8 +1018,9 @@ class _AllowanceScreenState extends State<AllowanceScreen>
     final scheme = Theme.of(context).colorScheme;
     final isNew = _justInserted.contains(t.id);
     final key = isNew ? (_txnKeys[t.id] ??= GlobalKey()) : null;
-    final row = Card(
+    final row = MinecraftCard(
       key: key,
+      padding: EdgeInsets.zero,
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: scheme.primary.withValues(alpha: 0.12),

@@ -17,6 +17,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_layout.dart';
+import '../minecraft_theme.dart';
 import '../ios_components.dart';
 import 'bible_widget_service.dart';
 import 'share_card.dart';
@@ -215,8 +216,10 @@ class _BibleScreenState extends State<BibleScreen> {
               padding: AppLayout.pagePaddingTab,
               children: [
                 if (_tab == 'daily') ...[
-                  const Text('Verse of the Day',
-                      style: AppText.sectionTitle),
+                  const MinecraftSectionHeader(
+                    icon: Icons.auto_stories_rounded,
+                    title: 'Verse of the Day',
+                  ),
                   const SizedBox(height: AppSpacing.s8),
                   RepaintBoundary(
                     key: _dailyKey,
@@ -231,6 +234,7 @@ class _BibleScreenState extends State<BibleScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
+                          style: minecraftOutlinedButtonStyle(),
                           onPressed: () {
                             Clipboard.setData(ClipboardData(
                                 text:
@@ -244,6 +248,7 @@ class _BibleScreenState extends State<BibleScreen> {
                       const SizedBox(width: AppSpacing.s8),
                       Expanded(
                         child: OutlinedButton.icon(
+                          style: minecraftOutlinedButtonStyle(),
                           onPressed: () => shareBoundaryAsImage(
                             boundaryKey: _dailyKey,
                             filename: 'byahetayo-verse.png',
@@ -261,7 +266,7 @@ class _BibleScreenState extends State<BibleScreen> {
                               ? Icons.favorite
                               : Icons.favorite_border,
                           color: _favs.contains(daily.id)
-                              ? Colors.red
+                              ? MinecraftColors.heartRed
                               : null,
                         ),
                         onPressed: () => _toggleFav(daily.id),
@@ -269,7 +274,8 @@ class _BibleScreenState extends State<BibleScreen> {
                     ],
                   ),
                   const SizedBox(height: AppLayout.headerGap),
-                  const Card(
+                  const MinecraftCard(
+                    padding: EdgeInsets.zero,
                     child: ListTile(
                       title: Text('Translation: King James Version '
                           '(public domain)'),
@@ -356,11 +362,13 @@ class _BibleScreenState extends State<BibleScreen> {
                   ),
                   const SizedBox(height: AppLayout.cardGap),
                   if (filtered.isEmpty)
-                    const Card(
+                    const MinecraftCard(
+                      padding: EdgeInsets.zero,
                         child: ListTile(title: Text('No verses found.')))
                   else
                     for (final v in filtered)
-                      Card(
+                      MinecraftCard(
+                        padding: EdgeInsets.zero,
                         child: ListTile(
                           title: Text(v.text),
                           subtitle: Text(
@@ -371,7 +379,7 @@ class _BibleScreenState extends State<BibleScreen> {
                                   ? Icons.favorite
                                   : Icons.favorite_border,
                               color: _favs.contains(v.id)
-                                  ? Colors.red
+                                  ? MinecraftColors.heartRed
                                   : null,
                               size: 20,
                             ),
@@ -388,12 +396,14 @@ class _BibleScreenState extends State<BibleScreen> {
                   ),
                   const SizedBox(height: AppSpacing.s8),
                   if (_journal.isEmpty)
-                    const Card(
+                    const MinecraftCard(
+                      padding: EdgeInsets.zero,
                         child: ListTile(
                             title: Text('No journal entries yet.')))
                   else
                     for (final j in _journal)
-                      Card(
+                      MinecraftCard(
+                        padding: EdgeInsets.zero,
                         child: ListTile(
                           title: Text(j.text),
                           subtitle: Text(
@@ -446,7 +456,8 @@ class _BibleScreenState extends State<BibleScreen> {
                       'Reading plan: ${_planDone.length}/${biblePlanDays.length} days done'),
                   const SizedBox(height: AppLayout.cardGap),
                   for (var i = 0; i < biblePlanDays.length; i++)
-                    Card(
+                    MinecraftCard(
+                      padding: EdgeInsets.zero,
                       child: ExpansionTile(
                         leading: Checkbox(
                           value: _planDone.contains(i),
@@ -478,7 +489,7 @@ class _BibleScreenState extends State<BibleScreen> {
                                         ? Icons.favorite
                                         : Icons.favorite_border,
                                     color: _favs.contains(v.id)
-                                        ? Colors.red
+                                        ? MinecraftColors.heartRed
                                         : null,
                                     size: 20,
                                   ),

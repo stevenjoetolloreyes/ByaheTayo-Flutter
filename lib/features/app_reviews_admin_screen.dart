@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 import 'app_rating_overlay.dart' show appRatingTopics;
 import 'app_review_detail_screen.dart';
 import 'app_reviews.dart';
@@ -224,7 +225,6 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final starred = ratings.where((r) => r.stars != null).toList();
     final average = starred.isEmpty
         ? null
@@ -235,21 +235,17 @@ class _SummaryCard extends StatelessWidget {
         ? 0
         : (satisfiedCount * 100 / ratings.length).round();
     final noStarCount = ratings.length - starred.length;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _Stat(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: MinecraftCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _Stat(
                   value: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -267,7 +263,7 @@ class _SummaryCard extends StatelessWidget {
                         padding: EdgeInsets.only(bottom: 4),
                         child: Icon(
                           Icons.star,
-                          color: Color(0xFFFFB300),
+                          color: MinecraftColors.gold,
                           size: 20,
                         ),
                       ),
@@ -321,6 +317,7 @@ class _SummaryCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
       ),
     );
   }
@@ -382,7 +379,7 @@ class _DistributionRow extends StatelessWidget {
                 value: fraction,
                 minHeight: 8,
                 backgroundColor: scheme.surfaceContainerHighest,
-                color: const Color(0xFFFFB300),
+                color: MinecraftColors.gold,
               ),
             ),
           ),
@@ -523,14 +520,12 @@ class _ReviewCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final submittedAt = rating.submittedAt;
     final satisfied = rating.satisfied;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: MinecraftCard(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+        padding: const EdgeInsets.all(16),
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Wrap(
@@ -547,7 +542,7 @@ class _ReviewCard extends StatelessWidget {
                             i <= rating.stars!
                                 ? Icons.star
                                 : Icons.star_border,
-                            color: const Color(0xFFFFB300),
+                            color: MinecraftColors.gold,
                             size: 18,
                           ),
                       ],
@@ -561,16 +556,15 @@ class _ReviewCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: satisfied
-                          ? const Color(0xFF16A34A)
-                          : const Color(0xFFD97706),
+                          ? MinecraftColors.emerald
+                          : MinecraftColors.goldDark,
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       satisfied ? 'Satisfied' : 'Not yet',
-                      style: const TextStyle(
+                      style: MinecraftText.button(
                         color: Colors.white,
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -634,11 +628,10 @@ class _ReviewCard extends StatelessWidget {
                     style: AppText.caption,
                   ),
                 ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
         ),
-      ),
     );
   }
 }

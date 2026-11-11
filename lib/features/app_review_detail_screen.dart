@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 import 'app_reviews.dart';
 import 'student/student_data.dart';
 
@@ -132,9 +133,9 @@ class _AppReviewDetailScreenState extends State<AppReviewDetailScreen> {
                 children: [
                   _ReviewSummary(rating: rating),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Admin replies',
-                    style: AppText.headingStrong,
+                  MinecraftSectionHeader(
+                    icon: Icons.reply_rounded,
+                    title: 'Admin replies',
                   ),
                   const SizedBox(height: 12),
                   if (rating.adminReplies.isEmpty)
@@ -173,13 +174,8 @@ class _ReviewSummary extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final submittedAt = rating.submittedAt;
     final satisfied = rating.satisfied;
-    return Container(
+    return MinecraftCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -197,7 +193,7 @@ class _ReviewSummary extends StatelessWidget {
                         i <= rating.stars!
                             ? Icons.star
                             : Icons.star_border,
-                        color: const Color(0xFFFFB300),
+                        color: MinecraftColors.gold,
                         size: 20,
                       ),
                   ],
@@ -211,8 +207,8 @@ class _ReviewSummary extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: satisfied
-                      ? const Color(0xFF16A34A)
-                      : const Color(0xFFD97706),
+                      ? MinecraftColors.emerald
+                      : MinecraftColors.goldDark,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -279,14 +275,12 @@ class _ReplyBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final createdAt = reply.createdAt;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+      decoration: MinecraftDecorations.flatCardFor(
+        Theme.of(context).brightness,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
