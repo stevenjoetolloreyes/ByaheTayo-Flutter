@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
@@ -173,10 +175,17 @@ class BibleVerseWidgetProvider : HomeWidgetProvider() {
                         ?: verse?.scene
                         ?: DEFAULT_SCENE
                 }
-                setImageViewResource(
-                    R.id.widget_background,
-                    sceneDrawable(scene),
-                )
+                // Downsampled photo (Nov 11 widget fix): the
+                // verse_bg_* photos are 2240px wide (~10 MB decoded
+                // ARGB_8888), over the RemoteViews per-widget bitmap
+                // ceiling, so the provider decodes a ~800px-wide
+                // RGB_565 copy instead of setImageViewResource.
+                // On any failure the ImageView is left empty (the
+                // dark card background shows) — never the full-size
+                // drawable, and never a provider crash.
+                decodeWidgetBackground(context, sceneDrawable(scene))?.let {
+                    setImageViewBitmap(R.id.widget_background, it)
+                }
                 if (verse == null) {
                     setTextViewText(R.id.widget_verse, PLACEHOLDER_TEXT)
                     setViewVisibility(R.id.widget_ref, View.GONE)
@@ -309,6 +318,38 @@ class BibleVerseWidgetProvider : HomeWidgetProvider() {
         }
     }
 
+    /**
+     * Decodes a scene photo downsampled to at most [MAX_PHOTO_WIDTH] px
+     * wide (power-of-two inSampleSize, RGB_565), so the bitmap sent
+     * to the launcher stays inside the RemoteViews per-widget memory
+     * ceiling. The full-size verse_bg_* files are 2240px wide
+     * (~10 MB decoded ARGB_8888) — loading one with
+     * setImageViewResource can make the launcher reject the whole
+     * widget ("An error occurred when loading widget"). Returns null
+     * on any failure (bad resource, decode error): the caller then
+     * leaves the ImageView empty on the dark card background instead
+     * of crashing the provider or falling back to the full-size file.
+     */
+    private fun decodeWidgetBackground(context: Context, resId: Int): Bitmap? {
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeResource(context.resources, resId, bounds)
+            val width = bounds.outWidth
+            if (width <= 0) return null
+            var sampleSize = 1
+            while (width / sampleSize > MAX_PHOTO_WIDTH) sampleSize *= 2
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            BitmapFactory.decodeResource(context.resources, resId, options)
+        } catch (_: Exception) {
+            null
+        } catch (_: OutOfMemoryError) {
+            null
+        }
+    }
+
     /** Today's verse as the widget renders it. */
     data class WidgetVerse(
         val ref: String,
@@ -338,6 +379,14 @@ class BibleVerseWidgetProvider : HomeWidgetProvider() {
         const val DEFAULT_SCENE = "sunset_cross"
 
         const val PLACEHOLDER_TEXT = "Open EstudyanteGO to load today's verse"
+
+        /**
+         * Widest decoded widget photo, in px. The 4x2 widget renders
+         * at most ~1000px wide on a phone, so 800px keeps the bitmap
+         * (~800x400 RGB_565 ≈ 0.6 MB) inside the RemoteViews
+         * per-widget memory ceiling with headroom to spare.
+         */
+        const val MAX_PHOTO_WIDTH = 800
 
         /**
          * Liturgical season windows (inclusive). Movable seasons

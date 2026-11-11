@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:estudyantego/features/student/bible_widget_service.dart';
 import 'package:estudyantego/features/student/student_data.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -395,6 +397,86 @@ void main() {
               '{"date":"2026-11-08","id":"v01","ref":"John 3:16","text":"x"}',
               date),
           isNull);
+    });
+  });
+
+  group('widget layouts follow the RemoteViews rules', () {
+    // The widget layouts are read from disk: these tests fail on
+    // the old layouts (plain View, clipToOutline, full-size photo
+    // src) that made the launcher show "An error occurred when
+    // loading widget" on Steven's Huawei P30 Lite (Nov 8-11, 2026).
+    const liveLayouts = [
+      'android/app/src/main/res/layout/bible_verse_widget.xml',
+      'android/app/src/main/res/layout-night/bible_verse_widget.xml',
+    ];
+    const previewLayout =
+        'android/app/src/main/res/layout/bible_verse_widget_preview.xml';
+
+    String readLayout(String path) => File(path).readAsStringSync();
+
+    test('no plain View element in any widget layout', () {
+      for (final path in [...liveLayouts, previewLayout]) {
+        final xml = readLayout(path);
+        expect(xml.contains('<View'), isFalse,
+            reason:
+                '$path uses a plain View, which RemoteViews does not allow');
+      }
+    });
+
+    test('no clipToOutline / outlineProvider in any widget layout', () {
+      for (final path in [...liveLayouts, previewLayout]) {
+        final xml = readLayout(path);
+        expect(xml.contains('clipToOutline'), isFalse, reason: path);
+        expect(xml.contains('outlineProvider'), isFalse, reason: path);
+      }
+    });
+
+    test('no full-size photo src in any widget layout', () {
+      // The launcher must never decode the 2240px verse_bg_* file
+      // during inflation; the provider sets a downsampled bitmap.
+      for (final path in [...liveLayouts, previewLayout]) {
+        final xml = readLayout(path);
+        expect(xml.contains('android:src="@drawable/verse_bg_'), isFalse,
+            reason: path);
+      }
+      // The logo is the only src left in the live layouts.
+      for (final path in liveLayouts) {
+        expect(
+            readLayout(path)
+                .contains('android:src="@drawable/launch_image"'),
+            isTrue,
+            reason: path);
+      }
+    });
+
+    test('the provider-visible ids are still present', () {
+      for (final path in liveLayouts) {
+        final xml = readLayout(path);
+        for (final id in [
+          'widget_root',
+          'widget_background',
+          'widget_scrim',
+          'widget_verse',
+          'widget_divider',
+          'widget_ref',
+        ]) {
+          expect(xml.contains('android:id="@+id/$id"'), isTrue,
+              reason: '$path is missing $id');
+        }
+      }
+    });
+
+    test('the provider downsamples the photo instead of setImageViewResource',
+        () {
+      final provider = File(
+        'android/app/src/main/kotlin/com/estudyantego/app/BibleVerseWidgetProvider.kt',
+      ).readAsStringSync();
+      expect(provider.contains('setImageViewResource('), isFalse);
+      expect(provider.contains('setImageViewBitmap(R.id.widget_background'),
+          isTrue);
+      expect(provider.contains('inSampleSize'), isTrue);
+      expect(provider.contains('Bitmap.Config.RGB_565'), isTrue);
+      expect(provider.contains('decodeWidgetBackground'), isTrue);
     });
   });
 }

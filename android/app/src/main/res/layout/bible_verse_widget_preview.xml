@@ -2,15 +2,16 @@
 <!--
   Static preview for the widget picker ONLY. The picker never runs
   the provider, so the live layout would render empty here; this
-  layout hardcodes the sample scene (sunset/cross) with the
-  sample's verse — Philippians 4:13, in the KJV wording the app
-  actually shows ("which strengtheneth me", not the sample's
-  modern "who strengthens me") — styled exactly like the live
-  layout, so the picker shows what the widget really looks like.
-  Never used at runtime — the provider fills the live layouts
-  instead. The header uses the real E logo (@drawable/launch_image),
-  and the photo fills the rounded card edge to edge, as in the
-  live layout. -->
+  layout hardcodes the sample verse — Philippians 4:13, in the KJV
+  wording the app actually shows ("which strengtheneth me", not
+  the sample's modern "who strengthens me") — styled exactly like
+  the live layout, so the picker shows what the widget really
+  looks like. Never used at runtime — the provider fills the live
+  layouts instead. The header uses the real E logo
+  (@drawable/launch_image). The photo is NOT in this preview
+  (Nov 11 fix: the layout carries no photo src — the provider
+  sets a downsampled photo on every update), so the picker shows
+  the dark card background behind the sample verse. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -21,14 +22,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/bible_widget_card_background"
-        android:src="@drawable/verse_bg_sunset_cross"
         android:scaleType="centerCrop"
         android:contentDescription="@null" />
 
-    <View
+    <!-- RemoteViews (Nov 11 fix): plain View is NOT in the
+         RemoteViews allowed list, so the scrim is an ImageView
+         with the same gradient background, not a View. -->
+    <ImageView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/bible_widget_text_scrim" />
+        android:background="@drawable/bible_widget_text_scrim"
+        android:contentDescription="@null" />
 
     <!-- Content padding is ASYMMETRIC on purpose (top 16dp,
          bottom 8dp). The header (28dp logo) is shorter than the
@@ -98,8 +102,11 @@
 
         <!-- Short divider, centered under the verse and just
              wider than the pill, as in the v4 sample (~40% of the
-             card width at the usual 4-cell size) — NOT full-width. -->
-        <View
+             card width at the usual 4-cell size) — NOT full-width.
+             RemoteViews (Nov 11 fix): plain View is NOT in the
+             RemoteViews allowed list, so the divider is an
+             ImageView with the same translucent background. -->
+        <ImageView
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:layout_marginStart="80dp"

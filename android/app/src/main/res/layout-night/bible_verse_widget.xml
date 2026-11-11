@@ -21,15 +21,18 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/bible_widget_card_background"
-        android:src="@drawable/verse_bg_sunset_cross"
         android:scaleType="centerCrop"
         android:contentDescription="@null" />
 
-    <View
+    <!-- RemoteViews (Nov 11 fix): plain View is NOT in the
+         RemoteViews allowed list, so the scrim is an ImageView
+         with the same gradient background, not a View. -->
+    <ImageView
         android:id="@+id/widget_scrim"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/bible_widget_text_scrim" />
+        android:background="@drawable/bible_widget_text_scrim"
+        android:contentDescription="@null" />
 
     <!-- Content padding is ASYMMETRIC on purpose (top 16dp,
          bottom 8dp). The header (28dp logo) is shorter than the
@@ -99,8 +102,11 @@
 
         <!-- Short divider, centered under the verse and just
              wider than the pill, as in the v4 sample (~40% of the
-             card width at the usual 4-cell size) — NOT full-width. -->
-        <View
+             card width at the usual 4-cell size) — NOT full-width.
+             RemoteViews (Nov 11 fix): plain View is NOT in the
+             RemoteViews allowed list, so the divider is an
+             ImageView with the same translucent background. -->
+        <ImageView
             android:id="@+id/widget_divider"
             android:layout_width="match_parent"
             android:layout_height="1dp"
