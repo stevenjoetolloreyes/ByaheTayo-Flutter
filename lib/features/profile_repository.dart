@@ -18,7 +18,8 @@
 //   Fields: school, program, yearLevel (all nullable strings),
 //     profilePhotoUrl (nullable string — the Firebase Storage
 //     download URL of the user's own uploaded photo), updatedAt
-//     (server timestamp).
+//     (server timestamp), plan (string: 'free' / 'standard' / 'pro',
+//     ADMIN-ASSIGNED ONLY — see [StudentProfile.plan]).
 //   Never stored here: passwords, tokens, secrets, photo BYTES.
 //     The photo itself lives in Firebase Storage
 //     (`profile_photos/<uid>.jpg`, see profile_photo_storage.dart);
@@ -58,6 +59,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'onboarding/auth_service.dart';
 import 'onboarding/onboarding_state.dart';
 import 'profile_photo_storage.dart';
+import 'subscription_membership.dart';
 
 /// Firestore collection for student profiles.
 const studentProfilesCollection = 'student_profiles';
@@ -73,6 +75,7 @@ class StudentProfile {
     this.program,
     this.yearLevel,
     this.profilePhotoUrl,
+    this.plan = SubscriptionPlanId.free,
   });
 
   final String? school;
@@ -85,13 +88,24 @@ class StudentProfile {
   /// different field and is never stored here.
   final String? profilePhotoUrl;
 
+  /// Subscription plan, READ-ONLY from the app's side. The admin
+  /// (Steven) assigns it by setting the `plan` field on the user's
+  /// `student_profiles` document in the Firebase Console — the app
+  /// never writes it ([toDoc] deliberately omits it, so a backfill
+  /// or photo-upload save can never create, change, or clear it).
+  /// Missing or unknown values parse to [SubscriptionPlanId.free]
+  /// via [parseSubscriptionPlanId]; a plan is never invented.
+  final SubscriptionPlanId plan;
+
   bool get hasStudentInfo =>
       (school ?? '').trim().isNotEmpty ||
       (program ?? '').trim().isNotEmpty ||
       (yearLevel ?? '').trim().isNotEmpty;
 
   /// Builds the remote profile from a local [UserProfile] (used by
-  /// the save path and by backfill).
+  /// the save path and by backfill). The plan is deliberately NOT
+  /// copied here: the app never writes the plan, and [toDoc] omits
+  /// it, so a save can never overwrite the admin-assigned value.
   static StudentProfile fromUserProfile(UserProfile profile) {
     return StudentProfile(
       school: profile.school,
@@ -102,6 +116,11 @@ class StudentProfile {
   }
 
   Map<String, dynamic> toDoc() {
+    // NOTE: no 'plan' key — the plan is admin-assigned in the
+    // Firebase Console and the app must never write it. Every save
+    // (backfill, photo-upload sync) goes through here, so omitting
+    // it here guarantees the app can never create, change, or
+    // clear a user's plan.
     return {
       'school': school,
       'program': program,
@@ -120,6 +139,7 @@ class StudentProfile {
       program: stringOrNull(data['program']),
       yearLevel: stringOrNull(data['yearLevel']),
       profilePhotoUrl: stringOrNull(data['profilePhotoUrl']),
+      plan: parseSubscriptionPlanId(data['plan']),
     );
   }
 }
@@ -169,6 +189,13 @@ class FirestoreStudentProfileRepository implements StudentProfileRepository {
 /// local pick is re-uploaded by [_syncPhotoOnRestore] right after
 /// this merge, so an older remote URL can never permanently shadow a
 /// newer local photo.
+///
+/// The plan is the ONE exception to the "non-empty remote wins"
+/// rule: the remote plan ALWAYS wins, even when it is `free`
+/// (missing field → `free`). The plan is admin-assigned, never
+/// user-edited, so the local value is only a cache of the remote
+/// one — there is no local value to protect, and an admin who
+/// clears the field (or never set it) means the user is Free.
 UserProfile mergeStudentInfo(UserProfile local, StudentProfile remote) {
   String? pick(String? remoteValue, String? localValue) {
     final trimmed = (remoteValue ?? '').trim();
@@ -180,6 +207,7 @@ UserProfile mergeStudentInfo(UserProfile local, StudentProfile remote) {
     program: pick(remote.program, local.program),
     year: pick(remote.yearLevel, local.year),
     profilePhotoUrl: pick(remote.profilePhotoUrl, local.profilePhotoUrl),
+    plan: remote.plan,
   );
 }
 

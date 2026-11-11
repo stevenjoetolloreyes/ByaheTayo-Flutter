@@ -8,6 +8,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../subscription_membership.dart';
 import 'auth_service.dart';
 
 /// True once the user finished (or skipped) onboarding. Onboarding is
@@ -64,6 +65,7 @@ class UserProfile {
     this.year,
     this.jobTitle,
     this.company,
+    this.plan = SubscriptionPlanId.free,
   });
 
   final String displayName;
@@ -94,6 +96,14 @@ class UserProfile {
   final String? year;
   final String? jobTitle;
   final String? company;
+
+  /// Subscription plan, READ-ONLY from the app's side: a cached copy
+  /// of the admin-assigned `plan` field on the user's Firestore
+  /// `student_profiles` document (see profile_repository.dart). It
+  /// is set only by the restore path ([mergeStudentInfo]) and never
+  /// by any user-facing flow — no screen in the app changes it.
+  /// Defaults to [SubscriptionPlanId.free]; a plan is never invented.
+  final SubscriptionPlanId plan;
 
   bool get hasStudentInfo =>
       (school ?? '').trim().isNotEmpty ||
@@ -128,6 +138,7 @@ class UserProfile {
     String? year,
     String? jobTitle,
     String? company,
+    SubscriptionPlanId? plan,
   }) {
     return UserProfile(
       displayName: displayName ?? this.displayName,
@@ -141,6 +152,7 @@ class UserProfile {
       year: year ?? this.year,
       jobTitle: jobTitle ?? this.jobTitle,
       company: company ?? this.company,
+      plan: plan ?? this.plan,
     );
   }
 
@@ -157,6 +169,7 @@ class UserProfile {
       'year': year,
       'jobTitle': jobTitle,
       'company': company,
+      'plan': plan.name,
     };
   }
 
@@ -177,6 +190,7 @@ class UserProfile {
       year: json['year'] as String?,
       jobTitle: json['jobTitle'] as String?,
       company: json['company'] as String?,
+      plan: parseSubscriptionPlanId(json['plan']),
     );
   }
 }
@@ -225,6 +239,7 @@ class ProfileStore {
         year: profile.year,
         jobTitle: profile.jobTitle,
         company: profile.company,
+        plan: profile.plan,
       );
     } catch (_) {
       return null;

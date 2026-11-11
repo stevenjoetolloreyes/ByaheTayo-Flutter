@@ -58,6 +58,7 @@ import 'features/route_fare_overrides.dart';
 import 'features/shared_study_files.dart';
 import 'features/map_tab.dart';
 import 'features/study_tab.dart';
+import 'features/subscription_membership.dart';
 import 'features/top_nav.dart';
 import 'features/onboarding/auth_screen.dart';
 import 'features/onboarding/auth_service.dart';
@@ -1225,6 +1226,10 @@ class _HomeShellState extends State<_HomeShell>
           walletController: _walletController,
           visible: widget.selectedIndex == 1,
           currentUser: widget.user,
+          // Files storage limit + enforcement: the shell's loaded
+          // local profile carries the admin-assigned plan
+          // (ProfileStore.loadProfile); the tab never writes it.
+          plan: widget.profile?.plan ?? SubscriptionPlanId.free,
           // File sharing (Nov 8): cloud friends only when Firebase
           // is configured; shared-file storage follows the same
           // Firestore-vs-Local choice as the Fares tab repos.

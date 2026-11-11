@@ -15,8 +15,8 @@
 //   and "No grade yet" until the user records one.
 // * Files — file metadata the user added (StudyFile: name, size,
 //   type, folder). Nothing is seeded: folders start at 0 files and
-//   the storage bar at 0 B of 5 GB. Only metadata is stored, never
-//   file bytes.
+//   the storage bar at 0 B of the user's plan limit. Only metadata
+//   is stored, never file bytes.
 // * Notes — the real notes (StudentStorage), searchable; tapping
 //   one opens its full-screen view page for full CRUD.
 // * Review — the real quizzes (StudentStorage) and the real study
@@ -129,9 +129,14 @@ import 'student/note_create_sheet.dart';
 import 'student/note_detail_page.dart';
 import 'student/quiz_page.dart';
 import 'student/student_data.dart';
+import 'subscription_membership.dart';
 
-/// 5 GB study-files quota, matching the preview's storage bar.
-const _studyFilesQuotaBytes = 5 * 1024 * 1024 * 1024;
+/// Files storage is limited by the user's admin-assigned
+/// subscription plan (Free 2 GB, Standard 12 GB, Pro 30 GB — see
+/// [subscriptionStorageLimitBytes]). There is no fixed quota: the
+/// bar and the add-flow check both read the plan limit, and usage
+/// is the real local sum of the stored files' [StudyFile.sizeBytes]
+/// (see [studyFilesUsedBytes]).
 
 const _studyFolders = ['Lectures', 'Activities', 'Reviewers'];
 
@@ -319,6 +324,33 @@ String _formatBytes(int bytes) {
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
 }
 
+/// Total stored-files size: the real local sum of the files'
+/// [StudyFile.sizeBytes]. Never invented — an empty list is 0.
+/// The Files panel and the add-flow check both use this one sum.
+int studyFilesUsedBytes(List<StudyFile> files) =>
+    files.fold<int>(0, (sum, f) => sum + f.sizeBytes);
+
+/// Whether adding a file of [newFileBytes] fits within [plan]'s
+/// storage limit ([subscriptionStorageLimitBytes]). The check runs
+/// on every add attempt, against the real current usage
+/// ([usedBytes]). Exactly at the limit fits; 1 byte over does not.
+bool studyFileAddFits({
+  required int usedBytes,
+  required int newFileBytes,
+  required SubscriptionPlanId plan,
+}) => usedBytes + newFileBytes <= subscriptionStorageLimitBytes(plan);
+
+/// Honest over-limit message for a blocked add: names the plan and
+/// its real limit. Upgrades are assigned by the admin — there is no
+/// self-serve upgrade in the app, so the message says to ask the
+/// admin instead of offering a Subscribe action.
+String studyFileOverLimitMessage({required SubscriptionPlanId plan}) {
+  final p = subscriptionPlanForId(plan);
+  return "You're on the ${p.name} plan (${p.storageGB} GB) and this "
+      'file would take you over your limit. '
+      'Ask the admin to upgrade your plan.';
+}
+
 /// "Nov 4" — the preview's note-card date format.
 String _monthDay(DateTime d) => '${_months[d.month - 1]} ${d.day}';
 
@@ -394,6 +426,7 @@ class StudyTab extends StatefulWidget {
     this.currentUser,
     this.friendCloudRepository,
     this.sharedFileRepository,
+    this.plan = SubscriptionPlanId.free,
   });
 
   /// The shell's points wallet (same controller the Student and
@@ -424,6 +457,16 @@ class StudyTab extends StatefulWidget {
   /// the same way as the Fares tab repos). Null in widget tests
   /// that do not wire it — the shared section then stays hidden.
   final SharedStudyFileRepository? sharedFileRepository;
+
+  /// The user's subscription plan, from the local profile the
+  /// shell loaded (a cached copy of the admin-assigned `plan`
+  /// field on the user's Firestore `student_profiles` document).
+  /// The shell passes it in; the tab never reads or writes the
+  /// plan itself. Defaults to [SubscriptionPlanId.free] in widget
+  /// tests and when signed out — a plan is never invented. Drives
+  /// the Files storage bar limit and the add-flow enforcement
+  /// check.
+  final SubscriptionPlanId plan;
 
   @override
   State<StudyTab> createState() => _StudyTabState();
@@ -728,6 +771,23 @@ class _StudyTabState extends State<StudyTab> {
     // sync fallback; unknown size stores as 0, never guessed.
     final sizeBytes = await picked.length() ?? picked.lengthSync() ?? 0;
     if (!mounted) return;
+    // Storage enforcement (admin-assigned plan): the add is
+    // checked against the real current usage on EVERY attempt.
+    // Over the plan limit the file is NOT saved and the user gets
+    // an honest message naming the plan and its limit, plus the
+    // admin-upgrade prompt — never a self-serve Subscribe offer.
+    if (!studyFileAddFits(
+      usedBytes: studyFilesUsedBytes(_files),
+      newFileBytes: sizeBytes,
+      plan: widget.plan,
+    )) {
+      TopPopup.show(
+        context,
+        title: 'Storage limit reached',
+        message: studyFileOverLimitMessage(plan: widget.plan),
+      );
+      return;
+    }
     setState(() {
       _files.insert(
         0,
@@ -1529,7 +1589,9 @@ class _StudyTabState extends State<StudyTab> {
     _StudyTokens tokens, {
     required Key key,
   }) {
-    final used = _files.fold<int>(0, (sum, f) => sum + f.sizeBytes);
+    final used = studyFilesUsedBytes(_files);
+    final plan = subscriptionPlanForId(widget.plan);
+    final limitBytes = subscriptionStorageLimitBytes(widget.plan);
     final filtered = _files
         .where((f) => _fileFilter == 'all' || f.kind == _fileFilter)
         .where((f) => _selectedFolder == null || f.folder == _selectedFolder)
@@ -1555,7 +1617,7 @@ class _StudyTabState extends State<StudyTab> {
                       ),
                     ),
                     Text(
-                      '${_formatBytes(used)} of 5 GB used',
+                      '${_formatBytes(used)} of ${plan.storageGB} GB used — ${plan.name} plan',
                       style: MinecraftText.caption(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -1563,7 +1625,7 @@ class _StudyTabState extends State<StudyTab> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.s8),
-                _storageBar(tokens, used),
+                _storageBar(tokens, used, limitBytes),
               ],
             ),
           ),
@@ -1652,9 +1714,12 @@ class _StudyTabState extends State<StudyTab> {
   ];
 
   /// Blocky storage bar (Feature 3): cream track with a 3px ink
-  /// border, grass gradient fill.
-  Widget _storageBar(_StudyTokens tokens, int used) {
-    final fraction = (used / _studyFilesQuotaBytes).clamp(0.0, 1.0);
+  /// border, grass gradient fill. [limitBytes] is the user's real
+  /// plan limit — the fill fraction is real usage over that limit.
+  Widget _storageBar(_StudyTokens tokens, int used, int limitBytes) {
+    final fraction = limitBytes <= 0
+        ? 0.0
+        : (used / limitBytes).clamp(0.0, 1.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: 14,

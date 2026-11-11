@@ -1,8 +1,8 @@
 // Tests for the Subscription Membership flow (Account → Membership →
 // Plan Details). Approved preview, implemented as UI + navigation
-// only: there is no payment provider, so Subscribe Now must stop at
-// a confirmation sheet with an honest note — never a charge,
-// verification, or activation.
+// only: plans are ADMIN-ASSIGNED, so Subscribe Now must stop at a
+// sheet saying to ask the admin — never a charge, verification, or
+// activation, and never a change to the user's plan.
 import 'package:estudyantego/features/onboarding/auth_service.dart';
 import 'package:estudyantego/features/subscription_membership.dart';
 import 'package:estudyantego/features/top_nav.dart';
@@ -147,7 +147,7 @@ void main() {
     expect(find.text('Upgrade Your Experience'), findsOneWidget);
   });
 
-  testWidgets('Subscribe Now stops at confirmation, never activates', (
+  testWidgets('Subscribe Now shows the admin message, never activates', (
     WidgetTester tester,
   ) async {
     await _setSurface(tester, const Size(800, 1280));
@@ -161,13 +161,16 @@ void main() {
 
     await tester.tap(find.byKey(const Key('subscribe-now-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Confirm subscription'), findsOneWidget);
+    expect(find.text('Plan upgrade'), findsOneWidget);
     expect(find.text('Plan'), findsWidgets);
     expect(find.text('Billing'), findsWidgets);
     expect(find.text('Price'), findsWidgets);
     expect(find.text('Renewal'), findsWidgets);
     expect(find.text('₱299 / month'), findsWidgets);
-    expect(find.textContaining('payment provider'), findsOneWidget);
+    // Plans are admin-assigned: the sheet says so and names the plan.
+    expect(find.textContaining('assigned by the admin'), findsOneWidget);
+    expect(find.textContaining('upgrade your plan to Pro'), findsOneWidget);
+    expect(find.textContaining('hasn\'t changed'), findsOneWidget);
     expect(find.text('Close'), findsOneWidget);
     // No success / activation state anywhere.
     expect(find.textContaining('now Pro'), findsNothing);
@@ -176,7 +179,7 @@ void main() {
 
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
-    expect(find.text('Confirm subscription'), findsNothing);
+    expect(find.text('Plan upgrade'), findsNothing);
 
     // Back to Account: still Free — nothing was purchased.
     await tester.pageBack();

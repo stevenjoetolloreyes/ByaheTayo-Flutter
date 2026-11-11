@@ -541,6 +541,10 @@ class _AccountTabState extends State<AccountTab> {
     if (_showingMembership) {
       return SubscriptionMembershipScreen(
         onBack: () => setState(() => _showingMembership = false),
+        // The REAL current plan, from the local profile (a cached
+        // copy of the admin-assigned `plan` on the Firestore
+        // `student_profiles` doc). No profile yet means Free.
+        currentPlan: _profile?.plan ?? SubscriptionPlanId.free,
       );
     }
     // About screen (Nov 8): the full About page — stats graph,
@@ -1424,14 +1428,21 @@ class _AccountTabState extends State<AccountTab> {
   /// it between Points Wallet and Quick Actions, so it was added
   /// there (and nowhere else) to give the Membership flow its entry
   /// point. Everything else on the Account page is untouched. The
-  /// card always shows the real current plan (Free): there is no
-  /// payment provider, so no paid plan can ever be active.
+  /// card always shows the real current plan from the local
+  /// profile (a cached copy of the admin-assigned `plan` on the
+  /// Firestore `student_profiles` doc — see
+  /// profile_repository.dart). No profile yet means Free; a plan
+  /// is never invented.
   Widget _subscriptionCard(bool glass) {
     // Preview style: pale-yellow crown tile, "Subscription Member"
     // + "Your current membership plan", green plan pill, chevron.
-    // The pill shows the REAL current plan (Free): there is no
-    // payment provider, so no paid plan can ever be active — the
-    // preview's STANDARD tag is example data, not the user's plan.
+    // The pill shows the REAL current plan from the local profile
+    // and the line under the subtitle shows its storage limit —
+    // the preview's STANDARD tag is example data, not the user's
+    // plan.
+    final currentPlan = subscriptionPlanForId(
+      _profile?.plan ?? SubscriptionPlanId.free,
+    );
     final dark = _isDark;
     final tileColor = glass
         ? Colors.white.withValues(alpha: 0.12)
@@ -1495,6 +1506,10 @@ class _AccountTabState extends State<AccountTab> {
                     'Your current membership plan',
                     style: TextStyle(fontSize: 11, color: subtitleColor),
                   ),
+                  Text(
+                    currentPlan.storageLabel,
+                    style: TextStyle(fontSize: 11, color: subtitleColor),
+                  ),
                 ],
               ),
             ),
@@ -1506,7 +1521,7 @@ class _AccountTabState extends State<AccountTab> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'Free Plan',
+                '${currentPlan.name} Plan',
                 style: TextStyle(
                   color: tagColor,
                   fontSize: 10,

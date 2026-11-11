@@ -1,17 +1,21 @@
 // Subscription Membership flow — EstudyanteGO Flutter app.
 //
-// UI + navigation only. There is NO payment provider in the app, so
-// this flow never charges, verifies, or activates anything: Subscribe
-// Now opens a confirmation sheet that honestly stops there (see
-// [_showCheckoutSheet]). Plan selection is transient UI state inside
-// this flow, not a purchased membership — the Account page always
-// shows the real current plan (Free).
+// UI + navigation only. Plans are ADMIN-ASSIGNED: the admin sets the
+// `plan` field on the user's Firestore `student_profiles` document
+// and the app never writes it, so there is NO payment provider here
+// and Subscribe Now must never charge, verify, or activate anything.
+// Tapping Subscribe on Standard or Pro shows an honest sheet saying
+// plans are assigned by the admin (see [_showCheckoutSheet]) and
+// records nothing. Plan selection is transient UI state inside this
+// flow, not a purchased membership — the screen always shows the
+// user's real current plan (from the local profile, passed in as
+// [SubscriptionMembershipScreen.currentPlan]), never the selection.
 //
 // Prices are the approved figures: Free ₱0; Standard ₱99/month or
 // ₱950/year; Pro ₱299/month or ₱2,870/year (yearly = 20% off).
 // Storage limits are the approved spec (Free 2 GB, Standard 12 GB,
-// Pro 30 GB), shown on the plan cards only — no usage is tracked and
-// no limit is enforced.
+// Pro 30 GB), shown on the plan cards; the Files add flow enforces
+// the real plan's limit (see study_tab.dart).
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
@@ -47,9 +51,16 @@ class SubscriptionPlan {
   final List<String> benefits;
 
   /// Included file storage in GB (approved spec: Free 2, Standard 12,
-  /// Pro 30). Display only — no usage is tracked and no limit is
-  /// enforced anywhere in the app.
+  /// Pro 30). This is the single source of truth for storage limits:
+  /// [subscriptionStorageLimitBytes] reads it, and the Files add flow
+  /// enforces it against the user's real plan.
   final int storageGB;
+
+  /// Included file storage in bytes, derived from [storageGB] (1 GB =
+  /// 1024^3 bytes). This is the single source of truth for storage
+  /// limits: [subscriptionStorageLimitBytes] reads it, never a
+  /// hardcoded byte count.
+  int get storageBytes => storageGB * 1024 * 1024 * 1024;
 
   /// Display line for the plan card, e.g. "2 GB storage".
   String get storageLabel => '$storageGB GB storage';
@@ -120,6 +131,38 @@ const List<SubscriptionPlan> subscriptionPlans = [
   ),
 ];
 
+/// Parses a raw plan value (e.g. the `plan` field of a Firestore
+/// `student_profiles` document, set by the admin in the Firebase
+/// Console) into a [SubscriptionPlanId]. Matching is case-insensitive
+/// and ignores surrounding whitespace. Anything missing, non-string,
+/// or unknown falls back to [SubscriptionPlanId.free] — a plan is
+/// never invented for a user.
+SubscriptionPlanId parseSubscriptionPlanId(Object? raw) {
+  if (raw is! String) return SubscriptionPlanId.free;
+  switch (raw.trim().toLowerCase()) {
+    case 'free':
+      return SubscriptionPlanId.free;
+    case 'standard':
+      return SubscriptionPlanId.standard;
+    case 'pro':
+      return SubscriptionPlanId.pro;
+    default:
+      return SubscriptionPlanId.free;
+  }
+}
+
+/// The [SubscriptionPlan] for [id]. Always found: the three plans in
+/// [subscriptionPlans] cover every [SubscriptionPlanId].
+SubscriptionPlan subscriptionPlanForId(SubscriptionPlanId id) =>
+    subscriptionPlans.firstWhere((plan) => plan.id == id);
+
+/// Shared source of truth for the Files storage limit: the included
+/// storage for [id] in bytes, read from the plan constants in
+/// [subscriptionPlans] (Free 2 GB, Standard 12 GB, Pro 30 GB).
+/// No byte count is hardcoded here or anywhere else.
+int subscriptionStorageLimitBytes(SubscriptionPlanId id) =>
+    subscriptionPlanForId(id).storageBytes;
+
 /// Thousands separator for peso amounts (2870 → 2,870).
 String _formatAmount(int value) {
   if (value < 1000) return '$value';
@@ -188,12 +231,24 @@ class _CrownPainter extends CustomPainter {
 /// Shown INSIDE the Account tab (the shell's bottom navigation /
 /// sidebar stays visible) and returned to via [onBack]. Selecting a
 /// plan updates the action button; the button opens the plan details
-/// screen for the selected plan.
+/// screen for the selected plan. The 'Current Plan' mark and the
+/// header line always come from [currentPlan] (the user's real,
+/// admin-assigned plan), never from the transient selection.
 class SubscriptionMembershipScreen extends StatefulWidget {
-  const SubscriptionMembershipScreen({super.key, required this.onBack});
+  const SubscriptionMembershipScreen({
+    super.key,
+    required this.onBack,
+    this.currentPlan = SubscriptionPlanId.free,
+  });
 
   /// Return to the Account page content.
   final VoidCallback onBack;
+
+  /// The user's REAL current plan, from the local profile (a cached
+  /// copy of the admin-assigned `plan` on the Firestore
+  /// `student_profiles` doc). Defaults to Free when no profile is
+  /// loaded; a plan is never invented.
+  final SubscriptionPlanId currentPlan;
 
   @override
   State<SubscriptionMembershipScreen> createState() =>
@@ -219,7 +274,11 @@ class _SubscriptionMembershipScreenState
 
   @override
   Widget build(BuildContext context) {
-    final actionLabel = _selected.isFree
+    // When the selected plan IS the user's current plan there is
+    // nothing to upgrade to — the button stays disabled, exactly
+    // as it does for Free (the default current plan).
+    final isCurrentPlan = _selected.id == widget.currentPlan;
+    final actionLabel = isCurrentPlan || _selected.isFree
         ? 'Current Plan'
         : 'Upgrade to ${_selected.name}';
     return SingleChildScrollView(
@@ -239,6 +298,8 @@ class _SubscriptionMembershipScreenState
             ),
             _banner(),
             const SizedBox(height: AppLayout.cardGap),
+            _currentPlanLine(),
+            const SizedBox(height: AppLayout.cardGap),
             _billingSelector(),
             const SizedBox(height: AppLayout.cardGap),
             for (final plan in subscriptionPlans) ...[
@@ -256,7 +317,8 @@ class _SubscriptionMembershipScreenState
                       BorderRadius.circular(AppLayout.buttonRadius),
                 ),
               ),
-              onPressed: _selected.isFree ? null : _openDetails,
+              onPressed:
+                  isCurrentPlan || _selected.isFree ? null : _openDetails,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -277,6 +339,19 @@ class _SubscriptionMembershipScreenState
           ],
         ),
       ),
+    );
+  }
+
+  /// Header line stating the user's real current plan and its
+  /// storage limit. Read from [widget.currentPlan] — never from
+  /// the transient [_selected] state, so tapping another card
+  /// never moves the 'current plan' mark.
+  Widget _currentPlanLine() {
+    final current = subscriptionPlanForId(widget.currentPlan);
+    return Text(
+      'Current plan: ${current.name} — ${current.storageLabel}',
+      key: const Key('current-plan-line'),
+      style: AppText.label,
     );
   }
 
@@ -467,7 +542,10 @@ class _SubscriptionMembershipScreenState
                       ],
                     ),
                   ),
-                  if (plan.isFree)
+                  // 'Current Plan' marks the user's REAL current
+                  // plan (from the local profile), not the transient
+                  // selection and not always Free.
+                  if (plan.id == widget.currentPlan)
                     const _Pill(
                       label: 'Current Plan',
                       background: _lightGreen,
@@ -499,9 +577,9 @@ class _SubscriptionMembershipScreenState
                     ],
                   ),
                 ),
-              // Storage line (display only): states the approved
-              // per-plan storage spec. No usage is tracked and no
-              // limit is enforced.
+              // Storage line: states the approved per-plan storage
+              // spec. The Files add flow enforces this limit against
+              // the user's real plan (see study_tab.dart).
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
@@ -869,9 +947,10 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
     );
   }
 
-  /// Honest stop: shows exactly what WOULD be charged and states that
-  /// no payment provider is connected yet. Nothing is recorded, and
-  /// the plan never changes.
+  /// Honest stop: plans are ADMIN-ASSIGNED, so there is nothing to
+  /// confirm here. The sheet shows what the plan would be and tells
+  /// the user to ask the admin to upgrade. Nothing is recorded,
+  /// no payment is taken, and the plan never changes.
   void _showCheckoutSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -883,7 +962,7 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Confirm subscription',
+                'Plan upgrade',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 16),
@@ -908,9 +987,9 @@ class SubscriptionPlanDetailsScreen extends StatelessWidget {
                 // deep emerald in dark mode. Light mode inherits
                 // exactly as before.
                 child: Text(
-                  'Checkout and activation need a payment provider, '
-                  'which isn\'t connected yet. No payment has been taken '
-                  'and your plan hasn\'t changed.',
+                  'Plans are assigned by the admin. Ask the admin to '
+                  'upgrade your plan to ${plan.name}. Your plan '
+                  'hasn\'t changed.',
                   style: TextStyle(
                     color: Theme.of(sheetContext).brightness ==
                             Brightness.dark

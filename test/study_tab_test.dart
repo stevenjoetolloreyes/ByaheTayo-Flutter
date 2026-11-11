@@ -8,7 +8,7 @@
 //
 // Rules pinned here: a fresh install shows GWA "—" and honest
 // empty states; a recorded grade computes a real weighted GWA;
-// files start at 0 files / 0 B of 5 GB; notes and quizzes come
+// files start at 0 files / 0 B of the Free plan's 2 GB; notes and quizzes come
 // from the same StudentStorage the Student tab already uses;
 // the ❤️ chip is the favorited-notes count (0 with none) and the
 // ⭐ chip is the real points balance (0 pts with no wallet
@@ -182,11 +182,11 @@ void main() {
     expect(find.text('No grade yet'), findsOneWidget);
   });
 
-  testWidgets('Files panel starts empty: 0 files, 0 B of 5 GB', (tester) async {
+  testWidgets('Files panel starts empty: 0 files, 0 B of 2 GB — Free plan', (tester) async {
     await _pumpTab(tester);
     await _tapNav(tester, 'files');
     expect(find.text('Study files'), findsOneWidget);
-    expect(find.text('0 B of 5 GB used'), findsOneWidget);
+    expect(find.text('0 B of 2 GB used — Free plan'), findsOneWidget);
     for (final folder in ['Lectures', 'Activities', 'Reviewers']) {
       expect(find.text(folder), findsOneWidget);
     }
