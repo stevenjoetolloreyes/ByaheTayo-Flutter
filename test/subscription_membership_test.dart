@@ -4,6 +4,7 @@
 // a confirmation sheet with an honest note — never a charge,
 // verification, or activation.
 import 'package:estudyantego/features/onboarding/auth_service.dart';
+import 'package:estudyantego/features/subscription_membership.dart';
 import 'package:estudyantego/features/top_nav.dart';
 import 'package:estudyantego/main.dart';
 import 'package:flutter/material.dart';
@@ -184,6 +185,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Subscription Member'), findsOneWidget);
     expect(find.text('Free Plan'), findsOneWidget);
+  });
+
+  testWidgets('each plan card shows its storage limit (display only)', (
+    WidgetTester tester,
+  ) async {
+    await _setSurface(tester, const Size(800, 1280));
+    await _pumpApp(tester);
+    await _openAccount(tester);
+    await _openMembership(tester);
+
+    // Approved spec: Free 2 GB, Standard 12 GB, Pro 30 GB.
+    expect(find.text('2 GB storage'), findsOneWidget);
+    expect(find.text('12 GB storage'), findsOneWidget);
+    expect(find.text('30 GB storage'), findsOneWidget);
+  });
+
+  test('plan constants carry the approved storage limits', () {
+    expect(subscriptionPlans.length, 3);
+    expect(
+      subscriptionPlans
+          .firstWhere((plan) => plan.id == SubscriptionPlanId.free)
+          .storageGB,
+      2,
+    );
+    expect(
+      subscriptionPlans
+          .firstWhere((plan) => plan.id == SubscriptionPlanId.standard)
+          .storageGB,
+      12,
+    );
+    expect(
+      subscriptionPlans
+          .firstWhere((plan) => plan.id == SubscriptionPlanId.pro)
+          .storageGB,
+      30,
+    );
+    expect(
+      subscriptionPlans
+          .firstWhere((plan) => plan.id == SubscriptionPlanId.free)
+          .storageLabel,
+      '2 GB storage',
+    );
   });
 
   testWidgets('phone width: nav visible on Membership, hidden on Details', (

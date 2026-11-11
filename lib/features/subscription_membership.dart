@@ -9,6 +9,9 @@
 //
 // Prices are the approved figures: Free ₱0; Standard ₱99/month or
 // ₱950/year; Pro ₱299/month or ₱2,870/year (yearly = 20% off).
+// Storage limits are the approved spec (Free 2 GB, Standard 12 GB,
+// Pro 30 GB), shown on the plan cards only — no usage is tracked and
+// no limit is enforced.
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
@@ -27,6 +30,7 @@ class SubscriptionPlan {
     required this.monthlyPrice,
     required this.yearlyPrice,
     required this.benefits,
+    required this.storageGB,
     required this.icon,
     required this.iconColor,
   });
@@ -41,6 +45,14 @@ class SubscriptionPlan {
   final int yearlyPrice;
 
   final List<String> benefits;
+
+  /// Included file storage in GB (approved spec: Free 2, Standard 12,
+  /// Pro 30). Display only — no usage is tracked and no limit is
+  /// enforced anywhere in the app.
+  final int storageGB;
+
+  /// Display line for the plan card, e.g. "2 GB storage".
+  String get storageLabel => '$storageGB GB storage';
 
   /// Leading icon for the plan card. Pro uses the widget-drawn crown
   /// ([isCrown]) instead of a glyph.
@@ -77,6 +89,7 @@ const List<SubscriptionPlan> subscriptionPlans = [
     monthlyPrice: 0,
     yearlyPrice: 0,
     benefits: ['Basic features', 'With advertisements'],
+    storageGB: 2,
     icon: Icons.eco_rounded,
     iconColor: Color(0xFF16A34A),
   ),
@@ -86,6 +99,7 @@ const List<SubscriptionPlan> subscriptionPlans = [
     monthlyPrice: 99,
     yearlyPrice: 950,
     benefits: ['All Free features', 'No advertisements'],
+    storageGB: 12,
     icon: Icons.bolt_rounded,
     iconColor: Color(0xFFF59E0B),
   ),
@@ -100,6 +114,7 @@ const List<SubscriptionPlan> subscriptionPlans = [
       'Priority Support',
       'Publishing in Communities',
     ],
+    storageGB: 30,
     icon: Icons.diamond_rounded,
     iconColor: Color(0xFFFFC107),
   ),
@@ -484,6 +499,23 @@ class _SubscriptionMembershipScreenState
                     ],
                   ),
                 ),
+              // Storage line (display only): states the approved
+              // per-plan storage spec. No usage is tracked and no
+              // limit is enforced.
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      size: 20,
+                      color: _brightGreen,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(plan.storageLabel)),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
