@@ -1418,6 +1418,103 @@ double bearingForMode(MapViewMode mode, double currentBearing) =>
 /// 3D buildings render only in 3D mode.
 bool buildingsForMode(MapViewMode mode) => mode == MapViewMode.perspective3d;
 
+/// ID of the runtime 3D buildings layer (added to the live style
+/// by [_MapTabState._syncBuildingsExtrusion] — it is NOT part of
+/// the Meta style document, which draws buildings as flat fills).
+const String kBuildings3dLayerId = 'estudyantego-buildings-3d';
+
+/// Minimum extrusion height (metres) applied to a building's
+/// real tile "height" — a 3.4 m shed still reads as a 3D block
+/// instead of a flat slab. Verified Nov 11, 2026 from a decoded
+/// z16 vector tile for Vigan: the buildings layer DOES carry a
+/// real "height" property (double, metres — e.g. 3.4, 6.8).
+const double kBuildings3dMinHeightM = 5;
+
+/// Default extrusion height (metres) for a building whose tile
+/// feature carries no "height" property — the fallback that
+/// still makes the building read as a 3D block.
+const double kBuildings3dDefaultHeightM = 10;
+
+/// Default extrusion height (metres) for an "elevated" building
+/// (feature property elevated == "yes") with no "height"
+/// property — taller than a normal building, still modest.
+/// (Was 24 m; lowered to 18 m, Nov 11.)
+const double kBuildings3dElevatedHeightM = 18;
+
+/// The layer the extrusion is inserted above: the Meta style's
+/// flat "buildings-elevated" fill, so the 3D blocks sit exactly
+/// where the flat footprints sit, with the style's roads,
+/// bridges and labels above them as before.
+const String kBuildings3dAnchorLayerId = 'buildings-elevated';
+
+/// Runtime fill-extrusion layer that renders the Meta Canterbury
+/// style's building footprints as 3D blocks. Source and
+/// source-layer are the style's own ("facebook" /
+/// "buildings" — verified against the live style document,
+/// Nov 11: two flat fill layers, minzoom 16, no extrusion).
+/// Height uses the feature's real "height" when present
+/// (verified from a decoded z16 tile for Vigan, Nov 11:
+/// double, metres — e.g. 3.4, 6.8), floored at 5 m so small
+/// real heights still read as blocks; otherwise the defaults
+/// above (10 m normal, 18 m elevated). Base uses
+/// "min_height" when present, else ground level. Colour is a
+/// shade lighter than the flat building fill
+/// (hsl(204.8, 26.8%, 25.7%)) so the blocks read against the
+/// dark map; the vertical gradient shades the sides darker.
+/// Honest limit: building data in the rural Cabugao → Vigan
+/// corridor is sparse in the tiles (a few footprints per
+/// tile), so extrusions appear only where the map data has
+/// buildings. Active only in 3D mode on the Meta style — see
+/// [_MapTabState._syncBuildingsExtrusion]. Pure value: tested
+/// in test/map_buildings_3d_test.dart without a live map.
+const FillExtrusionStyleLayer kBuildings3dExtrusionLayer =
+    FillExtrusionStyleLayer(
+      id: kBuildings3dLayerId,
+      sourceId: 'facebook',
+      sourceLayerId: 'buildings',
+      minZoom: 16,
+      maxZoom: 24,
+      layout: {'visibility': 'visible'},
+      paint: {
+        'fill-extrusion-color': '#47657b',
+        'fill-extrusion-height': [
+          'case',
+          ['==', ['get', 'elevated'], 'yes'],
+          [
+            'max',
+            ['to-number', ['get', 'height'], kBuildings3dElevatedHeightM],
+            kBuildings3dElevatedHeightM,
+          ],
+          [
+            'max',
+            ['to-number', ['get', 'height'], kBuildings3dDefaultHeightM],
+            kBuildings3dMinHeightM,
+          ],
+        ],
+        'fill-extrusion-base': ['to-number', ['get', 'min_height'], 0],
+        'fill-extrusion-opacity': 0.9,
+        'fill-extrusion-vertical-gradient': true,
+      },
+    );
+
+/// One-time auto-focus decision for the Map tab opening
+/// (Nov 11, 2026): true only when the tab has not auto-focused
+/// yet, the location service is on, and permission is ALREADY
+/// granted (whileInUse / always). Never prompts — the permission
+/// prompt stays on My Location / Live Follow. Extracted as a
+/// pure function so the guard matrix is unit-testable without
+/// a live map or a Geolocator mock.
+bool shouldAutoFocusOnLocation({
+  required bool alreadyDone,
+  required bool locationServiceEnabled,
+  required LocationPermission permission,
+}) {
+  if (alreadyDone) return false;
+  if (!locationServiceEnabled) return false;
+  return permission == LocationPermission.whileInUse ||
+      permission == LocationPermission.always;
+}
+
 /// View modes the Map tab's 2D/3D toggle offers: 2D top-down and
 /// 3D perspective only. Satellite is NOT offered — it needs a
 /// separate imagery tile source (not Meta vector) and was not
@@ -1841,12 +1938,20 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // 2D/3D view mode (Steven, Nov 8: "Oo, lagyan mo ng 3D
   // toggle"): 2D = flat top-down (the default); 3D = perspective
   // tilt. The toggle only moves the camera — never the route,
-  // stops, or fares. Buildings extrude only if the loaded style
-  // renders them: the Meta Canterbury style's building support
-  // is unverified from the sandbox (its CDN is unreachable
-  // there), so 3D promises perspective, not buildings — nothing
-  // is invented when they don't appear (see _applyViewMode).
+  // stops, or fares. In 3D on the Meta style the runtime
+  // extrusion layer ([kBuildings3dExtrusionLayer]) is also
+  // added, so the style's building footprints rise as 3D
+  // blocks (Nov 11, Steven: "Oo, gawin mo yung 3D buildings");
+  // in 2D, or on the CartoDB fallback, the layer is removed
+  // (see _syncBuildingsExtrusion). Heights come from the tile
+  // feature when present (floored at 5 m), else the 10 m /
+  // 18 m defaults — nothing is invented beyond that fallback.
   MapViewMode _viewMode = MapViewMode.standard2d;
+  // True while the runtime 3D buildings extrusion layer
+  // ([kBuildings3dExtrusionLayer]) is added to the live style.
+  // A style reload drops runtime layers, so _onStyleLoaded
+  // resets this to false before re-syncing.
+  bool _buildingsExtruded = false;
   // True once the current style has reported loaded (cleared on
   // every style switch, so the fallback timer only fires for a
   // style that never loads).
@@ -1898,6 +2003,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   bool _locationGranted = false;
   bool _locating = false;
   Position? _userPos;
+  // One-time auto-focus on open (Nov 11, 2026): claimed on the
+  // first attempt so a style reload / theme switch / route
+  // change can never re-fire it. Reset only when the State is
+  // created again (a fresh Map tab).
+  bool _autoFocusDone = false;
 
   // Tapped-location path: the hub-to-hub route whose line is drawn
   // on the map, plus the origin point it starts from.
@@ -2015,6 +2125,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   StreamSubscription<Position>? _livePositionSub;
   Timer? _liveGpsLostTimer;
   Timer? _liveMarkerTimer;
+  // Continuous follow-camera tick (Nov 11, 2026): eases the
+  // camera toward the gliding marker every 150 ms so it moves
+  // continuously between GPS fixes instead of jumping once
+  // per fix.
+  Timer? _liveCameraTimer;
   Timer? _liveClockTimer;
   // Interpolated bus-marker position: glides toward the latest
   // GPS fix between updates so the marker never teleports.
@@ -2037,8 +2152,34 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   int? _liveLastGoodRemainingMin;
   DateTime? _liveLastGoodArrival;
   MapViewMode _livePrevViewMode = MapViewMode.standard2d;
-  DateTime? _liveLastCameraAt;
   bool _liveCameraBusy = false;
+  // GPS position smoothing (Nov 11, 2026): raw fixes jitter,
+  // so the marker / camera / snapshot run on the smoothed
+  // point, never the raw fix. See PositionSmoother in
+  // live_follow.dart.
+  final PositionSmoother _livePositionFilter = PositionSmoother();
+  LatLng? _liveSmoothedPos;
+  // Last camera target + bearing, for the tick's skip rule
+  // (liveCameraShouldMove): a stopped bus does not re-animate
+  // the camera on every tick.
+  LatLng? _liveLastCameraTarget;
+  double _liveLastCameraBearing = 0;
+  // Live close-follow (Nov 11, 2026): the user's manual zoom
+  // during Live (+/−, pinch, double-tap). Null = no manual zoom
+  // — the follow camera settles at the close zoom
+  // (liveCloseFollowZoom). Cleared by Overview / My Location /
+  // Resume, which re-fit to the close zoom.
+  double? _liveUserZoom;
+  // True once the first Live camera move of the session has run
+  // (the ~1 s ease-in into the close view). Reset on start/stop.
+  bool _liveEaseInDone = false;
+  // A Live gesture (pinch / drag / rotate) paused follow, and
+  // the zoom the camera had when the gesture started — used at
+  // camera-idle time to tell a zoom gesture (resume at the new
+  // zoom) from a drag (stay paused). Only gesture pauses set
+  // this; tap-to-zoom, stop-chip and Overview pauses do not.
+  bool _livePausedByGesture = false;
+  double _liveGestureStartZoom = 0;
   // Catholic churches from Google Places (Churches chip, whole
   // Luzon). Markers show only while the chip is active and not
   // navigating, so they never clutter a route.
@@ -2437,6 +2578,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   void _onStyleLoaded(StyleController _) {
     _styleLoadTimer?.cancel();
     _styleLoaded = true;
+    // A style reload drops runtime layers, so the extrusion
+    // layer is gone even if it was added — reset the flag and
+    // let _applyViewMode re-sync it below (3D only).
+    _buildingsExtruded = false;
     // A style reload can reset the camera pitch: if the user is
     // in 3D, re-apply the tilt instantly (no animation — the
     // style just loaded, and an animation would replay on every
@@ -2444,6 +2589,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     if (_viewMode == MapViewMode.perspective3d) {
       unawaited(_applyViewMode(animated: false));
     }
+    // One-time smooth auto-focus on the user's location when
+    // the tab opens (Nov 11, 2026): fires here — map created
+    // + style loaded — and only once per tab lifetime (the
+    // flag in _autoFocusOnLocation). Silent: never prompts
+    // for permission on open.
+    unawaited(_autoFocusOnLocation());
     if (_styleMode != _MapStyleMode.meta) {
       // The CartoDB fallback style loaded: its tiles still have
       // to arrive — probe one fallback tile under the camera.
@@ -2710,6 +2861,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _livePositionSub?.cancel();
     _liveGpsLostTimer?.cancel();
     _liveMarkerTimer?.cancel();
+    _liveCameraTimer?.cancel();
     _liveClockTimer?.cancel();
     _sheetController.dispose();
     _sheetFocusNode.dispose();
@@ -2784,10 +2936,73 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         _userPos = position;
         _locationGranted = true;
       });
-      await _moveTo(LatLng(position.latitude, position.longitude), zoom: 15);
+      // 120 ms (Steven's pick, Nov 11): fast but still eased,
+      // so it reads as a smooth glide, not a snap.
+      await _moveTo(
+        LatLng(position.latitude, position.longitude),
+        zoom: 15,
+        duration: const Duration(milliseconds: 120),
+      );
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  /// One-time smooth auto-focus on the user's location when the
+  /// Map tab opens (Nov 11, 2026): once the map + style are
+  /// ready (called from [_onStyleLoaded]), if location
+  /// permission is ALREADY granted and a position is available,
+  /// fly the camera to the user once — the same animated
+  /// [_moveTo] the My Location button uses (zoom 15, 120 ms —
+  /// Steven's pick: fast but still eased, so it reads as a
+  /// smooth glide, not a snap). Never prompts for permission
+  /// and never shows a message on open; the permission prompt
+  /// stays on My Location / Live Follow. Never starts Live
+  /// Follow — a one-time fly-to only; Live Follow still starts
+  /// only via My Location / Start. If anything is missing
+  /// (service off, permission denied, no position), the tab
+  /// keeps today's behaviour: the active route stays fitted.
+  /// Takes precedence over the route fit on open (Steven's
+  /// pick); the route stays drawn and Overview / fit-route
+  /// still shows the whole route.
+  Future<void> _autoFocusOnLocation() async {
+    if (!mounted || _mapController == null) return;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted) return;
+    final permission = await Geolocator.checkPermission();
+    // One attempt per tab lifetime: the decision reads the
+    // flag, and the flag is claimed here regardless of the
+    // outcome, so a style reload / theme switch can never
+    // re-fire it.
+    final fire = shouldAutoFocusOnLocation(
+      alreadyDone: _autoFocusDone,
+      locationServiceEnabled: serviceEnabled,
+      permission: permission,
+    );
+    _autoFocusDone = true;
+    if (!fire) return;
+    Position? position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+    } catch (_) {
+      return;
+    }
+    // Live Follow started while the fix was loading: the
+    // camera is already on the user — do not fight it.
+    if (!mounted || _mapController == null || _liveFollowActive) return;
+    setState(() {
+      _userPos = position;
+      _locationGranted = true;
+    });
+    await _moveTo(
+      LatLng(position.latitude, position.longitude),
+      zoom: 15,
+      duration: const Duration(milliseconds: 120),
+    );
   }
 
   // ---- Live Follow (Nov 8, 2026) ----
@@ -2831,6 +3046,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     // switch to 3D, and start tracking.
     _livePrevViewMode = _viewMode;
     _liveSpeed.clear();
+    _livePositionFilter.clear();
+    _liveSmoothedPos = null;
+    _liveLastCameraTarget = null;
+    _liveLastCameraBearing = 0;
     _livePrevPos = null;
     _livePrevPosAt = null;
     _liveLastMovingAt = null;
@@ -2839,6 +3058,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _liveSnapshot = null;
     _liveGpsLost = false;
     _liveFollowPaused = false;
+    // Fresh Live session: no manual zoom, and the first camera
+    // move eases into the close view.
+    _liveUserZoom = null;
+    _liveEaseInDone = false;
+    _livePausedByGesture = false;
     setState(() {
       _liveFollowActive = true;
       _liveFollowStartedAt = DateTime.now();
@@ -2874,6 +3098,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       const Duration(milliseconds: 200),
       (_) => _liveMarkerTick(),
     );
+    _liveCameraTimer = Timer.periodic(
+      const Duration(milliseconds: 150),
+      (_) => _liveCameraTick(),
+    );
     _liveClockTimer = Timer.periodic(
       const Duration(seconds: 15),
       (_) => _liveClockTick(),
@@ -2890,7 +3118,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _livePositionSub = null;
     _liveGpsLostTimer?.cancel();
     _liveMarkerTimer?.cancel();
+    _liveCameraTimer?.cancel();
     _liveClockTimer?.cancel();
+    _liveUserZoom = null;
+    _liveEaseInDone = false;
+    _livePausedByGesture = false;
     final prevMode = _livePrevViewMode;
     setState(() {
       _liveFollowActive = false;
@@ -2899,6 +3131,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _liveSnapshot = null;
       _liveMarkerPos = null;
       _liveTargetPos = null;
+      _livePositionFilter.clear();
+      _liveSmoothedPos = null;
+      _liveLastCameraTarget = null;
+      _liveLastCameraBearing = 0;
       _liveFollowStartedAt = null;
       _liveLastMovingAt = null;
       _liveLastGoodRemainingMin = null;
@@ -2908,15 +3144,35 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     if (_activeRoute != null) _fitActiveRoute();
   }
 
-  /// One live GPS fix: smooths the speed, steers the bearing,
-  /// recomputes the trip snapshot, and glides the camera. The
-  /// position itself is never faked — a missing fix simply
-  /// leaves the last known position in place (see the lost
-  /// timer).
+  /// One live GPS fix: smooths the position (see
+  /// PositionSmoother) and the speed, steers the bearing, and
+  /// recomputes the trip snapshot. The camera is NOT moved
+  /// here — the 150 ms camera tick follows the gliding marker
+  /// continuously instead (see _liveCameraTick). The position
+  /// itself is never faked — a missing fix simply leaves the
+  /// last known position in place (see the lost timer).
   void _onLivePosition(Position pos) {
     if (!_liveFollowActive || !mounted) return;
     final now = DateTime.now();
-    final here = LatLng(pos.latitude, pos.longitude);
+    final raw = LatLng(pos.latitude, pos.longitude);
+    // Smooth the fix first (Nov 11, 2026): jitter averages
+    // out and wild jumps are dropped outright — the marker,
+    // camera, bearing and snapshot all run on the smoothed
+    // point, never the raw fix. A rejected fix means the GPS
+    // is alive but this one fix is nonsense: keep the last
+    // good position and re-arm the lost timer.
+    final smoothed = _livePositionFilter.add(
+      raw,
+      accuracy: pos.accuracy,
+      at: now,
+      speedMps: pos.speed >= 0 ? pos.speed : null,
+    );
+    if (smoothed == null) {
+      _armLiveGpsLostTimer();
+      return;
+    }
+    final here = smoothed;
+    _liveSmoothedPos = here;
     // Speed: the GPS-reported speed when the device gives one
     // (>= 0 m/s), else derived from the last two fixes. The
     // smoother averages the last few samples so one noisy fix
@@ -2973,7 +3229,6 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       }
     });
     _armLiveGpsLostTimer();
-    unawaited(_liveMoveCameraToMarker());
   }
 
   /// Re-arms the GPS-lost timer: no fix for [liveGpsLostAfter]
@@ -3022,7 +3277,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// guess from a stale speed.
   void _liveClockTick() {
     if (!_liveFollowActive || !mounted) return;
-    final pos = _userPos;
+    final pos = _liveSmoothedPos ??
+        (_userPos == null
+            ? null
+            : LatLng(_userPos!.latitude, _userPos!.longitude));
     if (pos == null) return;
     setState(() {
       final snap = _liveSnapshot;
@@ -3036,7 +3294,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           roadPoints: _roadPoints,
           origin: _activeRouteOrigin,
           stops: _routeStops,
-          position: LatLng(pos.latitude, pos.longitude),
+          position: pos,
           totalKm: totalKm,
           speedKmh: _liveSpeed.averageKmh,
           now: DateTime.now(),
@@ -3048,34 +3306,67 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     });
   }
 
-  /// One smooth follow-camera move: an animated (900 ms) glide
-  /// to the interpolated marker position in 3D, bearing
-  /// following the direction of travel. Throttled to one move
-  /// per 900 ms and skipped while a move is in flight or the
-  /// camera is paused, so updates never stack into jumps.
-  Future<void> _liveMoveCameraToMarker() async {
+  /// Continuous follow-camera tick (Nov 11, 2026): every
+  /// 150 ms the camera eases toward the gliding marker with a
+  /// short (200 ms) animation, so it moves continuously
+  /// between GPS fixes instead of sitting still and then
+  /// jumping once per fix. Skipped while paused or while a
+  /// move is in flight, and skipped when the marker has
+  /// barely moved since the last camera move (see
+  /// liveCameraShouldMove) — a stopped bus does not
+  /// re-animate the camera on every tick.
+  void _liveCameraTick() {
+    if (!_liveFollowActive || !mounted) return;
+    unawaited(_liveMoveCameraToMarker());
+  }
+
+  /// One smooth follow-camera move: a short (200 ms) glide to
+  /// the interpolated marker position in 3D, bearing
+  /// following the direction of travel. The 150 ms tick is the
+  /// cadence — there is no per-fix throttle any more, so a
+  /// move is never stacked behind a 900 ms wait. [force]
+  /// bypasses the barely-moved skip rule (resume after a
+  /// stop-chip pause: the camera flew to a stop and must come
+  /// back to the marker even if the bus barely moved). The
+  /// camera settles at the close follow zoom
+  /// ([liveCloseFollowZoom]) — or at the user's manual zoom
+  /// while one is set (see [_liveUserZoom]). The first move of
+  /// a session eases in over ~1 s ([liveCloseFollowEaseIn]);
+  /// later moves use the 200 ms glide. No 360° spin.
+  Future<void> _liveMoveCameraToMarker({bool force = false}) async {
     final controller = _mapController;
     final target = _liveMarkerPos ??
+        _liveSmoothedPos ??
         (_userPos == null
             ? null
             : LatLng(_userPos!.latitude, _userPos!.longitude));
     if (controller == null || target == null) return;
     if (_liveFollowPaused || _liveCameraBusy) return;
-    final now = DateTime.now();
-    if (_liveLastCameraAt != null &&
-        now.difference(_liveLastCameraAt!) <
-            const Duration(milliseconds: 900)) {
+    if (!force &&
+        !liveCameraShouldMove(
+          lastTarget: _liveLastCameraTarget,
+          lastBearing: _liveLastCameraBearing,
+          target: target,
+          bearing: _liveBearing,
+        )) {
       return;
     }
-    _liveLastCameraAt = now;
+    _liveLastCameraTarget = target;
+    _liveLastCameraBearing = _liveBearing;
     _liveCameraBusy = true;
+    // First move of the session: ease into the close view
+    // (~1 s) instead of snapping to it.
+    final duration = _liveEaseInDone
+        ? const Duration(milliseconds: 200)
+        : liveCloseFollowEaseIn;
+    _liveEaseInDone = true;
     try {
       await controller.animateCamera(
         center: Geographic(lon: target.longitude, lat: target.latitude),
-        zoom: 16,
+        zoom: liveFollowZoom(userZoom: _liveUserZoom),
         pitch: 60,
         bearing: _liveBearing,
-        nativeDuration: const Duration(milliseconds: 900),
+        nativeDuration: duration,
       );
     } catch (_) {
       // Interrupted by a newer camera move — the next one lands.
@@ -3094,8 +3385,41 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   }
 
   /// Resumes the follow camera after a stop-chip pause.
+  /// Resume re-fits: a manual zoom made during Live is dropped
+  /// and the follow camera settles back at the close zoom.
+  /// Forced: the camera flew to a stop while paused, so it
+  /// must come back to the marker even if the bus barely
+  /// moved since the last camera move.
   void _resumeLiveFollow() {
     if (!_liveFollowActive) return;
+    _liveUserZoom = null;
+    _livePausedByGesture = false;
+    setState(() => _liveFollowPaused = false);
+    unawaited(_liveMoveCameraToMarker(force: true));
+  }
+
+  /// Camera idle after a Live gesture pause (Nov 11, 2026 —
+  /// Live close-follow): a pinch / double-tap zoom paused
+  /// follow on gesture start, but the user only changed the
+  /// zoom — keep following at the new zoom instead of snapping
+  /// back to the close zoom. A drag or rotate leaves follow
+  /// paused (today's behaviour); the Resume control re-centres.
+  /// Only gesture pauses are reconsidered here — tap-to-zoom,
+  /// stop-chip and Overview pauses stay paused until Resume.
+  void _onLiveCameraIdle() {
+    if (!_liveFollowActive || !_liveFollowPaused || !_livePausedByGesture) {
+      return;
+    }
+    if (!liveGestureWasZoom(
+      startZoom: _liveGestureStartZoom,
+      zoom: _mapZoom,
+    )) {
+      // A drag / rotate: follow stays paused.
+      _livePausedByGesture = false;
+      return;
+    }
+    _liveUserZoom = _mapZoom;
+    _livePausedByGesture = false;
     setState(() => _liveFollowPaused = false);
     unawaited(_liveMoveCameraToMarker());
   }
@@ -3213,7 +3537,17 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// where it was. The stop card's reveal gate lives in
   /// [_selectStop] (min 650 ms), so the zoom is always visible
   /// before the card opens.
-  Future<void> _flyTo(LatLng target, {double zoom = 13}) async {
+  ///
+  /// [duration] overrides the flight time: the My Location
+  /// jump and the one-time auto-focus on open use 120 ms
+  /// (Steven's pick, Nov 11 — fast but still eased, so it
+  /// reads as a smooth glide, not a snap). Hub / stop / nav
+  /// flights keep the 1400 ms default.
+  Future<void> _flyTo(
+    LatLng target, {
+    double zoom = 13,
+    Duration duration = const Duration(milliseconds: 1400),
+  }) async {
     final controller = _mapController;
     if (controller == null) return;
     final generation = ++_flyGeneration;
@@ -3222,7 +3556,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       await controller.animateCamera(
         center: Geographic(lon: target.longitude, lat: target.latitude),
         zoom: zoom,
-        nativeDuration: const Duration(milliseconds: 1400),
+        nativeDuration: duration,
       );
       _mapCenter = target;
       _mapZoom = zoom;
@@ -3248,10 +3582,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _moveTo(LatLng target, {double zoom = 13}) async {
+  Future<void> _moveTo(
+    LatLng target, {
+    double zoom = 13,
+    Duration duration = const Duration(milliseconds: 1400),
+  }) async {
     // Animated: a jump (my-location, hub tap, nav start) keeps
     // the current rotation instead of flattening it.
-    await _flyTo(target, zoom: zoom);
+    await _flyTo(target, zoom: zoom, duration: duration);
   }
 
   /// Compass tap: face north again (rotate 0), keeping centre
@@ -3290,13 +3628,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// map is not created yet — the mode is stored and applied on
   /// creation / style load.
   ///
-  /// Buildings: the native renderer draws whatever
-  /// fill-extrusion layers the loaded style declares — the
-  /// Canterbury style's building support is unverified from
-  /// this sandbox (its CDN is unreachable there), so this
-  /// method tilts the camera and promises nothing about
-  /// buildings. No building data is invented: when the style
-  /// carries no heights, 3D is perspective only.
+  /// Buildings: after the camera move, [_syncBuildingsExtrusion]
+  /// adds the runtime fill-extrusion layer in 3D (Meta style
+  /// only) and removes it in 2D, so the style's building
+  /// footprints rise as 3D blocks only while 3D is on.
   Future<void> _applyViewMode({bool animated = true}) async {
     final controller = _mapController;
     if (controller == null) return;
@@ -3315,6 +3650,49 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     } catch (_) {
       // Interrupted by a newer camera move, or the map is not
       // attached yet — the next camera move still lands.
+    }
+    unawaited(_syncBuildingsExtrusion());
+  }
+
+  /// Adds or removes the runtime 3D buildings extrusion layer
+  /// ([kBuildings3dExtrusionLayer]) so it matches [_viewMode]
+  /// and [_styleMode]: present only in 3D on the Meta style,
+  /// absent in 2D and on the CartoDB fallback (a raster style
+  /// has no vector building source to extrude). Called from
+  /// [_applyViewMode] (mode taps, map creation, style loads).
+  /// Never throws — a native failure just leaves the map as it
+  /// was (flat buildings), so a missing layer can never break
+  /// the map. [_buildingsExtruded] tracks whether the layer is
+  /// currently added; it is reset in [_onStyleLoaded] because a
+  /// style reload drops runtime layers.
+  Future<void> _syncBuildingsExtrusion() async {
+    final style = _mapController?.style;
+    if (style == null) return;
+    final want =
+        _styleMode == _MapStyleMode.meta &&
+        buildingsForMode(_viewMode);
+    if (want == _buildingsExtruded) return;
+    try {
+      if (want) {
+        try {
+          await style.addLayer(
+            kBuildings3dExtrusionLayer,
+            aboveLayerId: kBuildings3dAnchorLayerId,
+          );
+        } catch (_) {
+          // Anchor layer missing (style revision) — append on
+          // top instead; still 3D, just above the labels.
+          await style.addLayer(kBuildings3dExtrusionLayer);
+        }
+        _buildingsExtruded = true;
+      } else {
+        await style.removeLayer(kBuildings3dLayerId);
+        _buildingsExtruded = false;
+      }
+    } catch (_) {
+      // Native layer call failed (map tearing down, style
+      // reloading) — leave the flag as it was; the next style
+      // load / mode tap re-syncs.
     }
   }
 
@@ -3832,7 +4210,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       _selectedStopIndex = null;
       if (resumeFollow) _liveFollowPaused = false;
     });
-    if (resumeFollow) unawaited(_liveMoveCameraToMarker());
+    if (resumeFollow) unawaited(_liveMoveCameraToMarker(force: true));
   }
 
   // ---- Line maker (admin-only) ----
@@ -5507,6 +5885,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       widgets.add(
         OutlinedButton.icon(
           onPressed: () {
+            // Overview re-fits: drop the manual zoom so the
+            // next follow move settles at the close zoom again.
+            _liveUserZoom = null;
+            _livePausedByGesture = false;
             setState(() => _liveFollowPaused = true);
             _fitActiveRoute();
           },
@@ -5990,12 +6372,22 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
               // Resume control re-centres. Programmatic moves
               // (developerAnimation / apiAnimation — the follow
               // camera itself, flights, view-mode tilts) never
-              // pause follow.
+              // pause follow. The zoom the gesture started at is
+              // recorded so camera-idle time can tell a pinch /
+              // double-tap zoom (resume at the new zoom, see
+              // [_onLiveCameraIdle]) from a drag (stay paused).
               if (event.reason == CameraChangeReason.apiGesture &&
                   _liveFollowActive &&
                   !_liveFollowPaused) {
+                _liveGestureStartZoom = _mapZoom;
+                _livePausedByGesture = true;
                 setState(() => _liveFollowPaused = true);
               }
+            } else if (event is MapEventCameraIdle) {
+              // A gesture (or a camera transition) ended — a
+              // zoom gesture paused follow only to be resumed
+              // at the new zoom (see [_onLiveCameraIdle]).
+              _onLiveCameraIdle();
             } else if (event is MapEventClick) {
               if (_setEndpointsActive) {
                 // Set Start/End mode: the tap places the Start
@@ -6225,6 +6617,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                       zoom: zoom,
                     );
                     _mapZoom = zoom;
+                    // A manual zoom during Live is respected: the
+                    // follow camera keeps following at this zoom
+                    // instead of snapping back to the close zoom.
+                    if (_liveFollowActive && !_liveFollowPaused) {
+                      _liveUserZoom = zoom;
+                    }
                   } catch (_) {}
                 },
               ),
@@ -6245,6 +6643,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
                       zoom: zoom,
                     );
                     _mapZoom = zoom;
+                    // A manual zoom during Live is respected: the
+                    // follow camera keeps following at this zoom
+                    // instead of snapping back to the close zoom.
+                    if (_liveFollowActive && !_liveFollowPaused) {
+                      _liveUserZoom = zoom;
+                    }
                   } catch (_) {}
                 },
               ),

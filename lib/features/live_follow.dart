@@ -185,6 +185,120 @@ class SpeedSmoother {
   void clear() => _samples.clear();
 }
 
+/// GPS position smoothing for Live Follow (Nov 11, 2026): the
+/// raw fixes jitter ±5–20 m even when the bus is still, which
+/// yanks the marker and the follow camera off the road. This
+/// filter keeps the last few ACCEPTED fixes and returns their
+/// accuracy-weighted mean, so jitter averages out. It never
+/// invents a position: the smoothed point only changes when a
+/// real fix is accepted, and a wild jump — farther than the bus
+/// could possibly have travelled since the last fix — is
+/// dropped outright instead of dragging the marker across the
+/// map. No sensor fusion, no dead reckoning, no snap-to-road:
+/// only the fixes themselves are used.
+class PositionSmoother {
+  PositionSmoother({
+    this.capacity = 3,
+    this.maxPlausibleSpeedMps = 35,
+    this.minPlausibleSpeedMps = 15,
+  });
+
+  /// Fixes kept for the weighted mean (a few only, so the
+  /// filter adds at most ~1 fix of lag).
+  final int capacity;
+
+  /// Fastest the bus could plausibly travel (m/s) — used when
+  /// the device reports no speed. 35 m/s ≈ 126 km/h, generous
+  /// for a bus, so a real fix is never rejected for speed.
+  final double maxPlausibleSpeedMps;
+
+  /// Slowest speed the filter ever assumes (m/s): the device
+  /// sometimes reports 0 while the bus is already rolling, so
+  /// a fix is always allowed at least this much travel. 15 m/s
+  /// still rejects a 100 m jump in one second at a stop.
+  final double minPlausibleSpeedMps;
+
+  final List<_PositionFix> _fixes = [];
+
+  /// Feeds one raw fix. Returns the new smoothed position, or
+  /// null when the fix was rejected as an outlier (the smoothed
+  /// position is unchanged then). [accuracy] is the fix's
+  /// reported accuracy in metres; [speedMps] the device's
+  /// reported speed in m/s (null = unknown).
+  LatLng? add(
+    LatLng point, {
+    required double accuracy,
+    required DateTime at,
+    double? speedMps,
+  }) {
+    if (_fixes.isNotEmpty) {
+      final last = _fixes.last;
+      final dtSeconds =
+          at.difference(last.at).inMilliseconds / 1000;
+      final speed = math.max(
+        speedMps ?? maxPlausibleSpeedMps,
+        minPlausibleSpeedMps,
+      );
+      final maxDistance = speed * (dtSeconds > 0 ? dtSeconds : 0) +
+          last.accuracy +
+          accuracy;
+      final movedKm = distanceAlongPath([last.point, point], 0, 1);
+      if (movedKm * 1000 > maxDistance) return null;
+    }
+    _fixes.add(_PositionFix(point, accuracy, at));
+    if (_fixes.length > capacity) _fixes.removeAt(0);
+    return smoothed;
+  }
+
+  /// Current smoothed position, or null before any fix.
+  LatLng? get smoothed {
+    if (_fixes.isEmpty) return null;
+    var wSum = 0.0;
+    var latSum = 0.0;
+    var lngSum = 0.0;
+    for (final f in _fixes) {
+      // Weight by accuracy: a 5 m fix counts 4x a 20 m fix.
+      // Accuracy is clamped to >= 5 m so a (possibly
+      // optimistic) 1 m report cannot dominate the mean.
+      final w = 1 / math.max(f.accuracy, 5);
+      wSum += w;
+      latSum += f.point.latitude * w;
+      lngSum += f.point.longitude * w;
+    }
+    return LatLng(latSum / wSum, lngSum / wSum);
+  }
+
+  bool get hasFixes => _fixes.isNotEmpty;
+
+  void clear() => _fixes.clear();
+}
+
+class _PositionFix {
+  const _PositionFix(this.point, this.accuracy, this.at);
+  final LatLng point;
+  final double accuracy;
+  final DateTime at;
+}
+
+/// Whether the follow camera should re-target on this tick
+/// (Nov 11, 2026): skip when the marker has barely moved since
+/// the last camera move (< 2 m and < 2° bearing change), so a
+/// stopped bus does not re-animate the camera on every tick.
+/// A null [lastTarget] (no camera move yet) always moves.
+bool liveCameraShouldMove({
+  required LatLng? lastTarget,
+  required double lastBearing,
+  required LatLng target,
+  required double bearing,
+}) {
+  if (lastTarget == null) return true;
+  final movedKm = distanceAlongPath([lastTarget, target], 0, 1);
+  if (movedKm >= 0.002) return true;
+  var diff = (bearing - lastBearing).abs() % 360;
+  if (diff > 180) diff = 360 - diff;
+  return diff >= 2;
+}
+
 /// Speed (km/h) implied by two fixes and the time between them —
 /// the fallback when the device reports no speed. Null when the
 /// time delta is not positive (no movement can be derived).
@@ -231,15 +345,53 @@ double liveMarkerScreenRotationDeg({
   return diff;
 }
 
+/// The close street-level zoom Live Follow settles at (Nov 11,
+/// 2026 — Live close-follow): the preview's settled zoom, so the
+/// street fills the view while driving. Replaces the old follow
+/// zoom of 16.
+const double liveCloseFollowZoom = 18.3;
+
+/// Ease-in duration for the first Live Follow camera move of a
+/// session (Nov 11, 2026): the camera glides into the close view
+/// in about a second instead of snapping to it. Later moves keep
+/// the existing 900 ms glide. No 360° spin — the spin belongs to
+/// the preview fly-in only.
+const Duration liveCloseFollowEaseIn = Duration(milliseconds: 1000);
+
+/// Effective Live Follow zoom: a manual zoom the user made during
+/// Live (+/−, pinch, double-tap) wins and is respected until
+/// Overview / My Location / Resume re-fits; otherwise the close
+/// follow zoom. Null [userZoom] = no manual zoom.
+double liveFollowZoom({double? userZoom}) => userZoom ?? liveCloseFollowZoom;
+
+/// True when a Live Follow gesture pause was really a zoom
+/// (pinch / double-tap): the zoom moved while the gesture ran.
+/// A drag or a rotate never changes the zoom, so the zoom delta
+/// alone tells them apart. [tolerance] (0.2) ignores the small
+/// drift of a follow-camera glide that was still settling when
+/// the gesture started — a deliberate pinch moves the zoom by
+/// far more than that.
+bool liveGestureWasZoom({
+  required double startZoom,
+  required double zoom,
+  double tolerance = 0.2,
+}) {
+  return (zoom - startZoom).abs() > tolerance;
+}
+
 /// Target zoom for a plain map tap (tap-to-zoom, Nov 11,
 /// 2026): two levels closer than the current zoom, clamped to
-/// the map's 3..19 range. Exactly at the Live follow zoom (16)
-/// the tap recentres without zooming further in — the follow
-/// camera already sits at 16, so zooming on every tap would
-/// walk the zoom up while the user is only trying to look
-/// around. (Above 16 the +2 clamp still applies: 18 -> 19.)
+/// the map's 3..19 range. Exactly at the Live follow zoom
+/// ([liveCloseFollowZoom]) the tap recentres without zooming
+/// further in — the follow camera already sits there, so zooming
+/// on every tap would walk the zoom up while the user is only
+/// trying to look around. (Above the follow zoom the +2 clamp
+/// still applies: 18 -> 19.) The 0.05 tolerance covers native
+/// zoom values landing a hair off the constant.
 double liveTapZoomTarget(double currentZoom) {
-  if (currentZoom == 16) return 16;
+  if ((currentZoom - liveCloseFollowZoom).abs() < 0.05) {
+    return liveCloseFollowZoom;
+  }
   return (currentZoom + 2).clamp(3.0, 19.0);
 }
 

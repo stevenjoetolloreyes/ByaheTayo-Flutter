@@ -19,6 +19,24 @@
 // The form is flat on the themed background (no card, no gradient,
 // no decorative shapes) with rounded inputs, per the spec's mockups.
 //
+// MINECRAFT THEME (Nov 11): the full blocky Minecraft treatment
+// from the approved sign-in preview — grass hero with the current
+// E logo as-is (white block + dirt strip), Baloo 2 headings,
+// blocky buttons/cards (3px ink borders, hard shadows), a Press
+// Start 2P pixel divider label, Nunito body, and Minecraft tap
+// animations + synthesized sounds (submit = level-up arpeggio,
+// other taps = click) via the existing sound engine. Visual-only:
+// every value, state, and tap still works exactly as before. The
+// step indicator is NOT reintroduced (it was removed Nov 11).
+// Size notes (existing sizes kept, never shrunk): the page title
+// stays 26sp (the real app's existing displaySmall size, not the
+// preview's 20sp) and button labels stay 16sp (the entry spec's
+// button size, not the preview's 15sp). The divider label is the
+// theme's 10sp pixel accent. The shell keeps the 52dp entry CTA
+// height (the Minecraft theme's Material buttons default to 40dp),
+// and text buttons use grass green in both modes (the theme's
+// deep-leaves text button is unreadable on the dark page).
+//
 // STRICT GOOGLE RULE (never weaken it):
 // - Sign In Google is LOGIN ONLY: after Google authentication, the
 //   screen looks up the EstudyanteGO profile for the Firebase UID in
@@ -51,10 +69,13 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_layout.dart';
+import '../minecraft_tap_animation.dart';
+import '../minecraft_theme.dart';
 import '../profile_repository.dart';
 import 'auth_service.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
+import 'splash_sound.dart';
 
 /// Shown when Google Sign In succeeds but no EstudyanteGO profile
 /// exists for the Firebase UID. Exact string (the strict rule requires
@@ -67,9 +88,44 @@ Future<ProfileStore> _profileStore() async {
   return ProfileStore(prefs);
 }
 
+/// Blocky 48px frame for the header icon buttons (back + theme
+/// toggle): surface fill, 2.5px ink border, 12px corners — the
+/// Minecraft icon-chip treatment. The child's own key, tooltip,
+/// and onPressed are untouched.
+class _BlockyIconButton extends StatelessWidget {
+  const _BlockyIconButton({required this.child, required this.isDark});
+
+  final Widget child;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return MinecraftTapAnimation(
+      sound: MinecraftSoundKind.click,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color:
+              isDark ? MinecraftColors.darkElevated : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark
+                ? MinecraftColors.darkBorder
+                : MinecraftColors.border,
+            width: 2.5,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: child,
+      ),
+    );
+  }
+}
+
 /// Shared entry shell for the two auth pages: header (back + theme
-/// toggle), branding, title, subtitle, then the page's own [child]
-/// form content.
+/// toggle), grass hero branding, title, subtitle, then the page's
+/// own [child] form content.
 class _AuthShell extends StatelessWidget {
   const _AuthShell({
     required this.themeMode,
@@ -92,12 +148,60 @@ class _AuthShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = entryEffectiveBrightness(themeMode, context);
     final colors = entryColorsFor(brightness);
+    final isDark = brightness == Brightness.dark;
     final onThemeModeChanged = this.onThemeModeChanged;
     final onBack = this.onBack;
+    // Minecraft theme for the auth pages, with the entry spec's
+    // 52dp CTA height kept (the theme's Material buttons default
+    // to 40dp) and grass text buttons (readable on the dark page
+    // too). The outlined button's border and label follow the
+    // brightness so they stay visible in dark mode.
+    final outlineFg = isDark
+        ? MinecraftColors.grassGreen
+        : MinecraftColors.deepLeaves;
+    final theme = minecraftThemeData(brightness).copyWith(
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: MinecraftColors.grassGreen,
+          textStyle: MinecraftText.button(
+            color: MinecraftColors.grassGreen,
+            fontSize: 16,
+          ),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: MinecraftColors.grassGreen,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor:
+              MinecraftColors.grassGreen.withValues(alpha: 0.4),
+          minimumSize: const Size.fromHeight(52),
+          shape: MinecraftShapes.buttonShape,
+          textStyle: MinecraftText.button(
+            color: Colors.white,
+            fontSize: 16,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: outlineFg,
+          minimumSize: const Size.fromHeight(52),
+          side: BorderSide(
+            color: isDark
+                ? MinecraftColors.darkBorder
+                : MinecraftColors.border,
+            width: MinecraftShapes.buttonBorderWidth,
+          ),
+          shape: MinecraftShapes.buttonShape,
+          textStyle: MinecraftText.button(color: outlineFg, fontSize: 16),
+        ),
+      ),
+    );
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: entryOverlayStyle(brightness),
       child: Theme(
-        data: entryThemeData(brightness),
+        data: theme,
         child: Scaffold(
           backgroundColor: colors.background,
           body: SafeArea(
@@ -111,71 +215,139 @@ class _AuthShell extends StatelessWidget {
                   Row(
                     children: [
                       if (onBack != null)
-                        IconButton(
-                          key: const Key('auth-back'),
-                          tooltip: 'Back',
-                          onPressed: onBack,
-                          icon: const Icon(Icons.arrow_back),
+                        _BlockyIconButton(
+                          isDark: isDark,
+                          child: IconButton(
+                            key: const Key('auth-back'),
+                            tooltip: 'Back',
+                            onPressed: onBack,
+                            icon: const Icon(Icons.arrow_back),
+                          ),
                         )
                       else
                         const SizedBox(width: 48),
                       const Spacer(),
                       if (onThemeModeChanged != null)
-                        ThemeModeToggle(
-                          mode: themeMode,
-                          onModeChanged: onThemeModeChanged,
+                        _BlockyIconButton(
+                          isDark: isDark,
+                          child: ThemeModeToggle(
+                            mode: themeMode,
+                            onModeChanged: onThemeModeChanged,
+                          ),
                         )
                       else
                         const SizedBox(width: 48),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.s16),
-                  // Branding.
-                  Center(
-                    child: Image.asset(
-                      'assets/images/estudyantego_logo.png',
-                      width: 96,
-                      height: 96,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.s12),
-                  Center(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text.rich(
-                        TextSpan(
-                          style: AppText.displayMedium
-                              .copyWith(color: colors.primaryText),
-                          children: [
-                            const TextSpan(text: 'Estudyante'),
-                            TextSpan(
-                              text: 'GO',
-                              style: TextStyle(color: colors.primary),
-                            ),
-                          ],
-                        ),
+                  // Grass hero: the Minecraft header — grass
+                  // gradient, the current E logo as-is in a white
+                  // block with a dirt strip, Baloo 2 wordmark
+                  // (white 'Estudyante', gold 'GO'), and the
+                  // tagline in white. Kept compact (snug logo
+                  // block, tight padding) so the submit button
+                  // stays above the fold on a 600px viewport.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          MinecraftColors.grassBright,
+                          MinecraftColors.grassMid,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      borderRadius: BorderRadius.circular(
+                        MinecraftShapes.cardRadius,
+                      ),
+                      border: MinecraftShapes.blockBorder,
+                      boxShadow: const [MinecraftShapes.cardShadow],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 102,
+                          height: 102,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(
+                              MinecraftShapes.cardRadius,
+                            ),
+                            border: MinecraftShapes.blockBorder,
+                            boxShadow: const [MinecraftShapes.cardShadow],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              MinecraftShapes.cardRadius - 3,
+                            ),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: Center(
+                                    child: Image.asset(
+                                      'assets/images/estudyantego_logo.png',
+                                      width: 96,
+                                      height: 96,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  height: 6,
+                                  color: MinecraftColors.dirtBrown,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.s8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text.rich(
+                            TextSpan(
+                              style: MinecraftText.heading(
+                                color: Colors.white,
+                                fontSize: 28,
+                              ),
+                              children: [
+                                const TextSpan(text: 'Estudyante'),
+                                TextSpan(
+                                  text: 'GO',
+                                  style: TextStyle(
+                                    color: MinecraftColors.gold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.s4),
+                        Text(
+                          'Your Student Companion',
+                          style: MinecraftText.body(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.s4),
-                  Center(
-                    child: Text(
-                      'Your Student Companion',
-                      style: AppText.label
-                          .copyWith(color: colors.secondaryText),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 16),
                   Text(
                     title,
-                    style: AppText.displaySmall
-                        .copyWith(color: colors.primaryText),
+                    style: MinecraftText.heading(
+                      color: colors.primaryText,
+                      fontSize: 26,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s4),
                   Text(
                     subtitle,
-                    style: AppText.bodySmall
-                        .copyWith(color: colors.secondaryText),
+                    style: MinecraftText.body(
+                      color: colors.secondaryText,
+                      fontSize: 15,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s24),
                   child,
@@ -189,7 +361,8 @@ class _AuthShell extends StatelessWidget {
   }
 }
 
-/// Google button shared by both pages: white, with the Google "G".
+/// Google button shared by both pages: white, with the Google "G",
+/// a 3px ink border, and 12px blocky corners.
 class _GoogleButton extends StatelessWidget {
   const _GoogleButton({
     required this.enabled,
@@ -203,15 +376,21 @@ class _GoogleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton(
+    final button = ElevatedButton(
       onPressed: enabled ? onPressed : null,
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF17211D),
+        foregroundColor: MinecraftColors.ink,
         disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
         minimumSize: const Size.fromHeight(52),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(
+            MinecraftShapes.buttonRadius,
+          ),
+          side: const BorderSide(
+            color: MinecraftColors.border,
+            width: MinecraftShapes.buttonBorderWidth,
+          ),
         ),
         elevation: 0,
       ),
@@ -233,10 +412,13 @@ class _GoogleButton extends StatelessWidget {
                   height: 24,
                 ),
                 const SizedBox(width: 12),
-                const Flexible(
+                Flexible(
                   child: Text(
                     'Continue with Google',
-                    style: AppText.button,
+                    style: MinecraftText.button(
+                      color: MinecraftColors.ink,
+                      fontSize: 16,
+                    ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
@@ -244,11 +426,16 @@ class _GoogleButton extends StatelessWidget {
               ],
             ),
     );
+    return MinecraftTapAnimation(
+      sound: MinecraftSoundKind.click,
+      enabled: enabled && !loading,
+      child: button,
+    );
   }
 }
 
 /// "OR SIGN IN WITH" / "OR SIGN UP WITH" divider, shared by both
-/// pages.
+/// pages. The label is the Press Start 2P pixel accent.
 class _OrDivider extends StatelessWidget {
   const _OrDivider({required this.label, required this.colors});
 
@@ -264,8 +451,7 @@ class _OrDivider extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12),
           child: Text(
             label,
-            style: AppText.captionSemiBold
-                .copyWith(color: colors.secondaryText),
+            style: MinecraftText.pixel(color: colors.secondaryText),
           ),
         ),
         const Expanded(child: Divider()),
@@ -485,13 +671,19 @@ class _SignInScreenState extends State<SignInScreen> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+          MinecraftTapAnimation(
+            sound: MinecraftSoundKind.click,
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Send link'),
+          MinecraftTapAnimation(
+            sound: MinecraftSoundKind.click,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Send link'),
+            ),
           ),
         ],
       ),
@@ -534,7 +726,10 @@ class _SignInScreenState extends State<SignInScreen> {
               padding: AppLayout.cardPadding,
               decoration: BoxDecoration(
                 color: colors.error.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(
+                  MinecraftShapes.cardRadius,
+                ),
+                border: Border.all(color: colors.error, width: 2.5),
               ),
               child: Row(
                 children: [
@@ -545,7 +740,9 @@ class _SignInScreenState extends State<SignInScreen> {
                       'Firebase is not configured yet, so '
                       'sign-in is unavailable in this build. '
                       'Add google-services.json to enable it.',
-                      style: TextStyle(color: colors.primaryText),
+                      style: MinecraftText.body(
+                        color: colors.primaryText,
+                      ),
                     ),
                   ),
                 ],
@@ -588,51 +785,62 @@ class _SignInScreenState extends State<SignInScreen> {
           const SizedBox(height: AppSpacing.s8),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _configured ? _forgotPassword : null,
-              child: const Text('Forgot password?'),
+            child: MinecraftTapAnimation(
+              sound: MinecraftSoundKind.click,
+              enabled: _configured,
+              child: TextButton(
+                onPressed: _configured ? _forgotPassword : null,
+                child: const Text('Forgot password?'),
+              ),
             ),
           ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.s12),
             Text(
               _error!,
-              style: TextStyle(color: colors.error),
+              style: MinecraftText.body(color: colors.error),
             ),
           ],
           if (_noAccount) ...[
             const SizedBox(height: AppSpacing.s12),
-            OutlinedButton(
-              onPressed: widget.onCreateAccountRequested,
-              child: const Text('Create Account'),
+            MinecraftTapAnimation(
+              sound: MinecraftSoundKind.click,
+              child: OutlinedButton(
+                onPressed: widget.onCreateAccountRequested,
+                child: const Text('Create Account'),
+              ),
             ),
           ],
-          const SizedBox(height: AppSpacing.s16),
-          FilledButton(
-            onPressed: (_busy || !_configured) ? null : _submit,
-            child: _loading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.onPrimary,
-                    ),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.login, size: 20),
-                      const SizedBox(width: 8),
-                      const Flexible(
-                        child: Text(
-                          'Sign In',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
+          const SizedBox(height: 12),
+          MinecraftTapAnimation(
+            sound: MinecraftSoundKind.levelup,
+            enabled: !_busy && _configured,
+            child: FilledButton(
+              onPressed: (_busy || !_configured) ? null : _submit,
+              child: _loading
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colors.onPrimary,
                       ),
-                    ],
-                  ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.login, size: 20),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Sign In',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
           const SizedBox(height: AppSpacing.s20),
           _OrDivider(label: 'OR SIGN IN WITH', colors: colors),
@@ -646,26 +854,34 @@ class _SignInScreenState extends State<SignInScreen> {
           Text(
             'On Sign In, Google is login-only — no account, no entry.',
             textAlign: TextAlign.center,
-            style:
-                AppText.bodySmall.copyWith(color: colors.secondaryText),
+            style: MinecraftText.body(
+              color: colors.secondaryText,
+              fontSize: 15,
+            ),
           ),
           const SizedBox(height: AppSpacing.s16),
-          TextButton(
-            onPressed: _busy ? null : widget.onCreateAccountRequested,
-            child: Text.rich(
-              TextSpan(
-                style:
-                    AppText.bodySmall.copyWith(color: colors.secondaryText),
-                children: [
-                  const TextSpan(text: "Don't have an account? "),
-                  TextSpan(
-                    text: 'Create Account',
-                    style: TextStyle(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
+          MinecraftTapAnimation(
+            sound: MinecraftSoundKind.click,
+            enabled: !_busy,
+            child: TextButton(
+              onPressed: _busy ? null : widget.onCreateAccountRequested,
+              child: Text.rich(
+                TextSpan(
+                  style: MinecraftText.body(
+                    color: colors.secondaryText,
+                    fontSize: 15,
                   ),
-                ],
+                  children: [
+                    const TextSpan(text: "Don't have an account? "),
+                    TextSpan(
+                      text: 'Create Account',
+                      style: TextStyle(
+                        color: colors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -852,7 +1068,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               padding: AppLayout.cardPadding,
               decoration: BoxDecoration(
                 color: colors.error.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(
+                  MinecraftShapes.cardRadius,
+                ),
+                border: Border.all(color: colors.error, width: 2.5),
               ),
               child: Row(
                 children: [
@@ -863,7 +1082,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       'Firebase is not configured yet, so '
                       'sign-in is unavailable in this build. '
                       'Add google-services.json to enable it.',
-                      style: TextStyle(color: colors.primaryText),
+                      style: MinecraftText.body(
+                        color: colors.primaryText,
+                      ),
                     ),
                   ),
                 ],
@@ -918,35 +1139,39 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             const SizedBox(height: AppSpacing.s12),
             Text(
               _error!,
-              style: TextStyle(color: colors.error),
+              style: MinecraftText.body(color: colors.error),
             ),
           ],
-          const SizedBox(height: AppSpacing.s16),
-          FilledButton(
-            onPressed: (_busy || !_configured) ? null : _submit,
-            child: _loading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.onPrimary,
-                    ),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.person_add_outlined, size: 20),
-                      const SizedBox(width: 8),
-                      const Flexible(
-                        child: Text(
-                          'Create Account',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
+          const SizedBox(height: 12),
+          MinecraftTapAnimation(
+            sound: MinecraftSoundKind.levelup,
+            enabled: !_busy && _configured,
+            child: FilledButton(
+              onPressed: (_busy || !_configured) ? null : _submit,
+              child: _loading
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colors.onPrimary,
                       ),
-                    ],
-                  ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person_add_outlined, size: 20),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Create Account',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
           const SizedBox(height: AppSpacing.s20),
           _OrDivider(label: 'OR SIGN UP WITH', colors: colors),
@@ -960,26 +1185,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           Text(
             'Google here creates your account and profile.',
             textAlign: TextAlign.center,
-            style:
-                AppText.bodySmall.copyWith(color: colors.secondaryText),
+            style: MinecraftText.body(
+              color: colors.secondaryText,
+              fontSize: 15,
+            ),
           ),
           const SizedBox(height: AppSpacing.s16),
-          TextButton(
-            onPressed: _busy ? null : widget.onSignInRequested,
-            child: Text.rich(
-              TextSpan(
-                style:
-                    AppText.bodySmall.copyWith(color: colors.secondaryText),
-                children: [
-                  const TextSpan(text: 'Already have an account? '),
-                  TextSpan(
-                    text: 'Sign In',
-                    style: TextStyle(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
+          MinecraftTapAnimation(
+            sound: MinecraftSoundKind.click,
+            enabled: !_busy,
+            child: TextButton(
+              onPressed: _busy ? null : widget.onSignInRequested,
+              child: Text.rich(
+                TextSpan(
+                  style: MinecraftText.body(
+                    color: colors.secondaryText,
+                    fontSize: 15,
                   ),
-                ],
+                  children: [
+                    const TextSpan(text: 'Already have an account? '),
+                    TextSpan(
+                      text: 'Sign In',
+                      style: TextStyle(
+                        color: colors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -190,9 +190,12 @@ void main() {
       expect(liveTapZoomTarget(13), 15);
     });
 
-    test('exactly at the Live follow zoom (16) the tap recentres',
+    test('exactly at the Live follow zoom (18.3) the tap recentres',
         () {
-      expect(liveTapZoomTarget(16), 16);
+      expect(liveTapZoomTarget(liveCloseFollowZoom), liveCloseFollowZoom);
+      // 16 is no longer the follow zoom (Nov 11 close-follow):
+      // a tap there steps by 2 as usual.
+      expect(liveTapZoomTarget(16), 18);
     });
 
     test('zoom 18 taps to 19 (clamped at the max)', () {
