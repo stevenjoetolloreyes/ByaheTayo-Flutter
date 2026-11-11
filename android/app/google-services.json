@@ -1,29 +1,11 @@
 {
   "project_info": {
     "project_number": "832009508458",
+    "firebase_url": "https://estudyantego-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "estudyantego",
     "storage_bucket": "estudyantego.firebasestorage.app"
   },
   "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:832009508458:android:86a7bbe9c4483225655c13",
-        "android_client_info": {
-          "package_name": "com.estudyanteGo.app"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyD6ja3KS8-9c5O7SwApkIWF0yQveoTVeT4"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
     {
       "client_info": {
         "mobilesdk_app_id": "1:832009508458:android:977e2d637bcacc9d655c13",
@@ -31,7 +13,28 @@
           "package_name": "com.estudyantego.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "832009508458-1j86qsdl9alcno0bqfulsbg39at2n45t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.estudyantego.app",
+            "certificate_hash": "89d1b79ad3344b1344a5d72694a1e863953f8534"
+          }
+        },
+        {
+          "client_id": "832009508458-tkdk8befvbjubtlbjjf1nk5c502b5eof.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.estudyantego.app",
+            "certificate_hash": "78cdac146a102886fd1b26b276fc6c232da3c13a"
+          }
+        },
+        {
+          "client_id": "832009508458-jtheai4blghq9h7j2v9j45lgbutl0ddh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD6ja3KS8-9c5O7SwApkIWF0yQveoTVeT4"
@@ -39,7 +42,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "832009508458-jtheai4blghq9h7j2v9j45lgbutl0ddh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
