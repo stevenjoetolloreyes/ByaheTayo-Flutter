@@ -54,6 +54,8 @@ import 'entry_theme.dart';
 import 'onboarding_state.dart';
 import 'splash_sound.dart';
 
+import '../minecraft_theme.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({
     super.key,
@@ -225,8 +227,8 @@ class _SplashScreenState extends State<SplashScreen>
     final isDark = brightness == Brightness.dark;
     // Emerald adaptations of the spec's yellow / teal accents.
     final accent = isDark
-        ? const Color(0xFF34D399)
-        : const Color(0xFF16A34A);
+        ? MinecraftColors.emerald
+        : MinecraftColors.grassGreen;
     final roadBase =
         Color.lerp(colors.background, colors.primary, 0.08) ??
             colors.background;
@@ -487,7 +489,7 @@ class _SplashScreenState extends State<SplashScreen>
                                         backgroundColor: colors.border,
                                         valueColor:
                                             const AlwaysStoppedAnimation<Color>(
-                                          Color(0xFF34D399),
+                                          MinecraftColors.emerald,
                                         ),
                                       ),
                                       const SizedBox(height: 12),

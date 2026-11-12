@@ -51,6 +51,23 @@ class FakeProfilePhotoStorage implements ProfilePhotoStorage {
   /// download "failed" (or was never attempted).
   String? cachePathToReturn;
 
+  /// UIDs whose photo [deletePhoto] "deleted" (false = none existed).
+  final Map<String, bool> deletedPhotos = {};
+
+  /// When true, [deletePhoto] throws (offline / permission-denied).
+  bool failDelete = false;
+
+  /// Whether a photo "exists" for [deletePhoto] to delete.
+  bool photoExists = true;
+
+  @override
+  Future<bool> deletePhoto(String uid) async {
+    if (failDelete) throw Exception('Simulated Storage failure.');
+    final existed = photoExists;
+    deletedPhotos[uid] = existed;
+    return existed;
+  }
+
   @override
   Future<String> uploadPhoto(String uid, File file) async {
     if (failUpload) throw Exception('Simulated Storage failure.');

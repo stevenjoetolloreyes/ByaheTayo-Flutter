@@ -103,7 +103,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.s16),
-              const Text(
+              Text(
                 'Check your email',
                 style: AppText.titleMedium,
               ),

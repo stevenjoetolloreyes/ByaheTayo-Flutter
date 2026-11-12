@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared widget size chip ("4×2" / "4×3" / "3×3"): solid ink, blocky 8dp corners. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1C2B12" />
+    <corners android:radius="8dp" />
+</shape>

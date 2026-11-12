@@ -444,7 +444,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
           if (weeklyKeys.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Text('Weekly summaries',
+            Text('Weekly summaries',
                 style: AppText.sectionTitle),
             const SizedBox(height: AppSpacing.s8),
             for (final k in weeklyKeys.take(8))
@@ -459,7 +459,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ],
           if (monthlyKeys.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Text('Monthly summaries',
+            Text('Monthly summaries',
                 style: AppText.sectionTitle),
             const SizedBox(height: AppSpacing.s8),
             for (final k in monthlyKeys)

@@ -14,10 +14,10 @@ void main() {
       expect(AppLayout.pagePaddingLarge, const EdgeInsets.all(24));
     });
 
-    test('card geometry: 16 padding, 12 gaps, 16 corners', () {
+    test('card geometry: 16 padding, 12 gaps, 14 corners', () {
       expect(AppLayout.cardPadding, const EdgeInsets.all(16));
       expect(AppLayout.cardGap, 12);
-      expect(AppLayout.cardRadius, 16);
+      expect(AppLayout.cardRadius, 14);
     });
 
     test('header/footer rhythm is 16', () {
@@ -92,9 +92,9 @@ void main() {
             child: ListView(
               padding: AppLayout.pagePaddingTab,
               children: [
-                const Text('Page title', style: AppText.pageTitle),
+                Text('Page title', style: AppText.pageTitle),
                 const SizedBox(height: AppLayout.headerGap),
-                const AppCard(
+                AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -120,7 +120,7 @@ void main() {
                   ),
                 ),
                 const SizedBox(height: AppLayout.cardGap),
-                const AppCard(
+                AppCard(
                   child: Text('Second card', style: AppText.cardTitle),
                 ),
               ],

@@ -206,7 +206,7 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 20, 0, 5),
               child: Text(
-                'ESTUDYANTEGO · VERSION 1.0.0',
+                'ESTUDYANTEGO · VERSION 3.5.1',
                 textAlign: TextAlign.center,
                 style: MinecraftText.pixel(color: muted, fontSize: 8),
               ),
@@ -251,7 +251,7 @@ class _AboutEstudyanteGOScreenState extends State<AboutEstudyanteGOScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Version 1.0.0 · com.estudyantego.app',
+          'Version 3.5.1 · com.estudyantego.app',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 12, color: muted),
         ),

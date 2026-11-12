@@ -20,6 +20,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../minecraft_theme.dart';
+
 /// Total entrance length. The last item starts at 14 x 70 ms and
 /// runs 500 ms, so everything lands by ~1.5 s; the remaining time
 /// is the tail for the points count-up and the confetti burst.
@@ -135,9 +137,9 @@ class _ConfettiPainter extends CustomPainter {
 
   static const _colors = <Color>[
     Color(0xFFF59E0B), // amber — the streak flame
-    Color(0xFF16A34A), // brand emerald
-    Color(0xFF34D399), // bright accent
-    Color(0xFFFBBF24), // gold
+    MinecraftColors.grassGreen, // brand emerald
+    MinecraftColors.emerald, // bright accent
+    MinecraftColors.gold, // gold
     Colors.white,
   ];
 

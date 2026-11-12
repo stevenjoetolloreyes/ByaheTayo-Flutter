@@ -8,16 +8,25 @@
 // only showed the OS permission status and opened a permission
 // dialog). The old page's four pre-checked toggles existed only in
 // the Gemini preview HTML — the real app never had them — so this
-// screen creates four REAL local toggles, each wired to a
+// screen creates ten REAL local toggles, each wired to a
 // [NotificationPreferences] field and to the local schedule:
 //
-// * Class reminders — 15 minutes before each class starts.
-// * Assignment reminders — 8:00 AM the day before an assignment or
-//   exam is due.
-// * School reminders — 8:00 AM the day before a school event or a
+// * Class reminders — 30 minutes before each class starts, with
+//   the bus fare and trip time.
+// * Quiz / exam reminders — 8:00 PM the night before an exam.
+// * Assignment reminders — 8:00 AM the day before an assignment
+//   is due.
+// * Allowance / budget alerts — 8:00 AM while the allowance is
+//   used up or a monthly budget is over.
+// * 7-Day sign-in streak — 7:15 AM when the streak would break.
+// * Bible Verse / Daily Quote morning — 7:00 AM.
+// * School reminders — 8:00 AM the day before a school event or
 //   holiday.
 // * Daily login reminder — once a day, at a time the user picks
 //   (default 8:00 AM).
+// * Chat Support replies + App Reviews replies — announced when
+//   the app opens and finds an unread admin reply (no push server,
+//   so they cannot arrive while the app is closed).
 //
 // Every change saves the preference immediately and re-runs the
 // schedule refresh on [notificationService]. Friend requests,
@@ -118,7 +127,8 @@ class _NotificationSettingsScreenState
           context: context,
           title: 'Allow notifications?',
           message: 'EstudyanteGO can send you reminders about your '
-              'classes, assignments, school events and daily sign-in. '
+              'classes, exams, allowance, sign-in streak and verse, '
+              'and tell you when Steven replies. '
               'You can change this anytime in your device settings.',
           actions: const [
             IosAlertAction<bool>('Not now', value: false),
@@ -270,7 +280,8 @@ class _NotificationSettingsScreenState
                   key: const Key('class-reminders-toggle'),
                   title: const Text('Class reminders'),
                   subtitle: const Text(
-                      '15 minutes before each class starts.'),
+                      '30 minutes before each class starts, with your '
+                      'bus fare and trip time.'),
                   value: prefs?.classReminders ?? true,
                   onChanged: (value) {
                     final current = _prefs;
@@ -280,17 +291,70 @@ class _NotificationSettingsScreenState
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 IosSwitchRow(
+                  key: const Key('quiz-exam-reminders-toggle'),
+                  title: const Text('Quiz / exam reminders'),
+                  subtitle: const Text(
+                      '8:00 PM the night before an exam.'),
+                  value: prefs?.quizReminders ?? true,
+                  onChanged: (value) {
+                    final current = _prefs;
+                    if (current == null) return;
+                    _updatePrefs(current.copyWith(quizReminders: value));
+                  },
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                IosSwitchRow(
                   key: const Key('assignment-reminders-toggle'),
                   title: const Text('Assignment reminders'),
                   subtitle: const Text(
-                      '8:00 AM the day before an assignment or exam '
-                      'is due.'),
+                      '8:00 AM the day before an assignment is due.'),
                   value: prefs?.assignmentReminders ?? true,
                   onChanged: (value) {
                     final current = _prefs;
                     if (current == null) return;
                     _updatePrefs(
                         current.copyWith(assignmentReminders: value));
+                  },
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                IosSwitchRow(
+                  key: const Key('allowance-alerts-toggle'),
+                  title: const Text('Allowance / budget alerts'),
+                  subtitle: const Text(
+                      '8:00 AM when your allowance runs out or a '
+                      'monthly budget goes over.'),
+                  value: prefs?.allowanceAlerts ?? true,
+                  onChanged: (value) {
+                    final current = _prefs;
+                    if (current == null) return;
+                    _updatePrefs(
+                        current.copyWith(allowanceAlerts: value));
+                  },
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                IosSwitchRow(
+                  key: const Key('streak-reminder-toggle'),
+                  title: const Text('7-Day sign-in streak'),
+                  subtitle: const Text(
+                      '7:15 AM when your streak is about to break.'),
+                  value: prefs?.streakReminder ?? true,
+                  onChanged: (value) {
+                    final current = _prefs;
+                    if (current == null) return;
+                    _updatePrefs(current.copyWith(streakReminder: value));
+                  },
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                IosSwitchRow(
+                  key: const Key('verse-morning-toggle'),
+                  title: const Text('Bible Verse / Daily Quote morning'),
+                  subtitle: const Text(
+                      "Today's verse or quote at 7:00 AM."),
+                  value: prefs?.verseMorning ?? true,
+                  onChanged: (value) {
+                    final current = _prefs;
+                    if (current == null) return;
+                    _updatePrefs(current.copyWith(verseMorning: value));
                   },
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
@@ -351,6 +415,51 @@ class _NotificationSettingsScreenState
                 ],
               ],
             ),
+            const SizedBox(height: 20),
+            Text(
+              'REPLIES',
+              style: MinecraftText.pixel(color: muted, fontSize: 9),
+            ),
+            const SizedBox(height: 8),
+            _sectionCard(
+              context,
+              children: [
+                IosSwitchRow(
+                  key: const Key('chat-replies-toggle'),
+                  title: const Text('Chat Support replies'),
+                  subtitle: const Text(
+                      'When Steven replies in Chat Support.'),
+                  value: prefs?.chatReplies ?? true,
+                  onChanged: (value) {
+                    final current = _prefs;
+                    if (current == null) return;
+                    _updatePrefs(current.copyWith(chatReplies: value));
+                  },
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                IosSwitchRow(
+                  key: const Key('review-replies-toggle'),
+                  title: const Text('App Reviews replies'),
+                  subtitle: const Text(
+                      'When EstudyanteGO replies to your review.'),
+                  value: prefs?.reviewReplies ?? true,
+                  onChanged: (value) {
+                    final current = _prefs;
+                    if (current == null) return;
+                    _updatePrefs(current.copyWith(reviewReplies: value));
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Replies are checked when you open the app — they '
+              'cannot arrive while the app is closed until the full '
+              'push system is built.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: muted,
+                  ),
+            ),
             if (!_exactAlarms) ...[
               const SizedBox(height: 20),
               _sectionCard(
@@ -389,6 +498,15 @@ class _NotificationSettingsScreenState
               'Friend requests, community likes and comments, and '
               'announcements need the full push system — not built '
               'yet. Reminders here are scheduled on this device only.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: muted,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tapping a class, exam or assignment reminder opens '
+              'Schedule; an allowance alert opens Money; the morning '
+              'verse opens the Bible screen.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: muted,
                   ),

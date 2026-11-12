@@ -43,8 +43,8 @@ enum ErrorSeverity { info, warning, error, fatal }
 /// in this change: adding one is an open decision for the parent (see
 /// REPORT.md). Until then this constant must be bumped together with
 /// pubspec.yaml, and the value is honest about its source.
-const String kDiagnosticsAppVersion = '1.0.0';
-const String kDiagnosticsAppBuildNumber = '1';
+const String kDiagnosticsAppVersion = '3.5.1';
+const String kDiagnosticsAppBuildNumber = '2';
 
 /// One structured log entry. All fields are JSON-safe.
 class ErrorLogEntry {

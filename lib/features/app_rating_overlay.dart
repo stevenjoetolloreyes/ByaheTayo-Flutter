@@ -22,6 +22,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'app_rating.dart';
+import 'minecraft_theme.dart';
 import 'top_popup.dart';
 
 /// The improve topics offered in the "What can we improve?" step.
@@ -64,20 +65,22 @@ const int appRatingCommentMaxLength = 500;
 /// immediately on unlock; only the auto-open waits.
 const Duration appRatingAutoOpenDelay = Duration(milliseconds: 900);
 
-// Preview colors — the rating card is the preview's dark emerald in
-// either app theme, so these are fixed, not theme-derived.
+// Preview colors — the rating card is dark in either app theme, so
+// these are fixed, not theme-derived. Minecraft palette (Nov 12,
+// 2026 audit): the dark surfaces are the Minecraft dark tokens and
+// the brand greens are grass / deep leaves.
 const Color _appText = Color(0xFFEEF7F0);
-const Color _appTextSoft = Color(0xFF9DB8A6);
-const Color _appSurface = Color(0xFF13211A);
-const Color _appSurface2 = Color(0xFF182A20);
-const Color _appLine = Color(0xFF24402F);
-const Color _appBrand = Color(0xFF22C55E);
-const Color _appBrandDeep = Color(0xFF16A34A);
-const Color _starOn = Color(0xFFFBBF24);
-const Color _starOff = Color(0xFF33503E);
-const Color _cardBg = Color(0xFF101D15);
-const Color _cardBorder = Color(0xFF2B4A36);
-const Color _placeholderColor = Color(0xFF5F7A68);
+const Color _appTextSoft = MinecraftColors.darkSubtext;
+const Color _appSurface = MinecraftColors.darkBackground;
+const Color _appSurface2 = MinecraftColors.darkElevated;
+const Color _appLine = MinecraftColors.darkBorder;
+const Color _appBrand = MinecraftColors.grassGreen;
+const Color _appBrandDeep = MinecraftColors.deepLeaves;
+const Color _starOn = MinecraftColors.gold;
+const Color _starOff = MinecraftColors.darkBorder;
+const Color _cardBg = MinecraftColors.darkCard;
+const Color _cardBorder = MinecraftColors.darkBorder;
+const Color _placeholderColor = MinecraftColors.darkSubtext;
 
 /// Rating words, one per star (preview).
 const List<String> _ratingWords = <String>[
@@ -408,7 +411,10 @@ class _RatePillState extends State<_RatePill>
           child: Ink(
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: <Color>[Color(0xFF34D399), Color(0xFF16A34A)],
+                colors: <Color>[
+                  MinecraftColors.emerald,
+                  MinecraftColors.grassGreen,
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -416,7 +422,7 @@ class _RatePillState extends State<_RatePill>
               boxShadow: <BoxShadow>[
                 BoxShadow(
                   color:
-                      const Color(0xFF16A34A).withValues(alpha: 0.55),
+                      MinecraftColors.grassGreen.withValues(alpha: 0.55),
                   blurRadius: 30,
                   offset: const Offset(0, 16),
                   spreadRadius: -8,
@@ -949,7 +955,7 @@ class _RatingCardState extends State<_RatingCard> {
                                 color: _placeholderColor,
                               ),
                               filled: true,
-                              fillColor: const Color(0xFF0C1410),
+                              fillColor: MinecraftColors.darkBackground,
                               contentPadding:
                                   const EdgeInsets.symmetric(
                                 horizontal: 11,
@@ -992,7 +998,7 @@ class _RatingCardState extends State<_RatingCard> {
                     const SizedBox(height: 8),
                     Text(
                       _error!,
-                      style: const TextStyle(color: Color(0xFFF87171)),
+                      style: const TextStyle(color: MinecraftColors.heartRed),
                     ),
                   ],
                 ],
@@ -1073,7 +1079,10 @@ class _LogoBadge extends StatelessWidget {
       height: 44,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: <Color>[Color(0xFF22C55E), Color(0xFF14532D)],
+          colors: <Color>[
+            MinecraftColors.grassGreen,
+            MinecraftColors.deepLeaves,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

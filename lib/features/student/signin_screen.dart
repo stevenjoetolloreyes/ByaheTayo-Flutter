@@ -35,6 +35,7 @@ import 'package:flutter/material.dart';
 
 import '../ad_service.dart';
 import '../app_layout.dart';
+import '../local_notifications.dart';
 import '../minecraft_tap_animation.dart';
 import '../minecraft_theme.dart';
 import '../points_wallet_repository.dart';
@@ -131,9 +132,13 @@ class _SigninScreenState extends State<SigninScreen> {
     });
   }
 
-  Future<void> _save() => StudentStorage.saveList(
+  Future<void> _save() async {
+    await StudentStorage.saveList(
       StudentStorage.checkinsKey,
-      _records.map((r) => r.toJson()).toList());
+      _records.map((r) => r.toJson()).toList(),
+    );
+    requestLocalNotificationRefresh();
+  }
 
   Future<void> _checkIn() async {
     if (_remote) {

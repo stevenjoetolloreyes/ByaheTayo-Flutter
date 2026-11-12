@@ -63,6 +63,8 @@
 // When the service reports Firebase as not configured, the form shows
 // a clear banner and all submit buttons stay disabled — the app never
 // crashes and never fakes a sign-in.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../top_popup.dart';
 import 'package:flutter/services.dart';
@@ -72,6 +74,8 @@ import '../app_layout.dart';
 import '../minecraft_tap_animation.dart';
 import '../minecraft_theme.dart';
 import '../profile_repository.dart';
+import '../security/session_models.dart';
+import '../security/session_service.dart';
 import 'auth_service.dart';
 import 'entry_theme.dart';
 import 'onboarding_state.dart';
@@ -469,6 +473,7 @@ class SignInScreen extends StatefulWidget {
     required this.onSignedIn,
     required this.onCreateAccountRequested,
     this.profileRepository,
+    this.sessionService,
     this.themeMode = ThemeMode.dark,
     this.onThemeModeChanged,
     this.onBack,
@@ -490,6 +495,12 @@ class SignInScreen extends StatefulWidget {
   /// configured, null otherwise); null means the gate checks the
   /// local store only. Tests inject an in-memory fake here.
   final StudentProfileRepository? profileRepository;
+
+  /// Login Alerts + Session Manager: records this sign-in (and
+  /// failed attempts) in Firestore. Null in tests and when Firebase
+  /// is not configured — sign-in works exactly as before, only
+  /// without a session record.
+  final SessionService? sessionService;
 
   /// Selected theme, from the app shell.
   final ThemeMode themeMode;
@@ -554,8 +565,27 @@ class _SignInScreenState extends State<SignInScreen> {
         password: _passwordController.text,
       );
       if (!mounted) return;
+      // Session record (best-effort, never awaited: a slow or
+      // offline Firestore write must never stall the gate).
+      unawaited(() async {
+        try {
+          await widget.sessionService
+              ?.onSignedIn(user, signInMethod: 'email');
+        } catch (_) {}
+      }());
       widget.onSignedIn(user);
     } on AuthException catch (e) {
+      // Failed attempt, queued on this device and flushed into
+      // Login History after a later successful sign-in for the
+      // same email (the UID is unknown until then).
+      unawaited(() async {
+        try {
+          await widget.sessionService?.onSignInFailed(
+            email: _emailController.text.trim(),
+            reason: failureReasonForCode(e.code),
+          );
+        } catch (_) {}
+      }());
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
       if (mounted) {
@@ -609,6 +639,7 @@ class _SignInScreenState extends State<SignInScreen> {
               // Profile exists in Firestore (returning user, fresh
               // install / cleared data / new device): login
               // proceeds. The post-auth restore merges it locally.
+              _recordGoogleSignIn(user);
               widget.onSignedIn(user);
               return;
             }
@@ -627,6 +658,10 @@ class _SignInScreenState extends State<SignInScreen> {
         // No profile locally AND none in Firestore (or no remote
         // store at all): never auto-register from Sign In — sign
         // out immediately and point at Create Account instead.
+        // The rejected sign-in is recorded first (the UID is known
+        // while still signed in), so it shows in Login History as
+        // a failed attempt.
+        _recordNoAccountFailure(user);
         await widget.service.signOut();
         if (!mounted) return;
         setState(() {
@@ -635,6 +670,7 @@ class _SignInScreenState extends State<SignInScreen> {
         });
         return;
       }
+      _recordGoogleSignIn(user);
       widget.onSignedIn(user);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -645,6 +681,34 @@ class _SignInScreenState extends State<SignInScreen> {
     } finally {
       if (mounted) setState(() => _googleLoading = false);
     }
+  }
+
+  /// Records a successful Google login in the session store.
+  /// Fire-and-forget: a slow or offline write must never stall
+  /// the gate.
+  void _recordGoogleSignIn(AuthUser user) {
+    unawaited(() async {
+      try {
+        await widget.sessionService
+            ?.onSignedIn(user, signInMethod: 'google');
+      } catch (_) {}
+    }());
+  }
+
+  /// Records the login-only gate's rejection (Google succeeded but
+  /// no EstudyanteGO profile exists) as a failed attempt. The UID
+  /// is known while still signed in, so this writes directly —
+  /// still fire-and-forget, ahead of the immediate sign-out below.
+  void _recordNoAccountFailure(AuthUser user) {
+    unawaited(() async {
+      try {
+        await widget.sessionService?.recordKnownUserFailure(
+          user: user,
+          reason: 'no account found',
+          signInMethod: 'google',
+        );
+      } catch (_) {}
+    }());
   }
 
   Future<void> _forgotPassword() async {
@@ -900,6 +964,7 @@ class CreateAccountScreen extends StatefulWidget {
     required this.onAccountCreated,
     required this.onSignedIn,
     required this.onSignInRequested,
+    this.sessionService,
     this.themeMode = ThemeMode.dark,
     this.onThemeModeChanged,
     this.onBack,
@@ -920,6 +985,11 @@ class CreateAccountScreen extends StatefulWidget {
   /// The "Already have an account? Sign In" link navigates to the
   /// Sign In page — the gate swaps the destination.
   final VoidCallback onSignInRequested;
+
+  /// Login Alerts + Session Manager: records this sign-up's
+  /// sign-in in Firestore (see SignInScreen's field). Null in
+  /// tests and when Firebase is not configured.
+  final SessionService? sessionService;
 
   /// Selected theme, from the app shell.
   final ThemeMode themeMode;
@@ -991,6 +1061,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         displayName: _nameController.text.trim(),
       );
       if (!mounted) return;
+      // A created account is signed in: record the session
+      // (best-effort, never awaited — see SignInScreen._submit).
+      unawaited(() async {
+        try {
+          await widget.sessionService
+              ?.onSignedIn(user, signInMethod: 'email');
+        } catch (_) {}
+      }());
       widget.onAccountCreated(user);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -1038,6 +1116,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         );
         if (!mounted) return;
       }
+      unawaited(() async {
+        try {
+          await widget.sessionService
+              ?.onSignedIn(user, signInMethod: 'google');
+        } catch (_) {}
+      }());
       widget.onSignedIn(user);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);

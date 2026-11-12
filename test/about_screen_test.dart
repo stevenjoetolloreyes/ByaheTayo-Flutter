@@ -137,7 +137,7 @@ void main() {
       find.text('Kasama mo sa araw-araw na eskwela'),
       findsOneWidget,
     );
-    expect(find.text('Version 1.0.0 · com.estudyantego.app'), findsOneWidget);
+    expect(find.text('Version 3.5.1 · com.estudyantego.app'), findsOneWidget);
     expect(find.text('What is EstudyanteGO?'), findsOneWidget);
     expect(find.text('Fares'), findsOneWidget);
     expect(find.text('Routes & map'), findsOneWidget);
@@ -145,7 +145,7 @@ void main() {
     expect(find.text('Communities'), findsOneWidget);
     expect(find.text('Points'), findsOneWidget);
     expect(find.text('Made by a student, for students'), findsOneWidget);
-    expect(find.text('ESTUDYANTEGO · VERSION 1.0.0'), findsOneWidget);
+    expect(find.text('ESTUDYANTEGO · VERSION 3.5.1'), findsOneWidget);
     // No invented statistics anywhere on the screen.
     expect(find.textContaining('download'), findsNothing);
     expect(find.textContaining('users'), findsNothing);

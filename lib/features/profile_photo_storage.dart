@@ -52,6 +52,13 @@ abstract class ProfilePhotoStorage {
     String url, {
     Future<Directory> Function()? documentsDir,
   });
+
+  /// Deletes `profile_photos/<uid>.jpg`. Returns true when a photo
+  /// was deleted, false when none existed. A missing object is
+  /// "already deleted", never an error — callers only fail on real
+  /// Storage errors (offline, permission-denied). Used by the My
+  /// Data account-deletion flow.
+  Future<bool> deletePhoto(String uid);
 }
 
 /// Firebase implementation of [ProfilePhotoStorage].
@@ -68,6 +75,19 @@ class FirebaseProfilePhotoStorage implements ProfilePhotoStorage {
       SettableMetadata(contentType: 'image/jpeg'),
     );
     return ref.getDownloadURL();
+  }
+
+  @override
+  Future<bool> deletePhoto(String uid) async {
+    final ref = _storage.ref(profilePhotoStoragePath(uid));
+    try {
+      await ref.delete();
+      return true;
+    } on FirebaseException catch (e) {
+      // No photo stored: already deleted, not an error.
+      if (e.code == 'object-not-found') return false;
+      rethrow;
+    }
   }
 
   @override

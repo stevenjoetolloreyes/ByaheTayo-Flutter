@@ -174,7 +174,10 @@ class FirestoreStudentProfileRepository implements StudentProfileRepository {
 
   @override
   Future<void> saveProfile(String uid, StudentProfile profile) async {
-    await _doc(uid).set(profile.toDoc());
+    // Merge, never replace: toDoc() deliberately omits the
+    // admin-assigned `plan` field, and a non-merge set would silently
+    // delete it on every profile save (plan-wipe bug, fixed 3.5.1).
+    await _doc(uid).set(profile.toDoc(), SetOptions(merge: true));
   }
 }
 

@@ -16,6 +16,7 @@ import '../app_layout.dart';
 import '../minecraft_theme.dart';
 import '../community_posts.dart';
 import '../fares_tab.dart' as fares;
+import '../local_notifications.dart';
 import '../map_tab.dart' as maps;
 import 'student_data.dart';
 
@@ -59,8 +60,10 @@ class _CommuteScreenState extends State<CommuteScreen> {
     });
   }
 
-  Future<void> _saveFavs() =>
-      StudentStorage.saveStrings(StudentStorage.commuteFavsKey, _favs);
+  Future<void> _saveFavs() async {
+    await StudentStorage.saveStrings(StudentStorage.commuteFavsKey, _favs);
+    requestLocalNotificationRefresh();
+  }
   Future<void> _saveExpenses() => StudentStorage.saveList(
       StudentStorage.commuteExpensesKey,
       _expenses.map((e) => e.toJson()).toList());
@@ -151,7 +154,7 @@ class _CommuteScreenState extends State<CommuteScreen> {
             ],
           ),
           const SizedBox(height: AppLayout.headerGap),
-          const Text('Saved routes',
+          Text('Saved routes',
               style: AppText.sectionTitle),
           const SizedBox(height: AppSpacing.s8),
           if (_savedKeys.isEmpty)
@@ -232,7 +235,7 @@ class _CommuteScreenState extends State<CommuteScreen> {
                 ),
               ),
           const SizedBox(height: 20),
-          const Text('Commute expenses',
+          Text('Commute expenses',
               style: AppText.sectionTitle),
           const SizedBox(height: AppSpacing.s8),
           MinecraftCard(

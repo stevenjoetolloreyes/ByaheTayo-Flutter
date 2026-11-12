@@ -259,6 +259,17 @@ class ProfileStore {
 
   Future<void> markProfileSetupDone(String uid) =>
       _prefs.setBool(profileSetupDoneKey(uid), true);
+
+  /// Removes every local trace of [uid]'s profile: the stored JSON,
+  /// the setup-done flag, and the flat school contract key (which is
+  /// not UID-scoped — it always holds this user's school). Used by
+  /// the My Data account-deletion flow. App settings (theme,
+  /// sidebar, notification prefs) are untouched.
+  Future<void> clearProfile(String uid) async {
+    await _prefs.remove(profileDataKey(uid));
+    await _prefs.remove(profileSetupDoneKey(uid));
+    await _prefs.remove(profileSchoolKey);
+  }
 }
 
 /// Where the app should go next. Pure function of its inputs so tests

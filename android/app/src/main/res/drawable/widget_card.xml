@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared widget card: white card, 3px ink border, blocky 16dp corners.
+     Minecraft theme (Grass #58CC02, Deep Leaves #2F7A12, Dirt #9C6B30,
+     Gold #FFC800, Emerald #00D68F, Sky #1CB0F6). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFFF" />
+    <stroke
+        android:width="3dp"
+        android:color="#1C2B12" />
+    <corners android:radius="16dp" />
+</shape>

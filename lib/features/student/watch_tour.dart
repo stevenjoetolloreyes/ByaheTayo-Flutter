@@ -31,6 +31,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../minecraft_theme.dart';
+
 /// One tour stop: the feature's id (matches a registered target
 /// key), its short title, and the caption shown in the bubble.
 class WatchTourStop {
@@ -315,9 +317,9 @@ class WatchTourOverlay extends StatefulWidget {
 
 class _WatchTourOverlayState extends State<WatchTourOverlay>
     with SingleTickerProviderStateMixin {
-  static const _emerald = Color(0xFF14532D);
-  static const _emeraldAccent = Color(0xFF16A34A);
-  static const _darkBg = Color(0xFF0C1410);
+  static const _emerald = MinecraftColors.deepLeaves;
+  static const _emeraldAccent = MinecraftColors.grassGreen;
+  static const _darkBg = MinecraftColors.darkBackground;
 
   /// The current target's rect in this overlay's coordinates, or
   /// null when the target is not laid out (caption centres instead).

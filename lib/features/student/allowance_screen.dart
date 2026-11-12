@@ -24,10 +24,12 @@ import 'package:share_plus/share_plus.dart';
 import '../app_layout.dart';
 import '../minecraft_theme.dart';
 import '../ios_components.dart';
+import '../local_notifications.dart';
 import '../onboarding/splash_sound.dart';
 import '../top_popup.dart';
 import 'invoice_scan.dart';
 import 'note_extract_service.dart';
+import 'allowance_widget_service.dart';
 import 'student_data.dart';
 
 const _expenseCategories = [
@@ -287,12 +289,29 @@ class _AllowanceScreenState extends State<AllowanceScreen>
     });
   }
 
-  Future<void> _saveTxns() => StudentStorage.saveList(
-      StudentStorage.txnsKey, _txns.map((t) => t.toJson()).toList());
-  Future<void> _saveGoals() => StudentStorage.saveList(
-      StudentStorage.goalsKey, _goals.map((g) => g.toJson()).toList());
-  Future<void> _saveBudgets() => StudentStorage.saveList(
-      StudentStorage.budgetsKey, _budgets.map((b) => b.toJson()).toList());
+  Future<void> _saveTxns() async {
+    await StudentStorage.saveList(
+        StudentStorage.txnsKey, _txns.map((t) => t.toJson()).toList());
+    // Home screen widgets (Nov 11): the balance changed —
+    // push the stored transactions to the Allowance widget.
+    unawaited(AllowanceWidgetService.sync());
+    requestLocalNotificationRefresh();
+  }
+  Future<void> _saveGoals() async {
+    await StudentStorage.saveList(
+        StudentStorage.goalsKey, _goals.map((g) => g.toJson()).toList());
+    // Home screen widgets (Nov 11): a savings goal changed —
+    // push the stored goals to the Money widget.
+    unawaited(AllowanceWidgetService.sync());
+  }
+  Future<void> _saveBudgets() async {
+    await StudentStorage.saveList(
+        StudentStorage.budgetsKey, _budgets.map((b) => b.toJson()).toList());
+    // Home screen widgets (Nov 11): a budget limit changed —
+    // push the stored budgets to the Money widget.
+    unawaited(AllowanceWidgetService.sync());
+    requestLocalNotificationRefresh();
+  }
 
   void _snack(String m) {
     if (mounted) {

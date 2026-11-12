@@ -18,6 +18,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../minecraft_theme.dart';
 import 'google_events.dart';
 import 'student_data.dart';
 
@@ -142,7 +143,7 @@ class _ClassWeekGridState extends State<ClassWeekGrid> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final emerald = isDark ? const Color(0xFF34D399) : const Color(0xFF14532D);
+    final emerald = isDark ? MinecraftColors.emerald : MinecraftColors.deepLeaves;
     final days = widget.days;
     final now = widget.now;
     final todayIndex =

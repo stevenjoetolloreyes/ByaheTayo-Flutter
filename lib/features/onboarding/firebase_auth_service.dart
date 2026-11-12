@@ -68,7 +68,7 @@ class FirebaseAuthService implements AuthService {
       }
       return _fromFirebase(user);
     } on fb.FirebaseAuthException catch (e) {
-      throw AuthException(_messageForCode(e.code));
+      throw AuthException(_messageForCode(e.code), code: e.code);
     }
   }
 
@@ -93,7 +93,7 @@ class FirebaseAuthService implements AuthService {
       final fresh = _auth.currentUser;
       return fresh == null ? _fromFirebase(user) : _fromFirebase(fresh);
     } on fb.FirebaseAuthException catch (e) {
-      throw AuthException(_messageForCode(e.code));
+      throw AuthException(_messageForCode(e.code), code: e.code);
     }
   }
 
@@ -103,7 +103,7 @@ class FirebaseAuthService implements AuthService {
     try {
       await _auth.sendPasswordResetEmail(email: email);
     } on fb.FirebaseAuthException catch (e) {
-      throw AuthException(_messageForCode(e.code));
+      throw AuthException(_messageForCode(e.code), code: e.code);
     }
   }
 
@@ -117,7 +117,7 @@ class FirebaseAuthService implements AuthService {
     try {
       await user.sendEmailVerification();
     } on fb.FirebaseAuthException catch (e) {
-      throw AuthException(_messageForCode(e.code));
+      throw AuthException(_messageForCode(e.code), code: e.code);
     }
   }
 
@@ -129,6 +129,91 @@ class FirebaseAuthService implements AuthService {
     await user.reload();
     final fresh = _auth.currentUser;
     return fresh == null ? null : _fromFirebase(fresh);
+  }
+
+  @override
+  Future<List<String>> signInMethods() async {
+    if (!isConfigured) return [];
+    final user = _auth.currentUser;
+    if (user == null) return [];
+    return user.providerData.map((p) => p.providerId).toList();
+  }
+
+  @override
+  Future<void> reauthenticateWithPassword({
+    required String password,
+  }) async {
+    _requireConfigured();
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthException('No user is signed in.');
+    }
+    final email = user.email;
+    if (email == null || email.isEmpty) {
+      throw const AuthException(
+        'This account has no email sign-in. Try signing in with Google.',
+      );
+    }
+    try {
+      await user.reauthenticateWithCredential(
+        fb.EmailAuthProvider.credential(email: email, password: password),
+      );
+    } on fb.FirebaseAuthException catch (e) {
+      throw AuthException(_messageForCode(e.code));
+    }
+  }
+
+  @override
+  Future<void> reauthenticateWithGoogle() async {
+    _requireConfigured();
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthException('No user is signed in.');
+    }
+    try {
+      await _ensureGoogleInitialized();
+      final account = await GoogleSignIn.instance.authenticate();
+      final idToken = account.authentication.idToken;
+      if (idToken == null) {
+        throw const AuthException(
+          'Google sign-in did not return an ID token.',
+        );
+      }
+      await user.reauthenticateWithCredential(
+        fb.GoogleAuthProvider.credential(idToken: idToken),
+      );
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        throw const AuthException('Google sign-in was canceled.');
+      }
+      throw const AuthException('Google sign-in failed. Please try again.');
+    } on fb.FirebaseAuthException catch (e) {
+      if (e.code == 'user-mismatch') {
+        throw const AuthException(
+          'That Google account does not match this account.',
+        );
+      }
+      throw AuthException(_messageForCode(e.code));
+    }
+  }
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    _requireConfigured();
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthException('No user is signed in.');
+    }
+    try {
+      await user.delete();
+    } on fb.FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw const AuthException(
+          'Please sign in again, then try deleting your account.',
+        );
+      }
+      throw AuthException(_messageForCode(e.code));
+    }
   }
 
   @override
@@ -197,7 +282,7 @@ class FirebaseAuthService implements AuthService {
       if (e.code == GoogleSignInExceptionCode.canceled) return null;
       throw const AuthException('Google sign-in failed. Please try again.');
     } on fb.FirebaseAuthException catch (e) {
-      throw AuthException(_messageForCode(e.code));
+      throw AuthException(_messageForCode(e.code), code: e.code);
     }
   }
 

@@ -1,4 +1,5 @@
 // Widget tests for the 7-Day Sign-in page and dashboard card.
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:estudyantego/features/student/signin_screen.dart';
 import 'package:estudyantego/features/student/student_data.dart';
 import 'package:estudyantego/features/student/student_theme.dart';
@@ -57,7 +58,8 @@ void main() {
     expect(find.text('Check in today · Day 1'), findsOneWidget);
   });
 
-  testWidgets('Student Hub uses its own light emerald theme', (tester) async {
+  testWidgets('Student Hub uses the Minecraft theme (light)',
+      (tester) async {
     tester.view.physicalSize = const Size(390, 6000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -68,8 +70,11 @@ void main() {
     expect(find.text('Student Hub'), findsOneWidget);
     final context = tester.element(find.byType(StudentTab));
     final theme = Theme.of(context);
-    expect(theme.scaffoldBackgroundColor, const Color(0xFFF5F8F6));
+    // Nov 12 Minecraft audit: the Hub theme derives from the shared
+    // Minecraft theme — paper scaffold, white cards, grass primary
+    // (was: #F5F8F6 scaffold, deep-emerald #14532D primary).
+    expect(theme.scaffoldBackgroundColor, MinecraftColors.paper);
     expect(theme.colorScheme.surface, const Color(0xFFFFFFFF));
-    expect(theme.colorScheme.primary, const Color(0xFF14532D));
+    expect(theme.colorScheme.primary, MinecraftColors.grassGreen);
   });
 }

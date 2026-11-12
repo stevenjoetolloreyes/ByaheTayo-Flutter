@@ -52,24 +52,29 @@ import 'minecraft_theme.dart';
 import 'friend_sharing.dart';
 import 'friend_store.dart';
 
-// Friends-local ChatGPT design tokens (Premium Dark + Emerald Green,
-// adopted Nov 5 as a LOOSE UI base). Tab-local on purpose: the shared
-// AppLayout/AppText scale is used by other tabs and stays untouched.
-// Only the tokens this tab actually uses are defined here.
-const kFriendsDarkCard = Color(0xFF202B25);
+// Friends-local Minecraft tokens (Nov 12, 2026 audit — the tab
+// used to carry ChatGPT "Premium Dark + Emerald Green" tokens).
+// Tab-local on purpose: the shared AppLayout/AppText scale is used
+// by other tabs and stays untouched. Only the tokens this tab
+// actually uses are defined here.
+const kFriendsDarkCard = MinecraftColors.darkCard;
 const kFriendsError = MinecraftColors.heartRed;
-const kFriendsCardRadius = 20.0;
+const kFriendsCardRadius = MinecraftShapes.cardRadius;
 const kFriendsInputRadius = 14.0;
-const kFriendsPageTitle =
-    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
-const kFriendsCardHeading =
-    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+final kFriendsPageTitle = MinecraftText.heading(fontSize: 26);
+final kFriendsCardHeading = MinecraftText.title(fontSize: 16);
 
-/// ChatGPT card geometry for Friends cards: 20dp corners, theme outline.
+/// Minecraft card geometry for Friends cards: 14dp corners, 3px ink
+/// border in light mode (1px dark border in dark mode, matching the
+/// global Minecraft card theme).
 ShapeBorder _friendsCardShape(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
   return RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(kFriendsCardRadius),
-    side: BorderSide(color: Theme.of(context).colorScheme.outline),
+    side: BorderSide(
+      color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+      width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
+    ),
   );
 }
 
@@ -370,7 +375,7 @@ class _FriendsTabState extends State<FriendsTab> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
+                Text(
                   'Add Friend',
                   style: AppText.titleStrong,
                 ),
@@ -848,13 +853,7 @@ class _FriendsTabState extends State<FriendsTab> {
         children: [
           Container(
             padding: AppLayout.cardPadding,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(kFriendsCardRadius),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ),
+            decoration: MinecraftDecorations.blockCard(),
             child: QrImageView(
               data: code,
               size: AppLayout.qrSize,

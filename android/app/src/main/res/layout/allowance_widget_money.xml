@@ -1,0 +1,971 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Allowance widget — Money (4x3). Approved preview v1 (Nov 11, 2026). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card"
+    android:orientation="vertical"
+    android:padding="12dp">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/launch_image"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="MONEY"
+            android:textColor="#21301A"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:text="" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_size_chip"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:text="4×3"
+            android:textColor="#FFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Available balance"
+            android:textColor="#5A6B52"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_balance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="₱0.00"
+            android:textColor="#2F7A12"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/widget_month_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_month_in"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="In: ₱0"
+                android:textColor="#21301A"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/widget_month_out"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Out: ₱0"
+                android:textColor="#21301A"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="No transactions yet."
+            android:textColor="#5A6B52"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Spending · last 6 months"
+        android:textColor="#2F7A12"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+    <FrameLayout
+        android:id="@+id/widget_bar_0"
+        android:layout_width="18dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_horizontal">
+        <TextView
+            android:id="@+id/widget_bar_0_level_0"
+            android:layout_width="18dp"
+            android:layout_height="8dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="visible" />
+        <TextView
+            android:id="@+id/widget_bar_0_level_1"
+            android:layout_width="18dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_0_level_2"
+            android:layout_width="18dp"
+            android:layout_height="24dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_0_level_3"
+            android:layout_width="18dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_0_level_4"
+            android:layout_width="18dp"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+    </FrameLayout>
+        <TextView
+            android:id="@+id/widget_bar_0_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Jun"
+            android:textColor="#5A6B52"
+            android:textSize="10sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+    <FrameLayout
+        android:id="@+id/widget_bar_1"
+        android:layout_width="18dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_horizontal">
+        <TextView
+            android:id="@+id/widget_bar_1_level_0"
+            android:layout_width="18dp"
+            android:layout_height="8dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="visible" />
+        <TextView
+            android:id="@+id/widget_bar_1_level_1"
+            android:layout_width="18dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_1_level_2"
+            android:layout_width="18dp"
+            android:layout_height="24dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_1_level_3"
+            android:layout_width="18dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_1_level_4"
+            android:layout_width="18dp"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+    </FrameLayout>
+        <TextView
+            android:id="@+id/widget_bar_1_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Jul"
+            android:textColor="#5A6B52"
+            android:textSize="10sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+    <FrameLayout
+        android:id="@+id/widget_bar_2"
+        android:layout_width="18dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_horizontal">
+        <TextView
+            android:id="@+id/widget_bar_2_level_0"
+            android:layout_width="18dp"
+            android:layout_height="8dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="visible" />
+        <TextView
+            android:id="@+id/widget_bar_2_level_1"
+            android:layout_width="18dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_2_level_2"
+            android:layout_width="18dp"
+            android:layout_height="24dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_2_level_3"
+            android:layout_width="18dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_2_level_4"
+            android:layout_width="18dp"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+    </FrameLayout>
+        <TextView
+            android:id="@+id/widget_bar_2_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Aug"
+            android:textColor="#5A6B52"
+            android:textSize="10sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+    <FrameLayout
+        android:id="@+id/widget_bar_3"
+        android:layout_width="18dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_horizontal">
+        <TextView
+            android:id="@+id/widget_bar_3_level_0"
+            android:layout_width="18dp"
+            android:layout_height="8dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="visible" />
+        <TextView
+            android:id="@+id/widget_bar_3_level_1"
+            android:layout_width="18dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_3_level_2"
+            android:layout_width="18dp"
+            android:layout_height="24dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_3_level_3"
+            android:layout_width="18dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_3_level_4"
+            android:layout_width="18dp"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+    </FrameLayout>
+        <TextView
+            android:id="@+id/widget_bar_3_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Sep"
+            android:textColor="#5A6B52"
+            android:textSize="10sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+    <FrameLayout
+        android:id="@+id/widget_bar_4"
+        android:layout_width="18dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_horizontal">
+        <TextView
+            android:id="@+id/widget_bar_4_level_0"
+            android:layout_width="18dp"
+            android:layout_height="8dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="visible" />
+        <TextView
+            android:id="@+id/widget_bar_4_level_1"
+            android:layout_width="18dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_4_level_2"
+            android:layout_width="18dp"
+            android:layout_height="24dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_4_level_3"
+            android:layout_width="18dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_4_level_4"
+            android:layout_width="18dp"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+    </FrameLayout>
+        <TextView
+            android:id="@+id/widget_bar_4_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Oct"
+            android:textColor="#5A6B52"
+            android:textSize="10sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+    <FrameLayout
+        android:id="@+id/widget_bar_5"
+        android:layout_width="18dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_horizontal">
+        <TextView
+            android:id="@+id/widget_bar_5_level_0"
+            android:layout_width="18dp"
+            android:layout_height="8dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="visible" />
+        <TextView
+            android:id="@+id/widget_bar_5_level_1"
+            android:layout_width="18dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_5_level_2"
+            android:layout_width="18dp"
+            android:layout_height="24dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_5_level_3"
+            android:layout_width="18dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/widget_bar_5_level_4"
+            android:layout_width="18dp"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/widget_bar_track"
+            android:text=""
+            android:visibility="gone" />
+    </FrameLayout>
+        <TextView
+            android:id="@+id/widget_bar_5_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Nov"
+            android:textColor="#5A6B52"
+            android:textSize="10sp" />
+    </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_chart_total"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="No spending recorded in the last 6 months."
+        android:textColor="#21301A"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Budget utilization"
+        android:textColor="#2F7A12"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+    <TextView
+        android:id="@+id/widget_budgets_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="No budget limits set."
+        android:textColor="#5A6B52"
+        android:textSize="12sp"
+        android:visibility="gone" />
+    <LinearLayout
+        android:id="@+id/widget_budget_0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_budget_0_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Food"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_budget_0_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Spent ₱0 of ₱0"
+                android:textColor="#5A6B52"
+                android:textSize="12sp" />
+        </LinearLayout>
+                    <ProgressBar
+                        android:id="@+id/widget_budget_0_bar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:layout_marginTop="2dp"
+                        android:max="100"
+                        android:progress="0"
+                        android:progressTint="#58CC02"
+                        android:progressBackgroundTint="#D9D9D9" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_budget_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_budget_1_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Food"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_budget_1_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Spent ₱0 of ₱0"
+                android:textColor="#5A6B52"
+                android:textSize="12sp" />
+        </LinearLayout>
+                    <ProgressBar
+                        android:id="@+id/widget_budget_1_bar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:layout_marginTop="2dp"
+                        android:max="100"
+                        android:progress="0"
+                        android:progressTint="#58CC02"
+                        android:progressBackgroundTint="#D9D9D9" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_budget_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_budget_2_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Food"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_budget_2_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Spent ₱0 of ₱0"
+                android:textColor="#5A6B52"
+                android:textSize="12sp" />
+        </LinearLayout>
+                    <ProgressBar
+                        android:id="@+id/widget_budget_2_bar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:layout_marginTop="2dp"
+                        android:max="100"
+                        android:progress="0"
+                        android:progressTint="#58CC02"
+                        android:progressBackgroundTint="#D9D9D9" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/widget_budgets_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="+1 more"
+        android:textColor="#5A6B52"
+        android:textSize="11sp"
+        android:visibility="gone" />
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Savings progress"
+        android:textColor="#2F7A12"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+    <TextView
+        android:id="@+id/widget_goals_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="No savings goals yet."
+        android:textColor="#5A6B52"
+        android:textSize="12sp"
+        android:visibility="gone" />
+    <LinearLayout
+        android:id="@+id/widget_goal_0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_goal_0_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="New shoes"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_goal_0_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="₱0 of ₱0"
+                android:textColor="#5A6B52"
+                android:textSize="12sp" />
+        </LinearLayout>
+                    <ProgressBar
+                        android:id="@+id/widget_goal_0_bar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:layout_marginTop="2dp"
+                        android:max="100"
+                        android:progress="0"
+                        android:progressTint="#58CC02"
+                        android:progressBackgroundTint="#D9D9D9" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_goal_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_goal_1_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="New shoes"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_goal_1_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="₱0 of ₱0"
+                android:textColor="#5A6B52"
+                android:textSize="12sp" />
+        </LinearLayout>
+                    <ProgressBar
+                        android:id="@+id/widget_goal_1_bar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:layout_marginTop="2dp"
+                        android:max="100"
+                        android:progress="0"
+                        android:progressTint="#58CC02"
+                        android:progressBackgroundTint="#D9D9D9" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/widget_goals_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="+1 more"
+        android:textColor="#5A6B52"
+        android:textSize="11sp"
+        android:visibility="gone" />
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Recent transactions"
+        android:textColor="#2F7A12"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+    <TextView
+        android:id="@+id/widget_recent_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="No transactions yet."
+        android:textColor="#5A6B52"
+        android:textSize="12sp"
+        android:visibility="gone" />
+    <LinearLayout
+        android:id="@+id/widget_txn_0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_txn_0_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Lunch"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_txn_0_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Food · Nov 12"
+                android:textColor="#5A6B52"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_txn_0_amount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="−₱120"
+            android:textColor="#21301A"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_txn_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_txn_1_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Lunch"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_txn_1_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Food · Nov 12"
+                android:textColor="#5A6B52"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_txn_1_amount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="−₱120"
+            android:textColor="#21301A"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_txn_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_txn_2_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Lunch"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_txn_2_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Food · Nov 12"
+                android:textColor="#5A6B52"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_txn_2_amount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="−₱120"
+            android:textColor="#21301A"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_txn_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_txn_3_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Lunch"
+                android:textColor="#21301A"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_txn_3_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Food · Nov 12"
+                android:textColor="#5A6B52"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_txn_3_amount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="−₱120"
+            android:textColor="#21301A"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_empty_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No transactions yet."
+            android:textColor="#21301A"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_empty_sub"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Add a transaction to track your allowance."
+            android:textColor="#5A6B52"
+            android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

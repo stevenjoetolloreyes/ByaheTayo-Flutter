@@ -42,10 +42,16 @@ class AuthUser {
 }
 
 /// A user-facing auth failure. [message] is safe to show in the UI.
+/// [code] is the raw Firebase error code when one is known
+/// ('wrong-password', 'invalid-credential', 'too-many-requests',
+/// ...), so callers that record failures (Login History) can label
+/// the reason honestly without parsing the user-facing message.
+/// Null when there is no Firebase code (generic failures).
 class AuthException implements Exception {
-  const AuthException(this.message);
+  const AuthException(this.message, {this.code});
 
   final String message;
+  final String? code;
 
   @override
   String toString() => 'AuthException: $message';
@@ -109,6 +115,35 @@ abstract class AuthService {
   /// the returned user and reuses an existing profile instead of
   /// duplicating it.
   Future<AuthUser?> signUpWithGoogle();
+
+  /// Sign-in methods for the current user (provider IDs, e.g.
+  /// 'password' or 'google.com'). Empty when signed out. Used by
+  /// the My Data delete flow to offer the right re-authentication
+  /// step — a password account re-auths with its password, a Google
+  /// account with a fresh Google sign-in.
+  Future<List<String>> signInMethods();
+
+  /// Re-authenticates the current user with their account password.
+  /// Throws [AuthException] on a wrong password. Required
+  /// immediately before [deleteCurrentUser]: Firebase only deletes
+  /// a user whose sign-in is recent.
+  Future<void> reauthenticateWithPassword({required String password});
+
+  /// Re-authenticates the current user with a fresh Google sign-in
+  /// (account chooser). Throws [AuthException] when the flow is
+  /// canceled or the Google account does not match the signed-in
+  /// user. Required immediately before [deleteCurrentUser] for
+  /// Google accounts.
+  Future<void> reauthenticateWithGoogle();
+
+  /// Deletes the currently signed-in Firebase user, permanently.
+  /// The caller must have re-authenticated immediately before
+  /// ([reauthenticateWithPassword] / [reauthenticateWithGoogle]);
+  /// otherwise Firebase throws requires-recent-login and this
+  /// reports it as an [AuthException] asking to sign in again.
+  /// Callers delete the user's Firestore documents, Storage files
+  /// and local data FIRST — this is the last step.
+  Future<void> deleteCurrentUser();
 
   Future<void> signOut();
 }

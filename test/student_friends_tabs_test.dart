@@ -204,7 +204,10 @@ void main() {
       final theme = Theme.of(context);
       expect(theme.scaffoldBackgroundColor, kStudentDarkBg);
       expect(theme.colorScheme.surface, kStudentDarkCard);
-      expect(theme.colorScheme.primary, kStudentEmeraldAccent);
+      // Nov 12 Minecraft audit: dark primary is grass green (was
+      // the old emerald accent #16A34A); dark bg/surface/outline
+      // are unchanged — the Minecraft dark tokens are the same values.
+      expect(theme.colorScheme.primary, MinecraftColors.grassGreen);
       expect(theme.colorScheme.outline, kStudentDarkBorder);
       expect(find.byType(TopNavBar), findsOneWidget);
     },

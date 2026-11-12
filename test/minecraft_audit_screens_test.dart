@@ -6,6 +6,7 @@
 // Every asserted value comes from the page's own inputs or seeded
 // local records — nothing is invented here.
 import 'package:estudyantego/features/about_screen.dart';
+import 'package:estudyantego/features/app_layout.dart';
 import 'package:estudyantego/features/app_reviews_admin_screen.dart';
 import 'package:estudyantego/features/community_admin.dart';
 import 'package:estudyantego/features/local_notifications.dart';
@@ -21,12 +22,15 @@ import 'package:estudyantego/features/student/commute_screen.dart';
 import 'package:estudyantego/features/student/edit_school_calendar_screen.dart';
 import 'package:estudyantego/features/student/quotes_screen.dart';
 import 'package:estudyantego/features/student/student_data.dart';
+import 'package:estudyantego/features/student/student_theme.dart';
 import 'package:estudyantego/features/student/walking_goal_screen.dart';
 import 'package:estudyantego/features/student/walking_repository.dart';
 import 'package:estudyantego/features/student/walking_sensor.dart';
 import 'package:estudyantego/features/student_id_card.dart';
 import 'package:estudyantego/features/subscription_membership.dart';
+import 'package:estudyantego/features/top_popup.dart';
 import 'package:estudyantego/features/trips_tab.dart';
+import 'package:estudyantego/features/friends_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,7 +65,10 @@ class _FakePermissionService implements PermissionService {
 /// Minimal scheduler fake: exact alarms allowed, nothing scheduled.
 class _FakeScheduler implements NotificationScheduler {
   @override
-  Future<bool> initialize({required String androidIcon}) async => true;
+  Future<bool> initialize({
+    required String androidIcon,
+    void Function(String? payload)? onTap,
+  }) async => true;
 
   @override
   Future<void> show({
@@ -122,6 +129,12 @@ void main() {
     expect(find.byKey(const Key('about-stat-routes')), findsOneWidget);
     expect(find.byKey(const Key('about-stat-hubs')), findsOneWidget);
     expect(find.byKey(const Key('about-stat-cities')), findsOneWidget);
+    // Version jump (Nov 12, 2026): 3.5.1, not 1.0.0.
+    expect(
+      find.text('Version 3.5.1 · com.estudyantego.app'),
+      findsOneWidget,
+    );
+    expect(find.text('ESTUDYANTEGO · VERSION 3.5.1'), findsOneWidget);
   });
 
   testWidgets('Subscription Membership screen is Minecraft themed',
@@ -324,6 +337,101 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  test('Shared AppText headings are Baloo 2 (Minecraft audit)', () {
+    // The shared scale used to be Plus Jakarta Sans; the audit
+    // repointed every heading style at Baloo 2 (GoogleFonts runtime
+    // download, family name 'Baloo2' plus a weight suffix).
+    // Body styles stay const and inherit Nunito from the theme.
+    expect(AppText.pageTitle.fontFamily, startsWith('Baloo2'));
+    expect(AppText.titleLarge.fontFamily, startsWith('Baloo2'));
+    expect(AppText.heading.fontFamily, startsWith('Baloo2'));
+    expect(AppText.headingStrong.fontFamily, startsWith('Baloo2'));
+    expect(AppText.sectionTitle.fontFamily, startsWith('Baloo2'));
+    expect(AppText.cardTitle.fontFamily, startsWith('Baloo2'));
+    expect(AppText.emptyTitle.fontFamily, startsWith('Baloo2'));
+    expect(AppText.displaySmall.fontFamily, startsWith('Baloo2'));
+    expect(AppText.bodyStrong.fontFamily, startsWith('Baloo2'));
+    // Card radius matches the global Minecraft card theme (14px).
+    expect(AppLayout.cardRadius, MinecraftShapes.cardRadius);
+  });
+
+  test('Student Hub theme derives from the Minecraft theme', () {
+    // Light: grass primary, paper scaffold, white cards, Baloo 2
+    // headings (was: deep-emerald primary, Inter body, Plus
+    // Jakarta Sans headings, 20px/1px cards).
+    final light = studentTheme;
+    expect(light.colorScheme.primary, MinecraftColors.grassGreen);
+    expect(light.scaffoldBackgroundColor, MinecraftColors.paper);
+    expect(light.cardColor, Colors.white);
+    expect(
+      light.textTheme.titleLarge?.fontFamily,
+      startsWith('Baloo2'),
+    );
+    expect(light.textTheme.bodyMedium?.fontFamily, startsWith('Nunito'));
+    final cardShape = light.cardTheme.shape as RoundedRectangleBorder;
+    expect(cardShape.borderRadius, BorderRadius.circular(14));
+    // Dark: the same dark surfaces the Hub already used.
+    final dark = studentDarkTheme;
+    expect(dark.colorScheme.primary, MinecraftColors.grassGreen);
+    expect(
+      dark.scaffoldBackgroundColor,
+      MinecraftColors.darkBackground,
+    );
+    expect(dark.cardColor, MinecraftColors.darkCard);
+  });
+
+  testWidgets('Friends section cards use the block shape',
+      (tester) async {
+    await _pump(tester, FriendsTab(codeGenerator: () => 'TEST-CODE'));
+    // Section titles render in Baloo 2 via MinecraftText.title.
+    final title = tester.widget<Text>(find.text('My Friends'));
+    expect(title.style?.fontFamily, startsWith('Baloo2'));
+    // The section card is a Card with the 14px / 3px block shape.
+    final card = tester.widget<Card>(find.byType(Card).first);
+    final shape = card.shape as RoundedRectangleBorder;
+    expect(shape.borderRadius, BorderRadius.circular(14));
+    expect(shape.side.width, MinecraftShapes.cardBorderWidth);
+    expect(shape.side.color, MinecraftColors.border);
+    // The friend code itself stays visible (local-only, no cloud).
+    expect(find.text('TEST-CODE'), findsOneWidget);
+  });
+
+  testWidgets('TopPopup checkmark is the grass block', (tester) async {
+    await _pump(
+      tester,
+      const TopPopup(
+        progress: AlwaysStoppedAnimation<double>(0.5),
+        title: 'Test title',
+        message: 'Test message',
+      ),
+    );
+    expect(find.text('Test title'), findsOneWidget);
+    expect(find.text('Test message'), findsOneWidget);
+    final checkCircle = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.check),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final decoration = checkCircle.decoration as BoxDecoration;
+    expect(decoration.color, MinecraftColors.grassGreen);
+    // The card keeps the 14px / 3px block shape in light mode: the
+    // Material that wraps the popup's message text.
+    final material = tester.widget<Material>(
+      find
+          .ancestor(
+            of: find.text('Test message'),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    final shape = material.shape as RoundedRectangleBorder;
+    expect(shape.borderRadius, BorderRadius.circular(14));
+    expect(shape.side.width, MinecraftShapes.cardBorderWidth);
   });
 }
 

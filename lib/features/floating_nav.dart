@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'minecraft_theme.dart';
+
 /// One destination for [FloatingGlassNav]. The shell maps its own
 /// destinations list into these — same labels, icons, order.
 class FloatingNavDestination {
@@ -42,7 +44,7 @@ class FloatingGlassNav extends StatelessWidget {
   final ValueChanged<int> onSelect;
   final List<FloatingNavDestination> destinations;
 
-  static const _emerald = Color(0xFF14532D);
+  static const _emerald = MinecraftColors.deepLeaves;
   static const _charcoal = Color(0xFF1F1F1F);
 
   @override

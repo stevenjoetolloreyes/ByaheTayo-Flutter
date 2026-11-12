@@ -75,6 +75,8 @@ class StudentTab extends StatefulWidget {
     this.onWatchTourConsumed,
     this.playEntrance = false,
     this.onEntranceConsumed,
+    this.notificationRoute,
+    this.onNotificationRouteConsumed,
     this.tourController,
   });
 
@@ -158,6 +160,19 @@ class StudentTab extends StatefulWidget {
   /// (or is skipped), so the gate clears [playEntrance]. Null in
   /// bare widget tests.
   final VoidCallback? onEntranceConsumed;
+
+  /// NOTIFICATION DEEP LINK (Smart Notifications v1): the
+  /// Student-hub screen a tapped notification asked to open —
+  /// 'classes' (Schedule), 'bible', or 'allowance'. Null means no
+  /// pending deep link. Consumed once via
+  /// [onNotificationRouteConsumed] when the screen is pushed, so
+  /// it never re-fires on a later visit.
+  final String? notificationRoute;
+
+  /// NOTIFICATION DEEP LINK: call once the route screen has been
+  /// pushed (or there is no screen to push), so the gate clears
+  /// [notificationRoute]. Null in bare widget tests.
+  final VoidCallback? onNotificationRouteConsumed;
 
   /// The Watch demo tour controller. The shell passes its own
   /// instance (and renders the overlay above the whole shell, so
@@ -455,6 +470,39 @@ class _StudentTabState extends State<StudentTab>
     widget.onEntranceConsumed?.call();
   }
 
+  /// The notification route value already pushed, so the same
+  /// deep link never opens twice.
+  String? _handledNotificationRoute;
+
+  /// Opens the screen a tapped notification asked for
+  /// ([StudentTab.notificationRoute]): 'classes' opens Schedule
+  /// (Classes), 'bible' the Bible screen, 'allowance' the Money /
+  /// Allowance screen. Runs once the tab has loaded (the tab may
+  /// still be showing its spinner when the gate arms the route)
+  /// and once per route value. The push is deferred a frame so
+  /// the tab switch settles first.
+  void _maybeOpenNotificationRoute() {
+    final route = widget.notificationRoute;
+    if (route == null ||
+        route == _handledNotificationRoute ||
+        _loading ||
+        !mounted) {
+      return;
+    }
+    _handledNotificationRoute = route;
+    widget.onNotificationRouteConsumed?.call();
+    final Widget? screen = switch (route) {
+      'classes' => const ClassesScreen(),
+      'bible' => const BibleScreen(),
+      'allowance' => const AllowanceScreen(),
+      _ => null,
+    };
+    if (screen == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _open(screen);
+    });
+  }
+
   /// Completes the entrance instantly at its live end states.
   /// Called when the Watch demo tour starts while the entrance
   /// is playing, so the tour takes over cleanly: every value is
@@ -661,6 +709,12 @@ class _StudentTabState extends State<StudentTab>
     if (widget.playEntrance && !oldWidget.playEntrance) {
       _maybeStartEntrance();
     }
+    // Notification deep link (Smart Notifications v1): a tapped
+    // notification arms the route while this tab already exists.
+    if (widget.notificationRoute != null &&
+        widget.notificationRoute != oldWidget.notificationRoute) {
+      _maybeOpenNotificationRoute();
+    }
   }
 
   void _loadCredits() {
@@ -762,6 +816,9 @@ class _StudentTabState extends State<StudentTab>
     // loaded — starting it during the spinner would animate
     // nothing. _maybeStartEntrance no-ops unless the gate armed it.
     _maybeStartEntrance();
+    // Same for a notification deep link: the gate may have armed
+    // the route before the tab finished loading.
+    _maybeOpenNotificationRoute();
   }
 
   Future<void> _open(Widget screen, {bool darkAware = false}) async {

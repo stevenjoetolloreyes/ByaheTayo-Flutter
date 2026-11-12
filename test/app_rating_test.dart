@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'package:estudyantego/features/app_rating.dart';
 import 'package:estudyantego/features/app_rating_overlay.dart';
+import 'package:estudyantego/features/minecraft_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -489,9 +490,11 @@ void main() {
       );
       final gradient =
           (ink.decoration as BoxDecoration).gradient as LinearGradient;
+      // Nov 12 Minecraft audit: the pill gradient is emerald ->
+      // grass (was #34D399 -> #16A34A).
       expect(
         gradient.colors,
-        <Color>[const Color(0xFF34D399), const Color(0xFF16A34A)],
+        <Color>[MinecraftColors.emerald, MinecraftColors.grassGreen],
       );
     });
 

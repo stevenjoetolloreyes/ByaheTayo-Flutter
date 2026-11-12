@@ -221,7 +221,7 @@ void showSigninRewardSchedule(BuildContext context) {
                     color: kStudentEmeraldAccent, size: 22),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text('Reward schedule',
                     style: AppText.headingStrong),
               ),

@@ -60,6 +60,154 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/bible_verse_widget_info" />
         </receiver>
+        <!-- Schedule home screen widgets (Android only), small 4x2
+             "Next Class" and big 4x3 "This Week". Approved preview
+             v2 (Nov 11, 2026). Each provider reads the pushed
+             schedule JSON from the home_widget SharedPreferences
+             and derives today / next class on every update; tapping
+             either widget opens the app's Classes screen. -->
+        <receiver
+            android:name=".ScheduleWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Schedule">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/schedule_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".ScheduleWeekWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Schedule — This Week">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/schedule_widget_week_info" />
+        </receiver>
+        <!-- EstudyanteGO Allowance widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".AllowanceWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Allowance">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/allowance_widget_info" />
+        </receiver>
+        <!-- EstudyanteGO Money widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".AllowanceMoneyWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Money">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/allowance_widget_money_info" />
+        </receiver>
+        <!-- EstudyanteGO Fares widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".FaresWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Fares">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fares_widget_info" />
+        </receiver>
+        <!-- EstudyanteGO Popular Routes widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".FaresPopularWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Popular Routes">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fares_widget_popular_info" />
+        </receiver>
+        <!-- EstudyanteGO Daily Quote widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".DailyQuotesWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Daily Quote">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/daily_quotes_widget_info" />
+        </receiver>
+        <!-- EstudyanteGO Daily Quote widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".DailyQuotesSquareWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Daily Quote">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/daily_quotes_widget_square_info" />
+        </receiver>
+        <!-- EstudyanteGO Daily Quote widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".DailyQuotesLargeWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Daily Quote">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/daily_quotes_widget_large_info" />
+        </receiver>
+        <!-- EstudyanteGO Tasks widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".TasksWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Tasks">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tasks_widget_info" />
+        </receiver>
+        <!-- EstudyanteGO Tasks widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".TasksSquareWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Tasks">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tasks_widget_square_info" />
+        </receiver>
+        <!-- EstudyanteGO Tasks widget (Nov 11, 2026). -->
+        <receiver
+            android:name=".TasksLargeWidgetProvider"
+            android:exported="true"
+            android:label="EstudyanteGO Tasks">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tasks_widget_large_info" />
+        </receiver>
         <!-- DIAGNOSTIC ONLY (Nov 4, 2026): disable androidx.startup initializers to test whether one of them crashes launch before MainActivity. Revert after the test result. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

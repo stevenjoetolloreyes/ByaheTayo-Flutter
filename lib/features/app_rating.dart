@@ -95,7 +95,7 @@ class AppRatingSubmission {
   /// Firebase UID, or null when the student is not signed in.
   final String? userId;
 
-  /// App version at submission time (e.g. "1.0.0+1").
+  /// App version at submission time (e.g. "3.5.1+2").
   final String appVersion;
 }
 

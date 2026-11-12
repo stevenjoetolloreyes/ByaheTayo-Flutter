@@ -29,6 +29,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -40,6 +41,9 @@ import 'features/app_layout.dart';
 import 'features/app_rating_overlay.dart';
 import 'features/app_reply_popup.dart';
 import 'features/app_review_notifications.dart';
+import 'features/chat_support.dart';
+import 'features/chat_support_screen.dart';
+import 'features/support_reply_popup.dart';
 import 'features/bus_companies.dart';
 import 'features/bus_stops.dart';
 import 'features/communities_tab.dart';
@@ -55,6 +59,10 @@ import 'features/minecraft_theme.dart';
 import 'features/onboarding/splash_sound.dart';
 import 'features/local_notifications.dart';
 import 'features/route_fare_overrides.dart';
+import 'features/security/login_alert_dialog.dart';
+import 'features/security/session_models.dart';
+import 'features/security/session_repository.dart';
+import 'features/security/session_service.dart';
 import 'features/shared_study_files.dart';
 import 'features/map_tab.dart';
 import 'features/study_tab.dart';
@@ -77,6 +85,14 @@ import 'features/onboarding/verify_email_screen.dart';
 import 'features/onboarding/welcome_back_overlay.dart';
 import 'features/profile_avatar.dart';
 import 'features/student_tab.dart';
+import 'features/student/allowance_screen.dart';
+import 'features/student/allowance_widget_service.dart';
+import 'features/student/classes_screen.dart';
+import 'features/student/daily_quotes_widget_service.dart';
+import 'features/student/fares_widget_service.dart';
+import 'features/student/quotes_screen.dart';
+import 'features/student/schedule_widget_service.dart';
+import 'features/student/tasks_widget_service.dart';
 import 'features/student/student_theme.dart';
 import 'features/student/watch_tour.dart';
 import 'theme_preference.dart';
@@ -372,23 +388,154 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
     // the first schedule without awaiting — reminders must never
     // block the app start, and the service never throws.
     unawaited(_initLocalNotifications());
+    // Home screen widgets (Nov 11): push the stored allowance /
+    // fares / quotes / tasks into the widgets at startup,
+    // and listen for widget taps (tap -> matching screen/tab).
+    // Both are best-effort and never block startup.
+    unawaited(AllowanceWidgetService.sync());
+    unawaited(FaresWidgetService.sync());
+    unawaited(DailyQuotesWidgetService.syncQuotes());
+    unawaited(TasksWidgetService.sync());
+    unawaited(_listenForWidgetClicks());
     localNotificationRefreshRequest.addListener(
       _onLocalNotificationRefreshRequested,
     );
+    // Schedule home screen widgets (Nov 11): push the stored schedule
+    // into the widgets at startup, and listen for widget taps (tap ->
+    // Classes screen). Both are best-effort and never block startup.
+    unawaited(ScheduleWidgetService.sync());
+    unawaited(_listenForWidgetClicks());
   }
 
   Future<void> _initLocalNotifications() async {
-    await _notificationService.initialize();
+    await _notificationService.initialize(onTap: _onNotificationTap);
     await _notificationService.refreshAll();
+  }
+
+  /// A notification was tapped (foreground tap, or the app was
+  /// launched from a notification while closed): open the tab and
+  /// Student-hub screen the payload points at
+  /// ([notificationTargetForPayload]). A class / assignment / quiz
+  /// tap opens Schedule; the route flag is consumed by the Student
+  /// tab once the screen has been pushed.
+  void _onNotificationTap(String? payload) {
+    if (!mounted) return;
+    final target = notificationTargetForPayload(payload);
+    setState(() {
+      _tabIndex = target.tab;
+      _notificationRoute = target.screen;
+    });
   }
 
   void _onLocalNotificationRefreshRequested() {
     unawaited(_notificationService.refreshAll());
   }
 
+  // ---- Home screen widget taps (Nov 11) ----
+
+  /// Listens for home screen widget taps: the stream while the app
+  /// is alive, plus the launch URI when the app was started from a tap.
+  Future<void> _listenForWidgetClicks() async {
+    _widgetClickSubscription =
+        HomeWidget.widgetClicked.listen(_onWidgetUri);
+    final initial = await HomeWidget.initiallyLaunchedFromHomeWidget();
+    if (initial != null) _onWidgetUri(initial);
+  }
+
+  /// A home screen widget tap: open the matching screen/tab when
+  /// the dashboard is showing, otherwise hold the tap until it is.
+  void _onWidgetUri(Uri? uri) {
+    if (uri == null || !_isWidgetUri(uri.toString())) return;
+    if (_destination == AppStartDestination.dashboard) {
+      _openWidgetUriNow(uri);
+    } else {
+      _pendingWidgetUri = uri;
+    }
+  }
+
+  bool _isWidgetUri(String uri) =>
+      uri == ScheduleWidgetService.classesUri ||
+      uri == AllowanceWidgetService.allowanceUri ||
+      uri == FaresWidgetService.faresUri ||
+      uri == DailyQuotesWidgetService.quotesUri ||
+      uri == TasksWidgetService.tasksUri;
+
+  /// Opens the matching screen/tab for a held widget tap, once the
+  /// dashboard is showing. No-op when there is no held tap, or when
+  /// the destination is not the dashboard yet.
+  void _openWidgetUriIfPending() {
+    if (_pendingWidgetUri == null ||
+        _destination != AppStartDestination.dashboard) {
+      return;
+    }
+    final uri = _pendingWidgetUri!;
+    _pendingWidgetUri = null;
+    _openWidgetUriNow(uri);
+  }
+
+  /// Dispatches a widget URI to its screen/tab. Pushed screens go
+  /// through [_openWidgetScreen] (once-only per URI); the Fares tab
+  /// switches tabs (popping any pushed screen first so the tab is
+  /// visible).
+  void _openWidgetUriNow(Uri uri) {
+    final raw = uri.toString();
+    if (raw == ScheduleWidgetService.classesUri) {
+      _openWidgetScreen(
+        raw,
+        () => const StudentTheme(child: ClassesScreen()),
+      );
+      return;
+    }
+    if (raw == FaresWidgetService.faresUri) {
+      _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      _selectTab(2);
+      return;
+    }
+    if (raw == AllowanceWidgetService.allowanceUri) {
+      _openWidgetScreen(
+        raw,
+        () => const StudentTheme(child: AllowanceScreen()),
+      );
+      return;
+    }
+    if (raw == DailyQuotesWidgetService.quotesUri) {
+      _openWidgetScreen(
+        raw,
+        () => const StudentTheme(child: QuotesScreen()),
+      );
+      return;
+    }
+    if (raw == TasksWidgetService.tasksUri) {
+      _openWidgetScreen(
+        raw,
+        () => const StudentTheme(child: ClassesScreen()),
+      );
+    }
+  }
+
+  /// Pushes a widget-opened screen on the app navigator, once, the
+  /// same way the Student hub opens its screens (wrapped in
+  /// StudentTheme). The push is deferred a frame so the dashboard
+  /// is built first when the tap arrived during the gate.
+  void _openWidgetScreen(String uri, Widget Function() builder) {
+    if (_widgetScreensOpen.contains(uri)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _widgetScreensOpen.contains(uri)) return;
+      final navigator = _navigatorKey.currentState;
+      if (navigator == null) return;
+      _widgetScreensOpen.add(uri);
+      unawaited(
+        navigator
+            .push(MaterialPageRoute(builder: (_) => builder()))
+            .whenComplete(() => _widgetScreensOpen.remove(uri)),
+      );
+    });
+  }
+
   @override
   void dispose() {
     _themeTimer?.cancel();
+    _widgetClickSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     localNotificationRefreshRequest.removeListener(
       _onLocalNotificationRefreshRequested,
@@ -398,6 +545,19 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
 
   // ---- First-time gate state ----
   AppStartDestination? _destination;
+
+  /// Home screen widget tap (Nov 11): the `homewidget://...` URI
+  /// a widget sends, held until the dashboard is showing — a
+  /// widget can be tapped while the app is still on the splash /
+  /// auth / setup gate (see [_onWidgetUri]).
+  Uri? _pendingWidgetUri;
+
+  /// URIs of widget-opened screens currently on top, so a second
+  /// tap cannot stack another copy of the same screen.
+  final Set<String> _widgetScreensOpen = {};
+
+  /// Stream subscription for widget taps while the app is alive.
+  StreamSubscription<Uri?>? _widgetClickSubscription;
 
   /// True when an auth screen was reached from onboarding (the
   /// first-launch path). Only then does auth get a back button, and
@@ -410,6 +570,11 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
   UserProfile? _profile;
   ProfileStore? _store;
   int _tabIndex = 0;
+
+  /// Student-hub screen a tapped notification asked to open
+  /// ('classes', 'bible' or 'allowance'; null = tab only). Set by
+  /// [_onNotificationTap], consumed by the Student tab.
+  String? _notificationRoute;
 
   /// Post-setup celebration phase (Feature 2). After a NEW user
   /// taps "Finish setup" on Profile Setup (step 8), the gate shows
@@ -461,6 +626,109 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
   /// the legacy local-only behavior).
   StudentProfileRepository? get _profileRepository =>
       _authService.isConfigured ? FirestoreStudentProfileRepository() : null;
+
+  /// Login Alerts + Session Manager (Account → Security). Created
+  /// once during [_resolveStart] (the splash always runs before
+  /// any auth screen can appear) with the same `isConfigured`
+  /// gate: no repository when Firebase is not configured, in which
+  /// case the service records nothing and sign-in works as before.
+  SessionService? _sessionService;
+
+  SessionService _ensureSessionService(SharedPreferences prefs) {
+    final existing = _sessionService;
+    if (existing != null) return existing;
+    final service = SessionService(
+      prefs: prefs,
+      repository: _authService.isConfigured
+          ? FirestoreSessionRepository()
+          : null,
+      notify: ({required String title, required String body}) async {
+        await _notificationService.showLoginAlert(
+          title: title,
+          body: body,
+        );
+      },
+    );
+    service.onForeignSession = _onForeignSession;
+    service.onRevoked = _onSessionRevoked;
+    _sessionService = service;
+    return service;
+  }
+
+  /// A sign-in from another device was detected. The service
+  /// already fired the local notification; the dialog asks 'Was
+  /// this you?' — but only while the dashboard is showing, so it
+  /// never pops over sign-in / setup. Otherwise the session stays
+  /// visible in the Security Center for later.
+  Future<void> _onForeignSession(UserSession session) async {
+    final user = _user;
+    if (user == null || _destination != AppStartDestination.dashboard) {
+      return;
+    }
+    final context = _navigatorKey.currentContext;
+    if (context == null || !mounted) return;
+    final choice = await showLoginAlertDialog(
+      context: context,
+      session: session,
+    );
+    if (choice == null || !mounted) return;
+    final service = _sessionService;
+    if (service == null) return;
+    if (choice == LoginAlertChoice.yesThatWasMe) {
+      await service.markSessionTrusted(session);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Thanks — this sign-in is marked as trusted.',
+          ),
+        ),
+      );
+      return;
+    }
+    // 'No, secure my account': revoke the other session, flag the
+    // account for a password change, and send the reset link
+    // through the app's existing password-reset flow.
+    await service.secureAccount(foreignSession: session, uid: user.uid);
+    if (!context.mounted) return;
+    try {
+      await _authService.sendPasswordReset(email: user.email);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Other session signed out. Password reset link sent — '
+            'check your email.',
+          ),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    }
+  }
+
+  /// This device's session record was deleted from another device
+  /// (mid-session revocation): sign out of Firebase and route to
+  /// sign-in. No-op when already signed out.
+  void _onSessionRevoked() {
+    if (_user == null || !mounted) return;
+    unawaited(_authService.signOut().catchError((_) {}));
+    _signOut();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _navigatorKey.currentContext;
+      if (context != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You were signed out from another device.'),
+          ),
+        );
+      }
+    });
+  }
 
   /// Restores the server-side student profile into the local store
   /// (merge, backfill, or local-only fallback — never throws, never
@@ -533,7 +801,12 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
     // Re-evaluate the Time Based theme when the app comes back, so a
     // 6 AM / 6 PM flip that happened while it was backgrounded
     // applies immediately instead of waiting for the next tick.
-    if (state == AppLifecycleState.resumed) _refreshTimeBasedTheme();
+    if (state == AppLifecycleState.resumed) {
+      _refreshTimeBasedTheme();
+      // Session heartbeat: refreshes last-active (throttled to one
+      // write per 5 minutes inside the service).
+      unawaited(_sessionService?.touchSession() ?? Future.value());
+    }
   }
 
   void _selectTab(int index) {
@@ -564,6 +837,35 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
       );
     } catch (_) {
       // Diagnostics failure must never break start resolution.
+    }
+    if (user != null) {
+      // Session restore stage: re-adopt (or create) this device's
+      // session record, and detect a revocation from another
+      // device. A revoked device signs out here, before any
+      // profile restore — the gate then routes to sign-in.
+      //
+      // The session feature must NEVER break or stall app start:
+      // Firestore can be unreachable (or unmocked in tests), and a
+      // hung write would leave the splash up forever. Bound it to
+      // 10 s and fall through to normal start on any failure.
+      var revoked = false;
+      try {
+        final service = _ensureSessionService(prefs);
+        revoked = await service.onRestoredSession(user).timeout(
+              const Duration(seconds: 10),
+              onTimeout: () => false,
+            );
+      } catch (_) {
+        revoked = false;
+      }
+      if (revoked) {
+        try {
+          await _authService.signOut();
+        } catch (_) {}
+        _user = null;
+        _profile = null;
+        return AppStartDestination.signIn;
+      }
     }
     if (user != null) {
       // Profile restore stage: timeout + fallback to the local
@@ -613,7 +915,16 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
       ),
     );
     setState(() => _destination = AppStartDestination.dashboard);
+    _openWidgetUriIfPending();
     if (promptForNotifications) _maybePromptForNotifications();
+    // Reply notifications (Smart Notifications v1): an unread admin
+    // reply in Chat Support or App Reviews fires one local
+    // notification. Checked on dashboard arrival — there is no push
+    // server, so this is the only delivery path.
+    final user = _user;
+    if (user != null) {
+      unawaited(_notificationService.checkReplyNotifications(uid: user.uid));
+    }
   }
 
   /// Shows the one-time notification-permission prompt on first
@@ -772,6 +1083,13 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
   }
 
   void _signOut() {
+    // The session watchers stop here; the session record itself
+    // was already deleted by the Account tab's sign-out (which
+    // deletes the record while still signed in, then signs out of
+    // Firebase). A sign-out that bypasses the tab (verify-email
+    // escape hatch) leaves the record until the next start, when
+    // the restored-session check re-adopts it.
+    unawaited(_sessionService?.stopWatchers() ?? Future.value());
     setState(() {
       _user = null;
       _profile = null;
@@ -824,7 +1142,10 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
     if (destination == null) {
       return SplashScreen(
         resolve: _resolveStart,
-        onDestination: (next) => setState(() => _destination = next),
+        onDestination: (next) {
+          setState(() => _destination = next);
+    _openWidgetUriIfPending();
+        },
         themeMode: _themeMode,
       );
     }
@@ -858,6 +1179,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           onCreateAccountRequested: () =>
               setState(() => _destination = AppStartDestination.createAccount),
           profileRepository: _profileRepository,
+          sessionService: _sessionService,
           themeMode: _themeMode,
           onThemeModeChanged: _setThemeMode,
           onBack: _cameFromOnboarding ? _backToOnboarding : null,
@@ -872,6 +1194,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           onSignedIn: _afterAuth,
           onSignInRequested: () =>
               setState(() => _destination = AppStartDestination.signIn),
+          sessionService: _sessionService,
           themeMode: _themeMode,
           onThemeModeChanged: _setThemeMode,
           onBack: _cameFromOnboarding ? _backToOnboarding : null,
@@ -888,6 +1211,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
               () => _destination = AppStartDestination.createAccount,
             ),
             profileRepository: _profileRepository,
+            sessionService: _sessionService,
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
           );
@@ -918,6 +1242,7 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
               () => _destination = AppStartDestination.createAccount,
             ),
             profileRepository: _profileRepository,
+            sessionService: _sessionService,
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
           );
@@ -988,8 +1313,15 @@ class _EstudyanteGOAppState extends State<EstudyanteGOApp>
           playStudentEntrance: _playStudentEntrance,
           onStudentEntranceConsumed: () =>
               setState(() => _playStudentEntrance = false),
+          // NOTIFICATION DEEP LINK (Smart Notifications v1): a
+          // tapped notification opens this screen on the Student
+          // tab; the tab consumes the flag once pushed.
+          notificationRoute: _notificationRoute,
+          onNotificationRouteConsumed: () =>
+              setState(() => _notificationRoute = null),
           permissionService: _permissionService,
           notificationService: _notificationService,
+          sessionService: _sessionService,
           onViewStudent: () => _selectTab(0),
           onViewCommunities: () => _selectTab(4),
           onViewFares: () => _selectTab(2),
@@ -1020,8 +1352,11 @@ class _HomeShell extends StatefulWidget {
     this.onWatchTourConsumed,
     this.playStudentEntrance = false,
     this.onStudentEntranceConsumed,
+    this.notificationRoute,
+    this.onNotificationRouteConsumed,
     required this.permissionService,
     required this.notificationService,
+    this.sessionService,
     required this.onViewStudent,
     required this.onViewCommunities,
     required this.onViewFares,
@@ -1060,8 +1395,25 @@ class _HomeShell extends StatefulWidget {
   /// Passed through to [StudentTab.onEntranceConsumed].
   final VoidCallback? onStudentEntranceConsumed;
 
+  /// NOTIFICATION DEEP LINK (Smart Notifications v1): the
+  /// Student-hub screen a tapped notification asked to open
+  /// ('classes', 'bible' or 'allowance'; null = tab only). Passed
+  /// through to [StudentTab.notificationRoute].
+  final String? notificationRoute;
+
+  /// NOTIFICATION DEEP LINK: called once the tab has pushed the
+  /// screen (or decided there is none), so the flag clears and
+  /// never re-fires. Passed through to
+  /// [StudentTab.onNotificationRouteConsumed].
+  final VoidCallback? onNotificationRouteConsumed;
+
   final PermissionService permissionService;
   final LocalNotificationService notificationService;
+
+  /// Login Alerts + Session Manager (Account → Security). Null in
+  /// tests and when Firebase is not configured — the Account tab
+  /// then keeps its previous behavior (no Security Center row).
+  final SessionService? sessionService;
   final VoidCallback onViewStudent;
   final VoidCallback onViewCommunities;
   final VoidCallback onViewFares;
@@ -1206,6 +1558,12 @@ class _HomeShellState extends State<_HomeShell>
             // Welcome Back finish arms it.
             playEntrance: widget.playStudentEntrance,
             onEntranceConsumed: widget.onStudentEntranceConsumed,
+            // NOTIFICATION DEEP LINK (Smart Notifications v1):
+            // forwarded verbatim from the gate; see
+            // [StudentTab.notificationRoute].
+            notificationRoute: widget.notificationRoute,
+            onNotificationRouteConsumed:
+                widget.onNotificationRouteConsumed,
             // Watch demo tour (Feature 3): the shell's controller
             // — the tab registers its cards on it, and the shell
             // renders the overlay above the whole shell.
@@ -1287,6 +1645,7 @@ class _HomeShellState extends State<_HomeShell>
           profile: widget.profile,
           permissionService: widget.permissionService,
           notificationService: widget.notificationService,
+          sessionService: widget.sessionService,
           walletController: _walletController,
           creditsController: _creditsController,
           adService: _adService,
@@ -1349,6 +1708,35 @@ class _HomeShellState extends State<_HomeShell>
       child: ratedBody,
     );
 
+    // Support-reply popup (Nov 11, 2026): when Steven replies to
+    // the student's Chat Support thread while the app is open, the
+    // same dark top card pops up ("EstudyanteGO replied") and
+    // tapping it opens Chat Support. Same wrapping as the review
+    // reply overlay above — one instance, used by both shells.
+    final supportBody = SupportReplyPopupOverlay(
+      repository: widget.authService.isConfigured
+          ? FirestoreSupportRepository()
+          : null,
+      userId: widget.user?.uid,
+      onOpenChat: () {
+        final user = widget.user;
+        if (user == null) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ChatSupportScreen(
+              repository: FirestoreSupportRepository(),
+              user: user,
+              studentName: supportFirstName(
+                widget.profile?.displayName ?? user.displayName,
+                user.email,
+              ),
+            ),
+          ),
+        );
+      },
+      child: replyBody,
+    );
+
     // Watch demo tour (Feature 3): the overlay sits above the
     // whole shell — whichever branch below is built — so stop 1
     // can highlight the top nav (phone) / left sidebar (tablet).
@@ -1375,7 +1763,7 @@ class _HomeShellState extends State<_HomeShell>
                   ),
                   // Expanded content stays responsive while the sidebar
                   // animates; no overflow, no layout shift of the content.
-                  Expanded(child: replyBody),
+                  Expanded(child: supportBody),
                 ],
               ),
             ),
@@ -1400,7 +1788,7 @@ class _HomeShellState extends State<_HomeShell>
                         TopNavDestination(d.label, d.icon, d.selectedIcon),
                     ],
                   ),
-                  Expanded(child: replyBody),
+                  Expanded(child: supportBody),
                 ],
               ),
             ),
@@ -1420,7 +1808,7 @@ class _HomeShellState extends State<_HomeShell>
   void _showNotifications(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => const Padding(
+      builder: (_) => Padding(
         padding: AppLayout.pagePaddingLarge,
         child: Column(
           mainAxisSize: MainAxisSize.min,

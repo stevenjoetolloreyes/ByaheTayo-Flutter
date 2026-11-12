@@ -305,6 +305,200 @@ service cloud.firestore {
         && request.auth.uid == userId;
     }
 
+    // Chat Support — student ↔ admin messaging (Nov 11, 2026;
+    // see lib/features/chat_support.dart).
+    //
+    // support_conversations/{id} — one thread per student
+    // conversation. support_conversations/{id}/messages/{id} —
+    // append-only messages. Visibility: a student reads only their
+    // own threads (studentUid == uid); admins (allowlisted emails
+    // above) read all threads. The assistant's greeting/auto-replies
+    // are written by the STUDENT's own client (on-device
+    // rule-based replies), so the student may create 'assistant'
+    // messages in their own open thread; only an admin may create
+    // 'admin' messages. Messages are never updated or deleted;
+    // closing a chat only flips `closed` (never back to false —
+    // a closed chat is replaced by a new conversation) and sets
+    // the 1–5 star rating (Chat Support only).
+    function supportParent(conversationId) {
+      return get(/databases/$(database)/documents/support_conversations/$(conversationId));
+    }
+
+    match /support_conversations/{conversationId} {
+      allow read: if isSignedIn()
+        && (resource.data.studentUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn()
+        && request.resource.data.studentUid == request.auth.uid
+        && request.resource.data.studentName is string
+        && request.resource.data.studentName.size() >= 1
+        && request.resource.data.studentName.size() <= 100
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 1000
+        && request.resource.data.lastSender == 'assistant'
+        && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.unreadForAdmin == 0
+        && request.resource.data.unreadForStudent == 0
+        && request.resource.data.closed == false
+        && !('rating' in request.resource.data)
+        && (!('topic' in request.resource.data)
+          || request.resource.data.topic in
+            ['schedule', 'fares', 'account', 'apk', 'other']);
+
+      allow update: if isSignedIn()
+        && (resource.data.studentUid == request.auth.uid || isAdmin())
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'lastMessage', 'lastMessageAt', 'lastSender', 'topic',
+            'unreadForAdmin', 'unreadForStudent', 'closed', 'rating',
+            'updatedAt',
+          ])
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 1000
+        && request.resource.data.lastSender in
+          ['student', 'admin', 'assistant']
+        && request.resource.data.unreadForAdmin is int
+        && request.resource.data.unreadForAdmin >= 0
+        && request.resource.data.unreadForStudent is int
+        && request.resource.data.unreadForStudent >= 0
+        && request.resource.data.closed is bool
+        && (resource.data.closed == false
+          || request.resource.data.closed == true)
+        && (!('rating' in request.resource.data)
+          || (request.resource.data.rating is int
+            && request.resource.data.rating >= 1
+            && request.resource.data.rating <= 5))
+        && (!('topic' in request.resource.data)
+          || request.resource.data.topic == null
+          || request.resource.data.topic in
+            ['schedule', 'fares', 'account', 'apk', 'other']);
+
+      allow delete: if false;
+    }
+
+    match /support_conversations/{conversationId}/messages/{messageId} {
+      allow read: if isSignedIn()
+        && (supportParent(conversationId).data.studentUid
+            == request.auth.uid
+          || isAdmin());
+
+      allow create: if isSignedIn()
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.text.matches('.*\\S.*')
+        && request.resource.data.system is bool
+        && request.resource.data.createdAt == request.time
+        && (
+          (request.resource.data.sender == 'student'
+            && supportParent(conversationId).data.studentUid
+              == request.auth.uid
+            && supportParent(conversationId).data.closed == false)
+          || (request.resource.data.sender == 'assistant'
+            && supportParent(conversationId).data.studentUid
+              == request.auth.uid
+            && supportParent(conversationId).data.closed == false)
+          || (request.resource.data.sender == 'admin' && isAdmin())
+        )
+        && (!('topic' in request.resource.data)
+          || request.resource.data.topic == null
+          || request.resource.data.topic in
+            ['schedule', 'fares', 'account', 'apk', 'other']);
+
+      allow update, delete: if false;
+    }
+
+    // Login Alerts + Session Manager (see
+    // lib/features/security/session_service.dart). Owner-only: a
+    // signed-in user may read/write ONLY their own records. There
+    // is deliberately NO admin override — not even an admin can
+    // read another student's sessions or login history.
+    //
+    //   user_sessions/{sessionId} — one document per sign-in,
+    //     created by the app at sign-in, deleted on log-out
+    //     (per-session log-out deletes that device's record; the
+    //     device's revocation watcher then signs it out).
+    //   login_attempts/{attemptId} — append-only sign-in attempts
+    //     the app could observe (successes + failures).
+    //   user_security/{uid} — passwordChangeRequired flag, set by
+    //     the secure-my-account flow, cleared by the owner.
+    //
+    // The read rules carry the null arm (resource == null): the
+    // app reads documents that may not exist yet (revocation
+    // check, security flag), and a resource.data-only rule would
+    // deny those reads — the same bug fixed Nov 2 in
+    // points_transactions.
+    //
+    // NOTE (3.5.1 merge): these rules sit above the
+    // friend_requests block, as placed by the Login Alerts build.
+    // The friend_requests missing-brace bug (which used to nest
+    // everything below it at depth 3) was FIXED in the same merge:
+    // friend_requests is now closed properly and the credits /
+    // scan / admin collections below it are top-level again. All
+    // matches in this file are top-level — verify in the Firebase
+    // Console (live rules may differ from this snapshot) before
+    // publishing.
+    match /user_sessions/{sessionId} {
+      allow read: if isSignedIn()
+        && (resource == null || resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'deviceLabel', 'platform', 'formFactor',
+          'signInMethod', 'createdAt', 'lastActiveAt',
+          'locationLabel', 'trusted',
+        ])
+        && request.resource.data.deviceLabel is string
+        && request.resource.data.platform is string
+        && request.resource.data.formFactor is string
+        && request.resource.data.signInMethod in ['email', 'google', 'restored']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastActiveAt == request.time
+        && request.resource.data.trusted is bool
+        && (request.resource.data.locationLabel == null
+          || request.resource.data.locationLabel is string);
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastActiveAt', 'trusted', 'locationLabel'])
+        && request.resource.data.uid == resource.data.uid;
+      allow delete: if isSignedIn()
+        && (resource == null || resource.data.uid == request.auth.uid);
+    }
+
+    match /login_attempts/{attemptId} {
+      allow read: if isSignedIn()
+        && (resource == null || resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'success', 'reason', 'deviceLabel', 'platform',
+          'signInMethod', 'createdAt', 'locationLabel',
+        ])
+        && request.resource.data.success is bool
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 120
+        && request.resource.data.deviceLabel is string
+        && request.resource.data.platform is string
+        && request.resource.data.signInMethod in ['email', 'google', 'restored']
+        && request.resource.data.createdAt == request.time
+        && (request.resource.data.locationLabel == null
+          || request.resource.data.locationLabel is string);
+      allow update, delete: if false;
+    }
+
+    match /user_security/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys()
+          .hasOnly(['passwordChangeRequired', 'updatedAt'])
+        && request.resource.data.passwordChangeRequired is bool;
+      allow delete: if false;
+    }
+
     // Friend requests — participant-only. A request may be created
     // only by its sender, starting pending, to someone else. Only
     // the recipient may change its status (accept/decline), and only
@@ -325,6 +519,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'updatedAt']);
       allow delete: if false;
+    }
 
     // Credits wallet cache (Queue #2 — see
     // lib/features/credits_repository.dart). Same pattern as the
@@ -441,7 +636,6 @@ service cloud.firestore {
         && request.resource.data.popupAdsEnabled is bool
         && request.resource.data.rewardedAmountUnits == 50;
       allow delete: if false;
-    }
     }
   }
 }

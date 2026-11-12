@@ -1,147 +1,86 @@
-// Student Hub's OWN design — Premium Dark + Emerald Green.
+// Student Hub's OWN design — Minecraft theme (Nov 12, 2026 audit).
 //
-// This theme applies ONLY to the Student Hub (dashboard + its module
-// screens + the sign-in page). Other tabs keep the app theme.
+// The Hub used to carry its own ChatGPT "Premium Dark + Emerald Green"
+// tokens (deep emerald #14532D primary, Inter body, Plus Jakarta Sans
+// headings, 20px / 1px cards). The Minecraft theme audit repointed the
+// Hub theme at the shared Minecraft tokens in
+// lib/features/minecraft_theme.dart (grass #58CC02 primary, Baloo 2
+// headings, Nunito body, 14px cards with 3px ink borders) so the
+// Student tab and every module screen opened from it render in the
+// same theme as the rest of the app. The Hub keeps its approved
+// structure (single-column dashboard, greeting banner, sign-in card
+// values) and the dark surfaces are unchanged — the Minecraft dark
+// tokens ARE the Hub's dark values (#0c1410 page, #202B25 cards,
+// #252B2D elevated, #343B3D borders).
 //
-// Tokens follow the ChatGPT design system Steven adopted Nov 5 as a
-// LOOSE UI base ("wag mo seryusuhin"): Premium Dark + Emerald Green
-// with a matching Light Mode. Adapted, not forced — the Hub keeps
-// its approved structure (single-column dashboard, greeting banner,
-// sign-in card values) and the tokens below are the Hub's own.
-// Primary stays Deep Emerald Green #14532D in both modes; the
-// readable dark accent is #34D399 and the light accent is #059669.
+// The old emerald constants below are KEPT: the 7-Day Sign-in tiles
+// and the approved sign-in card hardcode them (deliberate — do NOT
+// recolor the tile state colors), so they stay defined here even
+// though the theme no longer uses them as its primary.
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../minecraft_theme.dart';
 import '../onboarding/onboarding_state.dart';
 import '../profile_avatar.dart';
 
+/// Deep emerald — the 7-Day Sign-in tiles' current-day tile and the
+/// approved sign-in card's light-mode greens hardcode this (deliberate
+/// — do NOT recolor the tile state colors).
 const kStudentEmerald = Color(0xFF14532D);
-const kStudentEmeraldDark = Color(0xFF0A2E1A);
-// Brand accent (greeting/Bible gradients, dark-mode primary, the
-// approved sign-in card's light-mode greens). The ChatGPT light
-// accent (#059669) is kStudentLightAccent below — the sign-in
-// card's exact approved values stay untouched.
+// Brand accent — the 7-Day Sign-in tiles' completed-day tile (light)
+// and current-day tile (dark) hardcode this (deliberate).
 const kStudentEmeraldAccent = Color(0xFF16A34A);
-const kStudentLightAccent = Color(0xFF059669);
-const kStudentBg = Color(0xFFF5F8F6);
 const kStudentCard = Colors.white;
 const kStudentText = Color(0xFF17231C);
 const kStudentSubtext = Color(0xFF64748B);
 const kStudentBorder = Color(0xFFE2E8F0);
 
-// Semantic colors (ChatGPT system) — used only where the Hub
-// already has such a state (expenses, errors, info dots).
-const kStudentSuccess = Color(0xFF22C55E);
-const kStudentWarning = Color(0xFFF59E0B);
+// Error red — used by the Hub where it already has such a state
+// (expenses, error text). Success/warning/info states use the
+// Minecraft palette (emerald / gold / sky) via the theme.
 const kStudentError = Color(0xFFEF4444);
-const kStudentInfo = Color(0xFF3B82F6);
 
-// Card corner radius (ChatGPT: 18–22px).
-const kStudentCardRadius = 20.0;
-
-// Dark Mode palette for the Student Hub (ChatGPT dark tokens,
-// adapted: the elevated surface, secondary text and border keep
-// the Nov 2 polished values, which the ChatGPT system does not
-// specify). The page background is the preview's #0c1410 (Nov 7)
-// so the Hub matches the rest of the dark app exactly.
+// Dark surfaces for the Student Hub — identical to the Minecraft
+// dark tokens (see MinecraftColors): #0c1410 page, #202B25 cards,
+// #252B2D elevated, #B0B8B5 secondary text, #343B3D borders.
 const kStudentDarkBg = Color(0xFF0C1410);
-const kStudentDarkSecondaryBg = Color(0xFF18221D);
 const kStudentDarkCard = Color(0xFF202B25);
 const kStudentDarkElevated = Color(0xFF252B2D);
-const kStudentDarkText = Color(0xFFF8FAF9);
 const kStudentDarkSubtext = Color(0xFFB0B8B5);
 const kStudentDarkBorder = Color(0xFF343B3D);
 const kStudentDarkAccent = Color(0xFF34D399);
 
-// Student Hub typography (ChatGPT scale, Hub-local so the shared
-// AppText scale — used by other tabs — stays untouched).
-// Page title 26 Bold, section heading 20 Semibold, card heading
-// 16 Semibold. Body text keeps the app's established sizes.
-// Headings use Plus Jakarta Sans (preview typography, Nov 7).
-const kStudentPageTitle = TextStyle(
-  fontFamily: 'PlusJakartaSans',
+// Student Hub typography (Minecraft theme, Nov 12 audit): Baloo 2
+// headings. Page title 26 Bold, section heading 20 Semibold, card
+// heading 16 Semibold. Body text keeps the app's established sizes
+// (Nunito, from the theme).
+final kStudentPageTitle = GoogleFonts.baloo2(
   fontSize: 26,
   fontWeight: FontWeight.w800,
 );
-const kStudentSectionHeading = TextStyle(
-  fontFamily: 'PlusJakartaSans',
+final kStudentSectionHeading = GoogleFonts.baloo2(
   fontSize: 20,
   fontWeight: FontWeight.w600,
 );
-const kStudentCardHeading = TextStyle(
-  fontFamily: 'PlusJakartaSans',
+final kStudentCardHeading = GoogleFonts.baloo2(
   fontSize: 16,
   fontWeight: FontWeight.w600,
 );
 
-ThemeData get studentTheme => ThemeData.light().copyWith(
-      // Inter body (preview typography): copyWith has no fontFamily
-      // parameter, so the family is applied through the text theme.
-      textTheme: ThemeData.light().textTheme.apply(fontFamily: 'Inter'),
-      scaffoldBackgroundColor: kStudentBg,
-      cardColor: kStudentCard,
-      colorScheme: const ColorScheme.light(
-        primary: kStudentEmerald,
-        onPrimary: Colors.white,
-        secondary: kStudentLightAccent,
-        onSecondary: Colors.white,
-        surface: kStudentCard,
-        onSurface: kStudentText,
-        surfaceContainerHighest: kStudentCard,
-        outline: kStudentBorder,
-        error: kStudentError,
-      ),
-      cardTheme: const CardThemeData(
-        color: kStudentCard,
-        elevation: 1,
-        shadowColor: Color(0x1A0F172A),
-        shape: RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.all(Radius.circular(kStudentCardRadius)),
-          side: BorderSide(color: kStudentBorder),
-        ),
-      ),
-    );
+/// The Student Hub theme: the shared Minecraft theme (light).
+///
+/// Light: paper background, white blocky cards with 3px ink borders
+/// and hard shadows, grass-green primary, Baloo 2 headings, Nunito
+/// body. See [minecraftThemeData].
+ThemeData get studentTheme => minecraftThemeData(Brightness.light);
 
-/// Dark twin of [studentTheme]: same geometry, same Emerald Green
-/// identity, but the ChatGPT dark surfaces — #0c1410 page (preview
-/// bg, Nov 7), #202B25 cards, #252B2D elevated surfaces, #F8FAF9
-/// primary text, #B0B8B5 secondary text, #343B3D borders. The
-/// greeting banner gradient stays deep emerald → accent green in
-/// both modes.
-ThemeData get studentDarkTheme => ThemeData.dark().copyWith(
-      // Inter body (preview typography): copyWith has no fontFamily
-      // parameter, so the family is applied through the text theme.
-      textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Inter'),
-      scaffoldBackgroundColor: kStudentDarkBg,
-      canvasColor: kStudentDarkCard,
-      cardColor: kStudentDarkCard,
-      colorScheme: const ColorScheme.dark(
-        primary: kStudentEmeraldAccent,
-        onPrimary: Colors.white,
-        secondary: kStudentDarkAccent,
-        onSecondary: Color(0xFF052E16),
-        surface: kStudentDarkCard,
-        onSurface: kStudentDarkText,
-        surfaceContainerHighest: kStudentDarkElevated,
-        onSurfaceVariant: kStudentDarkSubtext,
-        outline: kStudentDarkBorder,
-        error: kStudentError,
-      ),
-      cardTheme: const CardThemeData(
-        color: kStudentDarkCard,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.all(Radius.circular(kStudentCardRadius)),
-          side: BorderSide(color: kStudentDarkBorder),
-        ),
-      ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: kStudentDarkElevated,
-      ),
-    );
+/// Dark twin of [studentTheme]: the shared Minecraft theme (dark).
+/// Same dark surfaces the Hub already used (#0c1410 page, #202B25
+/// cards, #252B2D elevated, #F8FAF9 primary text, #B0B8B5 secondary
+/// text, #343B3D borders), grass-green primary, gold XP, Baloo 2 /
+/// Nunito typography. See [minecraftThemeData].
+ThemeData get studentDarkTheme => minecraftThemeData(Brightness.dark);
 
 /// Applies the Student Hub theme to [child] (dashboard body or a
 /// module screen opened from it). The shell (nav bar, app bar) sits

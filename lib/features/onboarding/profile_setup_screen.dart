@@ -391,7 +391,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Student information (optional)',
                 style: AppText.cardTitle,
               ),
@@ -520,7 +520,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 },
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Employment information (optional)',
                 style: AppText.cardTitle,
               ),

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared widget chart bar segment (filled): solid grass green, 2dp corners. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#58CC02" />
+    <corners android:radius="2dp" />
+</shape>

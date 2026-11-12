@@ -248,11 +248,13 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
                   ),
                 ],
               ),
-              const Text(
+              Text(
                 'Saved on this device only — not shared. The app cannot '
                 'file this for you: copy the message and send it to the '
                 'LGU yourself.',
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: AppLayout.cardGap),
               if (!_loadingDirectory) ...[
@@ -413,7 +415,7 @@ class _ReportFareSheetState extends State<ReportFareSheet> {
               if (_error != null) ...[
                 Text(
                   _error!,
-                  style: const TextStyle(color: Colors.red),
+                  style: const TextStyle(color: MinecraftColors.heartRed),
                 ),
                 const SizedBox(height: AppSpacing.s8),
               ],
@@ -546,7 +548,9 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                 Text(
                   'Marked sent on '
                   '${formatComplaintDateTime(_complaint.submittedAt!)}.',
-                  style: const TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               const SizedBox(height: AppSpacing.s8),
               SelectableText(
@@ -573,10 +577,12 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                   label: Text('Open ${lgu.lguName} page'),
                 )
               else
-                const Text(
+                Text(
                   'No verified LGU Facebook page found for this route. '
                   'Copy the message and send it through another channel.',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               const SizedBox(height: AppSpacing.s8),
               OutlinedButton.icon(
@@ -593,10 +599,12 @@ class _ComplaintDetailSheetState extends State<ComplaintDetailSheet> {
                   icon: const Icon(Icons.check_circle_outline),
                   label: const Text('Mark as sent'),
                 ),
-                const Text(
+                Text(
                   'Opening Facebook does not mark this as sent. After '
                   'you send the message, come back and tap Mark as sent.',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
               const SizedBox(height: AppSpacing.s8),
@@ -704,7 +712,7 @@ class _LguAdminScreenState extends State<LguAdminScreen> {
                 if (error != null)
                   Text(
                     error!,
-                    style: const TextStyle(color: Colors.red),
+                    style: const TextStyle(color: MinecraftColors.heartRed),
                   ),
               ],
             ),

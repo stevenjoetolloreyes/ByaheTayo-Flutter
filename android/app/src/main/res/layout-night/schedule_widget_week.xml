@@ -1,0 +1,1081 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Schedule widget — This Week (4x3) NIGHT variant. Approved preview v2 (Nov 11, 2026).
+     Fixed slots: 7 day rows (Mon-Sun), 3 class lines each. A day row is
+     shown only when that day has classes or is today (same rule as the
+     in-app Classes week tab); other days are GONE. Google events appear
+     in the Google Calendar section below (name + white G badge, as in
+     the preview). RemoteViews rules (Nov 11 Bible widget fix): no plain
+     View, no outline clipping, no full-size photo src — the only src is
+     the E logo (@drawable/launch_image). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/schedule_widget_card_night"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/launch_image"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="THIS WEEK"
+            android:textColor="#EAF3E4"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <!-- Spacer: RemoteViews does not allow android.view.View /
+             Space, so an empty TextView carries the weight. -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:text="" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/schedule_widget_day_badge"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:text="4×3"
+            android:textColor="#10240A"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_day_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:id="@+id/widget_day_1_label"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:text="MON"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/widget_day_1_class_0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_1_class_0_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_1_class_0_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_1_class_0_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_1_class_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_1_class_1_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_1_class_1_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_1_class_1_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_1_class_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_1_class_2_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_1_class_2_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_1_class_2_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/widget_day_1_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No classes today"
+                    android:textColor="#A9BFA4"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/widget_day_1_more"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#A9BFA4"
+                    android:textSize="11sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/widget_day_1_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/schedule_widget_day_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#10240A"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_day_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:id="@+id/widget_day_2_label"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:text="TUE"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/widget_day_2_class_0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_2_class_0_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_2_class_0_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_2_class_0_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_2_class_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_2_class_1_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_2_class_1_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_2_class_1_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_2_class_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_2_class_2_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_2_class_2_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_2_class_2_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/widget_day_2_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No classes today"
+                    android:textColor="#A9BFA4"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/widget_day_2_more"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#A9BFA4"
+                    android:textSize="11sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/widget_day_2_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/schedule_widget_day_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#10240A"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_day_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:id="@+id/widget_day_3_label"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:text="WED"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/widget_day_3_class_0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_3_class_0_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_3_class_0_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_3_class_0_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_3_class_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_3_class_1_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_3_class_1_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_3_class_1_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_3_class_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_3_class_2_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_3_class_2_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_3_class_2_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/widget_day_3_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No classes today"
+                    android:textColor="#A9BFA4"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/widget_day_3_more"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#A9BFA4"
+                    android:textSize="11sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/widget_day_3_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/schedule_widget_day_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#10240A"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_day_4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:id="@+id/widget_day_4_label"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:text="THU"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/widget_day_4_class_0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_4_class_0_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_4_class_0_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_4_class_0_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_4_class_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_4_class_1_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_4_class_1_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_4_class_1_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_4_class_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_4_class_2_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_4_class_2_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_4_class_2_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/widget_day_4_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No classes today"
+                    android:textColor="#A9BFA4"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/widget_day_4_more"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#A9BFA4"
+                    android:textSize="11sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/widget_day_4_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/schedule_widget_day_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#10240A"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_day_5"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:id="@+id/widget_day_5_label"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:text="FRI"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/widget_day_5_class_0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_5_class_0_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_5_class_0_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_5_class_0_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_5_class_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_5_class_1_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_5_class_1_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_5_class_1_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_5_class_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_5_class_2_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_5_class_2_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_5_class_2_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/widget_day_5_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No classes today"
+                    android:textColor="#A9BFA4"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/widget_day_5_more"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#A9BFA4"
+                    android:textSize="11sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/widget_day_5_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/schedule_widget_day_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#10240A"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_day_6"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:id="@+id/widget_day_6_label"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:text="SAT"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/widget_day_6_class_0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_6_class_0_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_6_class_0_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_6_class_0_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_6_class_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_6_class_1_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_6_class_1_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_6_class_1_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_6_class_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_6_class_2_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_6_class_2_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_6_class_2_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/widget_day_6_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No classes today"
+                    android:textColor="#A9BFA4"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/widget_day_6_more"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#A9BFA4"
+                    android:textSize="11sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/widget_day_6_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/schedule_widget_day_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#10240A"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_day_7"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:id="@+id/widget_day_7_label"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:text="SUN"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/widget_day_7_class_0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_7_class_0_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_7_class_0_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_7_class_0_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_7_class_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_7_class_1_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_7_class_1_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_7_class_1_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/widget_day_7_class_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/widget_day_7_class_2_code"
+                        android:layout_width="62dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/widget_day_7_class_2_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#EAF3E4"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/widget_day_7_class_2_room"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A9BFA4"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/widget_day_7_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No classes today"
+                    android:textColor="#A9BFA4"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/widget_day_7_more"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#A9BFA4"
+                    android:textSize="11sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/widget_day_7_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/schedule_widget_day_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#10240A"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    <TextView
+        android:id="@+id/widget_next_up"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="#EAF3E4"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/widget_google_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:background="@drawable/schedule_widget_g_badge"
+            android:gravity="center"
+            android:text="G"
+            android:textColor="#4285F4"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="GOOGLE CALENDAR"
+            android:textColor="#EAF3E4"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_google_0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:background="@drawable/schedule_widget_g_badge"
+            android:gravity="center"
+            android:text="G"
+            android:textColor="#4285F4"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_google_title_0"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="#EAF3E4"
+            android:textSize="12sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_google_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:background="@drawable/schedule_widget_g_badge"
+            android:gravity="center"
+            android:text="G"
+            android:textColor="#4285F4"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_google_title_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="#EAF3E4"
+            android:textSize="12sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_google_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:background="@drawable/schedule_widget_g_badge"
+            android:gravity="center"
+            android:text="G"
+            android:textColor="#4285F4"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_google_title_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="#EAF3E4"
+            android:textSize="12sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_google_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:background="@drawable/schedule_widget_g_badge"
+            android:gravity="center"
+            android:text="G"
+            android:textColor="#4285F4"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_google_title_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="#EAF3E4"
+            android:textSize="12sp" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/widget_google_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="#A9BFA4"
+        android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>

@@ -38,6 +38,7 @@
 // huge points numerals) is not body text and stays out of the
 // scale on purpose.
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Spacing scale (dp). Every gap/padding in the app maps to one of
 /// these values; do not invent ad-hoc numbers.
@@ -71,9 +72,9 @@ abstract final class AppLayout {
   static const double headerGap = 16;
 
   /// Card corner radius — matches the global cardTheme in main.dart
-  /// (light + dark) and the student theme. Card margin stays the
+  /// (light + dark, Minecraft 14px) and the student theme. Card margin stays the
   /// Card default (4dp); never set it to zero.
-  static const double cardRadius = 16;
+  static const double cardRadius = 14;
 
   /// Entry-screen card corners (approved entry spec: range 16-20).
   static const double cardRadiusEntry = 18;
@@ -109,62 +110,68 @@ abstract final class AppLayout {
 }
 
 /// ONE typography scale. Sizes/weights/heights only — never colors.
-/// Headings use Plus Jakarta Sans and body text inherits Inter
-/// from the theme (preview typography, Nov 7).
+/// Headings use Baloo 2 (Minecraft theme, Feature 1 — google_fonts
+/// runtime download, no binary font files in the repo) and body text
+/// inherits Nunito from the theme (preview typography, Nov 7, updated
+/// to the Minecraft fonts by the Nov 12 theme audit). Heading styles
+/// are `static final` (not const) because GoogleFonts styles are
+/// built at runtime; call sites must not use them inside `const`
+/// widgets.
 abstract final class AppText {
-  static const TextStyle displayLarge =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 32, fontWeight: FontWeight.w800);
-  static const TextStyle displayMedium =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 28, fontWeight: FontWeight.w800);
+  static final TextStyle displayLarge = GoogleFonts.baloo2(
+    fontSize: 32,
+    fontWeight: FontWeight.w800,
+  );
+  static final TextStyle displayMedium = GoogleFonts.baloo2(
+    fontSize: 28,
+    fontWeight: FontWeight.w800,
+  );
 
   /// Onboarding titles (approved: 26sp w800 / 1.2).
-  static const TextStyle titleLarge =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 26, fontWeight: FontWeight.w800, height: 1.2);
+  static final TextStyle titleLarge = GoogleFonts.baloo2(
+    fontSize: 26,
+    fontWeight: FontWeight.w800,
+    height: 1.2,
+  );
 
   /// Tab page titles ('Friends', 'Know your fare before you go').
-  static const TextStyle pageTitle =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 22, fontWeight: FontWeight.w800);
+  static final TextStyle pageTitle = GoogleFonts.baloo2(
+    fontSize: 22,
+    fontWeight: FontWeight.w800,
+  );
 
   /// 24sp strong titles (verify-email heading).
-  static const TextStyle titleMedium =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 24, fontWeight: FontWeight.w800);
+  static final TextStyle titleMedium = GoogleFonts.baloo2(
+    fontSize: 24,
+    fontWeight: FontWeight.w800,
+  );
 
   /// AppBar titles + account header titles.
-  static const TextStyle titleSmall =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 20, fontWeight: FontWeight.w700);
+  static final TextStyle titleSmall = GoogleFonts.baloo2(
+    fontSize: 20,
+    fontWeight: FontWeight.w700,
+  );
 
   /// Strong 20sp titles (student greeting banner, sheet titles).
-  static const TextStyle titleStrong =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 20, fontWeight: FontWeight.w800);
+  static final TextStyle titleStrong = GoogleFonts.baloo2(
+    fontSize: 20,
+    fontWeight: FontWeight.w800,
+  );
 
-  static const TextStyle heading =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 18, fontWeight: FontWeight.w700);
-  static const TextStyle headingStrong =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 18, fontWeight: FontWeight.w800);
+  static final TextStyle heading = GoogleFonts.baloo2(
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+  );
+  static final TextStyle headingStrong = GoogleFonts.baloo2(
+    fontSize: 18,
+    fontWeight: FontWeight.w800,
+  );
 
   /// Section titles inside cards ('My Friends', 'Student Hub').
-  static const TextStyle sectionTitle =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 17, fontWeight: FontWeight.w700);
+  static final TextStyle sectionTitle = GoogleFonts.baloo2(
+    fontSize: 17,
+    fontWeight: FontWeight.w700,
+  );
   static const TextStyle bodyLarge = TextStyle(fontSize: 17);
 
   static const TextStyle body = TextStyle(fontSize: 16);
@@ -193,16 +200,16 @@ abstract final class AppText {
       TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
 
   /// Strong body values (stat values).
-  static const TextStyle bodyStrong =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 16, fontWeight: FontWeight.w800);
+  static final TextStyle bodyStrong = GoogleFonts.baloo2(
+    fontSize: 16,
+    fontWeight: FontWeight.w800,
+  );
 
   /// Large numerals without a line-height (balance amounts).
-  static const TextStyle displaySmall =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 26, fontWeight: FontWeight.w800);
+  static final TextStyle displaySmall = GoogleFonts.baloo2(
+    fontSize: 26,
+    fontWeight: FontWeight.w800,
+  );
 
   /// Person names in friend/request rows.
   static const TextStyle name =
@@ -222,16 +229,16 @@ abstract final class AppText {
       TextStyle(fontSize: 15, fontWeight: FontWeight.w600);
 
   /// Card titles ('Know something that can help commuters?').
-  static const TextStyle cardTitle =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 16, fontWeight: FontWeight.w700);
+  static final TextStyle cardTitle = GoogleFonts.baloo2(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+  );
 
   /// Empty-state titles (friends).
-  static const TextStyle emptyTitle =
-      TextStyle(
-      fontFamily: 'PlusJakartaSans',
-      fontSize: 16, fontWeight: FontWeight.w700);
+  static final TextStyle emptyTitle = GoogleFonts.baloo2(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+  );
 }
 
 /// Card with the shared tab geometry: theme 16dp corners + 16dp

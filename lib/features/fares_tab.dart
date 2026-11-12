@@ -9,6 +9,7 @@
 // + 22% road allowance) still powers those breakdown sheets and the
 // Map/Trips path. No dummy data: every number shown comes from the
 // rate table below or from the distance the user actually picked.
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'top_popup.dart';
@@ -32,16 +33,17 @@ import 'onboarding/auth_service.dart';
 import 'operator_fares.dart';
 import 'place_picker.dart';
 import 'route_fare_overrides.dart';
+import 'student/fares_widget_service.dart';
 
 // Fares-local ChatGPT design tokens (Premium Dark + Emerald Green,
 // adopted Nov 5 as a LOOSE UI base). Tab-local on purpose: the shared
 // AppLayout/AppText scale is used by other tabs and stays untouched.
 // Only the tokens this tab actually uses are defined here.
-const kFaresDarkCard = Color(0xFF202B25);
-const kFaresCardRadius = 20.0;
+const kFaresDarkCard = MinecraftColors.darkCard;
+const kFaresCardRadius = MinecraftShapes.cardRadius;
 const kFaresInputRadius = 14.0;
-const kFaresPageTitle = TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
-const kFaresCardHeading = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+final kFaresPageTitle = MinecraftText.heading(fontSize: 26);
+final kFaresCardHeading = MinecraftText.title(fontSize: 16);
 
 /// ChatGPT dark card surface (#202B25); light cards stay white.
 Color _faresCardColor(BuildContext context) {
@@ -50,10 +52,10 @@ Color _faresCardColor(BuildContext context) {
       : Colors.white;
 }
 
-/// Brand tokens (Nov 5 emerald system, shared with the preview):
-/// Deep Emerald #14532D and accent #16A34A.
-const kFaresDeepEmerald = Color(0xFF14532D);
-const kFaresAccent = Color(0xFF16A34A);
+/// Brand tokens (Minecraft theme, Nov 12 audit): deep leaves +
+/// grass green.
+const kFaresDeepEmerald = MinecraftColors.deepLeaves;
+const kFaresAccent = MinecraftColors.grassGreen;
 
 /// 20% off, rounded to the nearest ₱0.25 — the same rule
 /// [computeFare] uses for a discounted fare.
@@ -1255,6 +1257,9 @@ class _FaresTabState extends State<FaresTab> {
       final companies = await companyRepo.loadAll();
       if (mounted) setState(() => _busCompanies = companies);
     }
+    // Home screen widgets (Nov 11): the fares shown on the
+    // Fares tab changed — push them to the Fares widget.
+    unawaited(FaresWidgetService.sync());
   }
 
   /// Opens the Add Route form (admin only — the button is hidden

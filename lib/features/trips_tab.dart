@@ -533,7 +533,7 @@ class _TripsTabState extends State<TripsTab> {
               style: TextStyle(fontSize: 12),
             ),
             const SizedBox(height: AppLayout.cardGap),
-            const Text(
+            Text(
               'Stops',
               style: AppText.cardTitle,
             ),

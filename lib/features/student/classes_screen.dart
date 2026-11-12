@@ -5,6 +5,7 @@
 // section in-app, and — since the Nov 8 local notifications build
 // — as scheduled system notifications too: every save re-runs the
 // notification schedule (see local_notifications.dart).
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -21,7 +22,9 @@ import 'classes_plus_menu.dart';
 import 'google_calendar_sync.dart';
 import 'google_events.dart';
 import 'schedule_scan.dart';
+import 'schedule_widget_service.dart';
 import 'student_data.dart';
+import 'tasks_widget_service.dart';
 
 const _subjectColors = [
   0xFF16A34A,
@@ -212,6 +215,9 @@ class _ClassesScreenState extends State<ClassesScreen>
       _items = items.map(AssignmentItem.fromJson).toList()
         ..sort((a, b) => a.due.compareTo(b.due));
     });
+    // Refresh the Schedule home screen widgets from the stored
+    // schedule (best-effort, never blocks this screen).
+    unawaited(ScheduleWidgetService.sync());
   }
 
   /// Google-event tap (its list card): the Edit / Remove sheet.
@@ -227,10 +233,12 @@ class _ClassesScreenState extends State<ClassesScreen>
           if (i >= 0) _googleEvents[i] = updated;
         });
         await saveGoogleEvents(_googleEvents);
+        unawaited(ScheduleWidgetService.sync());
       },
       onRemoved: (removed) async {
         setState(() => _googleEvents.removeWhere((e) => e.id == removed.id));
         await saveGoogleEvents(_googleEvents);
+        unawaited(ScheduleWidgetService.sync());
       },
     );
   }
@@ -241,6 +249,7 @@ class _ClassesScreenState extends State<ClassesScreen>
       _subjects.map((s) => s.toJson()).toList(),
     );
     requestLocalNotificationRefresh();
+    unawaited(ScheduleWidgetService.sync());
   }
 
   Future<void> _saveItems() async {
@@ -249,6 +258,9 @@ class _ClassesScreenState extends State<ClassesScreen>
       _items.map((i) => i.toJson()).toList(),
     );
     requestLocalNotificationRefresh();
+    // Home screen widgets (Nov 11): the tasks changed —
+    // push the stored assignments to the Tasks widget.
+    unawaited(TasksWidgetService.sync());
   }
 
   void _snack(String m) {
@@ -544,6 +556,7 @@ class _ClassesScreenState extends State<ClassesScreen>
             : 'No classes added — the synced events are already on your timetable.',
       );
     }
+    unawaited(ScheduleWidgetService.sync());
   }
 
   /// Honest setup-missing state: the real sync cannot run until
@@ -1463,7 +1476,7 @@ class _ScannedSpringInState extends State<_ScannedSpringIn>
                 child: IgnorePointer(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16A34A)
+                      color: MinecraftColors.grassGreen
                           .withValues(alpha: _flash.value.clamp(0.0, 1.0)),
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1608,10 +1621,10 @@ class _ScanProgressDialogState extends State<_ScanProgressDialog>
                       child: Container(
                         height: 3,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF16A34A),
+                          color: MinecraftColors.grassGreen,
                           boxShadow: [
                             BoxShadow(
-                              color: Color(0xFF16A34A),
+                              color: MinecraftColors.grassGreen,
                               blurRadius: 8,
                               spreadRadius: 1,
                             ),

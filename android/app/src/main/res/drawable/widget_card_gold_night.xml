@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared widget inner card (gold, night): dark gold, 3px ink border, blocky 12dp corners. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#2E2A12" />
+    <stroke
+        android:width="3dp"
+        android:color="#0A0F06" />
+    <corners android:radius="12dp" />
+</shape>

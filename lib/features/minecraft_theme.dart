@@ -486,7 +486,13 @@ class _MinecraftBlockButtonState extends State<MinecraftBlockButton> {
     // press translate (4px down + collapsed shadow) — different
     // transform, same tap. The wrapper only observes the pointer
     // here; the GestureDetector below still owns the tap.
+    // Opaque hit behavior (Nov 11, 2026): the button must fire
+    // across its whole rect. The default (deferToChild) only fires
+    // where the inner Row's content sits — a full-width button
+    // (e.g. Chat Support's "Close this chat") then has dead zones
+    // on either side of its label where taps do nothing.
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: widget.onPressed,
       onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
       onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,

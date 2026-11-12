@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Schedule widget card: white card, 3px ink border, blocky 16dp corners. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFFF" />
+    <stroke
+        android:width="3dp"
+        android:color="#1C2B12" />
+    <corners android:radius="16dp" />
+</shape>

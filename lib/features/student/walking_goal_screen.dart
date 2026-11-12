@@ -193,7 +193,7 @@ class _ReadyBody extends StatelessWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text('Daily Step Goal',
                           style: AppText.sectionTitle),
                     ),
@@ -275,7 +275,7 @@ class _ReadyBody extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text('Weekly Walking History',
                           style: AppText.sectionTitle),
                     ),

@@ -7,6 +7,8 @@
 // from the card widget); list quotes share as text. Daily system
 // notifications are NOT included — this app has no push-notification
 // plugin, so the Daily quote surfaces on the dashboard and here.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../top_popup.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +17,7 @@ import 'package:share_plus/share_plus.dart';
 import '../app_layout.dart';
 import '../minecraft_theme.dart';
 import 'share_card.dart';
+import 'daily_quotes_widget_service.dart';
 import 'student_data.dart';
 
 class QuotesScreen extends StatefulWidget {
@@ -37,6 +40,9 @@ class _QuotesScreenState extends State<QuotesScreen> {
   void initState() {
     super.initState();
     _load();
+    // Home screen widgets (Nov 11): the quote of the day
+    // rotates daily — push today's quote to the widget.
+    unawaited(DailyQuotesWidgetService.syncQuotes());
   }
 
   Future<void> _load() async {

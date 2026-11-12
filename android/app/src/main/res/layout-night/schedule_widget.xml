@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Schedule widget — Next Class (4x2) NIGHT variant. Approved preview v2 (Nov 11, 2026).
+     Shows whether there are classes today, the next class coming up
+     (code + name, day/date, time range, room, "COMING UP / Tomorrow
+     at 9:00 AM"), and the Google Calendar section (each synced event
+     with its white G badge and its name only, as in the preview).
+     RemoteViews rules (Nov 11 Bible widget fix): no plain View, no
+     outline clipping, no full-size photo src — the only src is the E
+     logo (@drawable/launch_image). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/schedule_widget_card_night"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/launch_image"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="SCHEDULE"
+            android:textColor="#EAF3E4"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:text="" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/schedule_widget_day_badge"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:text="4×2"
+            android:textColor="#10240A"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_today_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="No classes today"
+        android:textColor="#EAF3E4"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_today_sub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#A9BFA4"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/widget_next_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/schedule_widget_next_card_night"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/widget_next_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="NEXT CLASS · CSS101"
+            android:textColor="#58CC02"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_next_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Installing and Configuring Computer Systems"
+            android:textColor="#EAF3E4"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_next_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Thu, Nov 12"
+            android:textColor="#EAF3E4"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_next_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="9:00–10:30 AM · CC203"
+            android:textColor="#EAF3E4"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="COMING UP"
+            android:textColor="#A9BFA4"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_next_when"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tomorrow at 9:00 AM"
+            android:textColor="#EAF3E4"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_empty_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No subjects yet."
+            android:textColor="#EAF3E4"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_empty_sub"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Add a subject to build your timetable."
+            android:textColor="#A9BFA4"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_google_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/schedule_widget_g_badge"
+                android:gravity="center"
+                android:text="G"
+                android:textColor="#4285F4"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="GOOGLE CALENDAR"
+                android:textColor="#EAF3E4"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_google_0"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/schedule_widget_g_badge"
+                android:gravity="center"
+                android:text="G"
+                android:textColor="#4285F4"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_google_title_0"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="NSTP 1"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_google_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/schedule_widget_g_badge"
+                android:gravity="center"
+                android:text="G"
+                android:textColor="#4285F4"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_google_title_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="Life and Works of Rizal"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_google_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/schedule_widget_g_badge"
+                android:gravity="center"
+                android:text="G"
+                android:textColor="#4285F4"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_google_title_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="Discrete Mathematics"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_google_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/schedule_widget_g_badge"
+                android:gravity="center"
+                android:text="G"
+                android:textColor="#4285F4"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_google_title_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="Vigan"
+                android:textColor="#EAF3E4"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_google_more"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#A9BFA4"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
+</LinearLayout>

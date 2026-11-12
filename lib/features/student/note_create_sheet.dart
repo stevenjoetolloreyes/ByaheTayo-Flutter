@@ -26,7 +26,7 @@ Future<Note?> showNoteCreateMenu(
     context: context,
     barrierColor: const Color.fromRGBO(8, 12, 10, 0.3),
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (_) => const _NoteCreateMenuSheet(),
   );
@@ -173,7 +173,7 @@ Future<Note?> _showAddNoteSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (_) => const _AddNoteSheet(),
   );
@@ -448,7 +448,7 @@ Future<Note?> _showExtractDraftSheet(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (_) => _ExtractDraftSheet(file: file, result: result),
   );

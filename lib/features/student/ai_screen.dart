@@ -423,11 +423,11 @@ class _AiChatPanelState extends State<AiChatPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final bubbleAi = isDark ? const Color(0xFF1A2C22) : const Color(0xFFEEF4F0);
+    final bubbleAi = isDark
+        ? MinecraftColors.darkElevated
+        : MinecraftColors.cream;
     final bubbleUser = MinecraftColors.grassGreen;
-    final textColor = isDark
-        ? const Color(0xFFEEF5F1)
-        : const Color(0xFF10231A);
+    final textColor = isDark ? const Color(0xFFEEF5F1) : MinecraftColors.ink;
     return Column(
       children: [
         // On-device line (the panel header above already shows the

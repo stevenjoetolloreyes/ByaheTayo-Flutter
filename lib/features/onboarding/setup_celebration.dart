@@ -12,7 +12,7 @@
 // Watch demo tour (see the TOUR HOOK note on [StudentTab] — the
 // tour itself is Feature 3, not built here).
 //
-// Style: dark emerald (#14532D / #16A34A on dark bg #0c1410),
+// Style: Minecraft dark (grass #58CC02 / deep leaves #2F7A12 on dark bg #0c1410),
 // ENGLISH labels, Material icons only, no emoji as UI icons.
 // Android-first; same layout on Android and iOS.
 import 'dart:async';
@@ -20,22 +20,23 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../minecraft_theme.dart';
 import 'splash_sound.dart';
 
 /// Dark emerald background shared by both overlays.
-const _overlayBackground = Color(0xFF0C1410);
+const _overlayBackground = MinecraftColors.darkBackground;
 
 /// Deep emerald (circle ring / secondary surfaces).
-const _deepEmerald = Color(0xFF14532D);
+const _deepEmerald = MinecraftColors.deepLeaves;
 
 /// Primary emerald (circle, buttons).
-const _emerald = Color(0xFF16A34A);
+const _emerald = MinecraftColors.grassGreen;
 
 /// Light emerald (confetti + secondary text).
-const _lightEmerald = Color(0xFF4ADE80);
+const _lightEmerald = MinecraftColors.emerald;
 
 /// Gold confetti accent.
-const _gold = Color(0xFFFACC15);
+const _gold = MinecraftColors.gold;
 
 /// How long the celebration plays before auto-advancing to the
 /// prompt. Tapping anywhere skips ahead immediately.

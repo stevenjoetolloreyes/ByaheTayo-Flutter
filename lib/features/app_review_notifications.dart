@@ -203,7 +203,7 @@ class _AppReviewNotificationsSheetState
       stream: _notificationsStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Padding(
+          return Padding(
             padding: AppLayout.pagePaddingLarge,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -217,7 +217,7 @@ class _AppReviewNotificationsSheetState
           );
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
+          return Padding(
             padding: AppLayout.pagePaddingLarge,
             child: Center(child: CircularProgressIndicator()),
           );
@@ -230,7 +230,7 @@ class _AppReviewNotificationsSheetState
           shrinkWrap: true,
           padding: AppLayout.pagePaddingLarge,
           children: [
-            const Text('Notifications', style: AppText.headingStrong),
+            Text('Notifications', style: AppText.headingStrong),
             const SizedBox(height: AppSpacing.s12),
             for (final notification in notifications)
               _NotificationEntry(notification: notification),
@@ -248,7 +248,7 @@ class _NotificationsEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
+    return Padding(
       padding: AppLayout.pagePaddingLarge,
       child: Column(
         mainAxisSize: MainAxisSize.min,

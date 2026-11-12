@@ -14,7 +14,7 @@
 // originated on the Sign In page and the restored profile is
 // complete enough to land on the dashboard.
 //
-// Style: dark emerald (#14532D / #16A34A on dark bg #0c1410),
+// Style: Minecraft dark (grass #58CC02 / deep leaves #2F7A12 on dark bg #0c1410),
 // ENGLISH labels, Material icons only, no emoji as UI icons.
 // Android-first; same layout on Android and iOS.
 import 'dart:async';
@@ -26,14 +26,16 @@ import 'auth_service.dart';
 import 'onboarding_state.dart';
 import 'splash_sound.dart';
 
+import '../minecraft_theme.dart';
+
 /// Dark emerald background shared with the Feature 2 overlays.
-const _overlayBackground = Color(0xFF0C1410);
+const _overlayBackground = MinecraftColors.darkBackground;
 
 /// Deep emerald (avatar ring / secondary surfaces).
-const _deepEmerald = Color(0xFF14532D);
+const _deepEmerald = MinecraftColors.deepLeaves;
 
 /// Primary emerald (E badge, rings).
-const _emerald = Color(0xFF16A34A);
+const _emerald = MinecraftColors.grassGreen;
 
 /// Light emerald (subtitle text).
 const _lightEmeraldText = Color(0xFFBBF7D0);

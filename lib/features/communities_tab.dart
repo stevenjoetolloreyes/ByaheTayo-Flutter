@@ -49,20 +49,18 @@ import 'minecraft_theme.dart';
 // Emerald Green #14532D, dark accent #34D399, light accent #059669).
 // Status badge tints: pale in light mode, deep semantic tints in
 // dark mode so badges stay readable on a dark card.
-const kCommunityEmerald = Color(0xFF14532D);
+const kCommunityEmerald = MinecraftColors.deepLeaves;
 
-// Card corner radius (ChatGPT: 18–22px).
-const kCommunityCardRadius = 20.0;
+// Card corner radius (Minecraft: 14px).
+const kCommunityCardRadius = MinecraftShapes.cardRadius;
 
 // Communities typography (ChatGPT scale, tab-local).
 // Page title 26 Bold, section heading 20 Semibold, card heading
-// 16 Semibold. Body text keeps the app's established sizes.
-const kCommunityPageTitle =
-    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
-const kCommunitySectionHeading =
-    TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
-const kCommunityCardHeading =
-    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+// 16 Semibold (Minecraft theme, Nov 12 audit: Baloo 2). Body text
+// keeps the app's established sizes.
+final kCommunityPageTitle = MinecraftText.heading(fontSize: 26);
+final kCommunitySectionHeading = MinecraftText.heading(fontSize: 20);
+final kCommunityCardHeading = MinecraftText.title(fontSize: 16);
 
 class CommunitiesTab extends StatefulWidget {
   const CommunitiesTab({
@@ -588,7 +586,7 @@ class _CommunitiesTabState extends State<CommunitiesTab> {
               decoration: BoxDecoration(
                 color: dark
                     ? kCommunityEmerald
-                    : const Color(0xFFDCFCE7),
+                    : const Color(0xFFD9F7C4),
                 borderRadius: BorderRadius.circular(12),
                 // Feature 4: blocky 2.5px border on the
                 // description box.

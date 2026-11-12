@@ -26,6 +26,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
+import 'minecraft_theme.dart';
 
 /// How long a top popup stays up before auto-dismissing.
 const Duration topPopupDuration = Duration(seconds: 5);
@@ -76,9 +77,11 @@ class TopPopup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // Preview geometry: 1px #22c55e border, 16px radius, content
-    // padding 12/14/15, and the 3px #22c55e drain bar pinned to the
-    // bottom edge (not in-flow under the text).
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Minecraft geometry (Nov 12 audit): 3px ink border (1px dark
+    // border in dark mode), 14px radius, content padding 12/14/15,
+    // and the 3px grass drain bar pinned to the bottom edge (not
+    // in-flow under the text).
     final content = Stack(
       children: [
         Padding(
@@ -90,9 +93,15 @@ class TopPopup extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF16A34A),
+                    decoration: BoxDecoration(
+                      color: MinecraftColors.grassGreen,
                       shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark
+                            ? MinecraftColors.darkBorder
+                            : MinecraftColors.border,
+                        width: 2,
+                      ),
                     ),
                     padding: const EdgeInsets.all(6),
                     child: const Icon(
@@ -129,7 +138,9 @@ class TopPopup extends StatelessWidget {
                     TextButton(
                       onPressed: onAction,
                       style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF16A34A),
+                        foregroundColor: isDark
+                            ? MinecraftColors.emerald
+                            : MinecraftColors.deepLeaves,
                         padding:
                             const EdgeInsets.symmetric(horizontal: 8),
                         minimumSize: Size.zero,
@@ -152,7 +163,7 @@ class TopPopup extends StatelessWidget {
             animation: progress,
             builder: (context, _) => LinearProgressIndicator(
               value: 1 - progress.value,
-              color: const Color(0xFF22C55E),
+              color: MinecraftColors.grassGreen,
               backgroundColor: Colors.transparent,
               minHeight: 3,
             ),
@@ -161,8 +172,11 @@ class TopPopup extends StatelessWidget {
       ],
     );
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: const BorderSide(color: Color(0xFF22C55E)),
+      borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
+      side: BorderSide(
+        color: isDark ? MinecraftColors.darkBorder : MinecraftColors.border,
+        width: isDark ? 1 : MinecraftShapes.cardBorderWidth,
+      ),
     );
     if (onTap == null) {
       return Material(
@@ -180,7 +194,7 @@ class TopPopup extends StatelessWidget {
       shape: shape,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(MinecraftShapes.cardRadius),
         child: content,
       ),
     );

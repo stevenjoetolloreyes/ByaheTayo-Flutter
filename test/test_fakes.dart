@@ -153,6 +153,77 @@ class FakeAuthService implements AuthService {
     return user;
   }
 
+  /// Sign-in methods the fake reports for the current user. Tests
+  /// set this to drive the My Data delete re-auth step: ['password']
+  /// for email accounts, ['google.com'] for Google accounts.
+  List<String> signInMethodsResult = const ['password'];
+
+  /// True after a successful re-authentication in this fake.
+  bool reauthenticated = false;
+
+  /// True after [deleteCurrentUser] runs.
+  bool userDeleted = false;
+
+  /// Password the fake accepts for re-authentication. Defaults to
+  /// the record's password (set by [createAccount] or [signIn]);
+  /// tests may override it directly.
+  String? reauthPasswordOverride;
+
+  @override
+  Future<List<String>> signInMethods() async =>
+      _user == null ? [] : List.of(signInMethodsResult);
+
+  @override
+  Future<void> reauthenticateWithPassword({
+    required String password,
+  }) async {
+    _checkConfigured();
+    final user = _user;
+    if (user == null) {
+      throw const AuthException('No user is signed in.');
+    }
+    final record = _records[user.email];
+    final expected = reauthPasswordOverride ?? record?.password ?? '';
+    if (password != expected) {
+      throw const AuthException('Incorrect email or password.');
+    }
+    reauthenticated = true;
+  }
+
+  @override
+  Future<void> reauthenticateWithGoogle() async {
+    _checkConfigured();
+    if (_user == null) {
+      throw const AuthException('No user is signed in.');
+    }
+    if (googleCanceled) {
+      throw const AuthException('Google sign-in was canceled.');
+    }
+    final user = googleUser;
+    if (user == null || user.email != _user!.email) {
+      throw const AuthException(
+        'That Google account does not match this account.',
+      );
+    }
+    reauthenticated = true;
+  }
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    _checkConfigured();
+    if (_user == null) {
+      throw const AuthException('No user is signed in.');
+    }
+    if (!reauthenticated) {
+      throw const AuthException(
+        'Please sign in again, then try deleting your account.',
+      );
+    }
+    _user = null;
+    userDeleted = true;
+    _controller.add(null);
+  }
+
   @override
   Future<void> signOut() async {
     _checkConfigured();

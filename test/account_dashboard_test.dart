@@ -121,7 +121,7 @@ void main() {
     expect(find.text('Terms and Conditions'), findsOneWidget);
     expect(find.text('Privacy Policy'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
-    expect(find.text('ESTUDYANTEGO · VERSION 1.0.0'), findsOneWidget);
+    expect(find.text('ESTUDYANTEGO · VERSION 3.5.1'), findsOneWidget);
     // No invented identity, no guest wording, no fake badge.
     expect(find.text('Guest'), findsNothing);
     expect(find.text('No account signed in'), findsNothing);

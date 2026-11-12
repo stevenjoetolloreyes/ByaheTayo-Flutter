@@ -9,9 +9,9 @@
 // account balance), Transaction History, Account Information,
 // Preferences, and Security & Privacy. What changed: every action is
 // real now — profile editing, password reset, email verification,
-// notification permission status, theme switching, and sign-out all
-// do what they say. There is no account deletion (omitted: it needs
-// Firebase re-authentication to be safe).
+// notification permission status, theme switching, sign-out, and
+// (My Data, Nov 12) data export + account deletion with a fresh
+// re-authentication first — all do what they say.
 
 import 'package:flutter/material.dart';
 import 'top_popup.dart';
@@ -21,9 +21,13 @@ import 'about_screen.dart';
 import 'ad_service.dart';
 import 'admin_access.dart';
 import 'app_layout.dart';
+import 'chat_support.dart';
+import 'chat_support_screen.dart';
 import 'minecraft_theme.dart';
+import 'my_data_screen.dart';
 import 'app_reviews.dart';
 import 'app_reviews_admin_screen.dart';
+import 'support_inbox_screen.dart';
 import 'bus_stops.dart';
 import 'credits_repository.dart';
 import 'custom_routes.dart';
@@ -39,37 +43,38 @@ import 'onboarding/permission_service.dart';
 import 'points_wallet_repository.dart';
 import 'profile_avatar.dart';
 import 'rewards_screen.dart';
+import 'security/security_center_screen.dart';
+import 'security/session_service.dart';
 import 'student_id_card.dart';
 import 'subscription_membership.dart';
 
-// Account tab's OWN design tokens — ChatGPT design system Steven
-// adopted Nov 5 as a LOOSE UI base ("wag mo seryusuhin"): Premium
-// Dark + Emerald Green with a matching Light Mode. Adapted, not
-// forced — the approved Gemini layout (profile card, wallet,
-// subscription, quick actions, grouped sections, admin card) is
-// unchanged; only the colors, radii, typography and spacing below
-// are the tab's own. Primary stays Deep Emerald Green #14532D in
-// both modes; the readable dark accent is #34D399 and the light
-// accent is #059669. The glass (iPhone) variant keeps its
+// Account tab's OWN design tokens — Minecraft theme (Nov 12, 2026
+// audit). The tab used to carry ChatGPT "Premium Dark + Emerald
+// Green" tokens (deep emerald #14532D primary, #16A34A accent,
+// 20px cards, 14px buttons). The audit repointed them at the shared
+// Minecraft tokens in lib/features/minecraft_theme.dart (grass
+// #58CC02, deep leaves #2F7A12, emerald #00D68F, 14px cards with 3px
+// ink borders, 12px buttons) so the Account tab renders in the same
+// theme as the rest of the app. The approved Gemini layout (profile
+// card, wallet, subscription, quick actions, grouped sections, admin
+// card) is unchanged; only the colors, radii, and typography below
+// are the tab's own. The glass (iPhone) variant keeps its
 // translucent-white surfaces; only its green tints are retokened.
-const kAccountEmerald = Color(0xFF14532D);
-const kAccountEmeraldAccent = Color(0xFF16A34A);
-const kAccountLightAccent = Color(0xFF059669);
-const kAccountDarkAccent = Color(0xFF34D399);
-const kAccountDarkSurface = Color(0xFF18221D);
-const kAccountDarkCard = Color(0xFF202B25);
+const kAccountEmerald = MinecraftColors.deepLeaves;
+const kAccountEmeraldAccent = MinecraftColors.grassGreen;
+const kAccountLightAccent = MinecraftColors.emerald;
+const kAccountDarkAccent = MinecraftColors.emerald;
+const kAccountDarkSurface = MinecraftColors.darkBackground;
+const kAccountDarkCard = MinecraftColors.darkCard;
 const kAccountWarning = Color(0xFFF59E0B);
-// Card corner radius (ChatGPT: 18–22px) and button radius (14px).
-const kAccountCardRadius = 20.0;
-const kAccountButtonRadius = 14.0;
-// Account typography (ChatGPT scale, tab-local so the shared
-// AppText scale — used by other tabs — stays untouched).
+// Card corner radius (Minecraft: 14px) and button radius (12px).
+const kAccountCardRadius = MinecraftShapes.cardRadius;
+const kAccountButtonRadius = MinecraftShapes.buttonRadius;
+// Account typography (Minecraft theme, Nov 12 audit): Baloo 2.
 // Page title 26 Bold, card heading 16 Semibold. Body and secondary
 // text keep the app's established sizes.
-const kAccountPageTitle =
-    TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
-const kAccountCardHeading =
-    TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+final kAccountPageTitle = MinecraftText.heading(fontSize: 26);
+final kAccountCardHeading = MinecraftText.title(fontSize: 16);
 
 class AccountTab extends StatefulWidget {
   const AccountTab({
@@ -81,6 +86,7 @@ class AccountTab extends StatefulWidget {
     this.profile,
     required this.permissionService,
     this.notificationService,
+    this.sessionService,
     this.walletController,
     this.creditsController,
     this.adService,
@@ -116,6 +122,11 @@ class AccountTab extends StatefulWidget {
   /// which case the Notification Settings screen creates its own
   /// service for the session). Wired in main.dart.
   final LocalNotificationService? notificationService;
+
+  /// Login Alerts + Session Manager (Account → Security). Null in
+  /// bare widget tests and when Firebase is not configured — the
+  /// Security Center row is hidden then.
+  final SessionService? sessionService;
 
   /// Shared wallet state (null in bare widget tests). When it has a
   /// real backend, the wallet card and transaction history show live
@@ -183,6 +194,17 @@ class _AccountTabState extends State<AccountTab> {
   /// (permission + four real reminder toggles) replaces the Account
   /// content until Back is tapped.
   bool _showingNotifications = false;
+
+  /// Security Center screen shown INSIDE the Account tab, same
+  /// pattern as [_showingNotifications]: signed-in devices +
+  /// login history, returned to via Back.
+  bool _showingSecurityCenter = false;
+
+  /// My Data screen shown INSIDE the Account tab, same pattern as
+  /// [_showingAbout]: export + delete account, with real counts,
+  /// replaces the Account content until Back is tapped (or the
+  /// account is deleted, which signs the shell out).
+  bool _showingMyData = false;
 
   AuthUser? get _user => widget.user;
   UserProfile? get _profile => widget.profile;
@@ -330,7 +352,7 @@ class _AccountTabState extends State<AccountTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Transaction History',
                 style: AppText.heading,
               ),
@@ -408,6 +430,49 @@ class _AccountTabState extends State<AccountTab> {
           body: AppReviewsScreen(
             repository: widget.authService.isConfigured
                 ? FirestoreAppReviewsRepository()
+                : null,
+            adminEmail: widget.user?.email,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Chat Support (Nov 11, 2026): the assisted student ↔ admin
+  /// chat from preview v17. Signed-in only — signed-out users go
+  /// to sign-in first ([_requireAccount]). The repository is
+  /// created only when Firebase is configured; when null the
+  /// screen shows an honest unavailable state.
+  void _openChatSupport() {
+    _requireAccount(() {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatSupportScreen(
+            repository: widget.authService.isConfigured
+                ? FirestoreSupportRepository()
+                : null,
+            user: widget.user,
+            studentName: supportFirstName(
+              widget.profile?.displayName ?? widget.user?.displayName,
+              widget.user?.email,
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  /// Support Inbox (Nov 11, 2026): the admin-only screen that
+  /// lists student conversations. Same shape as _openAppReviews —
+  /// the screen is a body-only widget wrapped in a Scaffold here.
+  void _openSupportInbox() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Support Inbox')),
+          body: SupportInboxScreen(
+            repository: widget.authService.isConfigured
+                ? FirestoreSupportRepository()
                 : null,
             adminEmail: widget.user?.email,
           ),
@@ -526,6 +591,17 @@ class _AccountTabState extends State<AccountTab> {
   }
 
   Future<void> _signOut() async {
+    // The session record is deleted while still signed in (the
+    // delete needs auth), then Firebase signs out. Without a
+    // service the old path runs unchanged.
+    final service = widget.sessionService;
+    if (service != null) {
+      await service.signOutCurrent(
+        signOutAuth: () => widget.authService.signOut(),
+      );
+      if (mounted) widget.onSignedOut();
+      return;
+    }
     try {
       await widget.authService.signOut();
     } on AuthException catch (e) {
@@ -557,6 +633,22 @@ class _AccountTabState extends State<AccountTab> {
         customRouteRepository: widget.customRouteRepository,
       );
     }
+    // My Data screen (Nov 12): export + delete account, shown
+    // inside the Account tab, returned to via Back — or, after a
+    // successful deletion, the shell signs out.
+    if (_showingMyData && _signedIn) {
+      return MyDataScreen(
+        user: _user!,
+        authService: widget.authService,
+        profile: _profile,
+        walletController: widget.walletController,
+        onBack: () => setState(() => _showingMyData = false),
+        onAccountDeleted: () {
+          setState(() => _showingMyData = false);
+          widget.onSignedOut();
+        },
+      );
+    }
     // Notification Settings screen: permission + four real reminder
     // toggles, shown inside the Account tab, returned to via Back.
     // The permission status is reloaded on return, so the row
@@ -570,6 +662,21 @@ class _AccountTabState extends State<AccountTab> {
           setState(() => _showingNotifications = false);
           _loadNotificationStatus();
         },
+      );
+    }
+    // Security Center screen: signed-in devices + login history,
+    // shown inside the Account tab, returned to via Back.
+    if (_showingSecurityCenter) {
+      final user = _user;
+      final service = widget.sessionService;
+      if (user == null || service == null) {
+        return const SizedBox.shrink();
+      }
+      return SecurityCenterScreen(
+        sessionService: service,
+        user: user,
+        authService: widget.authService,
+        onBack: () => setState(() => _showingSecurityCenter = false),
       );
     }
     // iPhone glass branch: appearance only — same sections, same
@@ -697,6 +804,18 @@ class _AccountTabState extends State<AccountTab> {
                   onTap: _verifyEmail,
                   glass: glass,
                 ),
+              // Login Alerts + Session Manager: signed-in devices
+              // + login history. Hidden when the service is absent
+              // (tests / unconfigured Firebase).
+              if (widget.sessionService != null)
+                _infoTile(
+                  icon: Icons.security_outlined,
+                  title: 'Security Center',
+                  subtitle: 'Signed-in devices & login history',
+                  onTap: () =>
+                      setState(() => _showingSecurityCenter = true),
+                  glass: glass,
+                ),
             ] else
               _infoTile(
                 icon: Icons.account_circle_outlined,
@@ -719,14 +838,32 @@ class _AccountTabState extends State<AccountTab> {
                 _signedIn
                     ? 'Your account lives in Firebase (email and sign-in '
                         'state). Your profile, settings, and community '
-                        'posts are stored on this device only. Nothing '
-                        'else is uploaded by this app.'
+                        'posts are stored on this device only. Sign-in '
+                        'sessions and login attempts are stored in '
+                        'Firestore for your account only — see the '
+                        'Security Center. Nothing else is uploaded by '
+                        'this app.'
                     : 'No account is signed in. Only your on-device '
                         'settings (sidebar, theme) are stored, and '
                         'nothing is uploaded by this app.',
               ),
               glass: glass,
             ),
+            // My Data (Nov 12): export + delete account — real counts
+            // from the student's own data, on-device JSON export, and
+            // deletion with a fresh re-authentication first.
+            if (_signedIn)
+              _infoTile(
+                icon: Icons.storage_outlined,
+                title: 'My Data',
+                subtitle: 'Download your data or delete your account',
+                iconColor: MinecraftColors.deepLeaves,
+                iconBackground: MinecraftColors.grassGreen.withValues(
+                  alpha: 0.12,
+                ),
+                onTap: () => setState(() => _showingMyData = true),
+                glass: glass,
+              ),
           ],
         );
         final actions = _sectionCard(
@@ -734,6 +871,40 @@ class _AccountTabState extends State<AccountTab> {
           icon: Icons.grid_view_outlined,
           title: 'Account Actions',
           tiles: [
+            // Chat Support (Nov 11, 2026, preview v17): first row
+            // in Account Actions, marked NEW. NO "Chat with Admin"
+            // row here — the direct chat is reached only from the
+            // Quick Help chip inside Chat Support.
+            _infoTile(
+              icon: Icons.chat_bubble_outline,
+              title: 'Chat Support',
+              subtitle: 'Message the EstudyanteGO team',
+              // Full color (Steven, Nov 8): each Account Actions
+              // row gets its own color — green for Chat Support.
+              iconColor: kAccountEmeraldAccent,
+              iconBackground:
+                  kAccountEmeraldAccent.withValues(alpha: 0.12),
+              badge: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: kAccountEmeraldAccent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'NEW',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              onTap: _openChatSupport,
+              glass: glass,
+            ),
             _infoTile(
               icon: Icons.help_outline,
               title: 'Help & Support',
@@ -745,7 +916,7 @@ class _AccountTabState extends State<AccountTab> {
                   const Color(0xFFEA580C).withValues(alpha: 0.12),
               onTap: () => _showInfoDialog(
                 'Help & Support',
-                'EstudyanteGO v1.0.0. For account help, use password reset '
+                'EstudyanteGO v3.5.1. For account help, use password reset '
                 'from the Security & Privacy section.',
               ),
               glass: glass,
@@ -753,7 +924,7 @@ class _AccountTabState extends State<AccountTab> {
             _infoTile(
               icon: Icons.info_outline,
               title: 'About EstudyanteGO',
-              subtitle: 'Version 1.0.0',
+              subtitle: 'Version 3.5.1',
               // Full color (Steven, Nov 8): violet icon on a soft
               // violet tint.
               iconColor: const Color(0xFF7C3AED),
@@ -820,7 +991,7 @@ class _AccountTabState extends State<AccountTab> {
         final footer = Padding(
           padding: const EdgeInsets.fromLTRB(0, 20, 0, 5),
           child: Text(
-            'ESTUDYANTEGO · VERSION 1.0.0',
+            'ESTUDYANTEGO · VERSION 3.5.1',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 10,
@@ -948,7 +1119,7 @@ class _AccountTabState extends State<AccountTab> {
                 ? Colors.white.withValues(alpha: 0.12)
                 : dark
                     ? kAccountDarkSurface
-                    : const Color(0xFFEAF4ED)),
+                    : const Color(0xFFFFF8E1)),
         borderRadius: BorderRadius.circular(11),
       ),
       child: Icon(
@@ -966,7 +1137,9 @@ class _AccountTabState extends State<AccountTab> {
 
   /// One Account list row in the approved preview style: soft icon
   /// tile, compact bold title, muted subtitle, chevron. Same taps as
-  /// the rows it replaces — appearance only.
+  /// the rows it replaces — appearance only. [badge] is an optional
+  /// pill shown before the chevron (Chat Support's NEW tag, the
+  /// Support Inbox unread count).
   Widget _infoTile({
     required IconData icon,
     required String title,
@@ -977,8 +1150,27 @@ class _AccountTabState extends State<AccountTab> {
     Color? titleColor,
     Color? iconColor,
     Color? iconBackground,
+    Widget? badge,
     bool glass = false,
   }) {
+    final Widget? trailing;
+    if (badge == null && !showChevron) {
+      trailing = null;
+    } else {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ?badge,
+          if (badge != null && showChevron) const SizedBox(width: 4),
+          if (showChevron)
+            Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: glass ? null : Theme.of(context).hintColor,
+            ),
+        ],
+      );
+    }
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: _tileIcon(
@@ -1006,13 +1198,7 @@ class _AccountTabState extends State<AccountTab> {
               ),
             ),
       isThreeLine: isThreeLine,
-      trailing: showChevron
-          ? Icon(
-              Icons.chevron_right,
-              size: 20,
-              color: glass ? null : Theme.of(context).hintColor,
-            )
-          : null,
+      trailing: trailing,
       onTap: onTap,
     );
   }
@@ -1057,13 +1243,18 @@ class _AccountTabState extends State<AccountTab> {
               ? const [kAccountDarkSurface, kAccountDarkCard]
               : const [
                   Colors.white,
-                  Color(0xFFF5F8F6),
-                  Color(0xFFE9F5ED),
+                  MinecraftColors.paper,
+                  MinecraftColors.cream,
                 ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(kAccountCardRadius),
+        border: Border.all(
+          color: dark ? MinecraftColors.darkBorder : MinecraftColors.border,
+          width: dark ? 1 : MinecraftShapes.cardBorderWidth,
+        ),
+        boxShadow: dark ? null : const [MinecraftShapes.cardShadow],
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 17),
@@ -1098,7 +1289,7 @@ class _AccountTabState extends State<AccountTab> {
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                colors: [Color(0xFFD9F0E1), Color(0xFF9DCEAD)],
+                colors: [Color(0xFFD9F7C4), MinecraftColors.grassBright],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1151,7 +1342,7 @@ class _AccountTabState extends State<AccountTab> {
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundColor: const Color(0xFFD9F0E1),
+              backgroundColor: const Color(0xFFD9F7C4),
               backgroundImage: photoImage,
               child: hasPhoto
                   ? null
@@ -1461,12 +1652,12 @@ class _AccountTabState extends State<AccountTab> {
         ? Colors.white.withValues(alpha: 0.15)
         : dark
             ? kAccountDarkSurface
-            : const Color(0xFFE0F4E6);
+            : const Color(0xFFD9F7C4);
     final tagColor = glass
         ? Colors.white
         : dark
             ? kAccountDarkAccent
-            : const Color(0xFF176238);
+            : MinecraftColors.deepLeaves;
     final inkWell = InkWell(
       key: const Key('subscription-member-card'),
       borderRadius: BorderRadius.circular(kAccountCardRadius),
@@ -1749,7 +1940,7 @@ class _AccountTabState extends State<AccountTab> {
                   ? Colors.white
                   : dark
                       ? kAccountDarkAccent
-                      : const Color(0xFF176238),
+                      : MinecraftColors.deepLeaves,
             ),
             const SizedBox(width: 4),
             Text(
@@ -1761,7 +1952,7 @@ class _AccountTabState extends State<AccountTab> {
                     ? Colors.white
                     : dark
                         ? kAccountDarkAccent
-                        : const Color(0xFF176238),
+                        : MinecraftColors.deepLeaves,
               ),
             ),
           ],
@@ -1793,6 +1984,24 @@ class _AccountTabState extends State<AccountTab> {
           title: 'App Reviews',
           subtitle: 'Read student ratings and reply',
           onTap: _openAppReviews,
+          glass: glass,
+        ),
+        _infoTile(
+          icon: Icons.inbox_outlined,
+          title: 'Support Inbox',
+          subtitle: 'Read student messages and reply',
+          // Full color: blue icon on a soft blue tint, like
+          // Privacy Settings. The badge shows the total unread
+          // student messages waiting for Steven.
+          iconColor: const Color(0xFF2563EB),
+          iconBackground:
+              const Color(0xFF2563EB).withValues(alpha: 0.12),
+          badge: SupportInboxUnreadBadge(
+            repository: widget.authService.isConfigured
+                ? FirestoreSupportRepository()
+                : null,
+          ),
+          onTap: _openSupportInbox,
           glass: glass,
         ),
         _adminSubheader('Routes & fares', glass),
