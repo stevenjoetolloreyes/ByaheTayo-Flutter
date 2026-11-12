@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App string resources. Added Nov 13, 2026: the widget provider XMLs
+     (Schedule, Allowance, Fares, Daily Quotes, Tasks) use
+     android:description="@string/app_name", but no strings.xml existed,
+     so the release APK build failed at resource linking. -->
+<resources>
+    <string name="app_name">EstudyanteGO</string>
+</resources>
