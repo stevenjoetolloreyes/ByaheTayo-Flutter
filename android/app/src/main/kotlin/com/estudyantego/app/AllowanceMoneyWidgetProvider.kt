@@ -114,6 +114,11 @@ class AllowanceMoneyWidgetProvider : HomeWidgetProvider() {
                         }
                         val labelId = id(context, "widget_bar_${i}_label")
                         if (labelId != 0) setTextViewText(labelId, month.label)
+                        val valueId = id(context, "widget_bar_${i}_value")
+                        if (valueId != 0) setTextViewText(
+                            valueId,
+                            AllowanceWidgetData.formatPeso(month.amount),
+                        )
                     }
                     setTextViewText(
                         R.id.widget_chart_total,

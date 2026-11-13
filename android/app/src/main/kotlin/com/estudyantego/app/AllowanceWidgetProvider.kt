@@ -122,6 +122,11 @@ class AllowanceWidgetProvider : HomeWidgetProvider() {
                             )
                             val labelId = id(context, "widget_mini_bar_${i}_label")
                             if (labelId != 0) setTextViewText(labelId, month.label)
+                            val valueId = id(context, "widget_mini_bar_${i}_value")
+                            if (valueId != 0) setTextViewText(
+                                valueId,
+                                AllowanceWidgetData.formatPeso(month.amount),
+                            )
                         }
                     }
                 }

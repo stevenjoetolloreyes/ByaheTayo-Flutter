@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Allowance widget — Allowance (4x2). Approved preview v1 (Nov 11, 2026). -->
+<!-- Allowance widget — Allowance (4x2). Approved preview v1 (Nov 11, 2026). HD v7 (Nov 13, 2026). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -14,8 +14,8 @@
         android:gravity="center_vertical">
 
         <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:src="@drawable/launch_image"
             android:contentDescription="@null" />
 
@@ -25,7 +25,7 @@
             android:layout_marginStart="8dp"
             android:text="ALLOWANCE"
             android:textColor="#21301A"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:fontFamily="@font/press_start_2p"
             android:textStyle="bold" />
 
@@ -48,7 +48,7 @@
             android:layout_marginTop="8dp"
             android:text="Available balance"
             android:textColor="#5A6B52"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:fontFamily="@font/baloo_2" />
 
         <TextView
@@ -57,7 +57,7 @@
             android:layout_height="wrap_content"
             android:text="₱0.00"
             android:textColor="#2F7A12"
-            android:textSize="28sp"
+            android:textSize="30sp"
             android:fontFamily="@font/baloo_2"
             android:textStyle="bold" />
 
@@ -75,7 +75,7 @@
                 android:layout_weight="1"
                 android:text="In: ₱0"
                 android:textColor="#21301A"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:fontFamily="@font/baloo_2" />
 
             <TextView
@@ -85,7 +85,7 @@
                 android:layout_weight="1"
                 android:text="Out: ₱0"
                 android:textColor="#21301A"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:fontFamily="@font/baloo_2" />
         </LinearLayout>
 
@@ -103,7 +103,7 @@
         android:id="@+id/widget_chart"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="8dp"
         android:orientation="vertical"
         android:visibility="gone">
 
@@ -112,7 +112,7 @@
             android:layout_height="wrap_content"
             android:text="Spending · last 6 months"
             android:textColor="#2F7A12"
-            android:textSize="10sp"
+            android:textSize="12sp"
             android:textStyle="bold"
             android:fontFamily="@font/baloo_2" />
 
@@ -128,16 +128,26 @@
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
+                <TextView
+                    android:id="@+id/widget_mini_bar_0_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="1dp"
+                    android:text="₱0"
+                    android:textColor="#2F7A12"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/baloo_2" />
                 <FrameLayout
                     android:id="@+id/widget_mini_bar_0"
-                    android:layout_width="12dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="28dp"
                     android:layout_gravity="center_horizontal">
 
                     <TextView
                         android:id="@+id/widget_mini_bar_0_level_0"
-                        android:layout_width="12dp"
-                        android:layout_height="4dp"
+                        android:layout_width="16dp"
+                        android:layout_height="6dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -145,16 +155,7 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_0_level_1"
-                        android:layout_width="12dp"
-                        android:layout_height="8dp"
-                        android:layout_gravity="bottom|center_horizontal"
-                        android:background="@drawable/widget_bar_track"
-                        android:text=""
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/widget_mini_bar_0_level_2"
-                        android:layout_width="12dp"
+                        android:layout_width="16dp"
                         android:layout_height="12dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
@@ -162,9 +163,18 @@
                         android:visibility="gone" />
 
                     <TextView
+                        android:id="@+id/widget_mini_bar_0_level_2"
+                        android:layout_width="16dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:background="@drawable/widget_bar_track"
+                        android:text=""
+                        android:visibility="gone" />
+
+                    <TextView
                         android:id="@+id/widget_mini_bar_0_level_3"
-                        android:layout_width="12dp"
-                        android:layout_height="16dp"
+                        android:layout_width="16dp"
+                        android:layout_height="24dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -172,8 +182,8 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_0_level_4"
-                        android:layout_width="12dp"
-                        android:layout_height="20dp"
+                        android:layout_width="16dp"
+                        android:layout_height="28dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -187,7 +197,7 @@
                     android:layout_marginTop="1dp"
                     android:text="Jun"
                     android:textColor="#5A6B52"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:fontFamily="@font/baloo_2" />
             </LinearLayout>
             <LinearLayout
@@ -197,16 +207,26 @@
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
+                <TextView
+                    android:id="@+id/widget_mini_bar_1_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="1dp"
+                    android:text="₱0"
+                    android:textColor="#2F7A12"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/baloo_2" />
                 <FrameLayout
                     android:id="@+id/widget_mini_bar_1"
-                    android:layout_width="12dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="28dp"
                     android:layout_gravity="center_horizontal">
 
                     <TextView
                         android:id="@+id/widget_mini_bar_1_level_0"
-                        android:layout_width="12dp"
-                        android:layout_height="4dp"
+                        android:layout_width="16dp"
+                        android:layout_height="6dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -214,16 +234,7 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_1_level_1"
-                        android:layout_width="12dp"
-                        android:layout_height="8dp"
-                        android:layout_gravity="bottom|center_horizontal"
-                        android:background="@drawable/widget_bar_track"
-                        android:text=""
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/widget_mini_bar_1_level_2"
-                        android:layout_width="12dp"
+                        android:layout_width="16dp"
                         android:layout_height="12dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
@@ -231,9 +242,18 @@
                         android:visibility="gone" />
 
                     <TextView
+                        android:id="@+id/widget_mini_bar_1_level_2"
+                        android:layout_width="16dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:background="@drawable/widget_bar_track"
+                        android:text=""
+                        android:visibility="gone" />
+
+                    <TextView
                         android:id="@+id/widget_mini_bar_1_level_3"
-                        android:layout_width="12dp"
-                        android:layout_height="16dp"
+                        android:layout_width="16dp"
+                        android:layout_height="24dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -241,8 +261,8 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_1_level_4"
-                        android:layout_width="12dp"
-                        android:layout_height="20dp"
+                        android:layout_width="16dp"
+                        android:layout_height="28dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -256,7 +276,7 @@
                     android:layout_marginTop="1dp"
                     android:text="Jul"
                     android:textColor="#5A6B52"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:fontFamily="@font/baloo_2" />
             </LinearLayout>
             <LinearLayout
@@ -266,16 +286,26 @@
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
+                <TextView
+                    android:id="@+id/widget_mini_bar_2_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="1dp"
+                    android:text="₱0"
+                    android:textColor="#2F7A12"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/baloo_2" />
                 <FrameLayout
                     android:id="@+id/widget_mini_bar_2"
-                    android:layout_width="12dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="28dp"
                     android:layout_gravity="center_horizontal">
 
                     <TextView
                         android:id="@+id/widget_mini_bar_2_level_0"
-                        android:layout_width="12dp"
-                        android:layout_height="4dp"
+                        android:layout_width="16dp"
+                        android:layout_height="6dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -283,16 +313,7 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_2_level_1"
-                        android:layout_width="12dp"
-                        android:layout_height="8dp"
-                        android:layout_gravity="bottom|center_horizontal"
-                        android:background="@drawable/widget_bar_track"
-                        android:text=""
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/widget_mini_bar_2_level_2"
-                        android:layout_width="12dp"
+                        android:layout_width="16dp"
                         android:layout_height="12dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
@@ -300,9 +321,18 @@
                         android:visibility="gone" />
 
                     <TextView
+                        android:id="@+id/widget_mini_bar_2_level_2"
+                        android:layout_width="16dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:background="@drawable/widget_bar_track"
+                        android:text=""
+                        android:visibility="gone" />
+
+                    <TextView
                         android:id="@+id/widget_mini_bar_2_level_3"
-                        android:layout_width="12dp"
-                        android:layout_height="16dp"
+                        android:layout_width="16dp"
+                        android:layout_height="24dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -310,8 +340,8 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_2_level_4"
-                        android:layout_width="12dp"
-                        android:layout_height="20dp"
+                        android:layout_width="16dp"
+                        android:layout_height="28dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -325,7 +355,7 @@
                     android:layout_marginTop="1dp"
                     android:text="Aug"
                     android:textColor="#5A6B52"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:fontFamily="@font/baloo_2" />
             </LinearLayout>
             <LinearLayout
@@ -335,16 +365,26 @@
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
+                <TextView
+                    android:id="@+id/widget_mini_bar_3_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="1dp"
+                    android:text="₱0"
+                    android:textColor="#2F7A12"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/baloo_2" />
                 <FrameLayout
                     android:id="@+id/widget_mini_bar_3"
-                    android:layout_width="12dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="28dp"
                     android:layout_gravity="center_horizontal">
 
                     <TextView
                         android:id="@+id/widget_mini_bar_3_level_0"
-                        android:layout_width="12dp"
-                        android:layout_height="4dp"
+                        android:layout_width="16dp"
+                        android:layout_height="6dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -352,16 +392,7 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_3_level_1"
-                        android:layout_width="12dp"
-                        android:layout_height="8dp"
-                        android:layout_gravity="bottom|center_horizontal"
-                        android:background="@drawable/widget_bar_track"
-                        android:text=""
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/widget_mini_bar_3_level_2"
-                        android:layout_width="12dp"
+                        android:layout_width="16dp"
                         android:layout_height="12dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
@@ -369,9 +400,18 @@
                         android:visibility="gone" />
 
                     <TextView
+                        android:id="@+id/widget_mini_bar_3_level_2"
+                        android:layout_width="16dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:background="@drawable/widget_bar_track"
+                        android:text=""
+                        android:visibility="gone" />
+
+                    <TextView
                         android:id="@+id/widget_mini_bar_3_level_3"
-                        android:layout_width="12dp"
-                        android:layout_height="16dp"
+                        android:layout_width="16dp"
+                        android:layout_height="24dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -379,8 +419,8 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_3_level_4"
-                        android:layout_width="12dp"
-                        android:layout_height="20dp"
+                        android:layout_width="16dp"
+                        android:layout_height="28dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -394,7 +434,7 @@
                     android:layout_marginTop="1dp"
                     android:text="Sep"
                     android:textColor="#5A6B52"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:fontFamily="@font/baloo_2" />
             </LinearLayout>
             <LinearLayout
@@ -404,16 +444,26 @@
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
+                <TextView
+                    android:id="@+id/widget_mini_bar_4_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="1dp"
+                    android:text="₱0"
+                    android:textColor="#2F7A12"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/baloo_2" />
                 <FrameLayout
                     android:id="@+id/widget_mini_bar_4"
-                    android:layout_width="12dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="28dp"
                     android:layout_gravity="center_horizontal">
 
                     <TextView
                         android:id="@+id/widget_mini_bar_4_level_0"
-                        android:layout_width="12dp"
-                        android:layout_height="4dp"
+                        android:layout_width="16dp"
+                        android:layout_height="6dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -421,16 +471,7 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_4_level_1"
-                        android:layout_width="12dp"
-                        android:layout_height="8dp"
-                        android:layout_gravity="bottom|center_horizontal"
-                        android:background="@drawable/widget_bar_track"
-                        android:text=""
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/widget_mini_bar_4_level_2"
-                        android:layout_width="12dp"
+                        android:layout_width="16dp"
                         android:layout_height="12dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
@@ -438,9 +479,18 @@
                         android:visibility="gone" />
 
                     <TextView
+                        android:id="@+id/widget_mini_bar_4_level_2"
+                        android:layout_width="16dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:background="@drawable/widget_bar_track"
+                        android:text=""
+                        android:visibility="gone" />
+
+                    <TextView
                         android:id="@+id/widget_mini_bar_4_level_3"
-                        android:layout_width="12dp"
-                        android:layout_height="16dp"
+                        android:layout_width="16dp"
+                        android:layout_height="24dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -448,8 +498,8 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_4_level_4"
-                        android:layout_width="12dp"
-                        android:layout_height="20dp"
+                        android:layout_width="16dp"
+                        android:layout_height="28dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -463,7 +513,7 @@
                     android:layout_marginTop="1dp"
                     android:text="Oct"
                     android:textColor="#5A6B52"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:fontFamily="@font/baloo_2" />
             </LinearLayout>
             <LinearLayout
@@ -473,16 +523,26 @@
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
+                <TextView
+                    android:id="@+id/widget_mini_bar_5_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="1dp"
+                    android:text="₱0"
+                    android:textColor="#2F7A12"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/baloo_2" />
                 <FrameLayout
                     android:id="@+id/widget_mini_bar_5"
-                    android:layout_width="12dp"
-                    android:layout_height="20dp"
+                    android:layout_width="16dp"
+                    android:layout_height="28dp"
                     android:layout_gravity="center_horizontal">
 
                     <TextView
                         android:id="@+id/widget_mini_bar_5_level_0"
-                        android:layout_width="12dp"
-                        android:layout_height="4dp"
+                        android:layout_width="16dp"
+                        android:layout_height="6dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -490,16 +550,7 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_5_level_1"
-                        android:layout_width="12dp"
-                        android:layout_height="8dp"
-                        android:layout_gravity="bottom|center_horizontal"
-                        android:background="@drawable/widget_bar_track"
-                        android:text=""
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/widget_mini_bar_5_level_2"
-                        android:layout_width="12dp"
+                        android:layout_width="16dp"
                         android:layout_height="12dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
@@ -507,9 +558,18 @@
                         android:visibility="gone" />
 
                     <TextView
+                        android:id="@+id/widget_mini_bar_5_level_2"
+                        android:layout_width="16dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:background="@drawable/widget_bar_track"
+                        android:text=""
+                        android:visibility="gone" />
+
+                    <TextView
                         android:id="@+id/widget_mini_bar_5_level_3"
-                        android:layout_width="12dp"
-                        android:layout_height="16dp"
+                        android:layout_width="16dp"
+                        android:layout_height="24dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -517,8 +577,8 @@
 
                     <TextView
                         android:id="@+id/widget_mini_bar_5_level_4"
-                        android:layout_width="12dp"
-                        android:layout_height="20dp"
+                        android:layout_width="16dp"
+                        android:layout_height="28dp"
                         android:layout_gravity="bottom|center_horizontal"
                         android:background="@drawable/widget_bar_track"
                         android:text=""
@@ -532,7 +592,7 @@
                     android:layout_marginTop="1dp"
                     android:text="Nov"
                     android:textColor="#5A6B52"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:fontFamily="@font/baloo_2" />
             </LinearLayout>
         </LinearLayout>
