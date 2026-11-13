@@ -196,11 +196,29 @@ class SpeedSmoother {
 /// dropped outright instead of dragging the marker across the
 /// map. No sensor fusion, no dead reckoning, no snap-to-road:
 /// only the fixes themselves are used.
+///
+/// Hard cap (Nov 14, 2026 — Baguio teleport): the speed×dt
+/// gate below opens wide on a stale-fix gap (large dt) or a
+/// bogus speed report, so a fused fix kilometres away could
+/// pass it and teleport the marker ~10 km in one frame. No
+/// single fix may move the marker more than [maxJumpMeters],
+/// whatever dt or the reported speed says. Sustained
+/// disagreement is different from one stray fix: after
+/// [reacquireAfterRejections] consecutive rejections, or
+/// [reacquireAfterRejectionWindow] of only rejections, the
+/// next fix is accepted as a re-acquisition — the filter is
+/// cleared and seeded with it, so the marker jumps once,
+/// honestly, to where the device really is now, instead of
+/// freezing there forever after a genuine move (long GPS
+/// stall, then a true fix far away).
 class PositionSmoother {
   PositionSmoother({
     this.capacity = 3,
     this.maxPlausibleSpeedMps = 35,
     this.minPlausibleSpeedMps = 15,
+    this.maxJumpMeters = 250.0,
+    this.reacquireAfterRejections = 5,
+    this.reacquireAfterRejectionWindow = const Duration(seconds: 10),
   });
 
   /// Fixes kept for the weighted mean (a few only, so the
@@ -218,7 +236,40 @@ class PositionSmoother {
   /// still rejects a 100 m jump in one second at a stop.
   final double minPlausibleSpeedMps;
 
+  /// Absolute cap on how far one fix may move the marker from
+  /// the last accepted fix, in metres. 250 m is ~7x the
+  /// farthest a bus at [maxPlausibleSpeedMps] travels between
+  /// 1 s fixes (35 m), so real movement never trips it, while
+  /// kilometre-scale fused-location bounces — the Baguio
+  /// teleport — always do. The cap binds even when the
+  /// speed×dt gate below would allow more (long dt, bogus
+  /// speed, huge reported accuracy).
+  final double maxJumpMeters;
+
+  /// How many consecutive rejected fixes trigger
+  /// re-acquisition: the next fix is accepted and the filter
+  /// re-seeded with it. At the usual ~1 fix/s cadence this is
+  /// ~5 s of sustained disagreement — long enough that one
+  /// stray fix never moves the marker, short enough that a
+  /// genuine move is picked up promptly.
+  final int reacquireAfterRejections;
+
+  /// The same re-acquisition trigger, by time instead of
+  /// count, for sparse fixes: this long of only rejections.
+  /// Measured from the FIRST rejection, not from the last
+  /// accepted fix — a single far fix after a long silence is
+  /// still rejected (the cap holds regardless of dt); only
+  /// sustained disagreement re-acquires. Matches the 10 s
+  /// GPS-lost window ([liveGpsLostAfter]).
+  final Duration reacquireAfterRejectionWindow;
+
   final List<_PositionFix> _fixes = [];
+
+  /// Consecutive rejected fixes since the last acceptance, and
+  /// when the first of them arrived. Reset on every accept
+  /// and on [clear].
+  int _consecutiveRejections = 0;
+  DateTime? _firstRejectionAt;
 
   /// Feeds one raw fix. Returns the new smoothed position, or
   /// null when the fix was rejected as an outlier (the smoothed
@@ -243,8 +294,31 @@ class PositionSmoother {
           last.accuracy +
           accuracy;
       final movedKm = distanceAlongPath([last.point, point], 0, 1);
-      if (movedKm * 1000 > maxDistance) return null;
+      final movedM = movedKm * 1000;
+      if (movedM > maxDistance || movedM > maxJumpMeters) {
+        // Outlier — unless the device has been disagreeing
+        // with the last good position for a while, which means
+        // it really moved: re-acquire (clear + seed with this
+        // fix) instead of freezing the marker forever. The
+        // window is measured from the first rejection, so a
+        // single far fix after a long silence is still
+        // rejected — only sustained disagreement re-acquires.
+        if (_consecutiveRejections >= reacquireAfterRejections ||
+            (_firstRejectionAt != null &&
+                at.difference(_firstRejectionAt!) >=
+                    reacquireAfterRejectionWindow)) {
+          _fixes.clear();
+          _consecutiveRejections = 0;
+          _firstRejectionAt = null;
+        } else {
+          _consecutiveRejections++;
+          _firstRejectionAt ??= at;
+          return null;
+        }
+      }
     }
+    _consecutiveRejections = 0;
+    _firstRejectionAt = null;
     _fixes.add(_PositionFix(point, accuracy, at));
     if (_fixes.length > capacity) _fixes.removeAt(0);
     return smoothed;
@@ -270,7 +344,11 @@ class PositionSmoother {
 
   bool get hasFixes => _fixes.isNotEmpty;
 
-  void clear() => _fixes.clear();
+  void clear() {
+    _fixes.clear();
+    _consecutiveRejections = 0;
+    _firstRejectionAt = null;
+  }
 }
 
 class _PositionFix {

@@ -3544,9 +3544,20 @@ class _MapTabState extends State<MapTab>
   /// instead of stepping every 200 ms — and a new fix corrects
   /// it smoothly instead of teleporting it. The dt clamp (0.1 s)
   /// covers a resumed / backgrounded app. Skips the rebuild
-  /// when the move is under ~0.3 m (invisible).
+  /// when the move is under ~0.3 m (invisible). Skips the
+  /// rebuild entirely while the user is mid-gesture
+  /// ([_livePausedByGesture], Nov 14, 2026 — smooth zoom):
+  /// the arrow is anchored to its lat/lng by the map layer,
+  /// so it stays glued to the map while pinching without any
+  /// rebuild, and the per-frame setState would only compete
+  /// with the gesture for the UI thread. The marker catches
+  /// up on the next frame after the gesture ends, via the
+  /// same lerp. Only gesture pauses skip — stop-chip /
+  /// Overview pauses still update the marker, so the arrow
+  /// keeps moving while the camera is parked at a stop.
   void _onLiveFrame(Duration elapsed) {
     if (!_liveFollowActive || !mounted) return;
+    if (_livePausedByGesture) return;
     final prev = _liveLastFrameElapsed;
     _liveLastFrameElapsed = elapsed;
     final dtSeconds = prev == null
