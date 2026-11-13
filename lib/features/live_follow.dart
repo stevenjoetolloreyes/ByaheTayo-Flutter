@@ -345,6 +345,255 @@ double liveMarkerScreenRotationDeg({
   return diff;
 }
 
+/// Live Follow arrow marker style (Nov 13, 2026 — approved
+/// Preview v2, Arrow option): the current-position marker is a
+/// navigation arrow, NOT a bus/car glyph. The arrow itself
+/// rotates to the heading; the cone + halo behind it are the
+/// "GPS is live" chrome. When the signal is lost the marker
+/// goes grey with an amber dashed ring and NO cone / NO pulse,
+/// so a stale position never looks live — the panel text stays
+/// honest ("GPS signal lost — showing your last known
+/// position"). Pure decision, no widgets, so the two states
+/// are pinned in tests. Colours are raw ARGB ints so this file
+/// stays free of flutter/material imports.
+class LiveArrowMarkerStyle {
+  const LiveArrowMarkerStyle({
+    required this.coreStart,
+    required this.coreEnd,
+    required this.showHeadingCone,
+    required this.showHalo,
+    required this.showLostRing,
+  });
+
+  /// Top-left gradient colour of the 56dp arrow core.
+  final int coreStart;
+
+  /// Bottom-right gradient colour of the 56dp arrow core.
+  final int coreEnd;
+
+  /// Heading cone behind the arrow (locked only).
+  final bool showHeadingCone;
+
+  /// Pulsing GPS halo around the core (locked only).
+  final bool showHalo;
+
+  /// Amber dashed ring around the core (lost only).
+  final bool showLostRing;
+}
+
+/// Style for the Live Follow arrow marker for [gpsLost].
+LiveArrowMarkerStyle liveArrowMarkerStyle({required bool gpsLost}) {
+  if (gpsLost) {
+    return const LiveArrowMarkerStyle(
+      coreStart: 0xFF9CA3AF,
+      coreEnd: 0xFF6B7280,
+      showHeadingCone: false,
+      showHalo: false,
+      showLostRing: true,
+    );
+  }
+  return const LiveArrowMarkerStyle(
+    coreStart: 0xFF17CE62,
+    coreEnd: 0xFF0AA84C,
+    showHeadingCone: true,
+    showHalo: true,
+    showLostRing: false,
+  );
+}
+
+/// Google-level smoothing (Nov 13, 2026 — approved Preview v2):
+/// snap-to-road + per-frame prediction. Every helper here is
+/// pure, so the rules are pinned in tests without a device.
+///
+/// Snap-to-road never invents a position: it only projects the
+/// real (smoothed) GPS fix onto the nearest point of the loaded
+/// OSRM road geometry. Prediction never invents movement either:
+/// it advances the last real fix along the road at the last
+/// measured speed, and only for [livePredictionCoast] after the
+/// fix — after that the arrow holds until a new fix arrives.
+
+/// A GPS fix snapped onto the road geometry.
+class SnappedRoadPosition {
+  const SnappedRoadPosition({
+    required this.point,
+    required this.segmentIndex,
+    required this.distanceAlongKm,
+    required this.offRoadKm,
+  });
+
+  /// The fix projected onto the road.
+  final LatLng point;
+
+  /// Index of the road segment's start vertex.
+  final int segmentIndex;
+
+  /// Distance from the road's start to [point], along the road.
+  final double distanceAlongKm;
+
+  /// How far the raw fix was from the road.
+  final double offRoadKm;
+}
+
+/// Projects [position] onto the nearest segment of [roadPoints]
+/// (equirectangular metres around the fix — fine at road scale).
+/// Null when there is no usable geometry (< 2 points): the
+/// caller falls back to the smoothed fix itself.
+SnappedRoadPosition? snapToRoad({
+  required LatLng position,
+  required List<LatLng>? roadPoints,
+}) {
+  if (roadPoints == null || roadPoints.length < 2) return null;
+  const earthMPerDegLat = 110540.0;
+  final mPerDegLng = 111320.0 * math.cos(position.latitude * math.pi / 180);
+  double toX(LatLng p) => (p.longitude - position.longitude) * mPerDegLng;
+  double toY(LatLng p) => (p.latitude - position.latitude) * earthMPerDegLat;
+  var bestDistM = double.infinity;
+  var bestPoint = roadPoints.first;
+  var bestSegment = 0;
+  var bestAlongKm = 0.0;
+  var alongKm = 0.0;
+  for (var i = 0; i < roadPoints.length - 1; i++) {
+    final a = roadPoints[i];
+    final b = roadPoints[i + 1];
+    final segKm = distanceAlongPath([a, b], 0, 1);
+    final ax = toX(a);
+    final ay = toY(a);
+    final bx = toX(b);
+    final by = toY(b);
+    final dx = bx - ax;
+    final dy = by - ay;
+    final lenSq = dx * dx + dy * dy;
+    // t = where the fix projects onto the segment, clamped to
+    // the segment (0 = at a, 1 = at b).
+    var t = lenSq == 0 ? 0.0 : (-(ax * dx) - ay * dy) / lenSq;
+    t = t.clamp(0.0, 1.0);
+    final px = ax + dx * t;
+    final py = ay + dy * t;
+    final distM = math.sqrt(px * px + py * py);
+    if (distM < bestDistM) {
+      bestDistM = distM;
+      bestPoint = LatLng(
+        a.latitude + (b.latitude - a.latitude) * t,
+        a.longitude + (b.longitude - a.longitude) * t,
+      );
+      bestSegment = i;
+      bestAlongKm = alongKm + distanceAlongPath([a, bestPoint], 0, 1);
+    }
+    alongKm += segKm;
+  }
+  return SnappedRoadPosition(
+    point: bestPoint,
+    segmentIndex: bestSegment,
+    distanceAlongKm: bestAlongKm,
+    offRoadKm: bestDistM / 1000,
+  );
+}
+
+/// Point [distanceKm] along [roadPoints] from its start
+/// (linear within a segment). Past the end clamps to the last
+/// road point — prediction never runs off the road.
+LatLng pointAtDistanceAlongRoad(List<LatLng> roadPoints, double distanceKm) {
+  if (roadPoints.isEmpty) return const LatLng(0, 0);
+  if (distanceKm <= 0) return roadPoints.first;
+  var remaining = distanceKm;
+  for (var i = 0; i < roadPoints.length - 1; i++) {
+    final segKm = distanceAlongPath(
+      [roadPoints[i], roadPoints[i + 1]],
+      0,
+      1,
+    );
+    if (remaining <= segKm) {
+      final t = segKm == 0 ? 0.0 : remaining / segKm;
+      return LatLng(
+        roadPoints[i].latitude +
+            (roadPoints[i + 1].latitude - roadPoints[i].latitude) * t,
+        roadPoints[i].longitude +
+            (roadPoints[i + 1].longitude - roadPoints[i].longitude) * t,
+      );
+    }
+    remaining -= segKm;
+  }
+  return roadPoints.last;
+}
+
+/// Destination point [distanceKm] from [from] along
+/// [bearingDeg] (haversine destination formula). Used only when
+/// there is no road geometry to advance along.
+LatLng destinationPoint({
+  required LatLng from,
+  required double bearingDeg,
+  required double distanceKm,
+}) {
+  const earthKm = 6371.0;
+  final d = distanceKm / earthKm;
+  final br = bearingDeg * math.pi / 180;
+  final lat1 = from.latitude * math.pi / 180;
+  final lng1 = from.longitude * math.pi / 180;
+  final lat2 = math.asin(
+    math.sin(lat1) * math.cos(d) +
+        math.cos(lat1) * math.sin(d) * math.cos(br),
+  );
+  final lng2 = lng1 +
+      math.atan2(
+        math.sin(br) * math.sin(d) * math.cos(lat1),
+        math.cos(d) - math.sin(lat1) * math.sin(lat2),
+      );
+  return LatLng(lat2 * 180 / math.pi, lng2 * 180 / math.pi);
+}
+
+/// How long after the last GPS fix the arrow may keep coasting
+/// on prediction (3 s): long enough to bridge the normal ~1 s
+/// fix gap and brief dropouts, short enough that a dead GPS
+/// never looks alive. After this the arrow holds its last
+/// position until a new fix arrives (and the 10 s
+/// [liveGpsLostAfter] timer raises the honest lost state).
+const livePredictionCoast = Duration(seconds: 3);
+
+/// True while prediction may still coast: the last fix is no
+/// older than [coast] (default [livePredictionCoast]).
+bool livePredictionShouldCoast({
+  required DateTime lastFixAt,
+  required DateTime now,
+  Duration coast = livePredictionCoast,
+}) =>
+    !now.difference(lastFixAt).isNegative &&
+    now.difference(lastFixAt) <= coast;
+
+/// Predicts where the arrow should be [elapsed] after the last
+/// fix at [from], travelling at [speedKmh] along [bearingDeg].
+/// With road geometry + [distanceAlongKm] it advances along
+/// the road (so it follows curves); without geometry it dead-
+/// reckons along the bearing. No speed (null / 0) or no time
+/// passed = [from]: a stopped bus does not drift.
+LatLng predictLivePosition({
+  required LatLng from,
+  required double bearingDeg,
+  required double? speedKmh,
+  required Duration elapsed,
+  List<LatLng>? roadPoints,
+  double? distanceAlongKm,
+}) {
+  if (speedKmh == null ||
+      speedKmh <= 0 ||
+      elapsed <= Duration.zero) {
+    return from;
+  }
+  final distanceKm = speedKmh * elapsed.inMilliseconds / 3600000;
+  if (roadPoints != null &&
+      roadPoints.length >= 2 &&
+      distanceAlongKm != null) {
+    return pointAtDistanceAlongRoad(
+      roadPoints,
+      distanceAlongKm + distanceKm,
+    );
+  }
+  return destinationPoint(
+    from: from,
+    bearingDeg: bearingDeg,
+    distanceKm: distanceKm,
+  );
+}
+
 /// The close street-level zoom Live Follow settles at (Nov 11,
 /// 2026 — Live close-follow): the preview's settled zoom, so the
 /// street fills the view while driving. Replaces the old follow

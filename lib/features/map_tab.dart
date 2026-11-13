@@ -47,6 +47,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' hide Marker;
@@ -2044,7 +2045,8 @@ class MapTab extends StatefulWidget {
   State<MapTab> createState() => _MapTabState();
 }
 
-class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
+class _MapTabState extends State<MapTab>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   static const _initialCenter = LatLng(16.9, 121.05);
   static const _initialZoom = 8.0;
   static const _homeHub = 2; // Cabugao — his home hub (Fares default origin).
@@ -2284,13 +2286,35 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   DateTime? _liveFollowStartedAt;
   StreamSubscription<Position>? _livePositionSub;
   Timer? _liveGpsLostTimer;
-  Timer? _liveMarkerTimer;
+  // Per-frame Live interpolation (Nov 13, 2026 — Google-level
+  // smoothing, Preview v2): a Ticker drives the arrow every
+  // display frame (~60/120 fps) toward the predicted target,
+  // replacing the old 200 ms step-wise glide. The halo uses the
+  // tab's other ticker, hence TickerProviderStateMixin.
+  Ticker? _liveFrameTicker;
+  Duration? _liveLastFrameElapsed;
+  // Last GPS fix time + the snapped fix's distance along the
+  // road: the frame loop predicts from these between fixes.
+  DateTime? _liveLastFixAt;
+  double? _liveSnappedDistanceKm;
   // Continuous follow-camera tick (Nov 11, 2026): eases the
   // camera toward the gliding marker every 150 ms so it moves
   // continuously between GPS fixes instead of jumping once
   // per fix.
   Timer? _liveCameraTimer;
   Timer? _liveClockTimer;
+  // Pulsing halo behind the Live Follow arrow marker (Nov 13,
+  // 2026 — approved Preview v2, Arrow option). Owned by the tab
+  // state (not the marker widget): the marker rebuilds on every
+  // 200 ms marker tick, so a per-marker controller would restart
+  // the pulse on every tick. It repeats once first used; the
+  // AnimatedBuilder subtree only exists while the live marker
+  // is on screen, so it costs nothing when Live is off.
+  late final AnimationController _liveHaloController =
+      AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat(reverse: true);
   // Interpolated bus-marker position: glides toward the latest
   // GPS fix between updates so the marker never teleports.
   LatLng? _liveMarkerPos;
@@ -3022,12 +3046,14 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _routePulseTimer?.cancel();
     _livePositionSub?.cancel();
     _liveGpsLostTimer?.cancel();
-    _liveMarkerTimer?.cancel();
+    _liveFrameTicker?.stop();
+    _liveFrameTicker?.dispose();
     _liveCameraTimer?.cancel();
     _liveClockTimer?.cancel();
     _sheetController.dispose();
     _sheetFocusNode.dispose();
     _bearing.dispose();
+    _liveHaloController.dispose();
     super.dispose();
   }
 
@@ -3256,10 +3282,8 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       },
     );
     _armLiveGpsLostTimer();
-    _liveMarkerTimer = Timer.periodic(
-      const Duration(milliseconds: 200),
-      (_) => _liveMarkerTick(),
-    );
+    _liveLastFrameElapsed = null;
+    _liveFrameTicker = createTicker(_onLiveFrame)..start();
     _liveCameraTimer = Timer.periodic(
       const Duration(milliseconds: 150),
       (_) => _liveCameraTick(),
@@ -3279,7 +3303,12 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _livePositionSub?.cancel();
     _livePositionSub = null;
     _liveGpsLostTimer?.cancel();
-    _liveMarkerTimer?.cancel();
+    _liveFrameTicker?.stop();
+    _liveFrameTicker?.dispose();
+    _liveFrameTicker = null;
+    _liveLastFrameElapsed = null;
+    _liveLastFixAt = null;
+    _liveSnappedDistanceKm = null;
     _liveCameraTimer?.cancel();
     _liveClockTimer?.cancel();
     _liveUserZoom = null;
@@ -3367,8 +3396,17 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _liveBearing = lerpAngleDeg(_liveBearing, _liveTargetBearing, 0.3);
     _livePrevPos = here;
     _livePrevPosAt = now;
-    _liveTargetPos = here;
-    _liveMarkerPos ??= here;
+    // Snap-to-road (Nov 13, 2026 — Google-level smoothing):
+    // the marker + camera follow the fix projected onto the
+    // road, so GPS jitter never pulls the arrow onto buildings
+    // or side streets. No geometry loaded yet = the smoothed
+    // fix itself. The Live panel snapshot below still uses the
+    // smoothed fix, so its numbers do not change.
+    final snapped = snapToRoad(position: here, roadPoints: _roadPoints);
+    _liveTargetPos = snapped?.point ?? here;
+    _liveSnappedDistanceKm = snapped?.distanceAlongKm;
+    _liveLastFixAt = now;
+    _liveMarkerPos ??= _liveTargetPos;
     setState(() {
       _userPos = pos;
       _liveGpsLost = false;
@@ -3404,31 +3442,62 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     });
   }
 
-  /// Glides the bus marker toward the latest GPS fix (200 ms
-  /// ticks, half the remaining distance each tick): the marker
-  /// moves continuously even when fixes arrive in steps, and
-  /// never teleports. Only rebuilds when it actually moved.
-  void _liveMarkerTick() {
+  /// Per-frame Live interpolation (Nov 13, 2026 — Google-level
+  /// smoothing, Preview v2): on every display frame the arrow
+  /// eases toward the predicted target (see
+  /// [_livePredictedTarget]) with frame-rate-independent
+  /// exponential smoothing (tau ~0.25 s), so it moves every
+  /// frame at the real speed between the ~1/sec GPS fixes
+  /// instead of stepping every 200 ms — and a new fix corrects
+  /// it smoothly instead of teleporting it. The dt clamp (0.1 s)
+  /// covers a resumed / backgrounded app. Skips the rebuild
+  /// when the move is under ~0.3 m (invisible).
+  void _onLiveFrame(Duration elapsed) {
     if (!_liveFollowActive || !mounted) return;
-    final target = _liveTargetPos;
+    final prev = _liveLastFrameElapsed;
+    _liveLastFrameElapsed = elapsed;
+    final dtSeconds = prev == null
+        ? 0.016
+        : ((elapsed - prev).inMilliseconds / 1000).clamp(0.0, 0.1);
+    final predicted = _livePredictedTarget();
     final current = _liveMarkerPos;
-    if (target == null) return;
+    if (predicted == null) return;
     if (current == null) {
-      setState(() => _liveMarkerPos = target);
+      setState(() => _liveMarkerPos = predicted);
       return;
     }
-    final next = lerpLatLng(current, target, 0.5);
-    // Below ~1 m the move is invisible — snap and stop
-    // rebuilding.
-    final movedKm = distanceAlongPath([current, next], 0, 1);
-    if (movedKm < 0.001) {
-      if (current.latitude != target.latitude ||
-          current.longitude != target.longitude) {
-        setState(() => _liveMarkerPos = target);
-      }
-      return;
-    }
+    final k = 1 - math.exp(-dtSeconds / 0.25);
+    final next = lerpLatLng(current, predicted, k);
+    if (distanceAlongPath([current, next], 0, 1) < 0.0003) return;
     setState(() => _liveMarkerPos = next);
+  }
+
+  /// Where the arrow should be right now: the last snapped fix
+  /// advanced along the road at the last smoothed speed for the
+  /// time since that fix — but only while prediction may coast
+  /// ([livePredictionShouldCoast], 3 s). After that the arrow
+  /// holds its last position (the target itself) until a new
+  /// fix arrives; the 10 s [liveGpsLostAfter] timer then raises
+  /// the honest lost state. Movement is never faked beyond the
+  /// brief coast.
+  LatLng? _livePredictedTarget() {
+    final target = _liveTargetPos;
+    final lastFix = _liveLastFixAt;
+    if (target == null || lastFix == null) return target;
+    if (!livePredictionShouldCoast(
+      lastFixAt: lastFix,
+      now: DateTime.now(),
+    )) {
+      return target;
+    }
+    return predictLivePosition(
+      from: target,
+      bearingDeg: _liveTargetBearing,
+      speedKmh: _liveSpeed.averageKmh,
+      elapsed: DateTime.now().difference(lastFix),
+      roadPoints: _roadPoints,
+      distanceAlongKm: _liveSnappedDistanceKm,
+    );
   }
 
   /// Refreshes the Live panel clock (elapsed / arrival) while
@@ -4327,14 +4396,22 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       }
     }
     // User position: a plain blue-dot circle (MapLibre has no
-    // built-in blue dot). During Live Follow it is the green car
-    // icon from Steven's Live screen, riding the interpolated
-    // position so it glides instead of jumping between fixes.
-    // The car rotates to point along the direction of travel
-    // ON SCREEN (live bearing minus the map's bearing — in
-    // heading-up Live mode that is 0, so it points straight
-    // up). Tapping it focuses the live marker and resumes
-    // Follow (see _resumeLiveFollow).
+    // built-in blue dot). During Live Follow it is a navigation
+    // ARROW (Nov 13, 2026 — approved Preview v2, Arrow option),
+    // riding the interpolated position so it glides instead of
+    // jumping between fixes. Only the arrow itself rotates, to
+    // point along the direction of travel ON SCREEN (live
+    // bearing minus the map's bearing — in heading-up Live mode
+    // that is 0, so it points straight up). The old marker
+    // rotated the whole green circle + car glyph, so at an angle
+    // the glyph read like a sideways door; the arrow never does.
+    // A heading cone + pulsing halo sit behind the arrow while
+    // GPS is locked; when the signal is lost the arrow goes
+    // grey with an amber dashed ring and NO cone / NO pulse, so
+    // a stale position never looks live. Tapping it focuses the
+    // live marker and resumes Follow (see _resumeLiveFollow).
+    // Style decision lives in liveArrowMarkerStyle() (see
+    // live_follow.dart) and is pinned in tests.
     if (_userPos != null && _locationGranted) {
       if (_liveFollowActive) {
         final markerPos = _liveMarkerPos ??
@@ -4343,36 +4420,90 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           liveBearing: _liveBearing,
           mapBearing: _bearing.value,
         );
+        final style = liveArrowMarkerStyle(gpsLost: _liveGpsLost);
         markers.add(
           Marker(
             point: Geographic(
               lon: markerPos.longitude,
               lat: markerPos.latitude,
             ),
-            size: const Size(48, 48),
+            size: const Size(104, 104),
             child: GestureDetector(
               onTap: _resumeLiveFollow,
-              child: Transform.rotate(
-                angle: rotationDeg * math.pi / 180,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF16A34A),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 6,
-                        offset: Offset(0, 2),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Heading cone (locked only): apex points along
+                  // the direction of travel, same rotation as the
+                  // arrow.
+                  if (style.showHeadingCone)
+                    Transform.rotate(
+                      angle: rotationDeg * math.pi / 180,
+                      child: const CustomPaint(
+                        size: Size(104, 104),
+                        painter: _LiveHeadingConePainter(),
                       ),
-                    ],
+                    ),
+                  // Pulsing GPS halo (locked only): breathes via
+                  // the tab-owned controller so the 200 ms marker
+                  // ticks never restart it.
+                  if (style.showHalo)
+                    AnimatedBuilder(
+                      animation: _liveHaloController,
+                      builder: (context, child) {
+                        final t = _liveHaloController.value;
+                        return Container(
+                          width: 74 + 14 * t,
+                          height: 74 + 14 * t,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF17CE62)
+                                .withValues(alpha: 0.28 - 0.14 * t),
+                          ),
+                        );
+                      },
+                    ),
+                  // Amber dashed ring (lost only): the stale
+                  // position marker, no cone, no pulse.
+                  if (style.showLostRing)
+                    const CustomPaint(
+                      size: Size(84, 84),
+                      painter: _LiveLostRingPainter(),
+                    ),
+                  // 56dp arrow core: green gradient when locked,
+                  // grey when lost. Only the arrow rotates.
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(style.coreStart),
+                          Color(style.coreEnd),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Transform.rotate(
+                      angle: rotationDeg * math.pi / 180,
+                      child: const Icon(
+                        Icons.navigation,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.directions_car,
-                    color: Colors.white,
-                    size: 26,
-                  ),
-                ),
+                ],
               ),
             ),
           ),
@@ -7312,6 +7443,60 @@ class _RenameStopDialogState extends State<_RenameStopDialog> {
       ],
     );
   }
+}
+
+/// Heading cone behind the Live Follow arrow marker (Nov 13,
+/// 2026 — approved Preview v2, Arrow option): a translucent
+/// green wedge whose apex points UP in its own coordinates; the
+/// marker rotates it by the screen rotation so the apex points
+/// along the direction of travel. Drawn in a 104x104 box whose
+/// centre is the marker position.
+class _LiveHeadingConePainter extends CustomPainter {
+  const _LiveHeadingConePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF17CE62).withValues(alpha: 0.30)
+      ..style = PaintingStyle.fill;
+    final path = Path()
+      ..moveTo(size.width / 2, 4)
+      ..lineTo(size.width / 2 + 20, size.height / 2)
+      ..lineTo(size.width / 2 - 20, size.height / 2)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_LiveHeadingConePainter oldDelegate) => false;
+}
+
+/// Amber dashed ring around the Live Follow arrow marker when
+/// GPS is lost (Nov 13, 2026 — approved Preview v2, Arrow
+/// option): the stale-position marker. 16 short arcs read as a
+/// dashed circle; drawn in an 84x84 box centred on the core.
+class _LiveLostRingPainter extends CustomPainter {
+  const _LiveLostRingPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFF59E0B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    const dashes = 16;
+    final rect = Rect.fromCircle(
+      center: Offset(size.width / 2, size.height / 2),
+      radius: size.width / 2 - 2,
+    );
+    for (var i = 0; i < dashes; i++) {
+      final start = i * 2 * math.pi / dashes;
+      canvas.drawArc(rect, start, math.pi / dashes, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LiveLostRingPainter oldDelegate) => false;
 }
 
 /// Round dark control button used for zoom and my-location.

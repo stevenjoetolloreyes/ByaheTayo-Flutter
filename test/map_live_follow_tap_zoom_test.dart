@@ -1,7 +1,9 @@
-// Live Follow tap-to-zoom / drag-break / rotating car marker /
+// Live Follow tap-to-zoom / drag-break / rotating arrow marker /
 // blue route line (Nov 11, 2026; line re-coloured blue Nov 13,
 // 2026 by the approved Preview v3 style — the Nov 11 cyan live
-// line is superseded). Pure-logic tests only — the
+// line is superseded; arrow marker Nov 13, 2026 by the approved
+// Preview v2 Arrow option — the green car glyph is superseded).
+// Pure-logic tests only — the
 // native MapLibre map cannot render in flutter test, so the
 // camera moves, the drag pause, and the marker tap are only
 // checkable on Steven's phone after a green build. What IS
@@ -185,6 +187,35 @@ void main() {
         liveMarkerScreenRotationDeg(liveBearing: 0, mapBearing: 180),
         180,
       );
+    });
+  });
+
+  group('liveArrowMarkerStyle (Nov 13, 2026 — Preview v2 Arrow)', () {
+    test('GPS locked: green core, cone + halo on, no lost ring', () {
+      final style = liveArrowMarkerStyle(gpsLost: false);
+      expect(style.coreStart, 0xFF17CE62);
+      expect(style.coreEnd, 0xFF0AA84C);
+      expect(style.showHeadingCone, isTrue);
+      expect(style.showHalo, isTrue);
+      expect(style.showLostRing, isFalse);
+    });
+
+    test('GPS lost: grey core, NO cone, NO halo, amber ring on', () {
+      final style = liveArrowMarkerStyle(gpsLost: true);
+      expect(style.coreStart, 0xFF9CA3AF);
+      expect(style.coreEnd, 0xFF6B7280);
+      expect(style.showHeadingCone, isFalse);
+      expect(style.showHalo, isFalse);
+      expect(style.showLostRing, isTrue);
+    });
+
+    test('locked and lost styles are never the same marker', () {
+      final locked = liveArrowMarkerStyle(gpsLost: false);
+      final lost = liveArrowMarkerStyle(gpsLost: true);
+      expect(lost.coreStart, isNot(locked.coreStart));
+      expect(lost.showHeadingCone, isNot(locked.showHeadingCone));
+      expect(lost.showHalo, isNot(locked.showHalo));
+      expect(lost.showLostRing, isNot(locked.showLostRing));
     });
   });
 
