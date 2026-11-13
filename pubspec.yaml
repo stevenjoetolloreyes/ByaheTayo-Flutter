@@ -41,6 +41,11 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_maps_flutter: ^2.19.0
   geolocator: ^14.1.2
+  # Compass heading for Live Follow (Nov 13, 2026): the
+  # maintained flutter_compass_v2 fork — the original
+  # flutter_compass is stale (last release Sep 2023). Stream is
+  # only listened to while Live Follow runs.
+  flutter_compass_v2: ^1.0.0
   shared_preferences: ^2.5.6
   flutter_tts: ^4.2.5
   share_plus: ^13.3.1

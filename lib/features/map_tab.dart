@@ -49,6 +49,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_compass_v2/flutter_compass_v2.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' hide Marker;
 import 'package:maplibre/maplibre.dart' hide Position;
@@ -2285,6 +2286,13 @@ class _MapTabState extends State<MapTab>
   bool _liveFollowPaused = false;
   DateTime? _liveFollowStartedAt;
   StreamSubscription<Position>? _livePositionSub;
+  // Compass heading (Nov 13, 2026 — magnetometer / rotation
+  // vector): listened to only while Live Follow runs, like the
+  // GPS stream — no background drain. Null = no sensor / no
+  // reading yet: heading falls back to GPS bearing exactly as
+  // before (see blendLiveHeading).
+  StreamSubscription<CompassEvent>? _liveCompassSub;
+  double? _liveCompassHeading;
   Timer? _liveGpsLostTimer;
   // Per-frame Live interpolation (Nov 13, 2026 — Google-level
   // smoothing, Preview v2): a Ticker drives the arrow every
@@ -2321,6 +2329,12 @@ class _MapTabState extends State<MapTab>
   LatLng? _liveTargetPos;
   double _liveBearing = 0;
   double _liveTargetBearing = 0;
+  // GPS-only direction of travel (updated on fixes that moved
+  // 10 m+). The compass handler blends this with the compass
+  // heading into _liveTargetBearing — keeping the GPS bearing
+  // separate means a stale compass value can never survive a
+  // moving GPS fix (see blendLiveHeading).
+  double _liveGpsBearing = 0;
   final SpeedSmoother _liveSpeed = SpeedSmoother();
   LatLng? _livePrevPos;
   DateTime? _livePrevPosAt;
@@ -3045,6 +3059,7 @@ class _MapTabState extends State<MapTab>
     _routeDrawTimer?.cancel();
     _routePulseTimer?.cancel();
     _livePositionSub?.cancel();
+    _liveCompassSub?.cancel();
     _liveGpsLostTimer?.cancel();
     _liveFrameTicker?.stop();
     _liveFrameTicker?.dispose();
@@ -3234,6 +3249,11 @@ class _MapTabState extends State<MapTab>
     // switch to 3D, and start tracking.
     _livePrevViewMode = _viewMode;
     _liveSpeed.clear();
+    _liveGpsBearing = 0;
+    _liveTargetBearing = 0;
+    _liveCompassSub?.cancel();
+    _liveCompassSub = null;
+    _liveCompassHeading = null;
     _livePositionFilter.clear();
     _liveSmoothedPos = null;
     _liveLastCameraTarget = null;
@@ -3282,6 +3302,15 @@ class _MapTabState extends State<MapTab>
       },
     );
     _armLiveGpsLostTimer();
+    // Compass heading: magnetometer / rotation-vector sensor,
+    // Live only. A null stream = no compass sensor on this
+    // device: heading stays on GPS bearing. Null headings
+    // (uncalibrated / no sensor) are ignored the same way in
+    // _onLiveCompass.
+    final compassEvents = FlutterCompass.events;
+    if (compassEvents != null) {
+      _liveCompassSub = compassEvents.listen(_onLiveCompass);
+    }
     _liveLastFrameElapsed = null;
     _liveFrameTicker = createTicker(_onLiveFrame)..start();
     _liveCameraTimer = Timer.periodic(
@@ -3302,6 +3331,9 @@ class _MapTabState extends State<MapTab>
     if (!_liveFollowActive) return;
     _livePositionSub?.cancel();
     _livePositionSub = null;
+    _liveCompassSub?.cancel();
+    _liveCompassSub = null;
+    _liveCompassHeading = null;
     _liveGpsLostTimer?.cancel();
     _liveFrameTicker?.stop();
     _liveFrameTicker?.dispose();
@@ -3333,6 +3365,36 @@ class _MapTabState extends State<MapTab>
     });
     unawaited(_setViewMode(prevMode));
     if (_activeRoute != null) _fitActiveRoute();
+  }
+
+  /// One compass reading: low-pass filters the heading, then
+  /// steers the target bearing — the compass wins while stopped
+  /// or slow (so rotating the phone turns the map with no GPS
+  /// movement), GPS bearing wins at speed (see
+  /// [blendLiveHeading]). The smoothed live bearing eases toward
+  /// the target (shortest arc); the 150 ms camera tick follows
+  /// it, so the map turns smoothly instead of snapping. A null
+  /// heading is ignored, and a reading whose reported accuracy
+  /// is wildly off (> 45° deviation) is ignored too — the
+  /// previous heading stands, never a guessed one.
+  void _onLiveCompass(CompassEvent event) {
+    if (!_liveFollowActive || !mounted) return;
+    final heading = event.heading;
+    if (heading == null) return;
+    final accuracy = event.accuracy;
+    if (accuracy != null && accuracy > 45) return;
+    _liveCompassHeading = _liveCompassHeading == null
+        ? heading
+        : smoothCompassHeading(
+            previous: _liveCompassHeading!,
+            compass: heading,
+          );
+    _liveTargetBearing = blendLiveHeading(
+      gpsBearing: _liveGpsBearing,
+      compassHeading: _liveCompassHeading,
+      speedKmh: _liveSpeed.averageKmh,
+    );
+    _liveBearing = lerpAngleDeg(_liveBearing, _liveTargetBearing, 0.3);
   }
 
   /// One live GPS fix: smooths the position (see
@@ -3385,26 +3447,42 @@ class _MapTabState extends State<MapTab>
     // Bearing follows the direction of travel: only when the bus
     // actually moved (10 m+), so GPS jitter at a stop does not
     // spin the camera. The bearing is approached gradually
-    // (shortest arc), never snapped.
+    // (shortest arc), never snapped. The GPS bearing is kept
+    // separate from the blended target: on every fix the target
+    // is re-blended from it (see blendLiveHeading), so a stale
+    // compass value never survives a moving fix.
     if (_livePrevPos != null) {
       final movedKm =
           distanceAlongPath([_livePrevPos!, here], 0, 1);
       if (movedKm >= 0.01) {
-        _liveTargetBearing = bearingBetween(_livePrevPos!, here);
+        _liveGpsBearing = bearingBetween(_livePrevPos!, here);
       }
     }
+    _liveTargetBearing = blendLiveHeading(
+      gpsBearing: _liveGpsBearing,
+      compassHeading: _liveCompassHeading,
+      speedKmh: _liveSpeed.averageKmh,
+    );
     _liveBearing = lerpAngleDeg(_liveBearing, _liveTargetBearing, 0.3);
     _livePrevPos = here;
     _livePrevPosAt = now;
     // Snap-to-road (Nov 13, 2026 — Google-level smoothing):
     // the marker + camera follow the fix projected onto the
     // road, so GPS jitter never pulls the arrow onto buildings
-    // or side streets. No geometry loaded yet = the smoothed
-    // fix itself. The Live panel snapshot below still uses the
-    // smoothed fix, so its numbers do not change.
+    // or side streets — but ONLY when the fix is actually near
+    // the road ([liveSnapIsOnRoute], 50 m). A fix far from the
+    // route (at home in Aragan, off the Cabugao → Vigan road)
+    // keeps its true smoothed position instead of being dragged
+    // onto the highway, and its distance-along-road is cleared
+    // so prediction dead-reckons along the bearing instead of
+    // advancing along the road. No geometry loaded yet = the
+    // smoothed fix itself. The Live panel snapshot below still
+    // uses the smoothed fix, so its numbers do not change.
     final snapped = snapToRoad(position: here, roadPoints: _roadPoints);
-    _liveTargetPos = snapped?.point ?? here;
-    _liveSnappedDistanceKm = snapped?.distanceAlongKm;
+    final onRoute = liveSnapIsOnRoute(snapped);
+    _liveTargetPos = onRoute ? snapped!.point : here;
+    _liveSnappedDistanceKm =
+        onRoute ? snapped?.distanceAlongKm : null;
     _liveLastFixAt = now;
     _liveMarkerPos ??= _liveTargetPos;
     setState(() {
@@ -3472,14 +3550,17 @@ class _MapTabState extends State<MapTab>
     setState(() => _liveMarkerPos = next);
   }
 
-  /// Where the arrow should be right now: the last snapped fix
-  /// advanced along the road at the last smoothed speed for the
-  /// time since that fix — but only while prediction may coast
-  /// ([livePredictionShouldCoast], 3 s). After that the arrow
-  /// holds its last position (the target itself) until a new
-  /// fix arrives; the 10 s [liveGpsLostAfter] timer then raises
-  /// the honest lost state. Movement is never faked beyond the
-  /// brief coast.
+  /// Where the arrow should be right now: the last fix advanced
+  /// at the last smoothed speed for the time since that fix —
+  /// along the road when the fix was snapped on-route
+  /// ([_liveSnappedDistanceKm] set), or dead-reckoned along the
+  /// bearing when the fix is off-route (distance cleared, so an
+  /// off-route position is never dragged onto the road) — but
+  /// only while prediction may coast ([livePredictionShouldCoast],
+  /// 3 s). After that the arrow holds its last position (the
+  /// target itself) until a new fix arrives; the 10 s
+  /// [liveGpsLostAfter] timer then raises the honest lost state.
+  /// Movement is never faked beyond the brief coast.
   LatLng? _livePredictedTarget() {
     final target = _liveTargetPos;
     final lastFix = _liveLastFixAt;

@@ -74,6 +74,54 @@ void main() {
     });
   });
 
+  group('liveSnapIsOnRoute', () {
+    test('a fix ~20 m off the road snaps (within the 50 m limit)', () {
+      final snapped = snapToRoad(
+        position: const LatLng(17.75, 120.45019),
+        roadPoints: _road,
+      );
+      expect(snapped, isNotNull);
+      expect(snapped!.offRoadKm, closeTo(0.02, 0.01));
+      expect(liveSnapIsOnRoute(snapped), isTrue);
+      // And the snapped point is on the road, not at the fix.
+      expect(snapped.point.longitude, closeTo(120.45, 0.00001));
+    });
+
+    test('a fix 500 m off the road does NOT snap (caller keeps the true fix)', () {
+      // Aragan at home: far off the Cabugao → Vigan route.
+      final snapped = snapToRoad(
+        position: const LatLng(17.75, 120.45472),
+        roadPoints: _road,
+      );
+      expect(snapped, isNotNull);
+      expect(snapped!.offRoadKm, closeTo(0.5, 0.05));
+      expect(liveSnapIsOnRoute(snapped), isFalse);
+      // The projection still exists, but the caller must not use it.
+      expect(snapped.point.longitude, closeTo(120.45, 0.00001));
+    });
+
+    test('boundary: exactly 50 m snaps, just over 50 m does not', () {
+      const atLimit = SnappedRoadPosition(
+        point: LatLng(17.75, 120.45),
+        segmentIndex: 1,
+        distanceAlongKm: 5.56,
+        offRoadKm: 0.05,
+      );
+      expect(liveSnapIsOnRoute(atLimit), isTrue);
+      const overLimit = SnappedRoadPosition(
+        point: LatLng(17.75, 120.45),
+        segmentIndex: 1,
+        distanceAlongKm: 5.56,
+        offRoadKm: 0.050001,
+      );
+      expect(liveSnapIsOnRoute(overLimit), isFalse);
+    });
+
+    test('no geometry: null snap is never on-route', () {
+      expect(liveSnapIsOnRoute(null), isFalse);
+    });
+  });
+
   group('pointAtDistanceAlongRoad', () {
     test('halfway along the road', () {
       final p = pointAtDistanceAlongRoad(_road, 5.56);

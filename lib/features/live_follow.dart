@@ -407,7 +407,11 @@ LiveArrowMarkerStyle liveArrowMarkerStyle({required bool gpsLost}) {
 ///
 /// Snap-to-road never invents a position: it only projects the
 /// real (smoothed) GPS fix onto the nearest point of the loaded
-/// OSRM road geometry. Prediction never invents movement either:
+/// OSRM road geometry — and only when the fix is actually near
+/// the road (see [liveSnapToRoadMaxOffRoadM]): a fix far from
+/// the route (at home in Aragan, off the Cabugao → Vigan road)
+/// stays at its true position instead of being dragged onto
+/// the highway. Prediction never invents movement either:
 /// it advances the last real fix along the road at the last
 /// measured speed, and only for [livePredictionCoast] after the
 /// fix — after that the arrow holds until a new fix arrives.
@@ -489,6 +493,26 @@ SnappedRoadPosition? snapToRoad({
   );
 }
 
+/// Snap-to-road only applies this close to the road (50 m):
+/// GPS noise is 10–40 m, so a real on-road fix still snaps,
+/// but a truly off-route fix (at home in Aragan, hundreds of
+/// metres from the route) is left at its true position instead
+/// of being dragged onto the highway. The caller must use
+/// [liveSnapIsOnRoute] — [snapToRoad] itself still returns the
+/// nearest projection (with [SnappedRoadPosition.offRoadKm])
+/// so the distance is always visible to the caller and tests.
+const liveSnapToRoadMaxOffRoadM = 50.0;
+
+/// True when a snapped fix is close enough to the road for the
+/// snapped point to be used: off-road distance within
+/// [maxOffRoadM] (default [liveSnapToRoadMaxOffRoadM]).
+/// A null snap (no geometry) is never on-route.
+bool liveSnapIsOnRoute(
+  SnappedRoadPosition? snapped, {
+  double maxOffRoadM = liveSnapToRoadMaxOffRoadM,
+}) =>
+    snapped != null && snapped.offRoadKm * 1000 <= maxOffRoadM;
+
 /// Point [distanceKm] along [roadPoints] from its start
 /// (linear within a segment). Past the end clamps to the last
 /// road point — prediction never runs off the road.
@@ -548,6 +572,69 @@ LatLng destinationPoint({
 /// position until a new fix arrives (and the 10 s
 /// [liveGpsLostAfter] timer raises the honest lost state).
 const livePredictionCoast = Duration(seconds: 3);
+
+/// Compass heading for Live Follow (Nov 13, 2026 — Steven:
+/// rotating the phone while stopped should turn the map, like
+/// Google Maps). GPS bearing alone only moves when the bus
+/// moved 10 m+, so a stopped turn did nothing. The phone's
+/// magnetometer / rotation-vector sensor fills that gap — but
+/// only as a second source, never as the truth:
+///
+/// * No compass sensor / no reading yet (null heading) → GPS
+///   bearing, exactly as before.
+/// * Moving at speed (above [liveCompassMovingKmh]) → GPS
+///   bearing wins: it is the direction of travel, and the
+///   magnetometer is easily biased by the bus itself. A compass
+///   that disagrees wildly with GPS while moving is ignored
+///   by the same rule.
+/// * Stopped or slow → the compass steers, so rotating the
+///   phone turns the arrow / camera with no GPS movement.
+/// * Single readings are low-pass filtered
+///   ([smoothCompassHeading]) and wild jumps rejected, so an
+///   uncalibrated or noisy sensor cannot spin the map.
+
+/// Above this smoothed speed (km/h) GPS bearing wins over the
+/// compass heading.
+const liveCompassMovingKmh = 10.0;
+
+/// A single compass reading jumping further than this from the
+/// previous smoothed heading is treated as noise / an
+/// uncalibrated sensor and ignored (the previous heading is
+/// kept).
+const liveCompassMaxJumpDeg = 90.0;
+
+/// Which heading steers the Live Follow arrow / camera: the
+/// GPS direction of travel, or the compass heading. See the
+/// rules above [liveCompassMovingKmh].
+double blendLiveHeading({
+  required double gpsBearing,
+  required double? compassHeading,
+  required double? speedKmh,
+}) {
+  if (compassHeading == null) return gpsBearing;
+  if (speedKmh != null && speedKmh > liveCompassMovingKmh) {
+    return gpsBearing;
+  }
+  return compassHeading;
+}
+
+/// Low-pass filter for compass readings: eases [previous]
+/// toward [compass] along the shortest arc (0/360 wrap
+/// handled), so the heading turns smoothly instead of
+/// jittering with every sensor event. A single reading jumping
+/// further than [liveCompassMaxJumpDeg] is ignored and
+/// [previous] is returned unchanged.
+double smoothCompassHeading({
+  required double previous,
+  required double compass,
+  double factor = 0.25,
+}) {
+  var diff = (compass - previous) % 360;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  if (diff.abs() > liveCompassMaxJumpDeg) return previous;
+  return (previous + diff * factor) % 360;
+}
 
 /// True while prediction may still coast: the last fix is no
 /// older than [coast] (default [livePredictionCoast]).
