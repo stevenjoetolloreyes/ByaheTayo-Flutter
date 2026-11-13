@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fares widget — Fares (4x2). Approved preview v1 (Nov 11, 2026). NIGHT variant. -->
+<!-- Fares widget — Fares (4x2). Approved preview v1 (Nov 11, 2026). NIGHT variant — intentionally identical to the day/light layout: per the approved Preview the widget stays light in dark mode. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_card_night"
+    android:background="@drawable/widget_card"
     android:orientation="vertical"
     android:padding="12dp">
     <LinearLayout
@@ -24,7 +24,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:text="FARES"
-            android:textColor="#EAF3E4"
+            android:textColor="#21301A"
             android:textSize="13sp"
             android:textStyle="bold" 
             android:fontFamily="@font/press_start_2p"/>
@@ -49,7 +49,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Cabugao → Vigan Bus Terminal"
-            android:textColor="#EAF3E4"
+            android:textColor="#21301A"
             android:textSize="15sp"
             android:textStyle="bold" 
             android:fontFamily="@font/baloo_2"/>
@@ -59,7 +59,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Bus"
-            android:textColor="#B0B8B5"
+            android:textColor="#5A6B52"
             android:textSize="12sp" 
             android:fontFamily="@font/baloo_2"/>
 
@@ -87,7 +87,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:text="₱48 student"
-                android:textColor="#B0B8B5"
+                android:textColor="#5A6B52"
                 android:textSize="12sp" 
                 android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
@@ -98,7 +98,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Fare not set"
-            android:textColor="#B0B8B5"
+            android:textColor="#5A6B52"
             android:textSize="14sp"
             android:visibility="gone" 
             android:fontFamily="@font/baloo_2"/>
@@ -109,7 +109,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="≈ 31.6 km · 1 hr 10 min"
-            android:textColor="#B0B8B5"
+            android:textColor="#5A6B52"
             android:textSize="12sp" 
             android:fontFamily="@font/baloo_2"/>
         <LinearLayout
@@ -195,7 +195,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:text="Regular"
-                        android:textColor="#B0B8B5"
+                        android:textColor="#5A6B52"
                         android:textSize="9sp"
                         android:fontFamily="@font/baloo_2" />
                 </LinearLayout>
@@ -260,7 +260,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:text="Student"
-                        android:textColor="#B0B8B5"
+                        android:textColor="#5A6B52"
                         android:textSize="9sp"
                         android:fontFamily="@font/baloo_2" />
                 </LinearLayout>
@@ -281,7 +281,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Open EstudyanteGO to load fares."
-            android:textColor="#EAF3E4"
+            android:textColor="#21301A"
             android:textSize="14sp"
             android:textStyle="bold" 
             android:fontFamily="@font/baloo_2"/>
@@ -291,7 +291,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Fares load from the Fares tab when the app opens."
-            android:textColor="#B0B8B5"
+            android:textColor="#5A6B52"
             android:textSize="12sp" 
             android:fontFamily="@font/baloo_2"/>
     </LinearLayout>

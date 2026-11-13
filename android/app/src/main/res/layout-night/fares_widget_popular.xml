@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fares widget — Popular Routes (4x3). Approved preview v1 (Nov 11, 2026). NIGHT variant. -->
+<!-- Fares widget — Popular Routes (4x3). Approved preview v1 (Nov 11, 2026). NIGHT variant — intentionally identical to the day/light layout: per the approved Preview the widget stays light in dark mode. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_card_night"
+    android:background="@drawable/widget_card"
     android:orientation="vertical"
     android:padding="12dp">
     <LinearLayout
@@ -24,7 +24,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:text="POPULAR ROUTES"
-            android:textColor="#EAF3E4"
+            android:textColor="#21301A"
             android:textSize="13sp"
             android:textStyle="bold" 
             android:fontFamily="@font/press_start_2p"/>
@@ -40,7 +40,8 @@
     <LinearLayout
         android:id="@+id/widget_content"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="vertical">
         <LinearLayout
             android:id="@+id/widget_route_0"
@@ -60,7 +61,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Cabugao → Vigan Bus Terminal"
-                    android:textColor="#EAF3E4"
+                    android:textColor="#21301A"
                     android:textSize="13sp"
                     android:textStyle="bold" 
                     android:fontFamily="@font/baloo_2"/>
@@ -81,7 +82,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="₱48 student · ≈ 31.6 km"
-                android:textColor="#B0B8B5"
+                android:textColor="#5A6B52"
                 android:textSize="11sp" 
                 android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
@@ -103,7 +104,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Cabugao → San Juan, Ilocos Sur"
-                    android:textColor="#EAF3E4"
+                    android:textColor="#21301A"
                     android:textSize="13sp"
                     android:textStyle="bold" 
                     android:fontFamily="@font/baloo_2"/>
@@ -124,7 +125,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="₱16 student · ≈ 6.7 km"
-                android:textColor="#B0B8B5"
+                android:textColor="#5A6B52"
                 android:textSize="11sp" 
                 android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
@@ -146,7 +147,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Sinait → Cabugao"
-                    android:textColor="#EAF3E4"
+                    android:textColor="#21301A"
                     android:textSize="13sp"
                     android:textStyle="bold" 
                     android:fontFamily="@font/baloo_2"/>
@@ -167,10 +168,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="₱16 student · ≈ 12.1 km"
-                android:textColor="#B0B8B5"
+                android:textColor="#5A6B52"
                 android:textSize="11sp" 
                 android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
+        <!-- Flexible spacer: spreads the routes and the chart so the
+             widget fills its height instead of leaving a big empty
+             space below the content (seen on Steven's phone). It
+             collapses to zero when space is tight. -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
                 <LinearLayout
             android:id="@+id/widget_fare_chart"
             android:layout_width="match_parent"
@@ -202,7 +211,7 @@
                     android:gravity="center_horizontal">
 
                     <LinearLayout
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal">
                         <LinearLayout
@@ -266,7 +275,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="1dp"
                                 android:text="Regular"
-                                android:textColor="#B0B8B5"
+                                android:textColor="#5A6B52"
                                 android:textSize="9sp"
                                 android:fontFamily="@font/baloo_2" />
                         </LinearLayout>
@@ -331,7 +340,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="1dp"
                                 android:text="Student"
-                                android:textColor="#B0B8B5"
+                                android:textColor="#5A6B52"
                                 android:textSize="9sp"
                                 android:fontFamily="@font/baloo_2" />
                         </LinearLayout>
@@ -343,7 +352,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:text=""
-                        android:textColor="#B0B8B5"
+                        android:textColor="#5A6B52"
                         android:textSize="9sp"
                         android:fontFamily="@font/baloo_2"
                         android:maxLines="1"
@@ -358,7 +367,7 @@
                     android:gravity="center_horizontal">
 
                     <LinearLayout
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal">
                         <LinearLayout
@@ -422,7 +431,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="1dp"
                                 android:text="Regular"
-                                android:textColor="#B0B8B5"
+                                android:textColor="#5A6B52"
                                 android:textSize="9sp"
                                 android:fontFamily="@font/baloo_2" />
                         </LinearLayout>
@@ -487,7 +496,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="1dp"
                                 android:text="Student"
-                                android:textColor="#B0B8B5"
+                                android:textColor="#5A6B52"
                                 android:textSize="9sp"
                                 android:fontFamily="@font/baloo_2" />
                         </LinearLayout>
@@ -499,7 +508,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:text=""
-                        android:textColor="#B0B8B5"
+                        android:textColor="#5A6B52"
                         android:textSize="9sp"
                         android:fontFamily="@font/baloo_2"
                         android:maxLines="1"
@@ -514,7 +523,7 @@
                     android:gravity="center_horizontal">
 
                     <LinearLayout
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal">
                         <LinearLayout
@@ -578,7 +587,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="1dp"
                                 android:text="Regular"
-                                android:textColor="#B0B8B5"
+                                android:textColor="#5A6B52"
                                 android:textSize="9sp"
                                 android:fontFamily="@font/baloo_2" />
                         </LinearLayout>
@@ -643,7 +652,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="1dp"
                                 android:text="Student"
-                                android:textColor="#B0B8B5"
+                                android:textColor="#5A6B52"
                                 android:textSize="9sp"
                                 android:fontFamily="@font/baloo_2" />
                         </LinearLayout>
@@ -655,13 +664,20 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:text=""
-                        android:textColor="#B0B8B5"
+                        android:textColor="#5A6B52"
                         android:textSize="9sp"
                         android:fontFamily="@font/baloo_2"
                         android:maxLines="1"
                         android:ellipsize="end" />
                 </LinearLayout>
             </LinearLayout>
+        <!-- Flexible spacer: spreads the chart and the minimum-fare
+             line so the widget fills its height. Collapses to zero
+             when space is tight. -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
         </LinearLayout>
 <TextView
             android:id="@+id/widget_min_fare"
@@ -687,7 +703,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Open EstudyanteGO to load fares."
-            android:textColor="#EAF3E4"
+            android:textColor="#21301A"
             android:textSize="14sp"
             android:textStyle="bold" 
             android:fontFamily="@font/baloo_2"/>
@@ -697,7 +713,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Fares load from the Fares tab when the app opens."
-            android:textColor="#B0B8B5"
+            android:textColor="#5A6B52"
             android:textSize="12sp" 
             android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
