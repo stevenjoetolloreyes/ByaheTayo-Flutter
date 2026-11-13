@@ -636,6 +636,66 @@ double smoothCompassHeading({
   return (previous + diff * factor) % 360;
 }
 
+/// Built-in compass channel (Nov 13, 2026 — replaces
+/// flutter_compass_v2, removed the same day: its AAR was
+/// compiled against compileSdk 33 while its androidx deps
+/// need 34+, which failed the Actions build at
+/// checkReleaseAarMetadata). The heading comes from
+/// MainActivity.kt over this EventChannel — no pub plugin,
+/// no new dependency. The native side prefers the rotation
+/// vector and falls back to accelerometer + magnetometer.
+const liveCompassChannelName = 'com.estudyantego.app/compass';
+
+/// Android sensor accuracy status for a compass reading, as
+/// reported by SensorEvent.onAccuracyChanged:
+/// 0 = unreliable, 1 = low, 2 = medium, 3 = high.
+const liveCompassAccuracyUnreliable = 0;
+
+/// One heading reading from the native compass channel.
+class NativeCompassReading {
+  const NativeCompassReading({
+    required this.heading,
+    this.accuracy,
+  });
+
+  /// Heading in degrees, 0–360 (0 = north).
+  final double heading;
+
+  /// Sensor accuracy status (0–3, see
+  /// [liveCompassAccuracyUnreliable]), or null when the system
+  /// has not reported one yet.
+  final int? accuracy;
+}
+
+/// Parses one native compass event — the map MainActivity
+/// sends: {"heading": degrees, "accuracy": status int?}.
+/// Returns null for a malformed event, a missing / non-finite
+/// heading, or a heading outside 0–360: the caller keeps the
+/// previous heading, never a guessed one.
+NativeCompassReading? parseNativeCompassEvent(Object? event) {
+  if (event is! Map) return null;
+  final headingValue = event['heading'];
+  if (headingValue is! num) return null;
+  final heading = headingValue.toDouble();
+  if (heading.isNaN || heading.isInfinite) return null;
+  if (heading < 0 || heading > 360) return null;
+  final accuracyValue = event['accuracy'];
+  final accuracy = accuracyValue is num
+      ? accuracyValue.toInt()
+      : null;
+  return NativeCompassReading(
+    heading: heading,
+    accuracy: accuracy,
+  );
+}
+
+/// True when a native compass reading may steer the heading.
+/// An unreliable sensor (status 0 — uncalibrated magnetometer)
+/// is ignored; a missing accuracy is accepted, exactly as the
+/// old plugin's readings with no accuracy were.
+bool isCompassReadingUsable(NativeCompassReading reading) =>
+    reading.accuracy != liveCompassAccuracyUnreliable;
+
 /// True while prediction may still coast: the last fix is no
 /// older than [coast] (default [livePredictionCoast]).
 bool livePredictionShouldCoast({

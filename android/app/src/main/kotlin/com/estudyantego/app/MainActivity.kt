@@ -7,6 +7,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.view.Surface
 import androidx.activity.result.ActivityResultLauncher
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
@@ -37,6 +38,21 @@ class MainActivity : FlutterFragmentActivity() {
     private val walkingChannelName = "byahetayo/walking_steps"
     private var sensorManager: SensorManager? = null
     private var stepSensor: Sensor? = null
+
+    // Compass heading for Live Follow (Nov 13, 2026 — built-in,
+    // no plugin): the magnetometer / rotation-vector sensor is
+    // read here over the "com.estudyantego.app/compass"
+    // EventChannel, so no flutter_compass dependency (its AAR
+    // was compiled against compileSdk 33 while its androidx deps
+    // need 34+, which failed the Actions build at
+    // checkReleaseAarMetadata). Prefer TYPE_ROTATION_VECTOR;
+    // fall back to accelerometer + magnetometer when it is
+    // absent. Events are maps: {"heading": degrees 0–360
+    // (0 = north), "accuracy": sensor status int 0–3, absent
+    // until the system has reported one}. The listener is only
+    // registered while Dart is listening (Live Follow only);
+    // onCancel unregisters it, so there is no background drain.
+    private val compassChannelName = "com.estudyantego.app/compass"
 
     // Health Connect fallback for the Walking Goal (Nov 5, 2026):
     // today's steps from Health Connect on phones with no
@@ -104,6 +120,93 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onDestroy() {
         healthConnectScope.cancel()
         super.onDestroy()
+    }
+
+    // --- Built-in compass helpers (Nov 13, 2026) -----------------
+    // Heading in degrees, 0–360 (0 = north), from a rotation
+    // vector, with the display rotation compensated so the
+    // heading matches the way the phone is held.
+    private fun compassHeadingFromRotationVector(
+        values: FloatArray
+    ): Double {
+        val matrix = FloatArray(9)
+        SensorManager.getRotationMatrixFromVector(matrix, values)
+        return compassHeadingFromRotationMatrix(matrix)
+    }
+
+    // Heading from an accelerometer + magnetometer pair (the
+    // fallback when there is no rotation-vector sensor). Null
+    // when either reading is missing or no rotation matrix can
+    // be computed from them.
+    private fun compassHeadingFromAccelMagnet(
+        accel: FloatArray?,
+        magnet: FloatArray?
+    ): Double? {
+        if (accel == null || magnet == null) return null
+        val matrix = FloatArray(9)
+        if (!SensorManager.getRotationMatrix(
+                matrix, null, accel, magnet
+            )
+        ) {
+            return null
+        }
+        return compassHeadingFromRotationMatrix(matrix)
+    }
+
+    private fun compassHeadingFromRotationMatrix(
+        matrix: FloatArray
+    ): Double {
+        val remapped = FloatArray(9)
+        when (compassDisplayRotation()) {
+            Surface.ROTATION_90 ->
+                SensorManager.remapCoordinateSystem(
+                    matrix,
+                    SensorManager.AXIS_Y,
+                    SensorManager.AXIS_MINUS_X,
+                    remapped
+                )
+            Surface.ROTATION_180 ->
+                SensorManager.remapCoordinateSystem(
+                    matrix,
+                    SensorManager.AXIS_MINUS_X,
+                    SensorManager.AXIS_MINUS_Y,
+                    remapped
+                )
+            Surface.ROTATION_270 ->
+                SensorManager.remapCoordinateSystem(
+                    matrix,
+                    SensorManager.AXIS_MINUS_Y,
+                    SensorManager.AXIS_X,
+                    remapped
+                )
+            else -> matrix.copyInto(remapped)
+        }
+        val orientation = FloatArray(3)
+        SensorManager.getOrientation(remapped, orientation)
+        return (Math.toDegrees(orientation[0].toDouble()) + 360) % 360
+    }
+
+    // Light low-pass so one noisy accel / magnetometer sample
+    // cannot swing the heading (the Dart side low-passes again).
+    private fun lowPassCompass(
+        input: FloatArray,
+        output: FloatArray?
+    ): FloatArray {
+        val out = output ?: FloatArray(input.size)
+        val alpha = 0.25f
+        for (i in input.indices) {
+            out[i] = out[i] + alpha * (input[i] - out[i])
+        }
+        return out
+    }
+
+    @Suppress("DEPRECATION")
+    private fun compassDisplayRotation(): Int {
+        return try {
+            windowManager.defaultDisplay?.rotation ?: Surface.ROTATION_0
+        } catch (_: Exception) {
+            Surface.ROTATION_0
+        }
     }
 
     private fun crashLogFile(): File? {
@@ -312,6 +415,155 @@ class MainActivity : FlutterFragmentActivity() {
                 override fun onCancel(arguments: Any?) {
                     listener?.let { sensorManager?.unregisterListener(it) }
                     listener = null
+                }
+            }
+        )
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            compassChannelName
+        ).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                private var listener: SensorEventListener? = null
+                // Last accuracy the system reported for the sensor
+                // we actually read from (null = not reported yet;
+                // the Dart side accepts a missing accuracy).
+                private var lastAccuracy: Int? = null
+                private var accelReading: FloatArray? = null
+                private var magnetReading: FloatArray? = null
+
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink
+                ) {
+                    val manager = sensorManager
+                    if (manager == null) {
+                        events.error(
+                            "UNAVAILABLE",
+                            "Sensor service not available",
+                            null
+                        )
+                        return
+                    }
+                    val rotationVector = manager.getDefaultSensor(
+                        Sensor.TYPE_ROTATION_VECTOR
+                    )
+                    val accelerometer = manager.getDefaultSensor(
+                        Sensor.TYPE_ACCELEROMETER
+                    )
+                    val magneticField = manager.getDefaultSensor(
+                        Sensor.TYPE_MAGNETIC_FIELD
+                    )
+                    if (rotationVector == null &&
+                        (accelerometer == null || magneticField == null)
+                    ) {
+                        events.error(
+                            "UNAVAILABLE",
+                            "No compass sensor on this device",
+                            null
+                        )
+                        return
+                    }
+                    val useRotationVector = rotationVector != null
+                    listener = object : SensorEventListener {
+                        override fun onSensorChanged(event: SensorEvent) {
+                            val heading = when {
+                                useRotationVector &&
+                                    event.sensor.type ==
+                                        Sensor.TYPE_ROTATION_VECTOR -> {
+                                    compassHeadingFromRotationVector(
+                                        event.values
+                                    )
+                                }
+                                !useRotationVector &&
+                                    event.sensor.type ==
+                                        Sensor.TYPE_ACCELEROMETER -> {
+                                    accelReading = lowPassCompass(
+                                        event.values,
+                                        accelReading
+                                    )
+                                    compassHeadingFromAccelMagnet(
+                                        accelReading,
+                                        magnetReading
+                                    )
+                                }
+                                !useRotationVector &&
+                                    event.sensor.type ==
+                                        Sensor.TYPE_MAGNETIC_FIELD -> {
+                                    magnetReading = lowPassCompass(
+                                        event.values,
+                                        magnetReading
+                                    )
+                                    compassHeadingFromAccelMagnet(
+                                        accelReading,
+                                        magnetReading
+                                    )
+                                }
+                                else -> null
+                            } ?: return
+                            if (heading.isNaN()) return
+                            val payload = HashMap<String, Any>()
+                            payload["heading"] = heading
+                            lastAccuracy?.let {
+                                payload["accuracy"] = it
+                            }
+                            try {
+                                events.success(payload)
+                            } catch (_: Exception) {
+                                // A dead sink must never crash the
+                                // sensor thread.
+                            }
+                        }
+
+                        override fun onAccuracyChanged(
+                            sensor: Sensor?,
+                            accuracy: Int
+                        ) {
+                            // Only the sensor we read from counts:
+                            // the rotation-vector path reports its
+                            // own accuracy, the fallback path the
+                            // magnetometer's.
+                            if (useRotationVector &&
+                                sensor?.type ==
+                                    Sensor.TYPE_ROTATION_VECTOR
+                            ) {
+                                lastAccuracy = accuracy
+                            } else if (!useRotationVector &&
+                                sensor?.type ==
+                                    Sensor.TYPE_MAGNETIC_FIELD
+                            ) {
+                                lastAccuracy = accuracy
+                            }
+                        }
+                    }
+                    val active = listener ?: return
+                    if (useRotationVector) {
+                        manager.registerListener(
+                            active,
+                            rotationVector,
+                            SensorManager.SENSOR_DELAY_GAME
+                        )
+                    } else {
+                        manager.registerListener(
+                            active,
+                            accelerometer,
+                            SensorManager.SENSOR_DELAY_GAME
+                        )
+                        manager.registerListener(
+                            active,
+                            magneticField,
+                            SensorManager.SENSOR_DELAY_GAME
+                        )
+                    }
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    listener?.let {
+                        sensorManager?.unregisterListener(it)
+                    }
+                    listener = null
+                    lastAccuracy = null
+                    accelReading = null
+                    magnetReading = null
                 }
             }
         )

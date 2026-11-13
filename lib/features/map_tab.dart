@@ -49,7 +49,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_compass_v2/flutter_compass_v2.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' hide Marker;
 import 'package:maplibre/maplibre.dart' hide Position;
@@ -2286,12 +2285,14 @@ class _MapTabState extends State<MapTab>
   bool _liveFollowPaused = false;
   DateTime? _liveFollowStartedAt;
   StreamSubscription<Position>? _livePositionSub;
-  // Compass heading (Nov 13, 2026 — magnetometer / rotation
-  // vector): listened to only while Live Follow runs, like the
-  // GPS stream — no background drain. Null = no sensor / no
-  // reading yet: heading falls back to GPS bearing exactly as
-  // before (see blendLiveHeading).
-  StreamSubscription<CompassEvent>? _liveCompassSub;
+  // Compass heading (Nov 13, 2026 — built-in, no plugin:
+  // MainActivity.kt reads the magnetometer / rotation-vector
+  // sensor over the "com.estudyantego.app/compass"
+  // EventChannel). Listened to only while Live Follow runs,
+  // like the GPS stream — no background drain. Null = no
+  // sensor / no reading yet: heading falls back to GPS
+  // bearing exactly as before (see blendLiveHeading).
+  StreamSubscription<dynamic>? _liveCompassSub;
   double? _liveCompassHeading;
   Timer? _liveGpsLostTimer;
   // Per-frame Live interpolation (Nov 13, 2026 — Google-level
@@ -3302,15 +3303,21 @@ class _MapTabState extends State<MapTab>
       },
     );
     _armLiveGpsLostTimer();
-    // Compass heading: magnetometer / rotation-vector sensor,
-    // Live only. A null stream = no compass sensor on this
-    // device: heading stays on GPS bearing. Null headings
-    // (uncalibrated / no sensor) are ignored the same way in
-    // _onLiveCompass.
-    final compassEvents = FlutterCompass.events;
-    if (compassEvents != null) {
-      _liveCompassSub = compassEvents.listen(_onLiveCompass);
-    }
+    // Compass heading: the native sensor stream (MainActivity
+    // EventChannel), Live only. No sensor on this device =
+    // the channel errors and heading stays on GPS bearing;
+    // malformed / unreliable readings are ignored the same
+    // way in _onLiveCompass.
+    _liveCompassSub =
+        const EventChannel(liveCompassChannelName)
+            .receiveBroadcastStream()
+            .listen(
+              _onLiveCompass,
+              onError: (_) {
+                // No compass sensor / channel error: Live
+                // Follow keeps working on GPS bearing alone.
+              },
+            );
     _liveLastFrameElapsed = null;
     _liveFrameTicker = createTicker(_onLiveFrame)..start();
     _liveCameraTimer = Timer.periodic(
@@ -3367,22 +3374,30 @@ class _MapTabState extends State<MapTab>
     if (_activeRoute != null) _fitActiveRoute();
   }
 
-  /// One compass reading: low-pass filters the heading, then
-  /// steers the target bearing — the compass wins while stopped
-  /// or slow (so rotating the phone turns the map with no GPS
-  /// movement), GPS bearing wins at speed (see
-  /// [blendLiveHeading]). The smoothed live bearing eases toward
-  /// the target (shortest arc); the 150 ms camera tick follows
-  /// it, so the map turns smoothly instead of snapping. A null
-  /// heading is ignored, and a reading whose reported accuracy
-  /// is wildly off (> 45° deviation) is ignored too — the
-  /// previous heading stands, never a guessed one.
-  void _onLiveCompass(CompassEvent event) {
+  /// One compass reading from the native channel: low-pass
+  /// filters the heading, then steers the target bearing —
+  /// the compass wins while stopped or slow (so rotating the
+  /// phone turns the map with no GPS movement), GPS bearing
+  /// wins at speed (see [blendLiveHeading]). The smoothed
+  /// live bearing eases toward the target (shortest arc); the
+  /// 150 ms camera tick follows it, so the map turns smoothly
+  /// instead of snapping. A malformed event is ignored, and a
+  /// reading from an unreliable sensor (uncalibrated
+  /// magnetometer) is ignored too — the previous heading
+  /// stands, never a guessed one.
+  ///
+  /// Note on the old accuracy filter: the plugin reported
+  /// accuracy as a degree deviation mapped from the sensor
+  /// status (high 15 / medium 30 / low 45 / unreliable
+  /// absent), so the old `accuracy > 45` check could never
+  /// fire. The native channel reports the raw status
+  /// instead, and unreliable (0) is rejected here.
+  void _onLiveCompass(dynamic event) {
     if (!_liveFollowActive || !mounted) return;
-    final heading = event.heading;
-    if (heading == null) return;
-    final accuracy = event.accuracy;
-    if (accuracy != null && accuracy > 45) return;
+    final reading = parseNativeCompassEvent(event);
+    if (reading == null) return;
+    if (!isCompassReadingUsable(reading)) return;
+    final heading = reading.heading;
     _liveCompassHeading = _liveCompassHeading == null
         ? heading
         : smoothCompassHeading(

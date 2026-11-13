@@ -41,11 +41,16 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_maps_flutter: ^2.19.0
   geolocator: ^14.1.2
-  # Compass heading for Live Follow (Nov 13, 2026): the
-  # maintained flutter_compass_v2 fork — the original
-  # flutter_compass is stale (last release Sep 2023). Stream is
-  # only listened to while Live Follow runs.
-  flutter_compass_v2: ^1.0.0
+  # Compass heading for Live Follow (Nov 13, 2026): built-in,
+  # no plugin — the magnetometer / rotation-vector sensor is
+  # read natively in MainActivity.kt over the
+  # "com.estudyantego.app/compass" EventChannel (see
+  # live_follow.dart: parseNativeCompassEvent). The previous
+  # flutter_compass_v2 dependency was removed Nov 13, 2026:
+  # its AAR was compiled against compileSdk 33 while its
+  # androidx deps need 34+, so the Actions build failed at
+  # checkReleaseAarMetadata. Stream is only listened to while
+  # Live Follow runs.
   shared_preferences: ^2.5.6
   flutter_tts: ^4.2.5
   share_plus: ^13.3.1
