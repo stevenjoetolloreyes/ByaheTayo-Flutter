@@ -34,7 +34,8 @@
             android:text="SCHEDULE"
             android:textColor="#EAF3E4"
             android:textSize="13sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/press_start_2p"/>
 
         <TextView
             android:layout_width="0dp"
@@ -42,18 +43,7 @@
             android:layout_weight="1"
             android:text="" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/schedule_widget_day_badge"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:text="4×2"
-            android:textColor="#10240A"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+        
     </LinearLayout>
 
     <TextView
@@ -64,14 +54,46 @@
         android:text="No classes today"
         android:textColor="#EAF3E4"
         android:textSize="15sp"
-        android:textStyle="bold" />
+        android:textStyle="bold" 
+        android:fontFamily="@font/baloo_2"/>
 
     <TextView
         android:id="@+id/widget_today_sub"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textColor="#A9BFA4"
-        android:textSize="12sp" />
+        android:textSize="12sp" 
+        android:fontFamily="@font/baloo_2"/>
+    <LinearLayout
+        android:id="@+id/widget_progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_progress_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/baloo_2"
+            android:text="0 of 0 done"
+            android:textColor="#B0B8B5"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <ProgressBar
+            android:id="@+id/widget_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:layout_marginTop="2dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#58CC02"
+            android:progressBackgroundTint="#D9D9D9" />
+    </LinearLayout>
+
 
     <LinearLayout
         android:id="@+id/widget_next_card"
@@ -89,7 +111,8 @@
             android:text="NEXT CLASS · CSS101"
             android:textColor="#58CC02"
             android:textSize="11sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_next_name"
@@ -99,7 +122,8 @@
             android:text="Installing and Configuring Computer Systems"
             android:textColor="#EAF3E4"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_next_date"
@@ -107,7 +131,8 @@
             android:layout_height="wrap_content"
             android:text="Thu, Nov 12"
             android:textColor="#EAF3E4"
-            android:textSize="12sp" />
+            android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_next_time"
@@ -116,7 +141,8 @@
             android:text="9:00–10:30 AM · CC203"
             android:textColor="#EAF3E4"
             android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:layout_width="match_parent"
@@ -125,7 +151,8 @@
             android:text="COMING UP"
             android:textColor="#A9BFA4"
             android:textSize="9sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_next_when"
@@ -134,7 +161,8 @@
             android:text="Tomorrow at 9:00 AM"
             android:textColor="#EAF3E4"
             android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
 
     <LinearLayout
@@ -152,7 +180,8 @@
             android:text="No subjects yet."
             android:textColor="#EAF3E4"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_empty_sub"
@@ -160,7 +189,8 @@
             android:layout_height="wrap_content"
             android:text="Add a subject to build your timetable."
             android:textColor="#A9BFA4"
-            android:textSize="12sp" />
+            android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
 
     <LinearLayout
@@ -184,7 +214,8 @@
                 android:text="G"
                 android:textColor="#4285F4"
                 android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -193,7 +224,8 @@
                 android:text="GOOGLE CALENDAR"
                 android:textColor="#EAF3E4"
                 android:textSize="11sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <LinearLayout
@@ -212,7 +244,8 @@
                 android:text="G"
                 android:textColor="#4285F4"
                 android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_google_title_0"
@@ -221,7 +254,8 @@
                 android:layout_marginStart="6dp"
                 android:text="NSTP 1"
                 android:textColor="#EAF3E4"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <LinearLayout
@@ -240,7 +274,8 @@
                 android:text="G"
                 android:textColor="#4285F4"
                 android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_google_title_1"
@@ -249,7 +284,8 @@
                 android:layout_marginStart="6dp"
                 android:text="Life and Works of Rizal"
                 android:textColor="#EAF3E4"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <LinearLayout
@@ -268,7 +304,8 @@
                 android:text="G"
                 android:textColor="#4285F4"
                 android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_google_title_2"
@@ -277,7 +314,8 @@
                 android:layout_marginStart="6dp"
                 android:text="Discrete Mathematics"
                 android:textColor="#EAF3E4"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <LinearLayout
@@ -296,7 +334,8 @@
                 android:text="G"
                 android:textColor="#4285F4"
                 android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_google_title_3"
@@ -305,7 +344,8 @@
                 android:layout_marginStart="6dp"
                 android:text="Vigan"
                 android:textColor="#EAF3E4"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <TextView
@@ -315,6 +355,7 @@
             android:layout_marginTop="4dp"
             android:textColor="#A9BFA4"
             android:textSize="11sp"
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
 </LinearLayout>

@@ -26,7 +26,8 @@
             android:text="MY TASKS"
             android:textColor="#21301A"
             android:textSize="13sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/press_start_2p"/>
 
         <TextView
             android:layout_width="0dp"
@@ -34,18 +35,7 @@
             android:layout_weight="1"
             android:text="" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_size_chip"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:text="4×2"
-            android:textColor="#FFFFFF"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+        
     </LinearLayout>
     <TextView
         android:id="@+id/widget_pending_count"
@@ -55,7 +45,8 @@
         android:text="0 pending"
         android:textColor="#21301A"
         android:textSize="15sp"
-        android:textStyle="bold" />
+        android:textStyle="bold" 
+        android:fontFamily="@font/baloo_2"/>
 
     <LinearLayout
         android:id="@+id/widget_empty"
@@ -71,7 +62,8 @@
             android:text="No pending tasks."
             android:textColor="#21301A"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_empty_sub"
@@ -79,7 +71,8 @@
             android:layout_height="wrap_content"
             android:text="Add a task to get started."
             android:textColor="#5A6B52"
-            android:textSize="12sp" />
+            android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:id="@+id/widget_task_0"
@@ -110,7 +103,8 @@
                 android:text="Chapter 3 exercises"
                 android:textColor="#21301A"
                 android:textSize="13sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_task_0_sub"
@@ -118,7 +112,8 @@
                 android:layout_height="wrap_content"
                 android:text="Introduction to Computing · Assignment · due Nov 13, 2026"
                 android:textColor="#5A6B52"
-                android:textSize="11sp" />
+                android:textSize="11sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
     </LinearLayout>
     <LinearLayout
@@ -150,7 +145,8 @@
                 android:text="Chapter 3 exercises"
                 android:textColor="#21301A"
                 android:textSize="13sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_task_1_sub"
@@ -158,10 +154,22 @@
                 android:layout_height="wrap_content"
                 android:text="Introduction to Computing · Assignment · due Nov 13, 2026"
                 android:textColor="#5A6B52"
-                android:textSize="11sp" />
+                android:textSize="11sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
     </LinearLayout>
-    <TextView
+        <ProgressBar
+        android:id="@+id/widget_progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_marginTop="6dp"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="#58CC02"
+        android:progressBackgroundTint="#D9D9D9"
+        android:visibility="gone" />
+<TextView
         android:id="@+id/widget_done_line"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -169,5 +177,6 @@
         android:text="0 of 0 done"
         android:textColor="#5A6B52"
         android:textSize="11sp"
-        android:visibility="gone" />
+        android:visibility="gone" 
+        android:fontFamily="@font/baloo_2"/>
 </LinearLayout>

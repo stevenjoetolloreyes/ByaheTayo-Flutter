@@ -65,6 +65,29 @@ class ScheduleWeekWidgetProvider : HomeWidgetProvider() {
                 val next = ScheduleWidgetData.nextClass(subjects, now)
                 val nextDay = next?.second?.dayOfWeek?.value
 
+                // Today progress: classes finished so far today.
+                val nowMin = now.hour * 60 + now.minute
+                val todays = ScheduleWidgetData.classesOnDay(
+                    subjects,
+                    today.dayOfWeek.value,
+                )
+                val doneToday = todays.count { it.endMin <= nowMin }
+                if (todays.isEmpty()) {
+                    setViewVisibility(R.id.widget_progress, View.GONE)
+                } else {
+                    setViewVisibility(R.id.widget_progress, View.VISIBLE)
+                    setTextViewText(
+                        R.id.widget_progress_label,
+                        "Today · $doneToday of ${todays.size} done",
+                    )
+                    setProgressBar(
+                        R.id.widget_progress_bar,
+                        100,
+                        doneToday * 100 / todays.size,
+                        false,
+                    )
+                }
+
                 for (weekday in 1..7) {
                     val rowId = id(context, "widget_day_$weekday")
                     if (rowId == 0) continue
@@ -131,6 +154,22 @@ class ScheduleWeekWidgetProvider : HomeWidgetProvider() {
                                     id(context, "widget_day_${weekday}_class_${i}_room"),
                                     subject.room,
                                 )
+                                // DONE tag on today's finished
+                                // classes (preview v2 timeline).
+                                val doneId = id(
+                                    context,
+                                    "widget_day_${weekday}_class_${i}_done",
+                                )
+                                if (doneId != 0) {
+                                    setViewVisibility(
+                                        doneId,
+                                        if (isToday && subject.endMin <= nowMin) {
+                                            View.VISIBLE
+                                        } else {
+                                            View.GONE
+                                        },
+                                    )
+                                }
                             } else {
                                 setViewVisibility(lineId, View.GONE)
                             }

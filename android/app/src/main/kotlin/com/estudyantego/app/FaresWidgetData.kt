@@ -58,6 +58,9 @@ object FaresWidgetData {
     /** How many routes the big widget lists. */
     const val BIG_LIST_COUNT = 3
 
+    /** Chart bar levels: 0 (smallest) .. 4 (the biggest fare). */
+    const val BAR_LEVELS = 5
+
     /** One route: endpoints + vehicle + operator + fares +
      * formula distance + ETA. */
     data class WidgetRoute(
@@ -159,5 +162,14 @@ object FaresWidgetData {
             mins == 0 -> "$hours hr"
             else -> "$hours hr $mins min"
         }
+    }
+
+    /** Bar level (0..4) for a fare against the biggest fare in
+     * its comparison: the biggest fare is level 4, the rest
+     * scale to it, zero is level 0. Mirrors
+     * AllowanceWidgetData.barLevel. */
+    fun fareLevel(fare: Double, maxFare: Double): Int {
+        if (maxFare <= 0 || fare <= 0) return 0
+        return ((fare / maxFare) * 4).roundToInt().coerceIn(0, 4)
     }
 }

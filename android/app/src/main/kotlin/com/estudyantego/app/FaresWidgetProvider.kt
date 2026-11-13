@@ -102,9 +102,65 @@ class FaresWidgetProvider : HomeWidgetProvider() {
                         setViewVisibility(R.id.widget_distance, View.VISIBLE)
                         setTextViewText(R.id.widget_distance, distanceLine)
                     }
+                    // Fare comparison chart: Regular vs student
+                    // bars, scaled to the bigger fare.
+                    val fare = featured.fare
+                    val studentFare = featured.studentFare
+                    if (fare != null && studentFare != null) {
+                        setViewVisibility(R.id.widget_fare_chart, View.VISIBLE)
+                        val maxFare = maxOf(fare, studentFare)
+                        setBar(
+                            context,
+                            "widget_fare_bar_0",
+                            FaresWidgetData.fareLevel(fare, maxFare),
+                            fare == maxFare,
+                        )
+                        setBar(
+                            context,
+                            "widget_fare_bar_1",
+                            FaresWidgetData.fareLevel(studentFare, maxFare),
+                            studentFare == maxFare,
+                        )
+                    } else {
+                        setViewVisibility(R.id.widget_fare_chart, View.GONE)
+                    }
                 }
             }
             appWidgetManager.updateAppWidget(widgetId, views)
+        }
+    }
+
+    /**
+     * Shows one fare bar at [level] (0..4) by toggling its five
+     * pre-sized segments. Level 0 renders the short faint gray
+     * bar; the bigger fare renders deep leaves; the other renders
+     * grass green. Mirrors AllowanceMoneyWidgetProvider.setBar.
+     */
+    private fun RemoteViews.setBar(
+        context: Context,
+        base: String,
+        level: Int,
+        isMax: Boolean,
+    ) {
+        for (l in 0 until FaresWidgetData.BAR_LEVELS) {
+            val segmentId = context.resources.getIdentifier(
+                "${base}_level_$l",
+                "id",
+                context.packageName,
+            )
+            if (segmentId == 0) continue
+            setViewVisibility(
+                segmentId,
+                if (l == level) View.VISIBLE else View.GONE,
+            )
+            if (l == level) {
+                val bg = when {
+                    level == 0 -> R.drawable.widget_bar_track
+                    isMax -> R.drawable.widget_bar_fill_max
+                    else -> R.drawable.widget_bar_fill
+                }
+                setInt(segmentId, "setBackgroundResource", bg)
+            }
         }
     }
 }

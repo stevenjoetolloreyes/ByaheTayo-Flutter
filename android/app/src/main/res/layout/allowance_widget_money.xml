@@ -26,7 +26,8 @@
             android:text="MONEY"
             android:textColor="#21301A"
             android:textSize="13sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/press_start_2p"/>
 
         <TextView
             android:layout_width="0dp"
@@ -34,18 +35,7 @@
             android:layout_weight="1"
             android:text="" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_size_chip"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:text="4×3"
-            android:textColor="#FFFFFF"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+        
     </LinearLayout>
     <LinearLayout
         android:id="@+id/widget_content"
@@ -59,7 +49,8 @@
             android:layout_marginTop="8dp"
             android:text="Available balance"
             android:textColor="#5A6B52"
-            android:textSize="12sp" />
+            android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_balance"
@@ -68,7 +59,8 @@
             android:text="₱0.00"
             android:textColor="#2F7A12"
             android:textSize="24sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <LinearLayout
             android:id="@+id/widget_month_row"
@@ -84,7 +76,8 @@
                 android:layout_weight="1"
                 android:text="In: ₱0"
                 android:textColor="#21301A"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_month_out"
@@ -93,7 +86,8 @@
                 android:layout_weight="1"
                 android:text="Out: ₱0"
                 android:textColor="#21301A"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <TextView
@@ -104,7 +98,8 @@
             android:text="No transactions yet."
             android:textColor="#5A6B52"
             android:textSize="12sp"
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -112,7 +107,8 @@
         android:text="Spending · last 6 months"
         android:textColor="#2F7A12"
         android:textSize="11sp"
-        android:textStyle="bold" />
+        android:textStyle="bold" 
+        android:fontFamily="@font/baloo_2"/>
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -136,7 +132,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="visible" />
+            android:visibility="visible" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_0_level_1"
             android:layout_width="18dp"
@@ -144,7 +141,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_0_level_2"
             android:layout_width="18dp"
@@ -152,7 +150,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_0_level_3"
             android:layout_width="18dp"
@@ -160,7 +159,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_0_level_4"
             android:layout_width="18dp"
@@ -168,7 +168,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </FrameLayout>
         <TextView
             android:id="@+id/widget_bar_0_label"
@@ -177,7 +178,8 @@
             android:layout_marginTop="2dp"
             android:text="Jun"
             android:textColor="#5A6B52"
-            android:textSize="10sp" />
+            android:textSize="10sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:layout_width="0dp"
@@ -197,7 +199,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="visible" />
+            android:visibility="visible" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_1_level_1"
             android:layout_width="18dp"
@@ -205,7 +208,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_1_level_2"
             android:layout_width="18dp"
@@ -213,7 +217,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_1_level_3"
             android:layout_width="18dp"
@@ -221,7 +226,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_1_level_4"
             android:layout_width="18dp"
@@ -229,7 +235,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </FrameLayout>
         <TextView
             android:id="@+id/widget_bar_1_label"
@@ -238,7 +245,8 @@
             android:layout_marginTop="2dp"
             android:text="Jul"
             android:textColor="#5A6B52"
-            android:textSize="10sp" />
+            android:textSize="10sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:layout_width="0dp"
@@ -258,7 +266,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="visible" />
+            android:visibility="visible" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_2_level_1"
             android:layout_width="18dp"
@@ -266,7 +275,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_2_level_2"
             android:layout_width="18dp"
@@ -274,7 +284,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_2_level_3"
             android:layout_width="18dp"
@@ -282,7 +293,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_2_level_4"
             android:layout_width="18dp"
@@ -290,7 +302,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </FrameLayout>
         <TextView
             android:id="@+id/widget_bar_2_label"
@@ -299,7 +312,8 @@
             android:layout_marginTop="2dp"
             android:text="Aug"
             android:textColor="#5A6B52"
-            android:textSize="10sp" />
+            android:textSize="10sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:layout_width="0dp"
@@ -319,7 +333,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="visible" />
+            android:visibility="visible" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_3_level_1"
             android:layout_width="18dp"
@@ -327,7 +342,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_3_level_2"
             android:layout_width="18dp"
@@ -335,7 +351,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_3_level_3"
             android:layout_width="18dp"
@@ -343,7 +360,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_3_level_4"
             android:layout_width="18dp"
@@ -351,7 +369,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </FrameLayout>
         <TextView
             android:id="@+id/widget_bar_3_label"
@@ -360,7 +379,8 @@
             android:layout_marginTop="2dp"
             android:text="Sep"
             android:textColor="#5A6B52"
-            android:textSize="10sp" />
+            android:textSize="10sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:layout_width="0dp"
@@ -380,7 +400,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="visible" />
+            android:visibility="visible" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_4_level_1"
             android:layout_width="18dp"
@@ -388,7 +409,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_4_level_2"
             android:layout_width="18dp"
@@ -396,7 +418,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_4_level_3"
             android:layout_width="18dp"
@@ -404,7 +427,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_4_level_4"
             android:layout_width="18dp"
@@ -412,7 +436,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </FrameLayout>
         <TextView
             android:id="@+id/widget_bar_4_label"
@@ -421,7 +446,8 @@
             android:layout_marginTop="2dp"
             android:text="Oct"
             android:textColor="#5A6B52"
-            android:textSize="10sp" />
+            android:textSize="10sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:layout_width="0dp"
@@ -441,7 +467,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="visible" />
+            android:visibility="visible" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_5_level_1"
             android:layout_width="18dp"
@@ -449,7 +476,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_5_level_2"
             android:layout_width="18dp"
@@ -457,7 +485,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_5_level_3"
             android:layout_width="18dp"
@@ -465,7 +494,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         <TextView
             android:id="@+id/widget_bar_5_level_4"
             android:layout_width="18dp"
@@ -473,7 +503,8 @@
             android:layout_gravity="bottom|center_horizontal"
             android:background="@drawable/widget_bar_track"
             android:text=""
-            android:visibility="gone" />
+            android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </FrameLayout>
         <TextView
             android:id="@+id/widget_bar_5_label"
@@ -482,7 +513,8 @@
             android:layout_marginTop="2dp"
             android:text="Nov"
             android:textColor="#5A6B52"
-            android:textSize="10sp" />
+            android:textSize="10sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     </LinearLayout>
 
@@ -494,7 +526,8 @@
         android:text="No spending recorded in the last 6 months."
         android:textColor="#21301A"
         android:textSize="12sp"
-        android:textStyle="bold" />
+        android:textStyle="bold" 
+        android:fontFamily="@font/baloo_2"/>
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -502,7 +535,8 @@
         android:text="Budget utilization"
         android:textColor="#2F7A12"
         android:textSize="11sp"
-        android:textStyle="bold" />
+        android:textStyle="bold" 
+        android:fontFamily="@font/baloo_2"/>
     <TextView
         android:id="@+id/widget_budgets_empty"
         android:layout_width="match_parent"
@@ -511,7 +545,8 @@
         android:text="No budget limits set."
         android:textColor="#5A6B52"
         android:textSize="12sp"
-        android:visibility="gone" />
+        android:visibility="gone" 
+        android:fontFamily="@font/baloo_2"/>
     <LinearLayout
         android:id="@+id/widget_budget_0"
         android:layout_width="match_parent"
@@ -533,7 +568,8 @@
                 android:text="Food"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_budget_0_amount"
@@ -541,7 +577,8 @@
                 android:layout_height="wrap_content"
                 android:text="Spent ₱0 of ₱0"
                 android:textColor="#5A6B52"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
                     <ProgressBar
                         android:id="@+id/widget_budget_0_bar"
@@ -575,7 +612,8 @@
                 android:text="Food"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_budget_1_amount"
@@ -583,7 +621,8 @@
                 android:layout_height="wrap_content"
                 android:text="Spent ₱0 of ₱0"
                 android:textColor="#5A6B52"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
                     <ProgressBar
                         android:id="@+id/widget_budget_1_bar"
@@ -617,7 +656,8 @@
                 android:text="Food"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_budget_2_amount"
@@ -625,7 +665,8 @@
                 android:layout_height="wrap_content"
                 android:text="Spent ₱0 of ₱0"
                 android:textColor="#5A6B52"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
                     <ProgressBar
                         android:id="@+id/widget_budget_2_bar"
@@ -646,7 +687,8 @@
         android:text="+1 more"
         android:textColor="#5A6B52"
         android:textSize="11sp"
-        android:visibility="gone" />
+        android:visibility="gone" 
+        android:fontFamily="@font/baloo_2"/>
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -654,7 +696,8 @@
         android:text="Savings progress"
         android:textColor="#2F7A12"
         android:textSize="11sp"
-        android:textStyle="bold" />
+        android:textStyle="bold" 
+        android:fontFamily="@font/baloo_2"/>
     <TextView
         android:id="@+id/widget_goals_empty"
         android:layout_width="match_parent"
@@ -663,7 +706,8 @@
         android:text="No savings goals yet."
         android:textColor="#5A6B52"
         android:textSize="12sp"
-        android:visibility="gone" />
+        android:visibility="gone" 
+        android:fontFamily="@font/baloo_2"/>
     <LinearLayout
         android:id="@+id/widget_goal_0"
         android:layout_width="match_parent"
@@ -685,7 +729,8 @@
                 android:text="New shoes"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_goal_0_amount"
@@ -693,7 +738,8 @@
                 android:layout_height="wrap_content"
                 android:text="₱0 of ₱0"
                 android:textColor="#5A6B52"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
                     <ProgressBar
                         android:id="@+id/widget_goal_0_bar"
@@ -727,7 +773,8 @@
                 android:text="New shoes"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_goal_1_amount"
@@ -735,7 +782,8 @@
                 android:layout_height="wrap_content"
                 android:text="₱0 of ₱0"
                 android:textColor="#5A6B52"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
                     <ProgressBar
                         android:id="@+id/widget_goal_1_bar"
@@ -756,7 +804,8 @@
         android:text="+1 more"
         android:textColor="#5A6B52"
         android:textSize="11sp"
-        android:visibility="gone" />
+        android:visibility="gone" 
+        android:fontFamily="@font/baloo_2"/>
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -764,7 +813,8 @@
         android:text="Recent transactions"
         android:textColor="#2F7A12"
         android:textSize="11sp"
-        android:textStyle="bold" />
+        android:textStyle="bold" 
+        android:fontFamily="@font/baloo_2"/>
     <TextView
         android:id="@+id/widget_recent_empty"
         android:layout_width="match_parent"
@@ -773,7 +823,8 @@
         android:text="No transactions yet."
         android:textColor="#5A6B52"
         android:textSize="12sp"
-        android:visibility="gone" />
+        android:visibility="gone" 
+        android:fontFamily="@font/baloo_2"/>
     <LinearLayout
         android:id="@+id/widget_txn_0"
         android:layout_width="match_parent"
@@ -796,7 +847,8 @@
                 android:text="Lunch"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_txn_0_sub"
@@ -804,7 +856,8 @@
                 android:layout_height="wrap_content"
                 android:text="Food · Nov 12"
                 android:textColor="#5A6B52"
-                android:textSize="11sp" />
+                android:textSize="11sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <TextView
@@ -814,7 +867,8 @@
             android:text="−₱120"
             android:textColor="#21301A"
             android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:id="@+id/widget_txn_1"
@@ -838,7 +892,8 @@
                 android:text="Lunch"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_txn_1_sub"
@@ -846,7 +901,8 @@
                 android:layout_height="wrap_content"
                 android:text="Food · Nov 12"
                 android:textColor="#5A6B52"
-                android:textSize="11sp" />
+                android:textSize="11sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <TextView
@@ -856,7 +912,8 @@
             android:text="−₱120"
             android:textColor="#21301A"
             android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:id="@+id/widget_txn_2"
@@ -880,7 +937,8 @@
                 android:text="Lunch"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_txn_2_sub"
@@ -888,7 +946,8 @@
                 android:layout_height="wrap_content"
                 android:text="Food · Nov 12"
                 android:textColor="#5A6B52"
-                android:textSize="11sp" />
+                android:textSize="11sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <TextView
@@ -898,7 +957,8 @@
             android:text="−₱120"
             android:textColor="#21301A"
             android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout
         android:id="@+id/widget_txn_3"
@@ -922,7 +982,8 @@
                 android:text="Lunch"
                 android:textColor="#21301A"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_txn_3_sub"
@@ -930,7 +991,8 @@
                 android:layout_height="wrap_content"
                 android:text="Food · Nov 12"
                 android:textColor="#5A6B52"
-                android:textSize="11sp" />
+                android:textSize="11sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <TextView
@@ -940,7 +1002,8 @@
             android:text="−₱120"
             android:textColor="#21301A"
             android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     </LinearLayout>
     <LinearLayout
@@ -958,7 +1021,8 @@
             android:text="No transactions yet."
             android:textColor="#21301A"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
         <TextView
             android:id="@+id/widget_empty_sub"
@@ -966,6 +1030,7 @@
             android:layout_height="wrap_content"
             android:text="Add a transaction to track your allowance."
             android:textColor="#5A6B52"
-            android:textSize="12sp" />
+            android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
 </LinearLayout>

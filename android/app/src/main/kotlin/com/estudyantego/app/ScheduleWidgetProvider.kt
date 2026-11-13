@@ -88,6 +88,25 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                     )
                 }
 
+                // Day progress: classes finished so far today.
+                val nowMin = now.hour * 60 + now.minute
+                val doneToday = todays.count { it.endMin <= nowMin }
+                if (todays.isEmpty()) {
+                    setViewVisibility(R.id.widget_progress, View.GONE)
+                } else {
+                    setViewVisibility(R.id.widget_progress, View.VISIBLE)
+                    setTextViewText(
+                        R.id.widget_progress_label,
+                        "$doneToday of ${todays.size} done",
+                    )
+                    setProgressBar(
+                        R.id.widget_progress_bar,
+                        100,
+                        doneToday * 100 / todays.size,
+                        false,
+                    )
+                }
+
                 // Next class card (hidden when there is no next
                 // class); the empty state takes its place instead.
                 if (next != null) {

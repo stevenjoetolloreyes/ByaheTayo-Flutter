@@ -98,6 +98,21 @@ class TasksLargeWidgetProvider : HomeWidgetProvider() {
                 } else {
                     setViewVisibility(R.id.widget_more, View.GONE)
                 }
+                // Progress bar: share of all tasks done. Shown
+                // whenever there is at least one task.
+                val totalTasks = data?.tasks?.size ?: 0
+                if (totalTasks > 0) {
+                    setViewVisibility(R.id.widget_progress_bar, View.VISIBLE)
+                    setProgressBar(
+                        R.id.widget_progress_bar,
+                        100,
+                        (data?.completed()?.size ?: 0) * 100 / totalTasks,
+                        false,
+                    )
+                } else {
+                    setViewVisibility(R.id.widget_progress_bar, View.GONE)
+                }
+
                 // Done tasks, muted, below the pending ones (the
                 // preview's Completed section, flattened).
                 if (completed.isEmpty()) {

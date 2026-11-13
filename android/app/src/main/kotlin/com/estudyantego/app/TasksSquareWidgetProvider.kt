@@ -94,11 +94,24 @@ class TasksSquareWidgetProvider : HomeWidgetProvider() {
                 } else {
                     setViewVisibility(R.id.widget_more, View.GONE)
                 }
-                if (data != null && data.completed().isNotEmpty()) {
+                // Progress bar + done line: shown whenever there
+                // is at least one task ("0 of 5 done" included),
+                // so the bar always has its label.
+                if (data != null && data.tasks.isNotEmpty()) {
+                    val total = data.tasks.size
+                    val done = data.completed().size
                     setViewVisibility(R.id.widget_done_line, View.VISIBLE)
                     setTextViewText(R.id.widget_done_line, data.doneLine())
+                    setViewVisibility(R.id.widget_progress_bar, View.VISIBLE)
+                    setProgressBar(
+                        R.id.widget_progress_bar,
+                        100,
+                        done * 100 / total,
+                        false,
+                    )
                 } else {
                     setViewVisibility(R.id.widget_done_line, View.GONE)
+                    setViewVisibility(R.id.widget_progress_bar, View.GONE)
                 }
             }
             appWidgetManager.updateAppWidget(widgetId, views)

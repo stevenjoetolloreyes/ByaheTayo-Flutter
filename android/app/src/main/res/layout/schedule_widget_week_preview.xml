@@ -10,208 +10,677 @@
 
         <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/launch_image" android:contentDescription="@null" />
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="THIS WEEK" android:textColor="#21301A" android:textSize="13sp" android:textStyle="bold" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="THIS WEEK" android:textColor="#21301A" android:textSize="13sp" android:textStyle="bold" 
+            android:fontFamily="@font/press_start_2p"/>
 
         
         <TextView android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" android:text="" />
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_size_chip" android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="3dp" android:paddingBottom="3dp" android:text="4×3" android:textColor="#FFFFFF" android:textSize="10sp" android:textStyle="bold" />
+        
     </LinearLayout>
-        <LinearLayout android:id="@+id/widget_day_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="visible">
-            <TextView android:id="@+id/widget_day_1_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="MON" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
+            <LinearLayout
+        android:id="@+id/widget_progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="visible">
+
+        <TextView
+            android:id="@+id/widget_progress_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/baloo_2"
+            android:text="Today · 1 of 3 done"
+            android:textColor="#5A6B52"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <ProgressBar
+            android:id="@+id/widget_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:layout_marginTop="2dp"
+            android:max="100"
+            android:progress="33"
+            android:progressTint="#58CC02"
+            android:progressBackgroundTint="#D9D9D9" />
+    </LinearLayout>
+<LinearLayout android:id="@+id/widget_day_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="visible">
+            <TextView android:id="@+id/widget_day_1_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="MON" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                 <LinearLayout android:id="@+id/widget_day_1_class_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_1_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT101" />
-                    <TextView android:id="@+id/widget_day_1_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="7:30–9:30 AM" />
-                    <TextView android:id="@+id/widget_day_1_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC105" />
+                    <TextView android:id="@+id/widget_day_1_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT101" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_1_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="7:30–9:30 AM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_1_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC105" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_1_class_0_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="visible" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_1_class_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_1_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT102" />
-                    <TextView android:id="@+id/widget_day_1_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="10:00 AM–12:00 PM" />
-                    <TextView android:id="@+id/widget_day_1_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC105" />
+                    <TextView android:id="@+id/widget_day_1_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT102" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_1_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="10:00 AM–12:00 PM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_1_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC105" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_1_class_1_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_1_class_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_1_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CSS101" />
-                    <TextView android:id="@+id/widget_day_1_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="1:00–3:00 PM" />
-                    <TextView android:id="@+id/widget_day_1_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC105" />
+                    <TextView android:id="@+id/widget_day_1_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CSS101" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_1_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="1:00–3:00 PM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_1_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC105" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_1_class_2_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-                <TextView android:id="@+id/widget_day_1_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="gone" />
-                <TextView android:id="@+id/widget_day_1_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" />
+                <TextView android:id="@+id/widget_day_1_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
+                <TextView android:id="@+id/widget_day_1_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" 
+            android:fontFamily="@font/baloo_2"/>
             </LinearLayout>
-            <TextView android:id="@+id/widget_day_1_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:visibility="gone" />
+            <TextView android:id="@+id/widget_day_1_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:visibility="visible" 
+            android:fontFamily="@font/baloo_2" android:text="TODAY"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/widget_day_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="visible">
-            <TextView android:id="@+id/widget_day_2_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="TUE" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_2_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="TUE" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                 <LinearLayout android:id="@+id/widget_day_2_class_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_2_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CSS101" />
-                    <TextView android:id="@+id/widget_day_2_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="9:00–10:30 AM" />
-                    <TextView android:id="@+id/widget_day_2_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC203" />
+                    <TextView android:id="@+id/widget_day_2_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CSS101" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_2_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="9:00–10:30 AM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_2_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC203" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_2_class_0_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_2_class_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_2_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT102" />
-                    <TextView android:id="@+id/widget_day_2_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="10:30 AM–12:00 PM" />
-                    <TextView android:id="@+id/widget_day_2_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" />
+                    <TextView android:id="@+id/widget_day_2_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT102" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_2_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="10:30 AM–12:00 PM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_2_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_2_class_1_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_2_class_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_2_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT101" />
-                    <TextView android:id="@+id/widget_day_2_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="2:00–3:30 PM" />
-                    <TextView android:id="@+id/widget_day_2_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" />
+                    <TextView android:id="@+id/widget_day_2_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT101" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_2_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="2:00–3:30 PM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_2_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_2_class_2_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-                <TextView android:id="@+id/widget_day_2_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="gone" />
-                <TextView android:id="@+id/widget_day_2_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" />
+                <TextView android:id="@+id/widget_day_2_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
+                <TextView android:id="@+id/widget_day_2_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" 
+            android:fontFamily="@font/baloo_2"/>
             </LinearLayout>
-            <TextView android:id="@+id/widget_day_2_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:visibility="gone" />
+            <TextView android:id="@+id/widget_day_2_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:visibility="visible" 
+            android:fontFamily="@font/baloo_2" android:text="NEXT CLASS DAY"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/widget_day_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="visible">
-            <TextView android:id="@+id/widget_day_3_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="WED" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_3_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="WED" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                 <LinearLayout android:id="@+id/widget_day_3_class_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:visibility="gone">
-                    <TextView android:id="@+id/widget_day_3_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_3_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_3_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_3_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_3_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_3_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_3_class_0_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_3_class_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:visibility="gone">
-                    <TextView android:id="@+id/widget_day_3_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_3_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_3_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_3_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_3_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_3_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_3_class_1_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_3_class_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:visibility="gone">
-                    <TextView android:id="@+id/widget_day_3_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_3_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_3_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_3_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_3_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_3_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_3_class_2_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-                <TextView android:id="@+id/widget_day_3_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="visible" />
-                <TextView android:id="@+id/widget_day_3_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" />
+                <TextView android:id="@+id/widget_day_3_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="visible" 
+            android:fontFamily="@font/baloo_2"/>
+                <TextView android:id="@+id/widget_day_3_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" 
+            android:fontFamily="@font/baloo_2"/>
             </LinearLayout>
-            <TextView android:id="@+id/widget_day_3_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:text="TODAY" android:visibility="visible" />
+            <TextView android:id="@+id/widget_day_3_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:text="" android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/widget_day_4" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="visible">
-            <TextView android:id="@+id/widget_day_4_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="THU" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_4_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="THU" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                 <LinearLayout android:id="@+id/widget_day_4_class_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_4_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CSS101" />
-                    <TextView android:id="@+id/widget_day_4_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="9:00–10:30 AM" />
-                    <TextView android:id="@+id/widget_day_4_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC203" />
+                    <TextView android:id="@+id/widget_day_4_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CSS101" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_4_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="9:00–10:30 AM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_4_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC203" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_4_class_0_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_4_class_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_4_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT102" />
-                    <TextView android:id="@+id/widget_day_4_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="10:30 AM–12:00 PM" />
-                    <TextView android:id="@+id/widget_day_4_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" />
+                    <TextView android:id="@+id/widget_day_4_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT102" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_4_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="10:30 AM–12:00 PM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_4_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_4_class_1_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_4_class_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_4_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT101" />
-                    <TextView android:id="@+id/widget_day_4_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="2:00–3:30 PM" />
-                    <TextView android:id="@+id/widget_day_4_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" />
+                    <TextView android:id="@+id/widget_day_4_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="CT101" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_4_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" android:text="2:00–3:30 PM" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_4_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" android:text="CC104" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_4_class_2_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-                <TextView android:id="@+id/widget_day_4_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="gone" />
-                <TextView android:id="@+id/widget_day_4_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" />
+                <TextView android:id="@+id/widget_day_4_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
+                <TextView android:id="@+id/widget_day_4_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" 
+            android:fontFamily="@font/baloo_2"/>
             </LinearLayout>
-            <TextView android:id="@+id/widget_day_4_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:text="NEXT CLASS DAY" android:visibility="visible" />
+            <TextView android:id="@+id/widget_day_4_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" android:text="" android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/widget_day_5" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="gone">
-            <TextView android:id="@+id/widget_day_5_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="FRI" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_5_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="FRI" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                 <LinearLayout android:id="@+id/widget_day_5_class_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_5_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_5_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_5_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_5_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_5_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_5_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_5_class_0_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_5_class_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_5_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_5_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_5_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_5_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_5_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_5_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_5_class_1_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_5_class_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_5_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_5_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_5_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_5_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_5_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_5_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_5_class_2_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-                <TextView android:id="@+id/widget_day_5_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" />
-                <TextView android:id="@+id/widget_day_5_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" />
+                <TextView android:id="@+id/widget_day_5_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                <TextView android:id="@+id/widget_day_5_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" 
+            android:fontFamily="@font/baloo_2"/>
             </LinearLayout>
-            <TextView android:id="@+id/widget_day_5_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_5_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2" android:visibility="gone"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/widget_day_6" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="gone">
-            <TextView android:id="@+id/widget_day_6_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="SAT" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_6_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="SAT" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                 <LinearLayout android:id="@+id/widget_day_6_class_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_6_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_6_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_6_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_6_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_6_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_6_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_6_class_0_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_6_class_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_6_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_6_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_6_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_6_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_6_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_6_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_6_class_1_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_6_class_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_6_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_6_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_6_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_6_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_6_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_6_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_6_class_2_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-                <TextView android:id="@+id/widget_day_6_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" />
-                <TextView android:id="@+id/widget_day_6_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" />
+                <TextView android:id="@+id/widget_day_6_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                <TextView android:id="@+id/widget_day_6_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" 
+            android:fontFamily="@font/baloo_2"/>
             </LinearLayout>
-            <TextView android:id="@+id/widget_day_6_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_6_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2" android:visibility="gone"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/widget_day_7" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:visibility="gone">
-            <TextView android:id="@+id/widget_day_7_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="SUN" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_7_label" android:layout_width="38dp" android:layout_height="wrap_content" android:text="SUN" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                 <LinearLayout android:id="@+id/widget_day_7_class_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_7_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_7_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_7_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_7_class_0_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_7_class_0_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_7_class_0_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_7_class_0_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_7_class_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_7_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_7_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_7_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_7_class_1_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_7_class_1_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_7_class_1_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_7_class_1_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
                 <LinearLayout android:id="@+id/widget_day_7_class_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:id="@+id/widget_day_7_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/widget_day_7_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" />
-                    <TextView android:id="@+id/widget_day_7_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" />
+                    <TextView android:id="@+id/widget_day_7_class_2_code" android:layout_width="62dp" android:layout_height="wrap_content" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_7_class_2_time" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#21301A" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView android:id="@+id/widget_day_7_class_2_room" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                    <TextView
+                        android:id="@+id/widget_day_7_class_2_done"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/schedule_widget_day_badge"
+                        android:fontFamily="@font/baloo_2"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:text="DONE"
+                        android:textColor="#10240A"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-                <TextView android:id="@+id/widget_day_7_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" />
-                <TextView android:id="@+id/widget_day_7_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" />
+                <TextView android:id="@+id/widget_day_7_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="No classes today" android:textColor="#5A6B52" android:textSize="12sp" 
+            android:fontFamily="@font/baloo_2"/>
+                <TextView android:id="@+id/widget_day_7_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#5A6B52" android:textSize="11sp" 
+            android:fontFamily="@font/baloo_2"/>
             </LinearLayout>
-            <TextView android:id="@+id/widget_day_7_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_day_7_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/schedule_widget_day_badge" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:textColor="#10240A" android:textSize="9sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2" android:visibility="gone"/>
         </LinearLayout>
-    <TextView android:id="@+id/widget_next_up" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="Next up: Thu · CSS101 · 9:00 AM · CC203" />
+    <TextView android:id="@+id/widget_next_up" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="#21301A" android:textSize="12sp" android:textStyle="bold" android:text="Next up: Mon · CT102 · 10:00 AM · CC105" 
+            android:fontFamily="@font/baloo_2"/>
 
     <LinearLayout android:id="@+id/widget_google_section" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical">
 
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
 
-        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" />
+        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:text="GOOGLE CALENDAR" android:textColor="#21301A" android:textSize="11sp" android:textStyle="bold" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:text="GOOGLE CALENDAR" android:textColor="#21301A" android:textSize="11sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout android:id="@+id/widget_google_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal" android:gravity="center_vertical">
 
-        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" />
+        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
-        <TextView android:id="@+id/widget_google_title_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="NSTP 1" />
+        <TextView android:id="@+id/widget_google_title_0" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="NSTP 1" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout android:id="@+id/widget_google_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal" android:gravity="center_vertical">
 
-        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" />
+        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
-        <TextView android:id="@+id/widget_google_title_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="Life and Works of Rizal" />
+        <TextView android:id="@+id/widget_google_title_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="Life and Works of Rizal" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout android:id="@+id/widget_google_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal" android:gravity="center_vertical">
 
-        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" />
+        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
-        <TextView android:id="@+id/widget_google_title_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="Discrete Mathematics" />
+        <TextView android:id="@+id/widget_google_title_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="Discrete Mathematics" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
     <LinearLayout android:id="@+id/widget_google_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal" android:gravity="center_vertical">
 
-        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" />
+        <TextView android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/schedule_widget_g_badge" android:gravity="center" android:text="G" android:textColor="#4285F4" android:textSize="10sp" android:textStyle="bold" 
+            android:fontFamily="@font/baloo_2"/>
 
-        <TextView android:id="@+id/widget_google_title_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="Vigan" />
+        <TextView android:id="@+id/widget_google_title_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="#21301A" android:textSize="12sp" android:text="Vigan" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
-    <TextView android:id="@+id/widget_google_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#5A6B52" android:textSize="11sp" android:visibility="gone" />
+    <TextView android:id="@+id/widget_google_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#5A6B52" android:textSize="11sp" android:visibility="gone" 
+            android:fontFamily="@font/baloo_2"/>
     </LinearLayout>
 </LinearLayout>

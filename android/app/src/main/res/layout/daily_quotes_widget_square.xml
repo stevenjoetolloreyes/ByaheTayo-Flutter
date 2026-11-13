@@ -61,7 +61,8 @@
                 android:text="Daily Quote"
                 android:textColor="#FFFFFF"
                 android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/press_start_2p"/>
 
             <TextView
                 android:layout_width="0dp"
@@ -69,18 +70,7 @@
                 android:layout_weight="1"
                 android:text="" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/widget_size_chip"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:paddingTop="3dp"
-                android:paddingBottom="3dp"
-                android:text="3×3"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+            
 
             <ImageView
                 android:layout_width="24dp"
@@ -106,7 +96,8 @@
                 android:text="“Education is the most powerful weapon which you can use to change the world.”"
                 android:textColor="#FFFFFF"
                 android:textSize="18sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
 
             <TextView
                 android:id="@+id/widget_author"
@@ -115,7 +106,8 @@
                 android:layout_marginTop="6dp"
                 android:text="— Nelson Mandela"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="12sp" 
+                android:fontFamily="@font/baloo_2"/>
             <TextView
                 android:id="@+id/widget_category"
                 android:layout_width="match_parent"
@@ -123,7 +115,8 @@
                 android:layout_marginTop="4dp"
                 android:text="Education &amp; Success"
                 android:textColor="#EAF3E4"
-                android:textSize="11sp" />
+                android:textSize="11sp" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
 
         <LinearLayout
@@ -143,7 +136,8 @@
                 android:text="Open EstudyanteGO to load today's quote."
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/baloo_2"/>
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

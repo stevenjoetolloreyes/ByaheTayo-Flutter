@@ -101,10 +101,81 @@ class FaresPopularWidgetProvider : HomeWidgetProvider() {
                             setViewVisibility(rowId, View.GONE)
                         }
                     }
+                    // Fare comparison chart: one Regular/Student
+                    // bar pair per listed route.
+                    var anyBars = false
+                    for (i in 0 until FaresWidgetData.BIG_LIST_COUNT) {
+                        val groupId = id(context, "widget_route_${i}_bars")
+                        if (groupId == 0) continue
+                        if (i >= routes.size) {
+                            setViewVisibility(groupId, View.GONE)
+                            continue
+                        }
+                        val route = routes[i]
+                        if (route.fare != null && route.studentFare != null) {
+                            anyBars = true
+                            setViewVisibility(groupId, View.VISIBLE)
+                            val maxFare = maxOf(route.fare, route.studentFare)
+                            setBar(
+                                context,
+                                "widget_route_${i}_bar_0",
+                                FaresWidgetData.fareLevel(route.fare, maxFare),
+                                route.fare == maxFare,
+                            )
+                            setBar(
+                                context,
+                                "widget_route_${i}_bar_1",
+                                FaresWidgetData.fareLevel(route.studentFare, maxFare),
+                                route.studentFare == maxFare,
+                            )
+                            val labelId = id(context, "widget_route_${i}_bars_label")
+                            if (labelId != 0) setTextViewText(labelId, route.to)
+                        } else {
+                            setViewVisibility(groupId, View.GONE)
+                        }
+                    }
+                    setViewVisibility(
+                        R.id.widget_fare_chart,
+                        if (anyBars) View.VISIBLE else View.GONE,
+                    )
                     setTextViewText(R.id.widget_min_fare, FaresWidgetData.MIN_FARE_LABEL)
                 }
             }
             appWidgetManager.updateAppWidget(widgetId, views)
+        }
+    }
+
+    /**
+     * Shows one fare bar at [level] (0..4) by toggling its five
+     * pre-sized segments. Level 0 renders the short faint gray
+     * bar; the bigger fare renders deep leaves; the other renders
+     * grass green. Mirrors AllowanceMoneyWidgetProvider.setBar.
+     */
+    private fun RemoteViews.setBar(
+        context: Context,
+        base: String,
+        level: Int,
+        isMax: Boolean,
+    ) {
+        for (l in 0 until FaresWidgetData.BAR_LEVELS) {
+            val segmentId = context.resources.getIdentifier(
+                "${base}_level_$l",
+                "id",
+                context.packageName,
+            )
+            if (segmentId == 0) continue
+            setViewVisibility(
+                segmentId,
+                if (l == level) View.VISIBLE else View.GONE,
+            )
+            if (l == level) {
+                val bg = when {
+                    level == 0 -> R.drawable.widget_bar_track
+                    isMax -> R.drawable.widget_bar_fill_max
+                    else -> R.drawable.widget_bar_fill
+                }
+                setInt(segmentId, "setBackgroundResource", bg)
+            }
         }
     }
 

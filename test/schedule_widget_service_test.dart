@@ -445,18 +445,22 @@ void main() {
       }
     });
 
-    test('preview layouts show the approved v2 sample content', () {
+    test('preview layouts show the approved sample content', () {
       final small = readLayout(
           'android/app/src/main/res/layout/schedule_widget_preview.xml');
-      expect(small.contains('CSS101'), isTrue);
-      expect(small.contains('9:00–10:30 AM'), isTrue);
-      expect(small.contains('CC203'), isTrue);
+      // Nov 13 picker picture: a school day (Monday, 3 classes,
+      // 1 done) so the picker shows the progress bar + next class.
+      expect(small.contains('Classes today'), isTrue);
+      expect(small.contains('1 of 3 done'), isTrue);
+      expect(small.contains('CT102'), isTrue);
+      expect(small.contains('10:00 AM–12:00 PM'), isTrue);
+      expect(small.contains('CC105'), isTrue);
       expect(small.contains('NSTP 1'), isTrue);
       expect(small.contains('Vigan'), isTrue);
       final week = readLayout(
           'android/app/src/main/res/layout/schedule_widget_week_preview.xml');
       expect(week.contains('CT101'), isTrue);
-      expect(week.contains('Next up: Thu · CSS101 · 9:00 AM · CC203'),
+      expect(week.contains('Next up: Mon · CT102 · 10:00 AM · CC105'),
           isTrue);
     });
 
