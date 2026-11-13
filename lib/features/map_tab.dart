@@ -1705,8 +1705,95 @@ class MapLineLayerSpec {
       Object.hash(Object.hashAll(points), color, solid, width);
 }
 
+/// Approved route-line style (Steven, Nov 13, 2026 — Preview v3,
+/// artifact map-line-thickness-preview, "Okay na, ganyan na"):
+/// Google Maps blue core, 28 logical px wide, with a white
+/// casing around it (36 px total), rounded caps/joins in the
+/// preview. The 28 px is the blue core's width in the map's
+/// logical pixels — PolylineLayer takes an int width in logical
+/// pixels, the same unit the old 6 px green line used, so the
+/// preview's visual weight carries over 1:1 (the web preview's
+/// 28 px core + 36 px total is the same pair of numbers).
+/// The casing is drawn as a wider white layer underneath the
+/// core, exactly like the stop-highlight branch already did
+/// (white 11 under core 7); the numbers are scaled to the new
+/// style. The glow layer in the highlight branch is core + 16
+/// (44 px), matching the preview's shadow = width + 16.
+const kRouteLineBlue = Color(0xFF1A73E8);
+const kRouteLineCoreWidth = 28;
+const kRouteLineCasingWidth = 36;
+const kRouteLineGlowWidth = 44;
+
+/// The travelling highlight that rides the route line after the
+/// draw-in: a short bright band, same width as the core, so it
+/// reads as a pulse on top of the blue line. It covers this
+/// fraction of the whole path at any instant.
+const kRouteLinePulseWindow = 0.08;
+
+/// Sub-path of [points] between [start] and [end] as fractions
+/// of the path (0..1, by point count), with the cut points
+/// interpolated between the bracketing points so the head lands
+/// exactly on the road. Used by the draw-in animation
+/// ([routeDrawPoints]) and the travelling pulse
+/// ([routePulsePoints]). Pure, so the animation geometry is
+/// unit-testable without the native map. Out-of-range fractions
+/// clamp; a path with fewer than 2 points comes back unchanged.
+List<LatLng> routeSubPath(
+  List<LatLng> points,
+  double start,
+  double end,
+) {
+  if (points.length < 2) return List<LatLng>.of(points);
+  final s = start.clamp(0.0, 1.0);
+  final e = end.clamp(0.0, 1.0);
+  if (e <= s) return <LatLng>[points.first, points.first];
+  final segments = points.length - 1;
+  LatLng at(double fraction) {
+    final pos = fraction * segments;
+    final i = pos.floor().clamp(0, segments - 1);
+    final f = pos - i;
+    if (f <= 0) return points[i];
+    final a = points[i];
+    final b = points[i + 1];
+    return LatLng(
+      a.latitude + (b.latitude - a.latitude) * f,
+      a.longitude + (b.longitude - a.longitude) * f,
+    );
+  }
+
+  final out = <LatLng>[at(s)];
+  final firstIndex = (s * segments).ceil();
+  final lastIndex = (e * segments).floor();
+  for (var i = firstIndex; i <= lastIndex; i++) {
+    // The start point is already in the list — never repeat it.
+    if (points[i] != out.last) out.add(points[i]);
+  }
+  final head = at(e);
+  if (out.last != head) out.add(head);
+  return out;
+}
+
+/// Prefix of [points] drawn so far at [progress] (0..1) of the
+/// draw-in animation: 0 = just the origin point, 1 = the whole
+/// road. The state drives this from 0 to 1 in ~1.4 s when a
+/// route's road shape arrives, so the line draws itself from
+/// Cabugao to Vigan instead of appearing all at once.
+List<LatLng> routeDrawPoints(List<LatLng> points, double progress) =>
+    routeSubPath(points, 0, progress);
+
+/// The short window of [points] the pulse highlight covers when
+/// its head is at [head] (0..1 along the path). The window trails
+/// [kRouteLinePulseWindow] behind the head, so the band travels
+/// from origin to destination as the head advances.
+List<LatLng> routePulsePoints(List<LatLng> points, double head) =>
+    routeSubPath(
+      points,
+      head - kRouteLinePulseWindow,
+      head,
+    );
+
 /// The map's line layers, as pure data — slot 0 is ALWAYS the
-/// saved route line (green), and the draft line (amber) is an
+/// saved route line (blue, 28 px core on a 36 px white casing), and the draft line (amber) is an
 /// extra slot that exists ONLY while the admin is actively
 /// drawing AND has tapped at least one point. Stable slots
 /// matter: the maplibre plugin reconciles layers by index, and
@@ -1730,8 +1817,9 @@ class MapLineLayerSpec {
 /// shows its draft on enter.
 ///
 /// The stop-highlight branch (tapped stop → destination lights
-/// up) is preserved exactly: the same four layers, same widths,
-/// same colours — only expressed as specs. It never runs in
+/// up) keeps its four layers, re-coloured and re-sized to the
+/// approved style: dimmed blue before the stop, then glow 44 /
+/// white casing 36 / blue core 28 after it. It never runs in
 /// draw mode (entering draw mode clears the selection).
 ///
 /// [roadLoading] (Sinait → Cabugao, Nov 7, 20:40): the new
@@ -1759,17 +1847,30 @@ List<MapLineLayerSpec> mapLineLayers({
   required List<LatLng>? draftRoadPoints,
   bool roadLoading = false,
   bool liveMode = false,
+  // Draw-in animation progress (0..1) for the plain route line:
+  // 1 = the whole road, the default, so every existing caller
+  // that does not animate gets the finished line. While a stop
+  // is highlighted the animation is already done, so the
+  // progress only trims the plain branch.
+  double drawProgress = 1.0,
+  // Travelling-pulse head (0..1 along the route), null = no
+  // pulse layer. Only the plain branch shows it.
+  double? pulseHead,
 }) {
-  const green = Color(0xFF16A34A);
-  const cyan = Color(0xFF22D3EE);
   const amber = Color(0xFFF59E0B);
-  // Live Follow (Nov 11, 2026): while follow is active the
-  // route line renders bright cyan instead of green, so the
-  // live ride reads as "in progress" at a glance. The amber
-  // draft line is unchanged (it is the admin's in-progress
-  // work, not the live route).
-  final main = liveMode ? cyan : green;
-  final core = liveMode ? cyan : const Color(0xFF4ADE80);
+  // Approved style (Nov 13, 2026): the route line is Google
+  // Maps blue, 28 px core on a 36 px white casing, in normal
+  // AND Live Follow mode. The Nov 11 cyan live line is
+  // superseded: the preview Steven approved shows the blue
+  // line, and Live is still signalled by the Live button,
+  // the cyan live marker, the minimap and the Live panel —
+  // the line colour was never the only live signal.
+  // [liveMode] stays in the signature (callers + tests pass
+  // it) but no longer changes the line colour. The amber draft
+  // line is unchanged (it is the admin's in-progress work,
+  // not the live route).
+  const main = kRouteLineBlue;
+  const core = kRouteLineBlue;
   final layers = <MapLineLayerSpec>[];
   // Slot 0: the saved route line, always present when a route
   // is active — including in draw mode, as the reference under
@@ -1778,13 +1879,20 @@ List<MapLineLayerSpec> mapLineLayers({
   // the wrong route is ever drawn, not even briefly.
   if (!roadLoading) {
     if (drawMode) {
-      layers.add(
+      layers.addAll([
+        MapLineLayerSpec(
+          points: routePoints,
+          color: Colors.white,
+          solid: routeSolid,
+          width: kRouteLineCasingWidth,
+        ),
         MapLineLayerSpec(
           points: routePoints,
           color: main,
           solid: routeSolid,
+          width: kRouteLineCoreWidth,
         ),
-      );
+      ]);
     } else if (selectedStopIndex != null &&
         routeStops.isNotEmpty &&
         roadPoints != null &&
@@ -1800,34 +1908,63 @@ List<MapLineLayerSpec> mapLineLayers({
           solid: true,
         ),
         // Remaining part: soft glow + white casing + wide
-        // light-green core (bright cyan core in Live mode).
+        // blue core, at the approved widths (44 / 36 / 28).
         MapLineLayerSpec(
           points: split.after,
           color: main.withValues(alpha: 0.25),
           solid: true,
-          width: 16,
+          width: kRouteLineGlowWidth,
         ),
         MapLineLayerSpec(
           points: split.after,
           color: Colors.white,
           solid: true,
-          width: 11,
+          width: kRouteLineCasingWidth,
         ),
         MapLineLayerSpec(
           points: split.after,
           color: core,
           solid: true,
-          width: 7,
+          width: kRouteLineCoreWidth,
         ),
       ]);
     } else {
-      layers.add(
+      // Plain route line: white casing underneath, blue core
+      // on top — two layers, drawn bottom-to-top. The draw-in
+      // animation trims both to the same prefix, so the casing
+      // never outruns the core. The dashed fallback (OSRM
+      // failed) keeps both layers dashed with the same
+      // dash pattern, so it still reads as one cased line.
+      final drawn = drawProgress >= 1.0
+          ? routePoints
+          : routeDrawPoints(routePoints, drawProgress);
+      layers.addAll([
         MapLineLayerSpec(
-          points: routePoints,
+          points: drawn,
+          color: Colors.white,
+          solid: routeSolid,
+          width: kRouteLineCasingWidth,
+        ),
+        MapLineLayerSpec(
+          points: drawn,
           color: main,
           solid: routeSolid,
+          width: kRouteLineCoreWidth,
         ),
-      );
+      ]);
+      if (pulseHead != null) {
+        final pulse = routePulsePoints(routePoints, pulseHead);
+        if (pulse.length >= 2) {
+          layers.add(
+            MapLineLayerSpec(
+              points: pulse,
+              color: Colors.white.withValues(alpha: 0.9),
+              solid: true,
+              width: kRouteLineCoreWidth,
+            ),
+          );
+        }
+      }
     }
   }
   // Trailing slot, draw mode only and only once the admin has
@@ -2067,6 +2204,26 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   // Road-following shape from OSRM (null = still loading or failed;
   // the dashed direct line shows until real geometry arrives).
   List<LatLng>? _roadPoints;
+  // ---- Approved route-line animation (Steven, Nov 13, 2026) ----
+  // Draw-in progress (0..1) for the plain route line, driven by
+  // [_routeDrawTimer]: 28 steps of 50 ms ≈ 1.4 s from origin to
+  // destination when a route's road shape arrives. [_routePulseHead]
+  // is the travelling highlight's head (0..1 along the route);
+  // -1 = no pulse layer. The pulse runs two traversals (~3 s
+  // each) after the draw-in, then stops — a forever-running
+  // pulse would rebuild the whole tab at 20 fps for the life
+  // of the tab, and the draw/pulse are an entrance effect, not
+  // a live status. Timers (not AnimationController) keep this
+  // off the widget ticker: 20 fps is plenty for a line growing
+  // along a road, and each tick only re-runs the memoized
+  // layer spec — after the animation ends the spec is stable
+  // and the memo holds again. Cancelled in dispose and on
+  // every route change (the fetch nulls _roadPoints first, so
+  // a stale timer can never animate the wrong route's line).
+  Timer? _routeDrawTimer;
+  Timer? _routePulseTimer;
+  double _routeDrawProgress = 1.0;
+  double _routePulseHead = -1;
   // True while a road fetch is in flight for the CURRENT route
   // (set with the route change, cleared when the fetch settles).
   // While true, _routePolylineLayers draws NO line: the old
@@ -2858,6 +3015,8 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
     _styleLoadTimer?.cancel();
     _tileWatchdogTimer?.cancel();
     _fallbackLoadTimer?.cancel();
+    _routeDrawTimer?.cancel();
+    _routePulseTimer?.cancel();
     _livePositionSub?.cancel();
     _liveGpsLostTimer?.cancel();
     _liveMarkerTimer?.cancel();
@@ -3811,6 +3970,8 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
           _routeDurationSec = 0;
         });
       }
+      // The dashed fallback line draws in too.
+      _startRouteLineAnimation();
       _resyncLineLayers(requestId);
       return;
     }
@@ -3848,6 +4009,10 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         );
       }
     });
+    // The road shape just landed: draw the line in from the
+    // origin, then run the pulse. Starts after the setState
+    // above so the animation's first frame already trims it.
+    _startRouteLineAnimation();
     _resyncLineLayers(requestId);
   }
 
@@ -3911,10 +4076,11 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// Points + style for the active-route line. Solid = real
   /// OSRM road shape; dashed = direct-line fallback. When a stop
   /// is tapped, only the line from that stop to the destination
-  /// lights up (soft glow + white casing + wide light-green core)
+  /// lights up (soft glow + white casing + wide blue core)
   /// while the earlier part dims; tapping the destination leaves
   /// nothing lit. Dismissing the card restores this normal
-  /// standard-green line. One [PolylineLayer] per visual style
+  /// approved blue line (28 px core on a 36 px white casing).
+  /// One [PolylineLayer] per visual style
   /// (MapLibre styles a whole layer one colour/width, so the
   /// highlight is four layers drawn bottom-to-top, as before).
   /// Line layers for the map, via the stable-slot spec in
@@ -3954,6 +4120,8 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
       draftRoadPoints: _draftRoadPoints,
       roadLoading: _roadLoading,
       liveMode: _liveFollowActive,
+      drawProgress: _routeDrawProgress,
+      pulseHead: _routePulseHead >= 0 ? _routePulseHead : null,
     );
     if (_lineLayerSpecs != null &&
         listEquals(_lineLayerSpecs, specs)) {
@@ -3979,6 +4147,92 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         ),
     ];
     return _lineLayers;
+  }
+
+  /// Starts the approved route-line entrance animation for the
+  /// current route: the line draws itself from origin to
+  /// destination over ~1.4 s, then the highlight pulse travels
+  /// it twice. No-op while the admin is drawing (the amber
+  /// draft is the focus there) and when no route is active.
+  /// Called when a road fetch settles (success or dashed
+  /// fallback) and by the Replay button. A running animation
+  /// is cancelled first, so a fast route change never leaves
+  /// two timers stepping the same progress.
+  void _startRouteLineAnimation() {
+    _routeDrawTimer?.cancel();
+    _routePulseTimer?.cancel();
+    if (_activeRoute == null ||
+        _activeRouteOrigin == null ||
+        _lineMakerActive) {
+      _routeDrawProgress = 1.0;
+      _routePulseHead = -1;
+      return;
+    }
+    // Reset visibly in the same frame the fetch settles, so
+    // the full line never flashes for one frame before the
+    // draw-in starts trimming it.
+    if (mounted) {
+      setState(() {
+        _routeDrawProgress = 0.0;
+        _routePulseHead = -1;
+      });
+    }
+    var steps = 0;
+    _routeDrawTimer = Timer.periodic(
+      const Duration(milliseconds: 50),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        steps++;
+        setState(() {
+          _routeDrawProgress = (steps / 28).clamp(0.0, 1.0);
+        });
+        if (steps >= 28) {
+          timer.cancel();
+          _startRoutePulse();
+        }
+      },
+    );
+  }
+
+  /// Travelling highlight after the draw-in: the pulse head
+  /// advances 1/60 of the route per 50 ms tick (~3 s per
+  /// traversal) for two traversals, then the pulse layer is
+  /// removed and the timers stop.
+  void _startRoutePulse() {
+    _routePulseTimer?.cancel();
+    _routePulseHead = 0.0;
+    var loops = 0;
+    _routePulseTimer = Timer.periodic(
+      const Duration(milliseconds: 50),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _routePulseHead += 1 / 60;
+          if (_routePulseHead >= 1.0) {
+            _routePulseHead = 0.0;
+            loops++;
+            if (loops >= 2) {
+              timer.cancel();
+              _routePulseHead = -1;
+            }
+          }
+        });
+      },
+    );
+  }
+
+  /// Replay control (bottom-left, next to the attribution
+  /// button): re-runs the draw-in + pulse for the current
+  /// route. No-op with no active route.
+  void _replayRouteLineAnimation() {
+    if (_activeRoute == null || _activeRouteOrigin == null) return;
+    _startRouteLineAnimation();
   }
 
   /// Map markers — clean, like the preview: ONLY the active
@@ -4247,7 +4501,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// starts pre-filled from that route's current effective
   /// direction. When the route has no saved direction the draft
   /// is empty and NO amber line is drawn until the admin taps —
-  /// the green route line stays visible as the reference (a
+  /// the blue route line stays visible as the reference (a
   /// straight origin→destination amber line would invent a line
   /// the admin never tapped). The sheet hides (restored on
   /// exit) and the stop card dismisses.
@@ -6711,29 +6965,51 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
         // pill — the pill is gone, so this spot is free. Tapping
         // opens the fallback layer's attribution page, or states
         // the Meta credit. When the sheet is hidden the full chip
-        // shows centred at the bottom instead.
+        // shows centred at the bottom instead. The Replay button
+        // sits beside it (approved line animation, Nov 13, 2026):
+        // it re-runs the route line's draw-in + pulse. It lives
+        // here, not in the top-right cluster — a 6th button there
+        // would end below kMapStopCardTop and cover the stop
+        // card's close button. Hidden while drawing / placing
+        // endpoints (the bottom bars own this spot then) and
+        // with no active route (nothing to replay).
         if (!_sheetHidden)
           Positioned(
             left: 16,
             bottom: mapControlsBottomOffset(sheetHidden: _sheetHidden),
-            child: Material(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(999),
-              elevation: 4,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () => _onAttributionTap(
-                  dark: scheme.brightness == Brightness.dark,
-                ),
-                child: const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Icon(
-                    Icons.info_outline,
-                    color: Colors.white,
-                    size: 18,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Material(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(999),
+                  elevation: 4,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => _onAttributionTap(
+                      dark: scheme.brightness == Brightness.dark,
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.info_outline,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                if (_activeRoute != null &&
+                    !_lineMakerActive &&
+                    !_setEndpointsActive) ...[
+                  const SizedBox(width: 10),
+                  _MapControlButton(
+                    icon: Icons.replay,
+                    tooltip: 'Replay route animation',
+                    onPressed: _replayRouteLineAnimation,
+                  ),
+                ],
+              ],
             ),
           ),
         // Basemap attribution: visible whenever the sheet is hidden

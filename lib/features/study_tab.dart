@@ -554,10 +554,32 @@ class _StudyTabState extends State<StudyTab> {
     final quizzes = await StudentStorage.loadList(StudentStorage.quizzesKey);
     final cards = await StudentStorage.loadList(StudentStorage.flashcardsKey);
     final shared = await _loadSharedWithMe();
+    // Semester fix (Nov 13, 2026): stored subjects from the bad
+    // schedule scan carry room numbers as codes ("CC105") and
+    // fragments ("Coding", "Vigan") as names, and have no
+    // semester — repair them into the verified 1st-term meetings
+    // (ids kept, so recorded grades stay attached) and drop
+    // entries that name no real class. Persisted only when the
+    // migration actually changed something, so clean data is
+    // never rewritten.
+    final migrated = migrateStoredSubjects(
+      subjects.map(Subject.fromJson).toList(),
+      grades.map(GradeRecord.fromJson).toList(),
+    );
+    if (migrated.changed) {
+      await StudentStorage.saveList(
+        StudentStorage.subjectsKey,
+        migrated.subjects.map((s) => s.toJson()).toList(),
+      );
+      await StudentStorage.saveList(
+        StudentStorage.gradesKey,
+        migrated.grades.map((g) => g.toJson()).toList(),
+      );
+    }
     if (!mounted) return;
     setState(() {
-      _subjects = subjects.map(Subject.fromJson).toList();
-      _grades = grades.map(GradeRecord.fromJson).toList();
+      _subjects = migrated.subjects;
+      _grades = migrated.grades;
       _files = files.map(StudyFile.fromJson).toList()
         ..sort((a, b) => b.added.compareTo(a.added));
       _notes = notes.map(Note.fromJson).toList()
@@ -605,6 +627,26 @@ class _StudyTabState extends State<StudyTab> {
       if (g.subjectId == subjectId && g.semester == _semester) return g;
     }
     return null;
+  }
+
+  /// Subjects for the selected semester, one row per subject
+  /// code: a subject has two meeting entries (e.g. CT101 Mon +
+  /// Tue/Thu), but Grades shows one row per subject. The first
+  /// stored meeting is the row's representative, so a grade
+  /// recorded on it stays attached. Subjects with no code fall
+  /// back to their id, so they are never merged together.
+  /// 2nd Semester is empty until 2nd-semester subjects exist —
+  /// the 1st-semester list is never copied across.
+  List<Subject> get _gradeSubjects {
+    final seen = <String>{};
+    final out = <Subject>[];
+    for (final s in _subjects) {
+      if (s.semester != _semester) continue;
+      final code = s.code.trim().toUpperCase();
+      final key = code.isEmpty ? 'id:${s.id}' : 'code:$code';
+      if (seen.add(key)) out.add(s);
+    }
+    return out;
   }
 
   /// Weighted GWA for the selected semester, or null when no grade
@@ -886,7 +928,8 @@ class _StudyTabState extends State<StudyTab> {
   }
 
   Future<void> _fabGrades() async {
-    if (_subjects.isEmpty) {
+    final gradeSubjects = _gradeSubjects;
+    if (gradeSubjects.isEmpty) {
       if (!mounted) return;
       TopPopup.show(
         context,
@@ -895,8 +938,10 @@ class _StudyTabState extends State<StudyTab> {
       );
       return;
     }
-    final ungraded = _subjects.where((s) => _gradeFor(s.id) == null);
-    await _openGradeForm(ungraded.isEmpty ? _subjects.first : ungraded.first);
+    final ungraded = gradeSubjects.where((s) => _gradeFor(s.id) == null);
+    await _openGradeForm(
+      ungraded.isEmpty ? gradeSubjects.first : ungraded.first,
+    );
   }
 
   @override
@@ -1484,10 +1529,16 @@ class _StudyTabState extends State<StudyTab> {
             'No subjects yet.',
             'Add subjects from the Student tab → Classes & Timetable, then record grades here.',
           )
+        else if (_gradeSubjects.isEmpty)
+          _emptyCard(
+            tokens,
+            'No subjects yet for ${_semester == 1 ? '1st' : '2nd'} Semester.',
+            'Add ${_semester == 1 ? '1st' : '2nd'} Semester subjects from the Student tab → Classes & Timetable.',
+          )
         else
-          for (var i = 0; i < _subjects.length; i++) ...[
+          for (var i = 0; i < _gradeSubjects.length; i++) ...[
             if (i > 0) const SizedBox(height: 8),
-            _subjectRow(tokens, _subjects[i]),
+            _subjectRow(tokens, _gradeSubjects[i]),
           ],
         const SizedBox(height: AppSpacing.s12),
         Wrap(

@@ -13,11 +13,12 @@
 // a line the admin never tapped.
 //
 // The fix (mapLineLayers, pure): slot 0 is ALWAYS the saved
-// route line (green, including in draw mode as the reference
-// under the draft); the amber draft is a trailing slot that
-// exists ONLY while drawing AND at least one point was tapped
-// (or pre-filled from a saved direction). These tests cover the
-// spec the state memoizes — MapLibre cannot render in
+// route line (blue, 28 px core on a 36 px white casing, since
+// the Nov 13, 2026 approved style), including in draw mode as
+// the reference under the draft; the amber draft is a trailing
+// slot that exists ONLY while drawing AND at least one point was
+// tapped (or pre-filled from a saved direction). These tests
+// cover the spec the state memoizes — MapLibre cannot render in
 // flutter test, so the drawn line itself is only checkable on
 // Steven's phone after a green build.
 import 'package:estudyantego/features/bus_stops.dart';
@@ -29,7 +30,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-const _green = Color(0xFF16A34A);
+const _blue = Color(0xFF1A73E8);
 const _amber = Color(0xFFF59E0B);
 const _origin = LatLng(17.7943, 120.4534); // Cabugao
 const _dest = LatLng(17.56641, 120.3859); // Vigan Bus Terminal
@@ -61,7 +62,7 @@ List<MapLineLayerSpec> _layers({
 
 void main() {
   group('mapLineLayers — stale-line regression', () {
-    test('inactive mode draws only the green route line, no amber', () {
+    test('inactive mode draws only the blue route line, no amber', () {
       // Even with a leftover draft (the stale state after an
       // exit), the mode being inactive means no draft layer.
       final layers = _layers(
@@ -70,23 +71,28 @@ void main() {
           RouteWaypoint(lat: 17.65, lng: 120.40),
         ],
       );
-      expect(layers.length, 1);
-      expect(layers[0].color, _green);
-      expect(layers[0].points, [_origin, _dest]);
-      expect(layers[0].solid, isFalse);
+      // Two layers: white casing under the blue core.
+      expect(layers.length, 2);
+      expect(layers[0].color, Colors.white);
+      expect(layers[0].width, kRouteLineCasingWidth);
+      expect(layers[1].color, _blue);
+      expect(layers[1].width, kRouteLineCoreWidth);
+      expect(layers[1].points, [_origin, _dest]);
+      expect(layers[1].solid, isFalse);
     });
 
-    test('draw mode with an empty draft draws only the green line', () {
+    test('draw mode with an empty draft draws only the blue line', () {
       // The bug's second half: entering Draw line on a route
       // with no saved direction used to draw a straight
       // origin→destination amber line nobody tapped.
       final layers = _layers(drawMode: true);
-      expect(layers.length, 1);
-      expect(layers[0].color, _green);
-      expect(layers[0].points, [_origin, _dest]);
+      expect(layers.length, 2);
+      expect(layers[0].color, Colors.white);
+      expect(layers[1].color, _blue);
+      expect(layers[1].points, [_origin, _dest]);
     });
 
-    test('draw mode with tapped points draws green + amber', () {
+    test('draw mode with tapped points draws blue + amber', () {
       final layers = _layers(
         drawMode: true,
         draftWaypoints: const [
@@ -94,14 +100,15 @@ void main() {
           RouteWaypoint(lat: 17.65, lng: 120.40),
         ],
       );
-      expect(layers.length, 2);
-      // Slot 0 stays the saved route line (green reference).
-      expect(layers[0].color, _green);
-      expect(layers[0].points, [_origin, _dest]);
+      expect(layers.length, 3);
+      // Slots 0–1 stay the saved route line (blue reference).
+      expect(layers[0].color, Colors.white);
+      expect(layers[1].color, _blue);
+      expect(layers[1].points, [_origin, _dest]);
       // Trailing slot: the amber draft through the tapped points.
-      expect(layers[1].color, _amber);
-      expect(layers[1].points, [_origin, _mid1, _mid2, _dest]);
-      expect(layers[1].solid, isFalse); // dashed until OSRM arrives
+      expect(layers[2].color, _amber);
+      expect(layers[2].points, [_origin, _mid1, _mid2, _dest]);
+      expect(layers[2].solid, isFalse); // dashed until OSRM arrives
     });
 
     test('draw mode with a draft road shape draws a solid amber line',
@@ -119,10 +126,10 @@ void main() {
         ],
         draftRoadPoints: road,
       );
-      expect(layers.length, 2);
-      expect(layers[1].color, _amber);
-      expect(layers[1].points, road);
-      expect(layers[1].solid, isTrue);
+      expect(layers.length, 3);
+      expect(layers[2].color, _amber);
+      expect(layers[2].points, road);
+      expect(layers[2].solid, isTrue);
     });
 
     test('pre-filled draft from a saved direction shows the saved line',
@@ -143,9 +150,9 @@ void main() {
       final prefill = effectiveRouteWaypoints(customRoute: custom);
       expect(prefill.length, 2);
       final layers = _layers(drawMode: true, draftWaypoints: prefill);
-      expect(layers.length, 2);
-      expect(layers[1].color, _amber);
-      expect(layers[1].points, [_origin, _mid1, _mid2, _dest]);
+      expect(layers.length, 3);
+      expect(layers[2].color, _amber);
+      expect(layers[2].points, [_origin, _mid1, _mid2, _dest]);
     });
 
     test('pre-filled draft from named via stops matches the route line',
@@ -164,10 +171,10 @@ void main() {
       expect(prefill.length, 1);
       expect(prefill[0].name, 'San Juan, Ilocos Sur');
       final layers = _layers(drawMode: true, draftWaypoints: prefill);
-      expect(layers.length, 2);
-      expect(layers[1].points.first, _origin);
-      expect(layers[1].points.last, _dest);
-      expect(layers[1].points[1], prefill[0].point);
+      expect(layers.length, 3);
+      expect(layers[2].points.first, _origin);
+      expect(layers[2].points.last, _dest);
+      expect(layers[2].points[1], prefill[0].point);
     });
 
     test('spec equality holds across fresh instances', () {
@@ -186,7 +193,8 @@ void main() {
       expect(a[0], b[0]); // …but equal by value
     });
 
-    test('stop highlight still renders four layers, unchanged', () {
+    test('stop highlight still renders four layers, at the new widths',
+        () {
       const road = [
         LatLng(17.7943, 120.4534),
         LatLng(17.75, 120.44),
@@ -233,14 +241,14 @@ void main() {
         roadPoints: road,
       );
       expect(layers.length, 4);
-      expect(layers.map((l) => l.width), [6, 16, 11, 7]);
+      expect(layers.map((l) => l.width), [6, 44, 36, 28]);
       expect(
         layers.map((l) => l.color),
         [
-          _green.withValues(alpha: 0.15),
-          _green.withValues(alpha: 0.25),
+          _blue.withValues(alpha: 0.15),
+          _blue.withValues(alpha: 0.25),
           Colors.white,
-          const Color(0xFF4ADE80),
+          _blue,
         ],
       );
       expect(layers.every((l) => l.solid), isTrue);
@@ -279,9 +287,10 @@ void main() {
           RouteWaypoint(lat: 17.72, lng: 120.42),
         ],
       );
-      expect(layers.length, 2);
-      expect(layers[0].color, _green);
-      expect(layers[1].color, _amber);
+      expect(layers.length, 3);
+      expect(layers[0].color, Colors.white);
+      expect(layers[1].color, _blue);
+      expect(layers[2].color, _amber);
     });
   });
 }

@@ -176,10 +176,70 @@ void main() {
     expect(find.text('1.50'), findsWidgets);
     expect(find.text('Excellent'), findsOneWidget);
     expect(find.text('3 units · 1 graded'), findsOneWidget);
-    // 2nd Semester has no grade for this subject: GWA back to "—".
+    // 2nd Semester has no subjects at all for this student (the
+    // subject has no semester stored, so it reads as 1st): the
+    // panel shows the per-semester empty state and GWA back to "—",
+    // never the 1st-semester row.
     await tester.tap(find.text('2nd Semester'));
     await tester.pumpAndSettle();
-    expect(find.text('No grade yet'), findsOneWidget);
+    expect(find.text('Math 101'), findsNothing);
+    expect(find.text('No subjects yet for 2nd Semester.'), findsOneWidget);
+    expect(find.text('—'), findsWidgets);
+  });
+
+  testWidgets('Grades repairs the bad scan rows: 1st Semester shows '
+      '3 subjects, 2nd Semester is blank', (tester) async {
+    // The six rows from Steven's Nov 13 screenshots: room numbers
+    // as codes, fragments as names, no semester stored.
+    const badRowsJson =
+        '[{"id":"m1","name":"Introduction Of Computing","code":"CC105","teacher":"","room":"CC105","days":[1],"startMin":450,"endMin":570,"color":4278190080},'
+        '{"id":"m2","name":"Introduction Of Computing","code":"CC101","teacher":"","room":"CC104","days":[2,4],"startMin":840,"endMin":930,"color":4278190080},'
+        '{"id":"m3","name":"Coding","code":"Coding","teacher":"","room":"CC105","days":[1],"startMin":600,"endMin":720,"color":4278190080},'
+        '{"id":"m4","name":"Coding","code":"","teacher":"","room":"CC104","days":[2,4],"startMin":630,"endMin":720,"color":4278190080},'
+        '{"id":"m5","name":"Installing Configuration","code":"CC105","teacher":"","room":"CC105","days":[1],"startMin":780,"endMin":900,"color":4278190080},'
+        '{"id":"m6","name":"Computer and Configuration","code":"CC203","teacher":"","room":"CC203","days":[2,4],"startMin":540,"endMin":630,"color":4278190080}]';
+    await _pumpTab(
+      tester,
+      prefs: {'byahetayo_student_subjects': badRowsJson},
+    );
+    // 1st Semester: one row per subject code, correct names/codes.
+    expect(find.text('Introduction to Computing'), findsOneWidget);
+    expect(find.text('Computer Programming 1'), findsOneWidget);
+    expect(
+      find.text('Installing and Configuring Computer Systems'),
+      findsOneWidget,
+    );
+    expect(find.text('CT101'), findsOneWidget);
+    expect(find.text('CT102'), findsOneWidget);
+    expect(find.text('CSS101'), findsOneWidget);
+    // None of the mislabeled rows survives.
+    expect(find.text('CC105'), findsNothing);
+    expect(find.text('CC101'), findsNothing);
+    expect(find.text('CC203'), findsNothing);
+    expect(find.text('Coding'), findsNothing);
+    expect(find.text('Vigan'), findsNothing);
+    expect(find.text('No grade yet'), findsNWidgets(3));
+    // The repair is persisted, not just a display filter.
+    final storedSubjects = jsonDecode(
+      (await SharedPreferences.getInstance())
+              .getString('byahetayo_student_subjects') ??
+          '[]',
+    ) as List;
+    expect(
+      storedSubjects.map((s) => (s as Map)['code']).toList(),
+      ['CT101', 'CT101', 'CT102', 'CT102', 'CSS101', 'CSS101'],
+    );
+    // 2nd Semester: blank, no copied 1st-semester list.
+    await tester.tap(find.text('2nd Semester'));
+    await tester.pumpAndSettle();
+    expect(find.text('Introduction to Computing'), findsNothing);
+    expect(find.text('Computer Programming 1'), findsNothing);
+    expect(
+      find.text('Installing and Configuring Computer Systems'),
+      findsNothing,
+    );
+    expect(find.text('No subjects yet for 2nd Semester.'), findsOneWidget);
+    expect(find.text('—'), findsWidgets);
   });
 
   testWidgets('Files panel starts empty: 0 files, 0 B of 2 GB — Free plan', (tester) async {

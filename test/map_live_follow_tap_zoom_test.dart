@@ -1,9 +1,11 @@
 // Live Follow tap-to-zoom / drag-break / rotating car marker /
-// cyan route line (Nov 11, 2026). Pure-logic tests only — the
+// blue route line (Nov 11, 2026; line re-coloured blue Nov 13,
+// 2026 by the approved Preview v3 style — the Nov 11 cyan live
+// line is superseded). Pure-logic tests only — the
 // native MapLibre map cannot render in flutter test, so the
 // camera moves, the drag pause, and the marker tap are only
 // checkable on Steven's phone after a green build. What IS
-// pinned here: the cyan line spec (liveMode), the marker
+// pinned here: the blue line spec (liveMode and not), the marker
 // screen rotation, and the tap-zoom target zoom.
 import 'package:estudyantego/features/bus_stops.dart';
 import 'package:estudyantego/features/live_follow.dart';
@@ -13,9 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-const _green = Color(0xFF16A34A);
-const _cyan = Color(0xFF22D3EE);
-const _lightGreen = Color(0xFF4ADE80);
+const _blue = Color(0xFF1A73E8);
 const _amber = Color(0xFFF59E0B);
 const _origin = LatLng(17.7943, 120.4534); // Cabugao
 const _dest = LatLng(17.56641, 120.3859); // Vigan Bus Terminal
@@ -79,55 +79,57 @@ List<MapLineLayerSpec> _layers({
     );
 
 void main() {
-  group('mapLineLayers liveMode — cyan route line', () {
-    test('liveMode draws the plain route line cyan, not green', () {
+  group('mapLineLayers liveMode — blue route line in both modes', () {
+    test('liveMode draws the plain route line blue, casing + core', () {
       final layers = _layers(liveMode: true);
-      expect(layers.length, 1);
-      expect(layers[0].color, _cyan);
-      expect(layers[0].points, _road);
-      expect(layers[0].solid, isTrue);
+      expect(layers.length, 2);
+      expect(layers[0].color, Colors.white);
+      expect(layers[0].width, kRouteLineCasingWidth);
+      expect(layers[1].color, _blue);
+      expect(layers[1].width, kRouteLineCoreWidth);
+      expect(layers[1].points, _road);
+      expect(layers[1].solid, isTrue);
     });
 
-    test('liveMode defaults off: the plain line stays green', () {
+    test('liveMode defaults off: the plain line stays blue', () {
       final layers = _layers();
-      expect(layers.length, 1);
-      expect(layers[0].color, _green);
+      expect(layers.length, 2);
+      expect(layers[1].color, _blue);
       // Explicit false matches the default.
-      expect(_layers(liveMode: false)[0].color, _green);
+      expect(_layers(liveMode: false)[1].color, _blue);
     });
 
-    test('liveMode split: before dims cyan, after core is cyan', () {
+    test('liveMode split: before dims blue, after core is blue', () {
       final layers = _layers(liveMode: true, selectedStopIndex: 1);
       expect(layers.length, 4);
-      expect(layers.map((l) => l.width), [6, 16, 11, 7]);
+      expect(layers.map((l) => l.width), [6, 44, 36, 28]);
       expect(
         layers.map((l) => l.color),
         [
-          _cyan.withValues(alpha: 0.15),
-          _cyan.withValues(alpha: 0.25),
+          _blue.withValues(alpha: 0.15),
+          _blue.withValues(alpha: 0.25),
           Colors.white,
-          _cyan,
+          _blue,
         ],
       );
       expect(layers.every((l) => l.solid), isTrue);
     });
 
-    test('liveMode off split: green dim / light-green core, unchanged',
-        () {
+    test('liveMode off split: blue dim / blue core, unchanged', () {
       final layers = _layers(selectedStopIndex: 1);
       expect(layers.length, 4);
       expect(
         layers.map((l) => l.color),
         [
-          _green.withValues(alpha: 0.15),
-          _green.withValues(alpha: 0.25),
+          _blue.withValues(alpha: 0.15),
+          _blue.withValues(alpha: 0.25),
           Colors.white,
-          _lightGreen,
+          _blue,
         ],
       );
     });
 
-    test('liveMode draw mode: reference line cyan, draft stays amber',
+    test('liveMode draw mode: reference line blue, draft stays amber',
         () {
       final layers = _layers(
         liveMode: true,
@@ -136,9 +138,10 @@ void main() {
           RouteWaypoint(lat: 17.72, lng: 120.42),
         ],
       );
-      expect(layers.length, 2);
-      expect(layers[0].color, _cyan);
-      expect(layers[1].color, _amber);
+      expect(layers.length, 3);
+      expect(layers[0].color, Colors.white);
+      expect(layers[1].color, _blue);
+      expect(layers[2].color, _amber);
     });
   });
 

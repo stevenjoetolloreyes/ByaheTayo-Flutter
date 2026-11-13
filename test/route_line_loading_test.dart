@@ -32,7 +32,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-const _green = Color(0xFF16A34A);
+const _blue = Color(0xFF1A73E8);
 const _amber = Color(0xFFF59E0B);
 const _origin = LatLng(17.87538, 120.48078); // Sinait
 const _dest = LatLng(17.78916, 120.45838); // Cabugao
@@ -70,7 +70,7 @@ void main() {
         routeSolid: true,
         roadPoints: const [_origin, _mid, _dest],
       );
-      // No green line for the wrong (previous) route, not even
+      // No blue line for the wrong (previous) route, not even
       // briefly — the map shows no line until the new shape
       // arrives.
       expect(layers, isEmpty);
@@ -117,13 +117,17 @@ void main() {
         routeSolid: true,
         roadPoints: const [_origin, _mid, _dest],
       );
-      expect(layers.length, 1);
-      expect(layers.first.color, _green);
-      expect(layers.first.solid, isTrue);
+      // Two layers: white casing under the blue core.
+      expect(layers.length, 2);
+      expect(layers[0].color, Colors.white);
+      expect(layers[0].width, kRouteLineCasingWidth);
+      expect(layers[1].color, _blue);
+      expect(layers[1].width, kRouteLineCoreWidth);
+      expect(layers[1].solid, isTrue);
       // The pure helper draws the routePoints it is handed (the
       // state passes the loaded road shape there); roadPoints
       // only feeds the highlight branch's split.
-      expect(layers.first.points, [_origin, _dest]);
+      expect(layers[1].points, [_origin, _dest]);
     });
 
     test('not loading + tapped stop still highlights the remainder', () {
@@ -167,9 +171,10 @@ void main() {
         draftDest: _dest,
         draftRoadPoints: null,
       );
-      expect(layers.length, 1);
-      expect(layers.first.color, _green);
-      expect(layers.first.solid, isFalse);
+      expect(layers.length, 2);
+      expect(layers[0].color, Colors.white);
+      expect(layers[1].color, _blue);
+      expect(layers[1].solid, isFalse);
     });
   });
 }

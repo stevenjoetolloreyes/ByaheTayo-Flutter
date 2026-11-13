@@ -113,6 +113,11 @@ class Subject {
     required this.startMin,
     required this.endMin,
     required this.color,
+    // 1 = 1st Semester, 2 = 2nd Semester. Defaults to 1st so
+    // subjects stored before this field existed (and subjects
+    // added without a semester, e.g. the manual form and the
+    // Files scan) keep showing under 1st Semester.
+    this.semester = 1,
   });
 
   final String id;
@@ -124,6 +129,7 @@ class Subject {
   final int startMin;
   final int endMin;
   final int color;
+  final int semester;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -135,6 +141,7 @@ class Subject {
         'startMin': startMin,
         'endMin': endMin,
         'color': color,
+        'semester': semester,
       };
 
   static Subject fromJson(Map<String, dynamic> j) => Subject(
@@ -147,7 +154,321 @@ class Subject {
         startMin: j['startMin'] as int,
         endMin: j['endMin'] as int,
         color: j['color'] as int,
+        // Stored subjects from before the semester field existed
+        // read as 1st Semester — the only term the app has ever
+        // held classes for.
+        semester: (j['semester'] as num?)?.toInt() ?? 1,
       );
+}
+
+/// One verified 1st-term 2026–2027 DCT-1 class meeting, from
+/// Steven's Certificate of Registration (Nov 13, 2026). Used
+/// ONLY by [migrateStoredSubjects] to repair schedule-scan
+/// output that stored room numbers as subject codes ("CC105")
+/// and fragments ("Coding", "Vigan") as subject names. The
+/// 2nd-semester subjects are unknown and are never invented.
+class _VerifiedMeeting {
+  const _VerifiedMeeting({
+    required this.code,
+    required this.name,
+    required this.teacher,
+    required this.room,
+    required this.days,
+    required this.startMin,
+    required this.endMin,
+  });
+
+  final String code;
+  final String name;
+  final String teacher;
+  final String room;
+  final List<int> days;
+  final int startMin;
+  final int endMin;
+}
+
+const _verifiedFirstTermMeetings = <_VerifiedMeeting>[
+  _VerifiedMeeting(
+    code: 'CT101',
+    name: 'Introduction to Computing',
+    teacher: 'A. Supnet',
+    room: 'CC105',
+    days: [1],
+    startMin: 7 * 60 + 30,
+    endMin: 9 * 60 + 30,
+  ),
+  _VerifiedMeeting(
+    code: 'CT101',
+    name: 'Introduction to Computing',
+    teacher: 'A. Supnet',
+    room: 'CC104',
+    days: [2, 4],
+    startMin: 14 * 60,
+    endMin: 15 * 60 + 30,
+  ),
+  _VerifiedMeeting(
+    code: 'CT102',
+    name: 'Computer Programming 1',
+    teacher: 'W.E. Que',
+    room: 'CC105',
+    days: [1],
+    startMin: 10 * 60,
+    endMin: 12 * 60,
+  ),
+  _VerifiedMeeting(
+    code: 'CT102',
+    name: 'Computer Programming 1',
+    teacher: 'W.E. Que',
+    room: 'CC104',
+    days: [2, 4],
+    startMin: 10 * 60 + 30,
+    endMin: 12 * 60,
+  ),
+  _VerifiedMeeting(
+    code: 'CSS101',
+    name: 'Installing and Configuring Computer Systems',
+    teacher: 'L. Baja',
+    room: 'CC105',
+    days: [1],
+    startMin: 13 * 60,
+    endMin: 15 * 60,
+  ),
+  _VerifiedMeeting(
+    code: 'CSS101',
+    name: 'Installing and Configuring Computer Systems',
+    teacher: 'L. Baja',
+    room: 'CC203',
+    days: [2, 4],
+    startMin: 9 * 60,
+    endMin: 10 * 60 + 30,
+  ),
+];
+
+/// Room numbers on Steven's certificate. A stored "subject code"
+/// that is one of these is a scan artifact (the room read as the
+/// code), never a real subject code.
+const _certificateRooms = {'CC101', 'CC104', 'CC105', 'CC203'};
+
+/// Result of [migrateStoredSubjects]: the repaired subject list,
+/// the grade list with subject ids remapped onto kept subjects
+/// (grades for dropped junk entries are removed), and whether
+/// anything changed (so callers only rewrite storage when needed).
+class SubjectMigrationResult {
+  const SubjectMigrationResult({
+    required this.subjects,
+    required this.grades,
+    required this.changed,
+  });
+
+  final List<Subject> subjects;
+  final List<GradeRecord> grades;
+  final bool changed;
+}
+
+bool _sameDays(List<int> a, List<int> b) {
+  if (a.length != b.length) return false;
+  final sortedA = List<int>.of(a)..sort();
+  final sortedB = List<int>.of(b)..sort();
+  for (var i = 0; i < sortedA.length; i++) {
+    if (sortedA[i] != sortedB[i]) return false;
+  }
+  return true;
+}
+
+/// Repairs stored subjects from the bad schedule-scan output
+/// (Nov 13, 2026 screenshots: codes "CC105"/"CC101"/"CC203",
+/// names "Coding"/"Vigan"/"Installing Configuration"/"Computer
+/// and Configuration") into the verified 1st-term meetings, and
+/// drops entries that cannot be identified as a real class.
+/// Pure function — no storage access, so it is unit-testable.
+///
+/// Per stored subject, in order:
+/// 1. A subject whose code is already a real 1st-term code
+///    (CT101/CT102/CSS101) is kept as-is (semester clamped to
+///    1 or 2; anything else reads as 1).
+/// 2. Otherwise, an entry whose days + start + end match a
+///    verified meeting exactly is rebuilt as that meeting
+///    (correct code, name, teacher, room), keeping its id so
+///    any recorded grade stays attached.
+/// 3. Otherwise, an entry whose name is a recognizable fragment
+///    of a verified subject ("Introduction … Computing" →
+///    CT101, "Installing…" or "Computer and Configuration" →
+///    CSS101, "Coding" → CT102) gets that subject's correct
+///    code, name and teacher, keeping its own days, times,
+///    room and id.
+/// 4. Otherwise, an entry that is clearly a scan artifact (its
+///    code is a certificate room number, or its name is "Vigan"
+///    / "Coding" with no matching meeting) is dropped.
+/// 5. Anything else is a user-added subject and is kept as-is.
+///
+/// A second entry repairing to a meeting already kept is a
+/// duplicate: it is dropped and any grade on it is remapped to
+/// the kept entry's id, so no real grade is lost.
+SubjectMigrationResult migrateStoredSubjects(
+  List<Subject> stored,
+  List<GradeRecord> grades,
+) {
+  var changed = false;
+  final subjects = <Subject>[];
+  final keptMeetings = <String>{};
+  final remappedIds = <String, String>{};
+  final droppedIds = <String>{};
+
+  String meetingKey(_VerifiedMeeting m) =>
+      '${m.code}|${m.days.join(',')}|${m.startMin}|${m.endMin}';
+
+  for (final s in stored) {
+    final normalizedSemester = s.semester == 2 ? 2 : 1;
+    if (normalizedSemester != s.semester) changed = true;
+    final code = s.code.trim().toUpperCase().replaceAll(' ', '');
+    final name = s.name.trim();
+    final lowerName = name.toLowerCase();
+
+    // 1. Already a real subject code: keep, only fix semester.
+    if (code == 'CT101' || code == 'CT102' || code == 'CSS101') {
+      subjects.add(
+        normalizedSemester == s.semester
+            ? s
+            : Subject(
+                id: s.id,
+                name: s.name,
+                code: s.code,
+                teacher: s.teacher,
+                room: s.room,
+                days: s.days,
+                startMin: s.startMin,
+                endMin: s.endMin,
+                color: s.color,
+                semester: normalizedSemester,
+              ),
+      );
+      continue;
+    }
+
+    // 2. Exact meeting-pattern match: rebuild as that meeting.
+    _VerifiedMeeting? meeting;
+    for (final m in _verifiedFirstTermMeetings) {
+      if (_sameDays(s.days, m.days) &&
+          s.startMin == m.startMin &&
+          s.endMin == m.endMin) {
+        meeting = m;
+        break;
+      }
+    }
+    if (meeting != null) {
+      final key = meetingKey(meeting);
+      if (!keptMeetings.add(key)) {
+        // Duplicate of a meeting already kept: drop, remap grades.
+        final keptMeeting = meeting;
+        remappedIds[s.id] = subjects
+            .firstWhere(
+              (kept) =>
+                  kept.code == keptMeeting.code &&
+                  _sameDays(kept.days, keptMeeting.days) &&
+                  kept.startMin == keptMeeting.startMin &&
+                  kept.endMin == keptMeeting.endMin,
+            )
+            .id;
+        droppedIds.add(s.id);
+        changed = true;
+        continue;
+      }
+      changed = true;
+      subjects.add(Subject(
+        id: s.id,
+        name: meeting.name,
+        code: meeting.code,
+        teacher: meeting.teacher,
+        room: meeting.room,
+        days: meeting.days,
+        startMin: meeting.startMin,
+        endMin: meeting.endMin,
+        color: s.color,
+        semester: 1,
+      ));
+      continue;
+    }
+
+    // 3. Recognizable name fragment: repair code/name/teacher.
+    _VerifiedMeeting? byName;
+    if (lowerName.contains('introduction') &&
+        lowerName.contains('computing')) {
+      byName = _verifiedFirstTermMeetings[0];
+    } else if (lowerName.contains('installing') ||
+        lowerName.contains('computer and configuration')) {
+      byName = _verifiedFirstTermMeetings[4];
+    } else if (lowerName == 'coding' || code == 'CODING') {
+      byName = _verifiedFirstTermMeetings[2];
+    }
+    if (byName != null) {
+      changed = true;
+      subjects.add(Subject(
+        id: s.id,
+        name: byName.name,
+        code: byName.code,
+        teacher: byName.teacher,
+        room: s.room,
+        days: s.days,
+        startMin: s.startMin,
+        endMin: s.endMin,
+        color: s.color,
+        semester: 1,
+      ));
+      continue;
+    }
+
+    // 4. Clearly a scan artifact: drop it.
+    if (_certificateRooms.contains(code) ||
+        lowerName == 'vigan' ||
+        lowerName == 'coding') {
+      droppedIds.add(s.id);
+      changed = true;
+      continue;
+    }
+
+    // 5. User-added subject: keep as-is.
+    subjects.add(
+      normalizedSemester == s.semester
+          ? s
+          : Subject(
+              id: s.id,
+              name: s.name,
+              code: s.code,
+              teacher: s.teacher,
+              room: s.room,
+              days: s.days,
+              startMin: s.startMin,
+              endMin: s.endMin,
+              color: s.color,
+              semester: normalizedSemester,
+            ),
+    );
+  }
+
+  final keptGrades = <GradeRecord>[];
+  for (final g in grades) {
+    final remapped = remappedIds[g.subjectId];
+    if (remapped != null) {
+      changed = true;
+      keptGrades.add(GradeRecord(
+        subjectId: remapped,
+        grade: g.grade,
+        units: g.units,
+        semester: g.semester,
+      ));
+    } else if (droppedIds.contains(g.subjectId)) {
+      // Grade on a dropped junk entry: it names no real subject.
+      changed = true;
+    } else {
+      keptGrades.add(g);
+    }
+  }
+
+  return SubjectMigrationResult(
+    subjects: subjects,
+    grades: keptGrades,
+    changed: changed,
+  );
 }
 
 class AssignmentItem {
