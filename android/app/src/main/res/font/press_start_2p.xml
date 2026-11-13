@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Press Start 2P (SIL Open Font License 1.1, google/fonts).
+     Single weight 400. Used for the Allowance widget title.
+     Only android: attributes: minSdk 26, fonts in XML are
+     native (API 26+), so no appcompat app: fallback is needed. -->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="400"
+        android:font="@font/press_start_2p_regular" />
+</font-family>

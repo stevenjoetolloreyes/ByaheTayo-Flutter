@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Baloo 2 (SIL Open Font License 1.1, google/fonts). Variable
+     weight 400-800 in one file; the two declared weights let bold
+     TextViews pick the 700 instance and regular text the 400 one.
+     Used by the Allowance widget. Only android: attributes: the
+     app's minSdk is 26, where fonts in XML are native (API 26+),
+     so no appcompat app: fallback is needed. -->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="400"
+        android:font="@font/baloo_2_wght" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="700"
+        android:font="@font/baloo_2_wght" />
+</font-family>
