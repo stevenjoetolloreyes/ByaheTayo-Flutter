@@ -13,8 +13,8 @@
 // a line the admin never tapped.
 //
 // The fix (mapLineLayers, pure): slot 0 is ALWAYS the saved
-// route line (blue, 28 px core on a 36 px white casing, since
-// the Nov 13, 2026 approved style), including in draw mode as
+// route line (blue, 10 px core on a 14 px white casing, since
+// the Nov 13, 2026 approved style, Preview v4), including in draw mode as
 // the reference under the draft; the amber draft is a trailing
 // slot that exists ONLY while drawing AND at least one point was
 // tapped (or pre-filled from a saved direction). These tests
@@ -241,7 +241,7 @@ void main() {
         roadPoints: road,
       );
       expect(layers.length, 4);
-      expect(layers.map((l) => l.width), [6, 44, 36, 28]);
+      expect(layers.map((l) => l.width), [6, 26, 14, 10]);
       expect(
         layers.map((l) => l.color),
         [

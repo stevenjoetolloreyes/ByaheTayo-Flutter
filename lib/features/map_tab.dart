@@ -1705,24 +1705,27 @@ class MapLineLayerSpec {
       Object.hash(Object.hashAll(points), color, solid, width);
 }
 
-/// Approved route-line style (Steven, Nov 13, 2026 — Preview v3,
-/// artifact map-line-thickness-preview, "Okay na, ganyan na"):
-/// Google Maps blue core, 28 logical px wide, with a white
-/// casing around it (36 px total), rounded caps/joins in the
-/// preview. The 28 px is the blue core's width in the map's
-/// logical pixels — PolylineLayer takes an int width in logical
-/// pixels, the same unit the old 6 px green line used, so the
-/// preview's visual weight carries over 1:1 (the web preview's
-/// 28 px core + 36 px total is the same pair of numbers).
+/// Approved route-line style (Steven, Nov 13, 2026 — Preview v4,
+/// artifact map-line-thickness-preview, "Okay na, i-apply na sa
+/// real app"): Google Maps blue core, 10 logical px wide, with
+/// a white casing around it (14 px total), rounded caps/joins
+/// in the preview. The 10 px is the blue core's width in the
+/// map's logical pixels — PolylineLayer takes an int width in
+/// logical pixels, the same unit the old 6 px green line used,
+/// so the preview's visual weight carries over 1:1 (the web
+/// preview's 10 px core + 14 px total is the same pair of
+/// numbers). This replaces the Preview v3 28 px core: on
+/// Steven's phone the 28 px line covered the road and
+/// overlapped the stop pins.
 /// The casing is drawn as a wider white layer underneath the
 /// core, exactly like the stop-highlight branch already did
 /// (white 11 under core 7); the numbers are scaled to the new
 /// style. The glow layer in the highlight branch is core + 16
-/// (44 px), matching the preview's shadow = width + 16.
+/// (26 px), matching the preview's shadow = width + 16.
 const kRouteLineBlue = Color(0xFF1A73E8);
-const kRouteLineCoreWidth = 28;
-const kRouteLineCasingWidth = 36;
-const kRouteLineGlowWidth = 44;
+const kRouteLineCoreWidth = 10;
+const kRouteLineCasingWidth = 14;
+const kRouteLineGlowWidth = 26;
 
 /// The travelling highlight that rides the route line after the
 /// draw-in: a short bright band, same width as the core, so it
@@ -1793,7 +1796,7 @@ List<LatLng> routePulsePoints(List<LatLng> points, double head) =>
     );
 
 /// The map's line layers, as pure data — slot 0 is ALWAYS the
-/// saved route line (blue, 28 px core on a 36 px white casing), and the draft line (amber) is an
+/// saved route line (blue, 10 px core on a 14 px white casing), and the draft line (amber) is an
 /// extra slot that exists ONLY while the admin is actively
 /// drawing AND has tapped at least one point. Stable slots
 /// matter: the maplibre plugin reconciles layers by index, and
@@ -1818,8 +1821,8 @@ List<LatLng> routePulsePoints(List<LatLng> points, double head) =>
 ///
 /// The stop-highlight branch (tapped stop → destination lights
 /// up) keeps its four layers, re-coloured and re-sized to the
-/// approved style: dimmed blue before the stop, then glow 44 /
-/// white casing 36 / blue core 28 after it. It never runs in
+/// approved style: dimmed blue before the stop, then glow 26 /
+/// white casing 14 / blue core 10 after it. It never runs in
 /// draw mode (entering draw mode clears the selection).
 ///
 /// [roadLoading] (Sinait → Cabugao, Nov 7, 20:40): the new
@@ -1859,7 +1862,7 @@ List<MapLineLayerSpec> mapLineLayers({
 }) {
   const amber = Color(0xFFF59E0B);
   // Approved style (Nov 13, 2026): the route line is Google
-  // Maps blue, 28 px core on a 36 px white casing, in normal
+  // Maps blue, 10 px core on a 14 px white casing, in normal
   // AND Live Follow mode. The Nov 11 cyan live line is
   // superseded: the preview Steven approved shows the blue
   // line, and Live is still signalled by the Live button,
@@ -1908,7 +1911,7 @@ List<MapLineLayerSpec> mapLineLayers({
           solid: true,
         ),
         // Remaining part: soft glow + white casing + wide
-        // blue core, at the approved widths (44 / 36 / 28).
+        // blue core, at the approved widths (26 / 14 / 10).
         MapLineLayerSpec(
           points: split.after,
           color: main.withValues(alpha: 0.25),
@@ -4079,7 +4082,7 @@ class _MapTabState extends State<MapTab> with WidgetsBindingObserver {
   /// lights up (soft glow + white casing + wide blue core)
   /// while the earlier part dims; tapping the destination leaves
   /// nothing lit. Dismissing the card restores this normal
-  /// approved blue line (28 px core on a 36 px white casing).
+  /// approved blue line (10 px core on a 14 px white casing).
   /// One [PolylineLayer] per visual style
   /// (MapLibre styles a whole layer one colour/width, so the
   /// highlight is four layers drawn bottom-to-top, as before).

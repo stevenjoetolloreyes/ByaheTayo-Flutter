@@ -102,7 +102,7 @@ void main() {
     test('liveMode split: before dims blue, after core is blue', () {
       final layers = _layers(liveMode: true, selectedStopIndex: 1);
       expect(layers.length, 4);
-      expect(layers.map((l) => l.width), [6, 44, 36, 28]);
+      expect(layers.map((l) => l.width), [6, 26, 14, 10]);
       expect(
         layers.map((l) => l.color),
         [

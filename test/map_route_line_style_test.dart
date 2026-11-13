@@ -1,7 +1,7 @@
-// Approved route-line style (Steven, Nov 13, 2026 — Preview v3,
-// artifact map-line-thickness-preview, "Okay na, ganyan na"):
-// Google Maps blue #1A73E8 core, 28 px wide, white casing
-// (36 px total), covering the whole road, with a draw-in
+// Approved route-line style (Steven, Nov 13, 2026 — Preview v4,
+// artifact map-line-thickness-preview, "Okay na, i-apply na sa
+// real app"): Google Maps blue #1A73E8 core, 10 px wide, white
+// casing (14 px total), covering the whole road, with a draw-in
 // animation and a travelling pulse. Pure-logic tests only —
 // MapLibre cannot render in flutter test, so the drawn line
 // itself is only checkable on Steven's phone after a green
@@ -43,19 +43,20 @@ List<MapLineLayerSpec> _layers({
 
 void main() {
   group('approved route-line style', () {
-    test('constants are the approved Preview v3 numbers', () {
+    test('constants are the approved Preview v4 numbers', () {
       expect(kRouteLineBlue, _blue);
-      expect(kRouteLineCoreWidth, 28);
-      expect(kRouteLineCasingWidth, 36);
-      // Casing = core + 8, like the preview (28 core, 36 total).
-      expect(kRouteLineCasingWidth, kRouteLineCoreWidth + 8);
+      expect(kRouteLineCoreWidth, 10);
+      expect(kRouteLineCasingWidth, 14);
+      expect(kRouteLineGlowWidth, 26);
+      // Casing = core + 4, like the preview (10 core, 14 total).
+      expect(kRouteLineCasingWidth, kRouteLineCoreWidth + 4);
       expect(kRouteLineGlowWidth, kRouteLineCoreWidth + 16);
     });
 
     test('plain line is white casing under a blue core', () {
       final layers = _layers();
       expect(layers.length, 2);
-      expect(layers.map((l) => l.width), [36, 28]);
+      expect(layers.map((l) => l.width), [14, 10]);
       expect(layers.map((l) => l.color), [Colors.white, _blue]);
       expect(layers.map((l) => l.points), [_road, _road]);
       expect(layers.every((l) => l.solid), isTrue);
