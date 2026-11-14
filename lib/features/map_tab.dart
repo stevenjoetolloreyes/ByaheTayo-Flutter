@@ -3680,17 +3680,34 @@ class _MapTabState extends State<MapTab>
             : LatLng(_userPos!.latitude, _userPos!.longitude));
     if (controller == null || target == null) return;
     if (_liveFollowPaused || _liveCameraBusy) return;
+    // Bearing freeze (Nov 14, 2026 — Aragan spin fix): while
+    // the GPS signal is lost or the bus is stopped, the camera
+    // holds its last bearing — the compass still steers
+    // _liveBearing (so the arrow glyph keeps showing direction
+    // against the fixed map), but the map must not spin from
+    // compass noise indoors. Only the bearing passed to the
+    // camera freezes; center / zoom still follow the marker,
+    // and the same frozen bearing feeds the barely-moved skip
+    // rule below so a compass swing alone never re-animates
+    // the camera either. Resuming after a hold eases back
+    // along the shortest arc (see liveCameraBearing).
+    final cameraBearing = liveCameraBearing(
+      gpsLost: _liveGpsLost,
+      speedKmh: _liveSpeed.averageKmh,
+      liveBearing: _liveBearing,
+      lastCameraBearing: _liveLastCameraBearing,
+    );
     if (!force &&
         !liveCameraShouldMove(
           lastTarget: _liveLastCameraTarget,
           lastBearing: _liveLastCameraBearing,
           target: target,
-          bearing: _liveBearing,
+          bearing: cameraBearing,
         )) {
       return;
     }
     _liveLastCameraTarget = target;
-    _liveLastCameraBearing = _liveBearing;
+    _liveLastCameraBearing = cameraBearing;
     _liveCameraBusy = true;
     // First move of the session: ease into the close view
     // (~1 s) instead of snapping to it.
@@ -3703,7 +3720,7 @@ class _MapTabState extends State<MapTab>
         center: Geographic(lon: target.longitude, lat: target.latitude),
         zoom: liveFollowZoom(userZoom: _liveUserZoom),
         pitch: 60,
-        bearing: _liveBearing,
+        bearing: cameraBearing,
         nativeDuration: duration,
       );
     } catch (_) {

@@ -377,6 +377,49 @@ bool liveCameraShouldMove({
   return diff >= 2;
 }
 
+/// Most the follow-camera bearing may turn in one camera move
+/// (degrees). The 150 ms tick re-applies the bearing on every
+/// move, so a larger step would spin the map in a single glide
+/// when bearing following resumes after a hold — the compass
+/// may have drifted far while the bus was stopped.
+const liveCameraBearingMaxStepDeg = 30.0;
+
+/// Which bearing the follow camera should use on this move
+/// (Nov 14, 2026 — Aragan spin fix): the live bearing, or the
+/// last camera bearing, held. The map must NOT spin from
+/// compass noise: while the GPS signal is lost, or while the
+/// bus is stopped (smoothed speed at or below
+/// [liveMinMovingKmh]), the camera holds its last bearing —
+/// the compass still steers the live bearing itself (so the
+/// arrow glyph keeps showing direction against the fixed
+/// map), but the camera ignores it. Only when the GPS is
+/// locked AND the bus is really moving does the camera follow
+/// the live bearing, eased along the shortest arc in steps
+/// of at most [liveCameraBearingMaxStepDeg] per move, so
+/// resuming after a hold never spins the map in one glide
+/// (a 350° → 10° resume passes through 0, never through 180).
+/// Pure decision, no widgets, so the freeze / resume rules
+/// are pinned in tests. Result is normalised to 0..360.
+double liveCameraBearing({
+  required bool gpsLost,
+  required double? speedKmh,
+  required double liveBearing,
+  required double lastCameraBearing,
+}) {
+  if (gpsLost || speedKmh == null || speedKmh <= liveMinMovingKmh) {
+    return lastCameraBearing;
+  }
+  var diff = (liveBearing - lastCameraBearing) % 360;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  if (diff.abs() <= liveCameraBearingMaxStepDeg) {
+    return liveBearing % 360;
+  }
+  return (lastCameraBearing +
+          diff.sign * liveCameraBearingMaxStepDeg) %
+      360;
+}
+
 /// Speed (km/h) implied by two fixes and the time between them —
 /// the fallback when the device reports no speed. Null when the
 /// time delta is not positive (no movement can be derived).
